@@ -2,11 +2,11 @@ import Foundation
 import Observation
 
 /// How the Usage trend panel is drawn.
-enum TrendChartStyle: Sendable { case line, bar }
+enum TrendChartStyle: Sendable, Hashable { case line, bar }
 
 /// Vertical scaling for the trend panel — `log` (ln(1+x)) compresses big gaps
 /// between models so the smaller ones stay legible.
-enum TrendScaleMode: Sendable { case linear, log }
+enum TrendScaleMode: Sendable, Hashable { case linear, log }
 
 /// UI state for the Usage screen: the selected ``StatsPeriod`` plus how the
 /// trend panel is drawn. The summary itself is derived from a ``SessionStore``

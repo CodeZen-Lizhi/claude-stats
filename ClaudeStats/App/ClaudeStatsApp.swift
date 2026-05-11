@@ -18,5 +18,11 @@ struct ClaudeStatsApp: App {
             SettingsView()
                 .environment(appDelegate.env)
         }
+
+        Window("Share Stats", id: ShareExportView.windowID) {
+            ShareExportView()
+                .environment(appDelegate.env)
+        }
+        .windowResizability(.contentSize)
     }
 }

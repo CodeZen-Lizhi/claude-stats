@@ -36,6 +36,15 @@ final class SessionStore {
         UsageSummary.make(period: period, sessions: sessions, pricing: pricing, now: now)
     }
 
+    func summary(for selection: PeriodSelection, now: Date = .now) -> UsageSummary {
+        switch selection {
+        case .preset(let period):
+            return summary(for: period, now: now)
+        case .custom(let start, let end):
+            return UsageSummary.makeCustom(start: start, end: end, sessions: sessions, pricing: pricing)
+        }
+    }
+
     func sessions(in period: StatsPeriod, now: Date = .now) -> [Session] {
         sessions.filter { period.contains($0.stats?.lastActivity ?? $0.lastModified, now: now) }
     }

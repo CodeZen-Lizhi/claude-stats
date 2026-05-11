@@ -47,6 +47,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .font(.sora(12))
         .frame(width: 440)
         .navigationTitle("Claude Stats Settings")
     }

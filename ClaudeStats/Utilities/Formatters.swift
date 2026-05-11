@@ -29,6 +29,11 @@ enum Format {
         date.formatted(date: .abbreviated, time: .shortened)
     }
 
+    /// Day only, no year: `May 1`, `Dec 12`.
+    static func day(_ date: Date) -> String {
+        date.formatted(.dateTime.month(.abbreviated).day())
+    }
+
     private static func trim(_ value: Double) -> String {
         // One decimal place, but drop a trailing `.0`.
         let s = String(format: "%.1f", value)

@@ -2,49 +2,106 @@ import SwiftUI
 import Charts
 
 struct UsageView: View {
+    /// Frozen chart settings for an exported panel — the share window's choices,
+    /// since the export view can't carry the interactive view model's state.
+    struct ExportConfig: Hashable {
+        var period: PeriodSelection
+        var chartStyle: TrendChartStyle = .line
+        var useLog: Bool = false
+    }
+
+    /// `interactive` is the normal in-panel view; `export` drives the summary
+    /// and chart settings from a fixed ``ExportConfig`` and renders a static
+    /// (non-scrolling) body so it can be captured by `ImageRenderer`.
+    enum Mode: Hashable { case interactive, export(ExportConfig) }
+
     @Environment(AppEnvironment.self) private var env
     @State private var vm = UsageViewModel()
+    var mode: Mode = .interactive
+
+    private var exportConfig: ExportConfig? {
+        if case .export(let config) = mode { return config }
+        return nil
+    }
 
     var body: some View {
         @Bindable var vm = vm
-        let summary = vm.summary(from: env.store)
-        FadingScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+        let summary = exportConfig.map { env.store.summary(for: $0.period) } ?? vm.summary(from: env.store)
+        let series = summary.trendSeries()
+        let isHourly = series.granularity == .hour
+        let style: TrendChartStyle = isHourly ? .line : (exportConfig?.chartStyle ?? vm.chartStyle)
+        let useLog = style == .line && (exportConfig?.useLog ?? (vm.scaleMode == .log))
+        let interactive = exportConfig == nil
+
+        let content = VStack(alignment: .leading, spacing: 16) {
+            if interactive {
                 Picker("Period", selection: $vm.period) {
-                    ForEach(StatsPeriod.allCases) { Text($0.displayName).tag($0) }
+                    ForEach(StatsPeriod.allCases) { Text($0.displayName.uppercased()).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-
-                statCards(summary)
-                trendChart(summary)
-                modelBreakdown(summary)
             }
-            .padding(12)
+
+            statGrid(summary)
+            breakdownPanel(summary, series: series, isHourly: isHourly, style: style, useLog: useLog,
+                           interactive: interactive, exportPeriod: exportConfig?.period)
+            modelBreakdown(summary, series: series)
+        }
+        .padding(14)
+
+        if interactive {
+            FadingScrollView { content }
+        } else {
+            content
         }
     }
 
-    // MARK: Stat cards
-
-    private func statCards(_ s: UsageSummary) -> some View {
-        HStack(spacing: 8) {
-            statCard("Tokens", Format.tokens(s.totalTokens), "number")
-            statCard("Est. cost", Format.cost(s.totalCost), "dollarsign.circle")
-            statCard("Sessions", "\(s.sessionCount)", "bubble.left.and.bubble.right")
+    private func periodReadout(_ selection: PeriodSelection) -> some View {
+        BracketBox(spacing: 7) {
+            Text("PERIOD:")
+                .font(.sora(9))
+                .tracking(0.4)
+                .foregroundStyle(Color.stxMuted)
+            Text(selection.label())
+                .font(.sora(11, weight: .semibold))
+                .tracking(0.6)
+                .foregroundStyle(.primary)
+            Spacer(minLength: 0)
         }
     }
 
-    private func statCard(_ title: String, _ value: String, _ symbol: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Label(title, systemImage: symbol)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+    // MARK: Stat readouts
+
+    private func statGrid(_ s: UsageSummary) -> some View {
+        Grid(horizontalSpacing: 10, verticalSpacing: 8) {
+            GridRow {
+                statCell("Tokens", Format.tokens(s.totalTokens))
+                statCell("Est. cost", Format.cost(s.totalCost))
+            }
+            GridRow {
+                statCell("Sessions", "\(s.sessionCount)")
+                statCell("Messages", Format.tokens(s.messageCount))
+            }
+        }
+    }
+
+    private func statCell(_ title: String, _ value: String) -> some View {
+        BracketBox(spacing: 7) {
+            Text(title.uppercased() + ":")
+                .font(.sora(9))
+                .tracking(0.4)
+                .foregroundStyle(Color.stxMuted)
+                .lineLimit(1)
+                .layoutPriority(-1)
             Text(value)
-                .font(.title3.weight(.semibold).monospacedDigit())
+                .font(.sora(13, weight: .semibold).monospacedDigit())
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .layoutPriority(1)
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(8)
-        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+        .padding(.vertical, 7)
     }
 
     // MARK: Trend chart
@@ -81,130 +138,210 @@ struct UsageView: View {
     }
 
     @ViewBuilder
-    private func trendChart(_ s: UsageSummary) -> some View {
-        let series = s.trendSeries()
-        let isHourly = series.granularity == .hour
-        let style: TrendChartStyle = isHourly ? .line : vm.chartStyle
-        let useLog = style == .line && vm.scaleMode == .log
-        VStack(alignment: .leading, spacing: 6) {
-            Text(isHourly ? "Tokens today (hourly)" : "Tokens per day")
-                .font(.caption).foregroundStyle(.secondary)
+    private func breakdownPanel(_ s: UsageSummary, series: TrendSeries, isHourly: Bool, style: TrendChartStyle, useLog: Bool, interactive: Bool, exportPeriod: PeriodSelection?) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Text("BREAKDOWN")
+                    .font(.sora(13, weight: .semibold))
+                    .tracking(1.5)
+                    .foregroundStyle(.primary)
+                Spacer()
+                if interactive && !series.buckets.isEmpty {
+                    trendControls(style: style, showStyleToggle: !isHourly)
+                }
+            }
+            Text(captionText(isHourly: isHourly, style: style, useLog: useLog, annotate: !interactive))
+                .font(.sora(9))
+                .tracking(0.8)
+                .foregroundStyle(Color.stxMuted)
             if series.buckets.isEmpty {
                 Text(isHourly ? "No usage today yet." : "No usage for this period.")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .font(.sora(10))
+                    .foregroundStyle(Color.stxMuted.opacity(0.7))
                     .frame(maxWidth: .infinity, minHeight: 80)
             } else {
-                let points = trendPoints(series, style: style, useLog: useLog)
-                let maxY = max(1, points.map(\.value).max() ?? 1)
-                Chart(points) { p in
-                    switch style {
-                    case .line:
-                        LineMark(
-                            x: .value("Time", p.date, unit: isHourly ? .hour : .day),
-                            y: .value("Tokens", p.value)
-                        )
-                        .foregroundStyle(by: .value("Model", p.model))
-                        .interpolationMethod(.catmullRom)
-                    case .bar:
-                        BarMark(
-                            x: .value("Day", p.date, unit: .day),
-                            y: .value("Tokens", p.value)
-                        )
-                        .foregroundStyle(by: .value("Model", p.model))
-                    }
-                }
-                .chartForegroundStyleScale(mapping: { (model: String) in ModelPalette.color(for: model) })
-                .chartYScale(domain: 0...(maxY * 1.05))
-                .chartYAxis {
-                    AxisMarks { value in
-                        AxisGridLine()
-                        AxisValueLabel {
-                            if let v = value.as(Double.self) {
-                                Text(Format.tokens(Int(useLog ? expm1(v) : v)))
-                            }
-                        }
-                    }
-                }
-                .chartXAxis {
-                    if isHourly {
-                        AxisMarks(values: .stride(by: .hour, count: 6)) { _ in
-                            AxisGridLine()
-                            AxisValueLabel(format: .dateTime.hour())
-                        }
-                    } else {
-                        AxisMarks { _ in
-                            AxisGridLine()
-                            AxisValueLabel(format: .dateTime.month(.abbreviated).day())
-                        }
-                    }
-                }
-                .chartLegend(position: .bottom, spacing: 6)
-                .frame(height: 150)
+                legend(series)
+                StxRule()
+                chart(series: series, isHourly: isHourly, style: style, useLog: useLog)
+            }
+            if let exportPeriod {
+                StxRule()
+                periodReadout(exportPeriod)
+            }
+        }
+        .stxPanel(12)
+    }
 
-                trendControls(style: style, showStyleToggle: !isHourly)
+    private func captionText(isHourly: Bool, style: TrendChartStyle, useLog: Bool, annotate: Bool) -> String {
+        var parts = [isHourly ? "TOKENS TODAY · HOURLY" : "TOKENS PER DAY"]
+        if annotate {
+            parts.append(style == .bar ? "BARS" : "LINE")
+            if useLog { parts.append("LN SCALE") }
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private func legend(_ series: TrendSeries) -> some View {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)], alignment: .leading, spacing: 4) {
+            ForEach(Array(series.models.enumerated()), id: \.element) { idx, model in
+                BracketBox(spacing: 6) {
+                    Rectangle().fill(ModelPalette.color(at: idx)).frame(width: 7, height: 7)
+                    Text(model)
+                        .font(.sora(9))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 0)
+                }
             }
         }
     }
 
     @ViewBuilder
-    private func trendControls(style: TrendChartStyle, showStyleToggle: Bool) -> some View {
-        HStack(spacing: 12) {
-            Spacer()
-            if style == .line {
-                Button {
-                    vm.scaleMode = vm.scaleMode == .linear ? .log : .linear
-                } label: {
-                    Image(systemName: "function")
-                }
-                .foregroundStyle(vm.scaleMode == .log ? Color.accentColor : Color.secondary)
-                .help("Compress large gaps between models (ln scale)")
-            }
-            if showStyleToggle {
-                Button {
-                    vm.chartStyle = vm.chartStyle == .line ? .bar : .line
-                } label: {
-                    Image(systemName: vm.chartStyle == .line ? "chart.xyaxis.line" : "chart.bar.xaxis")
-                }
-                .foregroundStyle(Color.secondary)
-                .help(vm.chartStyle == .line ? "Switch to bar chart" : "Switch to line chart")
+    private func chart(series: TrendSeries, isHourly: Bool, style: TrendChartStyle, useLog: Bool) -> some View {
+        let points = trendPoints(series, style: style, useLog: useLog)
+        let maxY = max(1, points.map(\.value).max() ?? 1)
+        Chart(points) { p in
+            switch style {
+            case .line:
+                LineMark(
+                    x: .value("Time", p.date, unit: isHourly ? .hour : .day),
+                    y: .value("Tokens", p.value)
+                )
+                .foregroundStyle(by: .value("Model", p.model))
+                .interpolationMethod(.catmullRom)
+                .lineStyle(StrokeStyle(lineWidth: 2))
+            case .bar:
+                BarMark(
+                    x: .value("Day", p.date, unit: .day),
+                    y: .value("Tokens", p.value)
+                )
+                .foregroundStyle(by: .value("Model", p.model))
+                .cornerRadius(0)
             }
         }
-        .buttonStyle(.borderless)
-        .imageScale(.medium)
-        .font(.callout)
-        .padding(.top, 2)
+        .chartForegroundStyleScale(mapping: { (model: String) in
+            ModelPalette.color(at: series.models.firstIndex(of: model) ?? 0)
+        })
+        .chartYScale(domain: 0...(maxY * 1.05))
+        .chartYAxis {
+            AxisMarks { value in
+                AxisGridLine().foregroundStyle(Color.stxStroke)
+                AxisValueLabel {
+                    if let v = value.as(Double.self) {
+                        Text(Format.tokens(Int(useLog ? expm1(v) : v)))
+                            .font(.sora(8))
+                            .foregroundStyle(Color.stxMuted)
+                    }
+                }
+            }
+        }
+        .chartXAxis {
+            if isHourly {
+                AxisMarks(values: .stride(by: .hour, count: 6)) { value in
+                    AxisGridLine().foregroundStyle(Color.stxStroke)
+                    AxisValueLabel {
+                        if let d = value.as(Date.self) {
+                            Text(d, format: .dateTime.hour())
+                                .font(.sora(8))
+                                .foregroundStyle(Color.stxMuted)
+                        }
+                    }
+                }
+            } else {
+                AxisMarks { value in
+                    AxisGridLine().foregroundStyle(Color.stxStroke)
+                    AxisValueLabel {
+                        if let d = value.as(Date.self) {
+                            Text(d, format: .dateTime.month(.abbreviated).day())
+                                .font(.sora(8))
+                                .foregroundStyle(Color.stxMuted)
+                        }
+                    }
+                }
+            }
+        }
+        .chartLegend(.hidden)
+        .frame(height: 150)
+    }
+
+    @ViewBuilder
+    private func trendControls(style: TrendChartStyle, showStyleToggle: Bool) -> some View {
+        HStack(spacing: 6) {
+            if style == .line {
+                controlButton(
+                    systemName: "function",
+                    active: vm.scaleMode == .log,
+                    help: "Compress large gaps between models (ln scale)"
+                ) {
+                    vm.scaleMode = vm.scaleMode == .linear ? .log : .linear
+                }
+            }
+            if showStyleToggle {
+                controlButton(
+                    systemName: vm.chartStyle == .line ? "chart.xyaxis.line" : "chart.bar.xaxis",
+                    active: false,
+                    help: vm.chartStyle == .line ? "Switch to bar chart" : "Switch to line chart"
+                ) {
+                    vm.chartStyle = vm.chartStyle == .line ? .bar : .line
+                }
+            }
+        }
+    }
+
+    private func controlButton(systemName: String, active: Bool, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            BracketBox(spacing: 3) {
+                Image(systemName: systemName).font(.system(size: 9, weight: .bold))
+            }
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(active ? Color.stxAccent : Color.stxMuted)
+        .help(help)
     }
 
     // MARK: Per-model breakdown
 
     @ViewBuilder
-    private func modelBreakdown(_ s: UsageSummary) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("By model").font(.caption).foregroundStyle(.secondary)
+    private func modelBreakdown(_ s: UsageSummary, series: TrendSeries) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("BY MODEL")
+                .font(.sora(11, weight: .semibold))
+                .tracking(1)
+                .foregroundStyle(Color.stxMuted)
             if s.models.isEmpty {
                 Text("No usage recorded for this period.")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .font(.sora(10))
+                    .foregroundStyle(Color.stxMuted.opacity(0.7))
             } else {
                 let maxTokens = max(1, s.models.map(\.usage.total).max() ?? 1)
-                ForEach(s.models) { model in
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack {
-                            Circle()
-                                .fill(ModelPalette.color(for: model.model))
-                                .frame(width: 8, height: 8)
-                            Text(model.model).font(.caption).lineLimit(1)
-                            Spacer()
+                ForEach(Array(s.models.enumerated()), id: \.element.id) { idx, model in
+                    let color = ModelPalette.color(at: series.models.firstIndex(of: model.model) ?? idx)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            Rectangle().fill(color).frame(width: 7, height: 7)
+                            Text(model.model)
+                                .font(.sora(10))
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Spacer(minLength: 8)
                             Text(Format.tokens(model.usage.total))
-                                .font(.caption.monospacedDigit())
+                                .font(.sora(10).monospacedDigit())
+                                .foregroundStyle(.primary)
                             Text(Format.cost(model.estimatedCost))
-                                .font(.caption.monospacedDigit())
-                                .foregroundStyle(.secondary)
+                                .font(.sora(10).monospacedDigit())
+                                .foregroundStyle(Color.stxMuted)
                         }
-                        ProgressView(value: Double(model.usage.total), total: Double(maxTokens))
-                            .progressViewStyle(.linear)
-                            .tint(ModelPalette.color(for: model.model))
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Rectangle().fill(Color.primary.opacity(0.09))
+                                Rectangle()
+                                    .fill(color)
+                                    .frame(width: max(2, geo.size.width * CGFloat(model.usage.total) / CGFloat(maxTokens)))
+                            }
+                        }
+                        .frame(height: 3)
                     }
                 }
             }
@@ -213,9 +350,19 @@ struct UsageView: View {
 }
 
 #if DEBUG
-#Preview {
+#Preview("Light") {
     UsageView()
         .environment(AppEnvironment.preview())
-        .frame(width: 380, height: 460)
+        .frame(width: 380, height: 480)
+        .background(Color.stxBackground)
+        .preferredColorScheme(.light)
+}
+
+#Preview("Dark") {
+    UsageView()
+        .environment(AppEnvironment.preview())
+        .frame(width: 380, height: 480)
+        .background(Color.stxBackground)
+        .preferredColorScheme(.dark)
 }
 #endif

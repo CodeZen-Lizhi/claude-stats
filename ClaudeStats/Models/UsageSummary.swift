@@ -35,6 +35,27 @@ struct UsageSummary: Sendable, Hashable {
         return UsageSummary(period: period, sessionCount: inPeriod.count, models: allModels, timeline: allTimeline)
     }
 
+    /// Build a summary scoped to an explicit `[start, end]` range of calendar
+    /// days (inclusive on both ends). The stored `period` is set to
+    /// ``StatsPeriod/allTime`` purely so ``trendSeries(now:calendar:)`` picks
+    /// daily granularity — the human-facing range label always comes from the
+    /// originating ``PeriodSelection``, never from `period`.
+    static func makeCustom(start: Date, end: Date, sessions: [Session], pricing: ModelPricing, calendar: Calendar = .current) -> UsageSummary {
+        let lo = calendar.startOfDay(for: min(start, end))
+        guard let hiExclusive = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: max(start, end))) else {
+            return .empty(period: .allTime)
+        }
+        let inRange = sessions.filter { session in
+            let when = session.stats?.lastActivity ?? session.lastModified
+            return when >= lo && when < hiExclusive
+        }
+        let allModels = inRange.flatMap { $0.stats?.models ?? [] }.merged(pricing: pricing)
+        let allTimeline = inRange.flatMap { $0.stats?.timeline ?? [] }
+            .filter { $0.start >= lo && $0.start < hiExclusive }
+            .mergedByModelBucket()
+        return UsageSummary(period: .allTime, sessionCount: inRange.count, models: allModels, timeline: allTimeline)
+    }
+
     /// Per-model series for the trend chart: hourly across *today* for
     /// ``StatsPeriod/today``, daily across the span of ``timeline`` otherwise.
     /// Every `(model × bucket-in-span)` is present (zero-filled) so each model

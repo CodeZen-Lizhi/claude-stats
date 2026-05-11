@@ -13,11 +13,12 @@ struct SessionRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.projectDisplayName)
-                    .font(.callout.weight(.medium))
+                    .font(.sora(12, weight: .medium))
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                 Text(session.stats?.title ?? session.externalID)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.sora(10))
+                    .foregroundStyle(Color.stxMuted)
                     .lineLimit(1)
             }
 
@@ -25,8 +26,8 @@ struct SessionRow: View {
 
             VStack(alignment: .trailing, spacing: 2) {
                 Text(Format.relativeDate(session.stats?.lastActivity ?? session.lastModified))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .font(.sora(9))
+                    .foregroundStyle(Color.stxMuted)
                 HStack(spacing: 6) {
                     if let stats = session.stats {
                         modelDots(stats.models)
@@ -35,8 +36,8 @@ struct SessionRow: View {
                         Text(Format.cost(stats.totalCost))
                     }
                 }
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
+                .font(.sora(9).monospacedDigit())
+                .foregroundStyle(Color.stxMuted)
             }
         }
         .contentShape(Rectangle())
@@ -55,27 +56,29 @@ struct SessionRow: View {
     /// Up to four model swatches (then a `+N`), colored to match the Usage screen.
     @ViewBuilder
     private func modelDots(_ models: [ModelUsage]) -> some View {
-        let shown = models.prefix(4)
+        let shown = Array(models.prefix(4).enumerated())
         if !shown.isEmpty {
             HStack(spacing: 3) {
-                ForEach(shown) { m in
-                    Circle().fill(ModelPalette.color(for: m.model)).frame(width: 6, height: 6)
+                ForEach(shown, id: \.element.id) { idx, _ in
+                    Rectangle().fill(ModelPalette.color(at: idx)).frame(width: 6, height: 6)
                 }
                 if models.count > shown.count {
                     Text("+\(models.count - shown.count)")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(.tertiary)
+                        .font(.sora(8, weight: .medium))
+                        .foregroundStyle(Color.stxMuted.opacity(0.7))
                 }
             }
         }
     }
-
 }
 
 #if DEBUG
 #Preview {
-    List(Session.previewSamples) { SessionRow(session: $0) }
-        .listStyle(.inset)
-        .frame(width: 380, height: 200)
+    VStack(spacing: 0) {
+        ForEach(Session.previewSamples) { SessionRow(session: $0).padding(8) }
+    }
+    .frame(width: 380, height: 200)
+    .background(Color.stxBackground)
+    .preferredColorScheme(.dark)
 }
 #endif

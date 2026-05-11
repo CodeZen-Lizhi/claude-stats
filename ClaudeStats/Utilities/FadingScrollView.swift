@@ -46,7 +46,32 @@ struct FadingScrollView<Content: View>: View {
         .onPreferenceChange(ContentFrameKey.self) { [model] frame in
             MainActor.assumeIsolated { model.contentFrameChanged(frame) }
         }
+        .mask { EdgeFadeMask(model: model) }
         .overlay(alignment: .topTrailing) { ScrollThumb(model: model) }
+    }
+}
+
+// MARK: - Soft edge fade
+
+/// A `mask` view that keeps the scroll content fully opaque except for a short
+/// gradient band at whichever edge can still be scrolled — so content slides
+/// under the surrounding chrome with a soft fade instead of a hard clip. The
+/// band collapses to nothing when an edge is at its travel limit.
+private struct EdgeFadeMask: View {
+    let model: ScrollIndicatorModel
+    private let band: CGFloat = 20
+
+    var body: some View {
+        let overflow = max(model.contentHeight - model.viewportHeight, 0)
+        let topFade = min(max(model.offset, 0), band)
+        let bottomFade = min(max(overflow - model.offset, 0), band)
+        VStack(spacing: 0) {
+            LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                .frame(height: topFade)
+            Color.black
+            LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                .frame(height: bottomFade)
+        }
     }
 }
 

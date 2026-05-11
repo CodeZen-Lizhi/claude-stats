@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let env = AppEnvironment()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        Theme.registerFonts()
         env.start()
     }
 
