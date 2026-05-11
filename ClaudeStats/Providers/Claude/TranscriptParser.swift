@@ -1,8 +1,8 @@
 import Foundation
 
 /// Parses a Claude Code `.jsonl` transcript into ``SessionStats``: title,
-/// message count, activity window, per-model token totals (priced), and a
-/// per-day token breakdown.
+/// message count, activity window, per-model token totals (priced), and an
+/// hourly per-model token timeline.
 ///
 /// Reads the file whole and splits on newlines — transcripts are typically
 /// small. (A pathologically huge transcript would be loaded fully into
@@ -14,7 +14,7 @@ struct TranscriptParser: Sendable {
         guard let data = try? Data(contentsOf: url) else { return nil }
 
         var perModel: [String: (count: Int, usage: TokenUsage)] = [:]
-        var daily: [Date: TokenUsage] = [:]
+        var perModelHourly: [String: [Date: TokenUsage]] = [:]
         var messageCount = 0
         var firstActivity: Date?
         var lastActivity: Date?
@@ -43,7 +43,9 @@ struct TranscriptParser: Sendable {
                     acc.usage += usage
                     perModel[model] = acc
                     if let date {
-                        daily[calendar.startOfDay(for: date), default: .zero] += usage
+                        let hour = calendar.dateInterval(of: .hour, for: date)?.start
+                            ?? calendar.startOfDay(for: date)
+                        perModelHourly[model, default: [:]][hour, default: .zero] += usage
                     }
                 } else {
                     // Still count the model so a session with assistant turns
@@ -69,7 +71,9 @@ struct TranscriptParser: Sendable {
         let models = perModel
             .map { ModelUsage(model: $0.key, messageCount: $0.value.count, usage: $0.value.usage, pricing: pricing) }
             .sorted { $0.usage.total > $1.usage.total }
-        let daySlices = daily.map { DaySlice(day: $0.key, usage: $0.value) }.sorted { $0.day < $1.day }
+        let timeline = perModelHourly
+            .flatMap { model, byHour in byHour.map { ModelBucket(model: model, start: $0.key, usage: $0.value) } }
+            .sorted { $0.start < $1.start }
 
         // Empty transcript (only queue-ops / snapshots): not worth showing.
         guard messageCount > 0 || !models.isEmpty else { return nil }
@@ -81,7 +85,7 @@ struct TranscriptParser: Sendable {
             firstActivity: firstActivity,
             lastActivity: lastActivity,
             models: models,
-            daily: daySlices
+            timeline: timeline
         )
     }
 

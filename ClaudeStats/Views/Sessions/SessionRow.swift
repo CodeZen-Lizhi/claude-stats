@@ -29,6 +29,7 @@ struct SessionRow: View {
                     .foregroundStyle(.secondary)
                 HStack(spacing: 6) {
                     if let stats = session.stats {
+                        modelDots(stats.models)
                         Label(Format.tokens(stats.totalTokens), systemImage: "number")
                             .labelStyle(.titleAndIcon)
                         Text(Format.cost(stats.totalCost))
@@ -50,6 +51,25 @@ struct SessionRow: View {
             }
         }
     }
+
+    /// Up to four model swatches (then a `+N`), colored to match the Usage screen.
+    @ViewBuilder
+    private func modelDots(_ models: [ModelUsage]) -> some View {
+        let shown = models.prefix(4)
+        if !shown.isEmpty {
+            HStack(spacing: 3) {
+                ForEach(shown) { m in
+                    Circle().fill(ModelPalette.color(for: m.model)).frame(width: 6, height: 6)
+                }
+                if models.count > shown.count {
+                    Text("+\(models.count - shown.count)")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+    }
+
 }
 
 #if DEBUG

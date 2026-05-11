@@ -49,12 +49,18 @@ struct SessionListView: View {
                     )
                 }
             } else {
-                List(sessions) { session in
-                    SessionRow(session: session)
-                        .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
+                FadingScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(sessions.enumerated()), id: \.element.id) { index, session in
+                            SessionRow(session: session)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                            if index < sessions.count - 1 {
+                                Divider().padding(.horizontal, 12)
+                            }
+                        }
+                    }
                 }
-                .listStyle(.inset)
-                .scrollContentBackground(.hidden)
             }
         }
     }

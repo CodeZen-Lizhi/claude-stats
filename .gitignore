@@ -38,6 +38,9 @@ Package.resolved
 # === Claude Code agent config (local, not part of the project) === #
 .claude/
 
+# === Agent skills (project-local AI tooling, not project source) === #
+.agents/
+
 # === Misc === #
 *.log
 *.orig

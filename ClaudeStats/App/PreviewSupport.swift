@@ -31,8 +31,11 @@ extension Session {
         let now = Date.now
         let cal = Calendar.current
         func daysAgo(_ n: Int) -> Date { cal.date(byAdding: .day, value: -n, to: now) ?? now }
-        func daily(_ entries: [(Int, TokenUsage)]) -> [DaySlice] {
-            entries.map { DaySlice(day: cal.startOfDay(for: daysAgo($0.0)), usage: $0.1) }
+        func dayStart(_ n: Int) -> Date { cal.startOfDay(for: daysAgo(n)) }
+        /// `(daysAgo, hour, model, usage)` → an hourly ``ModelBucket``.
+        func bucket(_ d: Int, _ h: Int, _ name: String, _ u: TokenUsage) -> ModelBucket {
+            let start = cal.date(byAdding: .hour, value: h, to: dayStart(d)) ?? dayStart(d)
+            return ModelBucket(model: name, start: start, usage: u)
         }
 
         return [
@@ -48,7 +51,17 @@ extension Session {
                         model("claude-opus-4-7", 41, usage(120_000, 38_000, 1_400_000, 90_000)),
                         model("claude-haiku-4-5", 12, usage(8_000, 2_000, 50_000)),
                     ],
-                    daily: daily([(1, usage(60_000, 18_000, 700_000, 45_000)), (0, usage(68_000, 22_000, 750_000, 45_000))])
+                    timeline: [
+                        bucket(1, 14, "claude-opus-4-7", usage(20_000, 6_000, 240_000, 15_000)),
+                        bucket(1, 15, "claude-opus-4-7", usage(28_000, 8_000, 300_000, 18_000)),
+                        bucket(1, 16, "claude-opus-4-7", usage(12_000, 4_000, 160_000, 12_000)),
+                        bucket(1, 15, "claude-haiku-4-5", usage(3_000, 800, 18_000)),
+                        bucket(0, 9, "claude-opus-4-7", usage(18_000, 6_000, 200_000, 12_000)),
+                        bucket(0, 10, "claude-opus-4-7", usage(30_000, 10_000, 320_000, 20_000)),
+                        bucket(0, 11, "claude-opus-4-7", usage(20_000, 6_000, 230_000, 13_000)),
+                        bucket(0, 9, "claude-haiku-4-5", usage(2_000, 600, 14_000)),
+                        bucket(0, 11, "claude-haiku-4-5", usage(3_000, 600, 18_000)),
+                    ]
                 )
             ),
             Session(
@@ -60,7 +73,10 @@ extension Session {
                     title: "Fix the off-by-one in pagination",
                     messageCount: 22, firstActivity: daysAgo(2), lastActivity: daysAgo(2),
                     models: [model("claude-sonnet-4-6", 11, usage(34_000, 9_500, 210_000, 12_000))],
-                    daily: daily([(2, usage(34_000, 9_500, 210_000, 12_000))])
+                    timeline: [
+                        bucket(2, 13, "claude-sonnet-4-6", usage(16_000, 4_500, 100_000, 6_000)),
+                        bucket(2, 14, "claude-sonnet-4-6", usage(18_000, 5_000, 110_000, 6_000)),
+                    ]
                 )
             ),
             Session(
@@ -71,8 +87,15 @@ extension Session {
                 stats: SessionStats(
                     title: "Migrate the settings screen to the new design",
                     messageCount: 53, firstActivity: daysAgo(10), lastActivity: daysAgo(9),
-                    models: [model("claude-opus-4-7", 26, usage(70_000, 24_000, 880_000, 50_000))],
-                    daily: daily([(10, usage(30_000, 10_000, 380_000, 20_000)), (9, usage(40_000, 14_000, 500_000, 30_000))])
+                    models: [
+                        model("claude-opus-4-7", 26, usage(70_000, 24_000, 880_000, 50_000)),
+                        model("claude-sonnet-4-6", 9, usage(12_000, 3_000, 60_000, 4_000)),
+                    ],
+                    timeline: [
+                        bucket(10, 17, "claude-opus-4-7", usage(30_000, 10_000, 380_000, 20_000)),
+                        bucket(10, 18, "claude-sonnet-4-6", usage(12_000, 3_000, 60_000, 4_000)),
+                        bucket(9, 10, "claude-opus-4-7", usage(40_000, 14_000, 500_000, 30_000)),
+                    ]
                 )
             ),
         ]

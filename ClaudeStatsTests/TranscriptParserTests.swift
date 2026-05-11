@@ -5,7 +5,7 @@ import Foundation
 @Suite("TranscriptParser")
 struct TranscriptParserTests {
 
-    @Test("Extracts title, message count, models, costs, and per-day buckets")
+    @Test("Extracts title, message count, models, costs, and the hourly timeline")
     func parsesSampleTranscript() async throws {
         let dir = try TempDir.make()
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -38,10 +38,13 @@ struct TranscriptParserTests {
         #expect(abs(modelB.estimatedCost - 0.001) < 1e-9)
         #expect(abs(stats.totalCost - 0.00724) < 1e-9)
 
-        // Two assistant timestamps >24h apart ⇒ exactly two day buckets,
-        // summing to the same token total regardless of local timezone.
-        #expect(stats.daily.count == 2)
-        #expect(stats.daily.map(\.tokens).reduce(0, +) == 1780)
+        // Three assistant turns ⇒ three (model, hour) buckets across two
+        // distinct hours; the token total is timezone-independent.
+        #expect(stats.timeline.count == 3)
+        #expect(stats.timeline.totalTokens == 1780)
+        #expect(Set(stats.timeline.map(\.model)) == ["model-a", "model-b"])
+        #expect(Set(stats.timeline.map(\.start)).count == 2)
+        #expect(stats.timeline.filter { $0.model == "model-a" }.totalTokens == 1355)
 
         let first = try #require(stats.firstActivity)
         let last = try #require(stats.lastActivity)
