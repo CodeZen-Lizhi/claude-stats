@@ -1,0 +1,56 @@
+name: ClaudeStats
+options:
+  bundleIdPrefix: com.claudestats
+  deploymentTarget:
+    macOS: "14.0"
+  xcodeVersion: "26.0"
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    DEVELOPMENT_LANGUAGE: en
+    SWIFT_STRICT_CONCURRENCY: complete
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+targets:
+  ClaudeStats:
+    type: application
+    platform: macOS
+    sources:
+      - path: ClaudeStats
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.claudestats.ClaudeStats
+        PRODUCT_NAME: "Claude Stats"
+        PRODUCT_MODULE_NAME: ClaudeStats
+        INFOPLIST_FILE: ClaudeStats/App/Info.plist
+        CODE_SIGN_ENTITLEMENTS: ClaudeStats/App/ClaudeStats.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        COMBINE_HIDPI_IMAGES: YES
+        GENERATE_INFOPLIST_FILE: NO
+        ENABLE_HARDENED_RUNTIME: NO
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Automatic
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+    entitlements:
+      path: ClaudeStats/App/ClaudeStats.entitlements
+    scheme:
+      testTargets:
+        - ClaudeStatsTests
+
+  ClaudeStatsTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: ClaudeStatsTests
+    dependencies:
+      - target: ClaudeStats
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.claudestats.ClaudeStatsTests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Claude Stats.app/Contents/MacOS/Claude Stats"
+        BUNDLE_LOADER: "$(TEST_HOST)"

@@ -1,0 +1,43 @@
+# === Xcode === #
+DerivedData/
+build/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/
+*.xcworkspace/xcuserdata/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.hmap
+*.dSYM
+*.dSYM.zip
+xcuserdata/
+
+# === XcodeGen === #
+# ClaudeStats.xcodeproj is generated from project.yml via `xcodegen generate`.
+ClaudeStats.xcodeproj/
+
+# === Swift Package Manager === #
+.build/
+.swiftpm/
+Package.resolved
+
+# === macOS === #
+.DS_Store
+._*
+*.swp
+*~
+
+# === Credentials / env === #
+.env
+.env.*
+*.pem
+*.p12
+*.key
+
+# === Claude Code agent config (local, not part of the project) === #
+.claude/
+
+# === Misc === #
+*.log
+*.orig

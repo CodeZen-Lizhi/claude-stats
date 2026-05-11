@@ -1,0 +1,27 @@
+{
+  "comment": "Model pricing in USD per 1,000,000 tokens. Copy to ~/.claude-stats/pricing.json to override. Rough public list prices; verify against current Anthropic pricing.",
+  "default_pricing": {
+    "input": 3.0,
+    "output": 15.0,
+    "cacheWrite5m": 3.75,
+    "cacheWrite1h": 6.0,
+    "cacheRead": 0.3
+  },
+  "models": {
+    "claude-opus-4-7": { "input": 15.0, "output": 75.0, "cacheWrite5m": 18.75, "cacheWrite1h": 30.0, "cacheRead": 1.5 },
+    "claude-opus-4-6": { "input": 15.0, "output": 75.0, "cacheWrite5m": 18.75, "cacheWrite1h": 30.0, "cacheRead": 1.5 },
+    "claude-opus-4-5": { "input": 15.0, "output": 75.0, "cacheWrite5m": 18.75, "cacheWrite1h": 30.0, "cacheRead": 1.5 },
+    "claude-opus-4-1": { "input": 15.0, "output": 75.0, "cacheWrite5m": 18.75, "cacheWrite1h": 30.0, "cacheRead": 1.5 },
+    "claude-opus-4": { "input": 15.0, "output": 75.0, "cacheWrite5m": 18.75, "cacheWrite1h": 30.0, "cacheRead": 1.5 },
+    "claude-sonnet-4-6": { "input": 3.0, "output": 15.0, "cacheWrite5m": 3.75, "cacheWrite1h": 6.0, "cacheRead": 0.3 },
+    "claude-sonnet-4-5": { "input": 3.0, "output": 15.0, "cacheWrite5m": 3.75, "cacheWrite1h": 6.0, "cacheRead": 0.3 },
+    "claude-sonnet-4": { "input": 3.0, "output": 15.0, "cacheWrite5m": 3.75, "cacheWrite1h": 6.0, "cacheRead": 0.3 },
+    "claude-3-7-sonnet": { "input": 3.0, "output": 15.0, "cacheWrite5m": 3.75, "cacheWrite1h": 6.0, "cacheRead": 0.3 },
+    "claude-3-5-sonnet": { "input": 3.0, "output": 15.0, "cacheWrite5m": 3.75, "cacheWrite1h": 6.0, "cacheRead": 0.3 },
+    "claude-haiku-4-5": { "input": 1.0, "output": 5.0, "cacheWrite5m": 1.25, "cacheWrite1h": 2.0, "cacheRead": 0.1 },
+    "claude-3-5-haiku": { "input": 0.8, "output": 4.0, "cacheWrite5m": 1.0, "cacheWrite1h": 1.6, "cacheRead": 0.08 },
+    "claude-3-haiku": { "input": 0.25, "output": 1.25, "cacheWrite5m": 0.3, "cacheWrite1h": 0.5, "cacheRead": 0.03 },
+    "gpt-5": { "input": 1.25, "output": 10.0, "cacheWrite5m": 1.5625, "cacheWrite1h": 2.5, "cacheRead": 0.125 },
+    "gemini-2.5-pro": { "input": 1.25, "output": 10.0, "cacheWrite5m": 1.5625, "cacheWrite1h": 2.5, "cacheRead": 0.125 }
+  }
+}

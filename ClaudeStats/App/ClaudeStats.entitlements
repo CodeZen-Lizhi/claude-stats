@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  App Sandbox is intentionally OFF: the app reads ~/.claude/projects/
+	  directly. If you later want to sandbox it, add com.apple.security.app-sandbox
+	  plus a user-selected read-only entitlement and switch the path access to a
+	  security-scoped bookmark.
+	-->
+</dict>
+</plist>

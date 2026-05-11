@@ -1,0 +1,12 @@
+import Foundation
+import os
+
+/// Subsystem-scoped loggers. Use these instead of `print`.
+enum Log {
+    private static let subsystem = Bundle.main.bundleIdentifier ?? "com.claudestats.ClaudeStats"
+
+    static let app = Logger(subsystem: subsystem, category: "app")
+    static let scanner = Logger(subsystem: subsystem, category: "scanner")
+    static let parser = Logger(subsystem: subsystem, category: "parser")
+    static let store = Logger(subsystem: subsystem, category: "store")
+}

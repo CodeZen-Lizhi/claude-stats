@@ -1,0 +1,24 @@
+import Foundation
+
+/// A source of AI-CLI usage data. One conformer per CLI.
+///
+/// Conformers are stateless value types so their `async` methods run off the
+/// main actor (a `nonisolated async` function does not inherit the caller's
+/// executor). Provider-specific quirks — path conventions, transcript format,
+/// model-name aliases — live inside the conformer's folder; shared code
+/// (`Models/`, `Services/`, views) only ever sees `Session` / `SessionStats`.
+protocol Provider: Sendable {
+    var kind: ProviderKind { get }
+
+    /// Whether the on-disk location this provider reads from exists. Drives
+    /// the "no data found" empty state without an expensive scan.
+    var dataDirectoryExists: Bool { get }
+
+    /// Cheap pass: enumerate transcripts and return their metadata. Does not
+    /// open/parse the files. Newest first.
+    func discoverSessions() async -> [Session]
+
+    /// Parse one transcript into ``SessionStats``. `nil` if the file is gone
+    /// or unreadable.
+    func parse(_ session: Session) async -> SessionStats?
+}

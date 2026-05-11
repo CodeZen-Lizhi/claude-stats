@@ -1,0 +1,39 @@
+import Foundation
+import Observation
+
+/// Composition root. Constructs the pricing table, preferences, provider
+/// registry, and the shared ``SessionStore``, then hands itself to the view
+/// tree via `.environment(_:)`. Views read it with
+/// `@Environment(AppEnvironment.self)`.
+@MainActor
+@Observable
+final class AppEnvironment {
+    let pricing: ModelPricing
+    let preferences: Preferences
+    let store: SessionStore
+
+    init(pricing: ModelPricing, preferences: Preferences, store: SessionStore) {
+        self.pricing = pricing
+        self.preferences = preferences
+        self.store = store
+    }
+
+    convenience init() {
+        let pricing = ModelPricing.loadDefault()
+        self.init(
+            pricing: pricing,
+            preferences: Preferences(),
+            store: SessionStore(registry: ProviderRegistry(pricing: pricing), pricing: pricing)
+        )
+    }
+
+    /// Kick off the first scan and the periodic refresh. Call once at launch.
+    func start() {
+        Task { await store.refresh() }
+        applyAutoRefreshSetting()
+    }
+
+    func applyAutoRefreshSetting() {
+        store.startAutoRefresh(every: TimeInterval(preferences.autoRefreshMinutes) * 60)
+    }
+}
