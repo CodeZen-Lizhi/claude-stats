@@ -59,7 +59,11 @@ struct StatsPanelBody: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TickBar(active: env.store.isLoading)
+            if env.preferences.enabledProviders.count > 1 {
+                ProviderSwitcherBar(interactive: !isExport)
+            } else {
+                TickBar(active: env.store.isLoading)
+            }
             header
             StxRule()
             paneBar
@@ -101,7 +105,7 @@ struct StatsPanelBody: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            Text("CLAUDE STATS")
+            Text("\(env.preferences.selectedProvider.shortName.uppercased()) STATS")
                 .font(.sora(15, weight: .semibold))
                 .tracking(1.6)
                 .foregroundStyle(.primary)

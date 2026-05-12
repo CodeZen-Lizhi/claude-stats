@@ -14,6 +14,10 @@ protocol Provider: Sendable {
     /// the "no data found" empty state without an expensive scan.
     var dataDirectoryExists: Bool { get }
 
+    /// Human-readable path of the directory this provider reads from, shown in
+    /// the empty state. `nil` if the provider has no fixed location yet.
+    var dataDirectoryPath: String? { get }
+
     /// Cheap pass: enumerate transcripts and return their metadata. Does not
     /// open/parse the files. Newest first.
     func discoverSessions() async -> [Session]
@@ -21,4 +25,8 @@ protocol Provider: Sendable {
     /// Parse one transcript into ``SessionStats``. `nil` if the file is gone
     /// or unreadable.
     func parse(_ session: Session) async -> SessionStats?
+}
+
+extension Provider {
+    var dataDirectoryPath: String? { nil }
 }

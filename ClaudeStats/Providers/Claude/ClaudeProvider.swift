@@ -12,6 +12,8 @@ struct ClaudeProvider: Provider {
         return FileManager.default.fileExists(atPath: paths.projectsDirectory.path, isDirectory: &isDir) && isDir.boolValue
     }
 
+    var dataDirectoryPath: String? { paths.projectsDirectory.path }
+
     func discoverSessions() async -> [Session] {
         await SessionScanner(paths: paths).scan()
     }

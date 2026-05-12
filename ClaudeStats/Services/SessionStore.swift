@@ -32,21 +32,41 @@ final class SessionStore {
 
     // MARK: Queries
 
-    func summary(for period: StatsPeriod, now: Date = .now) -> UsageSummary {
-        UsageSummary.make(period: period, sessions: sessions, pricing: pricing, now: now)
+    /// All discovered sessions belonging to `provider`.
+    func sessions(for provider: ProviderKind) -> [Session] {
+        sessions.filter { $0.provider == provider }
     }
 
-    func summary(for selection: PeriodSelection, now: Date = .now) -> UsageSummary {
+    private func sessions(matching provider: ProviderKind?) -> [Session] {
+        guard let provider else { return sessions }
+        return sessions.filter { $0.provider == provider }
+    }
+
+    /// Whether `provider`'s on-disk data directory exists.
+    func dataDirectoryExists(for provider: ProviderKind) -> Bool {
+        registry.provider(for: provider)?.dataDirectoryExists ?? false
+    }
+
+    /// `provider`'s data directory path, for the empty-state message.
+    func dataDirectoryPath(for provider: ProviderKind) -> String? {
+        registry.provider(for: provider)?.dataDirectoryPath
+    }
+
+    func summary(for period: StatsPeriod, provider: ProviderKind? = nil, now: Date = .now) -> UsageSummary {
+        UsageSummary.make(period: period, sessions: sessions(matching: provider), pricing: pricing, now: now)
+    }
+
+    func summary(for selection: PeriodSelection, provider: ProviderKind? = nil, now: Date = .now) -> UsageSummary {
         switch selection {
         case .preset(let period):
-            return summary(for: period, now: now)
+            return summary(for: period, provider: provider, now: now)
         case .custom(let start, let end):
-            return UsageSummary.makeCustom(start: start, end: end, sessions: sessions, pricing: pricing)
+            return UsageSummary.makeCustom(start: start, end: end, sessions: sessions(matching: provider), pricing: pricing)
         }
     }
 
-    func sessions(in period: StatsPeriod, now: Date = .now) -> [Session] {
-        sessions.filter { period.contains($0.stats?.lastActivity ?? $0.lastModified, now: now) }
+    func sessions(in period: StatsPeriod, provider: ProviderKind? = nil, now: Date = .now) -> [Session] {
+        sessions(matching: provider).filter { period.contains($0.stats?.lastActivity ?? $0.lastModified, now: now) }
     }
 
     // MARK: Refresh

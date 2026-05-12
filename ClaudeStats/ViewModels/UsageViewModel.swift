@@ -21,7 +21,7 @@ final class UsageViewModel {
     /// Linear vs. ln scaling (only used in line mode on non-Today periods).
     var scaleMode: TrendScaleMode = .linear
 
-    func summary(from store: SessionStore) -> UsageSummary {
-        store.summary(for: period)
+    func summary(from store: SessionStore, provider: ProviderKind) -> UsageSummary {
+        store.summary(for: period, provider: provider)
     }
 }

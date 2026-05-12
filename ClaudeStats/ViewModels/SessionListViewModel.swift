@@ -41,8 +41,8 @@ final class SessionListViewModel {
         }
     }
 
-    func projectGroups(from store: SessionStore) -> [ProjectGroup] {
-        var sessions = store.sessions
+    func projectGroups(from store: SessionStore, provider: ProviderKind) -> [ProjectGroup] {
+        var sessions = store.sessions(for: provider)
 
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if !query.isEmpty {

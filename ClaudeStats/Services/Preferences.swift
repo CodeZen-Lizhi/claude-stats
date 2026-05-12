@@ -29,6 +29,33 @@ final class Preferences {
         didSet { defaults.set(menuBarPeriod.rawValue, forKey: Keys.menuBarPeriod) }
     }
 
+    /// Which platforms the user has turned on. The switcher bar only appears
+    /// when this has more than one entry; otherwise the panel shows the single
+    /// enabled platform (and the original scanline strip). Always non-empty.
+    var enabledProviders: Set<ProviderKind> {
+        didSet {
+            if enabledProviders.isEmpty { enabledProviders = [.claude] }   // re-fires didSet, persists below
+            defaults.set(enabledProviders.map(\.rawValue).joined(separator: ","), forKey: Keys.enabledProviders)
+            if !enabledProviders.contains(selectedProvider) {
+                selectedProvider = orderedEnabledProviders.first ?? .claude
+            }
+        }
+    }
+    /// The platform currently being viewed. Always a member of ``enabledProviders``.
+    var selectedProvider: ProviderKind {
+        didSet { defaults.set(selectedProvider.rawValue, forKey: Keys.selectedProvider) }
+    }
+    /// When off, the app forgets ``selectedProvider`` on launch and starts on
+    /// the first enabled platform.
+    var rememberSelectedProvider: Bool {
+        didSet { defaults.set(rememberSelectedProvider, forKey: Keys.rememberSelectedProvider) }
+    }
+
+    /// ``enabledProviders`` in canonical (``ProviderKind/allCases``) order.
+    var orderedEnabledProviders: [ProviderKind] {
+        ProviderKind.allCases.filter(enabledProviders.contains)
+    }
+
     /// Opt-in to the AI activity analysis (reads macOS Screen Time; needs Full
     /// Disk Access). Off by default — the Activity tab only appears when on.
     var aiActivityAnalysisEnabled: Bool {
@@ -70,6 +97,22 @@ final class Preferences {
         gitOpensInWindow = defaults.bool(forKey: Keys.gitOpensInWindow)
         ideBundleIDsAdded = defaults.stringArray(forKey: Keys.ideBundleIDsAdded) ?? []
         ideBundleIDsRemoved = defaults.stringArray(forKey: Keys.ideBundleIDsRemoved) ?? []
+
+        let storedEnabled = (defaults.string(forKey: Keys.enabledProviders) ?? "")
+            .split(separator: ",")
+            .compactMap { ProviderKind(rawValue: String($0)) }
+        let enabled = storedEnabled.isEmpty ? Set([ProviderKind.claude]) : Set(storedEnabled)
+        let remember = (defaults.object(forKey: Keys.rememberSelectedProvider) as? Bool) ?? true
+        let storedSelected = ProviderKind(rawValue: defaults.string(forKey: Keys.selectedProvider) ?? "")
+        let firstEnabled = ProviderKind.allCases.first(where: enabled.contains) ?? .claude
+
+        enabledProviders = enabled
+        rememberSelectedProvider = remember
+        if remember, let s = storedSelected, enabled.contains(s) {
+            selectedProvider = s
+        } else {
+            selectedProvider = firstEnabled
+        }
     }
 
     private enum Keys {
@@ -81,5 +124,8 @@ final class Preferences {
         static let gitOpensInWindow = "gitOpensInWindow"
         static let ideBundleIDsAdded = "ideBundleIDsAdded"
         static let ideBundleIDsRemoved = "ideBundleIDsRemoved"
+        static let enabledProviders = "enabledProviders"
+        static let selectedProvider = "selectedProvider"
+        static let rememberSelectedProvider = "rememberSelectedProvider"
     }
 }

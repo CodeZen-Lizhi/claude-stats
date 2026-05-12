@@ -22,7 +22,14 @@ struct SettingsView: View {
                     }
                 }
                 .onChange(of: prefs.autoRefreshMinutes) { _, _ in env.applyAutoRefreshSetting() }
+
+                Toggle("Remember selected platform", isOn: $prefs.rememberSelectedProvider)
+                Text("When off, the app starts on the first enabled platform each launch instead of the one you last viewed.")
+                    .font(.sora(11))
+                    .foregroundStyle(.secondary)
             }
+
+            platformsSection(prefs: prefs)
 
             Section("Menu bar") {
                 Picker("Show", selection: $prefs.menuBarMetric) {
@@ -56,6 +63,33 @@ struct SettingsView: View {
         .font(.sora(12))
         .frame(width: 440)
         .navigationTitle("Claude Stats Settings")
+    }
+
+    @ViewBuilder
+    private func platformsSection(prefs: Preferences) -> some View {
+        Section("Platforms") {
+            Text("Pick the AI coding tools to track. Enable more than one and a platform switcher appears at the top of the panel.")
+                .font(.sora(11))
+                .foregroundStyle(.secondary)
+            ForEach(ProviderKind.allCases) { kind in
+                Toggle(isOn: Binding(
+                    get: { prefs.enabledProviders.contains(kind) },
+                    set: { on in
+                        if on {
+                            prefs.enabledProviders.insert(kind)
+                        } else if prefs.enabledProviders.count > 1 {
+                            prefs.enabledProviders.remove(kind)
+                        }
+                    })) {
+                    Label {
+                        Text(kind.displayName)
+                    } icon: {
+                        Image(kind.assetName).resizable().scaledToFit().frame(width: 16, height: 16)
+                    }
+                }
+                .disabled(prefs.enabledProviders.count == 1 && prefs.enabledProviders.contains(kind))
+            }
+        }
     }
 
     @ViewBuilder

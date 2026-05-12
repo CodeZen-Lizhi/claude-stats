@@ -26,7 +26,8 @@ struct UsageView: View {
 
     var body: some View {
         @Bindable var vm = vm
-        let summary = exportConfig.map { env.store.summary(for: $0.period) } ?? vm.summary(from: env.store)
+        let provider = env.preferences.selectedProvider
+        let summary = exportConfig.map { env.store.summary(for: $0.period, provider: provider) } ?? vm.summary(from: env.store, provider: provider)
         let series = summary.trendSeries()
         let isHourly = series.granularity == .hour
         let style: TrendChartStyle = isHourly ? .line : (exportConfig?.chartStyle ?? vm.chartStyle)

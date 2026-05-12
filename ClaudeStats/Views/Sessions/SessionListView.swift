@@ -39,7 +39,7 @@ struct SessionListView: View {
 
     @ViewBuilder
     private func exportContent(store: SessionStore, selection: PeriodSelection) -> some View {
-        let sessions = store.sessions
+        let sessions = store.sessions(for: env.preferences.selectedProvider)
             .filter { selection.contains($0.stats?.lastActivity ?? $0.lastModified) }
             .prefix(Self.exportRowLimit)
         if sessions.isEmpty {
@@ -65,26 +65,32 @@ struct SessionListView: View {
 
     @ViewBuilder
     private func content(store: SessionStore) -> some View {
-        if !store.dataDirectoryExists {
+        let provider = env.preferences.selectedProvider
+        let providerSessions = store.sessions(for: provider)
+        if !store.dataDirectoryExists(for: provider) {
             ContentUnavailableView {
-                Label("No Claude Code Data", systemImage: "tray")
+                Label("No \(provider.shortName) Data", systemImage: "tray")
             } description: {
-                Text("Couldn't find \(ClaudePaths.default.projectsDirectory.path).")
+                if let path = store.dataDirectoryPath(for: provider) {
+                    Text("Couldn't find \(path).")
+                } else {
+                    Text("\(provider.displayName) usage isn't supported yet.")
+                }
             }
             .font(.sora(12))
         } else {
-            let groups = vm.projectGroups(from: store)
+            let groups = vm.projectGroups(from: store, provider: provider)
             if groups.isEmpty {
-                if store.isLoading && store.sessions.isEmpty {
+                if store.isLoading && providerSessions.isEmpty {
                     ProgressView("Scanning sessions…")
                         .font(.sora(11))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ContentUnavailableView(
-                        store.sessions.isEmpty ? "No Sessions" : "No Matches",
-                        systemImage: store.sessions.isEmpty ? "tray" : "magnifyingglass",
-                        description: Text(store.sessions.isEmpty
-                            ? "No usable transcripts found yet."
+                        providerSessions.isEmpty ? "No Sessions" : "No Matches",
+                        systemImage: providerSessions.isEmpty ? "tray" : "magnifyingglass",
+                        description: Text(providerSessions.isEmpty
+                            ? "No usable \(provider.shortName) transcripts found yet."
                             : "No session matches “\(vm.searchText)”.")
                     )
                     .font(.sora(12))

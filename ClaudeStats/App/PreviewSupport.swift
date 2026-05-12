@@ -98,6 +98,21 @@ extension Session {
                     ]
                 )
             ),
+            Session(
+                id: "codex::d4", externalID: "d4", provider: .codex,
+                projectDirectoryName: "/Users/dev/projects/tag",
+                filePath: "/Users/dev/.codex/sessions/2026/01/01/rollout-2026-01-01T10-00-00-d4.jsonl",
+                cwd: "/Users/dev/projects/tag", lastModified: daysAgo(1), fileSize: 180_000,
+                stats: SessionStats(
+                    title: "Tidy up the markdown renderer",
+                    messageCount: 31, firstActivity: daysAgo(1), lastActivity: daysAgo(1),
+                    models: [model("gpt-5.1-codex", 14, usage(40_000, 6_000, 120_000))],
+                    timeline: [
+                        bucket(1, 11, "gpt-5.1-codex", usage(22_000, 3_000, 70_000)),
+                        bucket(1, 12, "gpt-5.1-codex", usage(18_000, 3_000, 50_000)),
+                    ]
+                )
+            ),
         ]
     }
 

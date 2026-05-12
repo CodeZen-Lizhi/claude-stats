@@ -30,6 +30,7 @@ struct AIActivityView: View {
         let token: UInt64
         let lastRefreshed: Date?
         let bundleIDs: Set<String>
+        let provider: ProviderKind
     }
 
     var body: some View {
@@ -43,9 +44,11 @@ struct AIActivityView: View {
     private var interactiveBody: some View {
         @Bindable var vm = vm
         let bundleIDs = env.preferences.effectiveIDEBundleIDs
+        let provider = env.preferences.selectedProvider
         let key = ReloadKey(token: vm.reloadToken,
                             lastRefreshed: env.store.lastRefreshedAt,
-                            bundleIDs: bundleIDs)
+                            bundleIDs: bundleIDs,
+                            provider: provider)
 
         return FadingScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -62,7 +65,7 @@ struct AIActivityView: View {
             .padding(14)
         }
         .task(id: key) {
-            await vm.reload(sessions: env.store.sessions, bundleIDs: bundleIDs)
+            await vm.reload(sessions: env.store.sessions(for: provider), bundleIDs: bundleIDs)
         }
         .onAppear { vm.refreshPermissionState() }
     }

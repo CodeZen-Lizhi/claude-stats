@@ -50,7 +50,8 @@ struct ShareExportView: View {
 
     private var activityReloadKey: AnyHashable {
         [AnyHashable(pane == .activity), AnyHashable(activityVM.reloadToken),
-         AnyHashable(env.store.lastRefreshedAt), AnyHashable(env.preferences.effectiveIDEBundleIDs)]
+         AnyHashable(env.store.lastRefreshedAt), AnyHashable(env.preferences.effectiveIDEBundleIDs),
+         AnyHashable(env.preferences.selectedProvider)]
     }
 
     /// A day binding that re-triggers the activity reload when changed.
@@ -93,7 +94,7 @@ struct ShareExportView: View {
         .frame(minHeight: 540)
         .task(id: activityReloadKey) {
             guard pane == .activity else { return }
-            await activityVM.reload(sessions: env.store.sessions, bundleIDs: env.preferences.effectiveIDEBundleIDs)
+            await activityVM.reload(sessions: env.store.sessions(for: env.preferences.selectedProvider), bundleIDs: env.preferences.effectiveIDEBundleIDs)
         }
         .onAppear { activityVM.refreshPermissionState() }
     }

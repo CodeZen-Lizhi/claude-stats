@@ -44,9 +44,11 @@ struct ModelPricing: Sendable, Hashable {
         if lower.contains("opus"), let r = first(containing: "opus") { return r }
         if lower.contains("haiku"), let r = first(containing: "haiku") { return r }
         if lower.contains("sonnet"), let r = first(containing: "sonnet") { return r }
-        if lower.contains("gpt") || lower.contains("o1") || lower.contains("o3") || lower.contains("codex"),
+        if lower.contains("gpt") || lower.contains("o1") || lower.contains("o3") || lower.contains("o4") || lower.contains("codex"),
            let r = first(containing: "gpt") { return r }
         if lower.contains("gemini"), let r = first(containing: "gemini") { return r }
+        if lower.contains("kimi") || lower.contains("moonshot"), let r = first(containing: "kimi") { return r }
+        if lower.contains("minimax") || lower.contains("abab"), let r = first(containing: "minimax") { return r }
         return defaultRate
     }
 

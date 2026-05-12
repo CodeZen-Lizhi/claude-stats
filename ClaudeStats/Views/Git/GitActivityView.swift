@@ -21,11 +21,13 @@ struct GitActivityView: View {
     private struct ReloadKey: Equatable {
         let token: UInt64
         let lastRefreshed: Date?
+        let provider: ProviderKind
     }
 
     var body: some View {
         @Bindable var vm = vm
-        let key = ReloadKey(token: vm.reloadToken, lastRefreshed: env.store.lastRefreshedAt)
+        let provider = env.preferences.selectedProvider
+        let key = ReloadKey(token: vm.reloadToken, lastRefreshed: env.store.lastRefreshedAt, provider: provider)
         return FadingScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 headerRow
@@ -47,7 +49,7 @@ struct GitActivityView: View {
             .padding(14)
         }
         .task(id: key) {
-            await vm.reload(sessions: env.store.sessions)
+            await vm.reload(sessions: env.store.sessions(for: provider))
         }
     }
 
@@ -120,7 +122,7 @@ struct GitActivityView: View {
     // MARK: Correlation
 
     private var correlationPanel: some View {
-        let points = vm.correlation(sessions: env.store.sessions)
+        let points = vm.correlation(sessions: env.store.sessions(for: env.preferences.selectedProvider))
         let hasTokens = points.contains { $0.claudeTokens > 0 }
         return VStack(alignment: .leading, spacing: 10) {
             Text("CLAUDE USAGE vs COMMITS")

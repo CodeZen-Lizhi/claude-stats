@@ -4,13 +4,20 @@ import Foundation
 /// ``ModelPricing`` table threaded in so providers can attach cost figures.
 ///
 /// Adding a provider = a new folder under `Providers/`, a `Provider`
-/// conformer, and one line in ``init(pricing:)``.
+/// conformer, and one line in ``init(pricing:)``. The display order in the UI
+/// comes from ``ProviderKind/allCases``, not this list.
 struct ProviderRegistry: Sendable {
     let providers: [any Provider]
 
-    init(pricing: ModelPricing, paths: ClaudePaths = .default) {
+    init(pricing: ModelPricing,
+         claudePaths: ClaudePaths = .default,
+         codexPaths: CodexPaths = .default) {
         providers = [
-            ClaudeProvider(paths: paths, pricing: pricing),
+            ClaudeProvider(paths: claudePaths, pricing: pricing),
+            CodexProvider(paths: codexPaths, pricing: pricing),
+            AntigravityProvider(),
+            KimiProvider(),
+            MiniMaxProvider(),
         ]
     }
 
