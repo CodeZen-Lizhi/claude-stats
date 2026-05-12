@@ -1,30 +1,27 @@
 import Foundation
 
-/// Recognises Antigravity (the Gemini-powered VS Code fork) but doesn't parse
-/// its usage yet.
+/// Recognises the Gemini CLI / Antigravity but doesn't parse its usage yet.
 ///
-/// Antigravity stores its agent state in `state.vscdb` (SQLite) under
-/// `~/Library/Application Support/Antigravity/User/globalStorage/` plus
-/// `~/.gemini/antigravity/`, but the keys that would carry per-conversation
-/// model + token counts are empty on the machines inspected so far (the
-/// trajectory data appears to live server-side). Until a usable on-disk
-/// format turns up, `discoverSessions()` returns nothing.
+/// Gemini-family tools keep state under `~/.gemini/` (the CLI's logs, the
+/// Antigravity IDE fork's `state.vscdb`, etc.), but the per-conversation model
+/// + token records aren't in a usable on-disk form on the machines inspected
+/// so far (the trajectory data appears to live server-side). Until that's
+/// confirmed, `discoverSessions()` returns nothing.
 ///
-// TODO: implement once the trajectory/usage storage format is confirmed.
-struct AntigravityProvider: Provider {
-    var kind: ProviderKind { .antigravity }
+// TODO: implement once the Gemini CLI session-log path/format is confirmed.
+struct GeminiProvider: Provider {
+    var kind: ProviderKind { .gemini }
 
-    private var globalStorageDirectory: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/Antigravity/User/globalStorage", isDirectory: true)
+    private var dataDirectory: URL {
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".gemini", isDirectory: true)
     }
 
     var dataDirectoryExists: Bool {
         var isDir: ObjCBool = false
-        return FileManager.default.fileExists(atPath: globalStorageDirectory.path, isDirectory: &isDir) && isDir.boolValue
+        return FileManager.default.fileExists(atPath: dataDirectory.path, isDirectory: &isDir) && isDir.boolValue
     }
 
-    var dataDirectoryPath: String? { globalStorageDirectory.path }
+    var dataDirectoryPath: String? { dataDirectory.path }
 
     func discoverSessions() async -> [Session] { [] }
 

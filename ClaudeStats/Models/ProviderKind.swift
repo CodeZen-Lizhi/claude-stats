@@ -1,16 +1,16 @@
 import SwiftUI
 
 /// The AI coding tools Claude Stats can read. ``claude`` is fully implemented;
-/// ``codex`` reads `~/.codex/sessions/`; ``antigravity`` / ``kimi`` /
-/// ``minimax`` are recognised (UI, settings, asset) but their on-disk log
-/// formats aren't parsed yet — their providers return no sessions.
+/// ``codex`` reads `~/.codex/sessions/`; ``gemini`` / ``kimi`` / ``minimax``
+/// are recognised (UI, settings, asset) but their on-disk log formats aren't
+/// parsed yet — their providers return no sessions.
 ///
 /// `allCases` order is the canonical display order (used by the platform
 /// switcher bar and the settings list).
 enum ProviderKind: String, CaseIterable, Sendable, Identifiable, Hashable {
     case claude
     case codex
-    case antigravity
+    case gemini
     case kimi
     case minimax
 
@@ -21,7 +21,7 @@ enum ProviderKind: String, CaseIterable, Sendable, Identifiable, Hashable {
         switch self {
         case .claude: "Claude Code"
         case .codex: "OpenAI Codex"
-        case .antigravity: "Antigravity"
+        case .gemini: "Gemini"
         case .kimi: "Kimi CLI"
         case .minimax: "MiniMax"
         }
@@ -32,20 +32,33 @@ enum ProviderKind: String, CaseIterable, Sendable, Identifiable, Hashable {
         switch self {
         case .claude: "Claude"
         case .codex: "Codex"
-        case .antigravity: "Antigravity"
+        case .gemini: "Gemini"
         case .kimi: "Kimi"
         case .minimax: "MiniMax"
         }
     }
 
-    /// Name of the colour-logo image set in `Assets.xcassets/Providers/`.
+    /// Name of the colour-logo image set in `Assets.xcassets/Providers/` — used
+    /// in Settings.
     var assetName: String {
         switch self {
         case .claude: "claudecode-color"
         case .codex: "codex-color"
-        case .antigravity: "antigravity-color"
-        case .kimi: "kimi-color"
+        case .gemini: "gemini-color"
+        case .kimi: "kimi"   // Kimi ships a single logo used in both places.
         case .minimax: "minimax-color"
+        }
+    }
+
+    /// Name of the monochrome (template-rendered) logo image set — used in the
+    /// panel's platform switcher so all logos read uniformly.
+    var monochromeAssetName: String {
+        switch self {
+        case .claude: "claudecode"
+        case .codex: "codex"
+        case .gemini: "gemini"
+        case .kimi: "kimi"
+        case .minimax: "minimax"
         }
     }
 
@@ -54,7 +67,7 @@ enum ProviderKind: String, CaseIterable, Sendable, Identifiable, Hashable {
         switch self {
         case .claude: "sparkles"
         case .codex: "chevron.left.forwardslash.chevron.right"
-        case .antigravity: "arrow.up.forward"
+        case .gemini: "sparkle"
         case .kimi: "moon.stars"
         case .minimax: "bolt"
         }
@@ -64,7 +77,7 @@ enum ProviderKind: String, CaseIterable, Sendable, Identifiable, Hashable {
         switch self {
         case .claude: Color(red: 0.85, green: 0.45, blue: 0.20)
         case .codex: Color(red: 0.10, green: 0.10, blue: 0.12)
-        case .antigravity: Color(red: 0.26, green: 0.52, blue: 0.96)
+        case .gemini: Color(red: 0.19, green: 0.53, blue: 1.0)
         case .kimi: Color(red: 0.20, green: 0.20, blue: 0.22)
         case .minimax: Color(red: 0.92, green: 0.30, blue: 0.26)
         }

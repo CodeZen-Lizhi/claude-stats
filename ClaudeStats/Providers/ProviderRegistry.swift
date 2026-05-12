@@ -15,7 +15,7 @@ struct ProviderRegistry: Sendable {
         providers = [
             ClaudeProvider(paths: claudePaths, pricing: pricing),
             CodexProvider(paths: codexPaths, pricing: pricing),
-            AntigravityProvider(),
+            GeminiProvider(),
             KimiProvider(),
             MiniMaxProvider(),
         ]

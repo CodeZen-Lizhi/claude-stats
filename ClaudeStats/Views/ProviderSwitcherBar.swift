@@ -46,11 +46,13 @@ private struct ProviderLogoButton: View {
 
     var body: some View {
         let content = VStack(spacing: 3) {
-            Image(kind.assetName)
+            Image(kind.monochromeAssetName)
                 .resizable()
+                .renderingMode(.template)
                 .scaledToFit()
                 .frame(width: 18, height: 18)
-                .opacity(isSelected ? 1 : (hovering ? 0.8 : 0.38))
+                .foregroundStyle(.primary)
+                .opacity(isSelected ? 1 : (hovering ? 0.7 : 0.32))
             Rectangle()
                 .fill(Color.stxAccent)
                 .frame(height: 1.5)
@@ -97,7 +99,7 @@ private struct LoadingLine: View {
 #if DEBUG
 #Preview("Switcher") {
     let env = AppEnvironment.preview()
-    env.preferences.enabledProviders = [.claude, .codex, .antigravity, .kimi, .minimax]
+    env.preferences.enabledProviders = [.claude, .codex, .gemini, .kimi, .minimax]
     return VStack(spacing: 0) {
         ProviderSwitcherBar().environment(env)
         StxRule()
