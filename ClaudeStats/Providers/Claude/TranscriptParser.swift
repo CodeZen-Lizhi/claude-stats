@@ -20,6 +20,7 @@ struct TranscriptParser: Sendable {
         var lastActivity: Date?
         var aiTitle: String?
         var firstUserTitle: String?
+        var messageTimestamps: [Date] = []
         let calendar = Calendar.current
 
         let decoder = JSONDecoder()
@@ -35,6 +36,7 @@ struct TranscriptParser: Sendable {
                 messageCount += 1
                 let date = ISO8601.parse(line.timestamp)
                 track(date, &firstActivity, &lastActivity)
+                if let date { messageTimestamps.append(date) }
                 let model = line.message?.model ?? "unknown"
                 let usage = line.message?.usage?.tokenUsage ?? .zero
                 if usage.total > 0 {
@@ -57,7 +59,9 @@ struct TranscriptParser: Sendable {
 
             case "user":
                 messageCount += 1
-                track(ISO8601.parse(line.timestamp), &firstActivity, &lastActivity)
+                let date = ISO8601.parse(line.timestamp)
+                track(date, &firstActivity, &lastActivity)
+                if let date { messageTimestamps.append(date) }
                 if firstUserTitle == nil, case .text(let raw)? = line.message?.content,
                    let cleaned = TitleSanitizer.sanitize(raw) {
                     firstUserTitle = cleaned
@@ -85,7 +89,8 @@ struct TranscriptParser: Sendable {
             firstActivity: firstActivity,
             lastActivity: lastActivity,
             models: models,
-            timeline: timeline
+            timeline: timeline,
+            activityIntervals: Self.coalesceBursts(messageTimestamps)
         )
     }
 
@@ -93,6 +98,36 @@ struct TranscriptParser: Sendable {
         guard let date else { return }
         if first == nil || date < first! { first = date }
         if last == nil || date > last! { last = date }
+    }
+
+    /// Adjacent message timestamps within ``burstGap`` collapse into one
+    /// interval; a lone message (or a sub-``minBurst`` run) is widened to
+    /// ``minBurst`` so it stays visible on a timeline.
+    private static let burstGap: TimeInterval = 5 * 60
+    private static let minBurst: TimeInterval = 30
+
+    static func coalesceBursts(_ timestamps: [Date]) -> [DateInterval] {
+        let sorted = timestamps.sorted()
+        guard let first = sorted.first else { return [] }
+        var out: [DateInterval] = []
+        var start = first
+        var end = first
+        for t in sorted.dropFirst() {
+            if t.timeIntervalSince(end) <= burstGap {
+                end = max(end, t)
+            } else {
+                out.append(burstInterval(start, end))
+                start = t; end = t
+            }
+        }
+        out.append(burstInterval(start, end))
+        return out
+    }
+
+    private static func burstInterval(_ start: Date, _ end: Date) -> DateInterval {
+        end.timeIntervalSince(start) >= minBurst
+            ? DateInterval(start: start, end: end)
+            : DateInterval(start: start, duration: minBurst)
     }
 }
 

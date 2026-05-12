@@ -3,10 +3,15 @@ import AppKit
 
 /// Which pane of the stats panel is shown.
 enum StatsPane: String, CaseIterable, Identifiable {
-    case sessions, usage
+    case sessions, usage, activity
     var id: String { rawValue }
-    var title: String { self == .sessions ? "Sessions" : "Usage" }
-    var toggled: StatsPane { self == .sessions ? .usage : .sessions }
+    var title: String {
+        switch self {
+        case .sessions: "Sessions"
+        case .usage: "Usage"
+        case .activity: "Activity"
+        }
+    }
 }
 
 /// The stats panel body: a scanline strip, a header, a Sessions/Usage title bar
@@ -25,6 +30,16 @@ struct StatsPanelBody: View {
 
     private var isExport: Bool { exportConfig != nil }
 
+    private var availablePanes: [StatsPane] {
+        var panes: [StatsPane] = [.sessions, .usage]
+        if !isExport && env.preferences.aiActivityAnalysisEnabled { panes.append(.activity) }
+        return panes
+    }
+
+    private var effectivePane: StatsPane {
+        availablePanes.contains(pane) ? pane : .usage
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             TickBar(active: env.store.isLoading)
@@ -33,35 +48,31 @@ struct StatsPanelBody: View {
             paneBar
 
             Group {
-                switch pane {
+                switch effectivePane {
                 case .sessions: SessionListView(mode: exportConfig.map { .export($0.period) } ?? .interactive)
                 case .usage: UsageView(mode: exportConfig.map(UsageView.Mode.export) ?? .interactive)
+                case .activity: AIActivityView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: isExport ? nil : .infinity)
+        }
+        .onChange(of: env.preferences.aiActivityAnalysisEnabled) { _, enabled in
+            if !enabled && pane == .activity { pane = .usage }
         }
     }
 
     private var paneBar: some View {
         HStack(spacing: 10) {
-            Text(pane.title.uppercased())
+            Text(effectivePane.title.uppercased())
                 .font(.sora(22, weight: .semibold))
                 .tracking(2.5)
                 .foregroundStyle(.primary)
             Spacer()
-            Button {
-                pane = pane.toggled
-            } label: {
-                BracketBox(spacing: 5) {
-                    Label(pane.toggled.title.uppercased(), systemImage: "arrow.left.arrow.right")
-                        .labelStyle(.titleAndIcon)
-                        .font(.sora(10))
-                        .tracking(0.8)
+            HStack(spacing: 12) {
+                ForEach(availablePanes) { p in
+                    PaneChip(title: p.title, isSelected: p == effectivePane) { pane = p }
                 }
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(Color.stxMuted)
-            .help("Switch to \(pane.toggled.title)")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -163,6 +174,35 @@ struct MenuPanelView: View {
         .foregroundStyle(Color.stxMuted)
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
+    }
+}
+
+/// A small underlined tab chip used in the pane bar to switch panes.
+private struct PaneChip: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                Text(title.uppercased())
+                    .font(.sora(10, weight: .semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(isSelected ? .primary : (hovering ? Color.primary : Color.primary.opacity(0.40)))
+                Rectangle()
+                    .fill(Color.stxAccent)
+                    .frame(height: 1.5)
+                    .scaleEffect(x: isSelected ? 1 : 0, anchor: .center)
+            }
+            .fixedSize()
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.18), value: isSelected)
+        .animation(.easeOut(duration: 0.12), value: hovering)
     }
 }
 

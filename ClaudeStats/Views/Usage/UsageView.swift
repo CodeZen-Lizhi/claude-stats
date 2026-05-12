@@ -35,11 +35,12 @@ struct UsageView: View {
 
         let content = VStack(alignment: .leading, spacing: 16) {
             if interactive {
-                Picker("Period", selection: $vm.period) {
-                    ForEach(StatsPeriod.allCases) { Text($0.displayName.uppercased()).tag($0) }
+                HStack(spacing: 0) {
+                    ForEach(Array(StatsPeriod.allCases.enumerated()), id: \.element) { idx, p in
+                        if idx > 0 { Spacer(minLength: 8) }
+                        PeriodTab(period: p, isSelected: vm.period == p) { vm.period = p }
+                    }
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
             }
 
             statGrid(summary)
@@ -286,6 +287,40 @@ struct UsageView: View {
                     vm.chartStyle = vm.chartStyle == .line ? .bar : .line
                 }
             }
+        }
+    }
+
+    private struct PeriodTab: View {
+        let period: StatsPeriod
+        let isSelected: Bool
+        let action: () -> Void
+        @State private var hovering = false
+
+        var body: some View {
+            Button(action: action) {
+                VStack(spacing: 4) {
+                    Text(period.displayName.uppercased())
+                        .font(.sora(10, weight: .semibold))
+                        .tracking(0.8)
+                        .foregroundStyle(textColor)
+                        .lineLimit(1)
+                    Rectangle()
+                        .fill(Color.stxAccent)
+                        .frame(height: 1.5)
+                        .scaleEffect(x: isSelected ? 1 : 0, anchor: .leading)
+                }
+                .fixedSize(horizontal: true, vertical: false)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .onHover { hovering = $0 }
+            .animation(.easeOut(duration: 0.22), value: isSelected)
+            .animation(.easeOut(duration: 0.12), value: hovering)
+        }
+
+        private var textColor: Color {
+            if isSelected { return .primary }
+            return hovering ? .primary : Color.primary.opacity(0.40)
         }
     }
 

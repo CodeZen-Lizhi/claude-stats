@@ -78,7 +78,8 @@ struct ShareExportView: View {
 
             optionGroup("Pane") {
                 Picker("Pane", selection: $pane) {
-                    ForEach(StatsPane.allCases) { Text($0.title).tag($0) }
+                    // Activity isn't exportable (it needs live Screen Time data).
+                    ForEach(StatsPane.allCases.filter { $0 != .activity }) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()

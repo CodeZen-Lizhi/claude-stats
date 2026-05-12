@@ -34,6 +34,21 @@ enum Format {
         date.formatted(.dateTime.month(.abbreviated).day())
     }
 
+    /// Compact duration: `0m`, `7m`, `1h 04m`, `3h`. Rounds to the minute.
+    static func duration(_ seconds: TimeInterval) -> String {
+        let total = max(0, Int(seconds.rounded()))
+        let minutes = total / 60
+        let h = minutes / 60
+        let m = minutes % 60
+        if h == 0 { return "\(m)m" }
+        return m == 0 ? "\(h)h" : String(format: "%dh %02dm", h, m)
+    }
+
+    /// `0%`, `48%`, `100%` from a `0...1` ratio.
+    static func percent(_ ratio: Double) -> String {
+        "\(Int((ratio * 100).rounded()))%"
+    }
+
     private static func trim(_ value: Double) -> String {
         // One decimal place, but drop a trailing `.0`.
         let s = String(format: "%.1f", value)

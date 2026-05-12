@@ -73,8 +73,8 @@ struct SessionListView: View {
             }
             .font(.sora(12))
         } else {
-            let sessions = vm.sessions(from: store)
-            if sessions.isEmpty {
+            let groups = vm.projectGroups(from: store)
+            if groups.isEmpty {
                 if store.isLoading && store.sessions.isEmpty {
                     ProgressView("Scanning sessions…")
                         .font(.sora(11))
@@ -92,11 +92,22 @@ struct SessionListView: View {
             } else {
                 FadingScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(Array(sessions.enumerated()), id: \.element.id) { index, session in
-                            SessionRow(session: session)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 7)
-                            if index < sessions.count - 1 {
+                        ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
+                            let isExpanded = vm.expandedProjects.contains(group.id)
+                            ProjectGroupRow(group: group, isExpanded: isExpanded) {
+                                withAnimation(.easeInOut(duration: 0.18)) { vm.toggle(group.id) }
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            if isExpanded {
+                                ForEach(group.sessions) { session in
+                                    SessionRow(session: session)
+                                        .padding(.leading, 28)
+                                        .padding(.trailing, 12)
+                                        .padding(.vertical, 7)
+                                }
+                            }
+                            if index < groups.count - 1 {
                                 StxRule().padding(.horizontal, 12)
                             }
                         }

@@ -1,13 +1,16 @@
 import Foundation
 import Observation
 
-/// UI state for the Sessions screen: a search query and a sort order. The
-/// derived list is computed against a ``SessionStore`` passed in by the view.
+/// UI state for the Sessions screen: a search query, a sort order, and which
+/// project groups are expanded. The derived list is computed against a
+/// ``SessionStore`` passed in by the view.
 @MainActor
 @Observable
 final class SessionListViewModel {
     var searchText: String = ""
     var sortOrder: SortOrder = .recent
+    /// Project groups (keyed by ``Session/projectDirectoryName``) that are open.
+    var expandedProjects: Set<String> = []
 
     enum SortOrder: String, CaseIterable, Identifiable {
         case recent, tokens, cost
@@ -21,26 +24,63 @@ final class SessionListViewModel {
         }
     }
 
-    func sessions(from store: SessionStore) -> [Session] {
-        var result = store.sessions
+    /// One project's sessions, already filtered and sorted for display.
+    struct ProjectGroup: Identifiable {
+        let id: String          // projectDirectoryName
+        let displayName: String
+        let sessions: [Session]
+        let lastActivity: Date
+        var count: Int { sessions.count }
+    }
+
+    func toggle(_ groupID: String) {
+        if expandedProjects.contains(groupID) {
+            expandedProjects.remove(groupID)
+        } else {
+            expandedProjects.insert(groupID)
+        }
+    }
+
+    func projectGroups(from store: SessionStore) -> [ProjectGroup] {
+        var sessions = store.sessions
 
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if !query.isEmpty {
-            result = result.filter { session in
+            sessions = sessions.filter { session in
                 session.projectDisplayName.lowercased().contains(query)
                     || (session.stats?.title.lowercased().contains(query) ?? false)
                     || (session.cwd?.lowercased().contains(query) ?? false)
             }
         }
 
+        let grouped = Dictionary(grouping: sessions, by: \.projectDirectoryName)
+        var groups = grouped.map { key, value -> ProjectGroup in
+            let sorted = sortedSessions(value)
+            let lastActivity = value
+                .map { $0.stats?.lastActivity ?? $0.lastModified }
+                .max() ?? .distantPast
+            return ProjectGroup(
+                id: key,
+                displayName: sorted.first?.projectDisplayName ?? key,
+                sessions: sorted,
+                lastActivity: lastActivity
+            )
+        }
+        groups.sort {
+            if $0.lastActivity != $1.lastActivity { return $0.lastActivity > $1.lastActivity }
+            return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+        }
+        return groups
+    }
+
+    private func sortedSessions(_ sessions: [Session]) -> [Session] {
         switch sortOrder {
         case .recent:
-            result.sort { ($0.stats?.lastActivity ?? $0.lastModified) > ($1.stats?.lastActivity ?? $1.lastModified) }
+            sessions.sorted { ($0.stats?.lastActivity ?? $0.lastModified) > ($1.stats?.lastActivity ?? $1.lastModified) }
         case .tokens:
-            result.sort { ($0.stats?.totalTokens ?? 0) > ($1.stats?.totalTokens ?? 0) }
+            sessions.sorted { ($0.stats?.totalTokens ?? 0) > ($1.stats?.totalTokens ?? 0) }
         case .cost:
-            result.sort { ($0.stats?.totalCost ?? 0) > ($1.stats?.totalCost ?? 0) }
+            sessions.sorted { ($0.stats?.totalCost ?? 0) > ($1.stats?.totalCost ?? 0) }
         }
-        return result
     }
 }

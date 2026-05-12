@@ -11,6 +11,10 @@ struct SessionStats: Sendable, Hashable {
     var models: [ModelUsage]
     /// Hourly buckets, one per `(model, hour)` with recorded usage.
     var timeline: [ModelBucket]
+    /// Coalesced runs of message activity ("bursts") — adjacent messages
+    /// within a gap threshold collapse into one interval. Used by the AI
+    /// activity analysis to overlap against editor-focus time.
+    var activityIntervals: [DateInterval] = []
 
     var totalUsage: TokenUsage { models.reduce(.zero) { $0 + $1.usage } }
     var totalTokens: Int { totalUsage.total }
