@@ -14,6 +14,7 @@ struct GitActivityView: View {
 
     @Environment(AppEnvironment.self) private var env
     @State private var vm = GitActivityViewModel()
+    @State private var graphRepo: GitRepo?
 
     private static let addColor = Color(red: 0.36, green: 0.68, blue: 0.34)
     private static let delColor = Color(red: 0.86, green: 0.30, blue: 0.24)
@@ -25,6 +26,14 @@ struct GitActivityView: View {
     }
 
     var body: some View {
+        if let graphRepo {
+            GitGraphView(repo: graphRepo, onBack: { self.graphRepo = nil })
+        } else {
+            overviewBody
+        }
+    }
+
+    private var overviewBody: some View {
         @Bindable var vm = vm
         let provider = env.preferences.selectedProvider
         let key = ReloadKey(token: vm.reloadToken, lastRefreshed: env.store.lastRefreshedAt, provider: provider)
@@ -203,10 +212,17 @@ struct GitActivityView: View {
 
     private var repoTimelinesPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("PER-REPO COMMIT TIMELINE")
-                .font(.sora(13, weight: .semibold))
-                .tracking(1.5)
-                .foregroundStyle(.primary)
+            HStack(spacing: 6) {
+                Text("PER-REPO COMMIT TIMELINE")
+                    .font(.sora(13, weight: .semibold))
+                    .tracking(1.5)
+                    .foregroundStyle(.primary)
+                Spacer()
+                Text("TAP A REPO FOR ITS GRAPH")
+                    .font(.sora(8))
+                    .tracking(0.6)
+                    .foregroundStyle(Color.stxMuted)
+            }
             ForEach(vm.repos) { activity in
                 StxRule()
                 repoTimelineRow(activity)
@@ -217,27 +233,34 @@ struct GitActivityView: View {
 
     private func repoTimelineRow(_ activity: RepoActivity) -> some View {
         let buckets = vm.timeline(for: activity)
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Text(activity.repo.displayName)
-                    .font(.sora(11, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                Spacer(minLength: 8)
-                Text("\(activity.commitCount) commit\(activity.commitCount == 1 ? "" : "s")")
-                    .font(.sora(9).monospacedDigit())
-                    .foregroundStyle(Color.stxMuted)
+        return Button { graphRepo = activity.repo } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(activity.repo.displayName)
+                        .font(.sora(11, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(Color.stxMuted)
+                    Spacer(minLength: 8)
+                    Text("\(activity.commitCount) commit\(activity.commitCount == 1 ? "" : "s")")
+                        .font(.sora(9).monospacedDigit())
+                        .foregroundStyle(Color.stxMuted)
+                }
+                Chart(buckets) { b in
+                    BarMark(x: .value("When", b.start), y: .value("Commits", b.commitCount))
+                        .foregroundStyle(Color.stxAccent.opacity(0.85))
+                        .cornerRadius(1)
+                }
+                .chartYAxis(.hidden)
+                .chartXAxis(.hidden)
+                .chartLegend(.hidden)
+                .frame(height: 28)
             }
-            Chart(buckets) { b in
-                BarMark(x: .value("When", b.start), y: .value("Commits", b.commitCount))
-                    .foregroundStyle(Color.stxAccent.opacity(0.85))
-                    .cornerRadius(1)
-            }
-            .chartYAxis(.hidden)
-            .chartXAxis(.hidden)
-            .chartLegend(.hidden)
-            .frame(height: 28)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
     }
 
     // MARK: Churn table

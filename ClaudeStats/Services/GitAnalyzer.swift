@@ -90,6 +90,69 @@ struct GitAnalyzer: Sendable {
         return commits
     }
 
+    // MARK: - Commit graph
+
+    /// The commit DAG for a repo: up to `limit` commits reachable from local
+    /// branches and tags, in `--date-order` (newest first). `nil` if `git`
+    /// couldn't be run.
+    func graph(for repo: GitRepo, limit: Int) -> GitGraph? {
+        guard isAvailable else { return nil }
+        let f = Self.fieldSep
+        let format = "format:\(Self.recordSep)%H\(f)%P\(f)%D\(f)%an\(f)%ae\(f)%at\(f)%s"
+        let args = ["-C", repo.rootPath, "log", "--branches", "--tags", "--date-order",
+                    "--decorate-refs-exclude=refs/remotes", "-n", "\(limit)", "--pretty=\(format)"]
+        guard let output = runGit(args) else { return nil }
+        let commits = Self.parseGraphLog(output)
+        return GitGraph(repo: repo, commits: commits, truncated: commits.count >= limit)
+    }
+
+    /// Per-file churn for one commit (`git show --numstat`). Empty for merge
+    /// commits (git prints no diff for them by default) and on error.
+    func fileChanges(for hash: String, in repo: GitRepo) -> [CommitFileChange] {
+        guard isAvailable, !hash.isEmpty else { return [] }
+        guard let output = runGit(["-C", repo.rootPath, "show", "--numstat", "--format=", "--no-color", hash]) else { return [] }
+        return output.split(separator: "\n").compactMap { line in
+            let cols = line.split(separator: "\t", maxSplits: 2, omittingEmptySubsequences: false)
+            guard cols.count >= 3 else { return nil }
+            let ins = cols[0] == "-" ? -1 : (Int(cols[0]) ?? 0)
+            let del = cols[1] == "-" ? -1 : (Int(cols[1]) ?? 0)
+            return CommitFileChange(path: String(cols[2]), insertions: ins, deletions: del)
+        }
+    }
+
+    /// Parse `git log --pretty=format:<rec>%H<f>%P<f>%D<f>%an<f>%ae<f>%at<f>%s`.
+    /// Each record is a single line (the `%s` subject has no newlines).
+    static func parseGraphLog(_ output: String) -> [GraphCommit] {
+        var commits: [GraphCommit] = []
+        for rawRecord in output.components(separatedBy: recordSep) {
+            let record = rawRecord.trimmingCharacters(in: CharacterSet(charactersIn: "\n"))
+            guard !record.isEmpty else { continue }
+            let fields = record.components(separatedBy: fieldSep)
+            guard fields.count >= 7 else { continue }
+            let hash = fields[0]
+            guard !hash.isEmpty else { continue }
+            let parents = fields[1].split(separator: " ").map(String.init)
+            let refs = parseRefs(fields[2])
+            let date = Double(fields[5]).map { Date(timeIntervalSince1970: $0) } ?? .distantPast
+            let subject = fields.count == 7 ? fields[6] : fields[6...].joined(separator: fieldSep)
+            commits.append(GraphCommit(hash: hash, parentHashes: parents, refs: refs,
+                                       author: fields[3], authorEmail: fields[4], date: date, subject: subject))
+        }
+        return commits
+    }
+
+    /// Parse the `%D` decoration string (`"HEAD -> main, tag: v1.0, feature/x"`).
+    static func parseRefs(_ decoration: String) -> [GitRef] {
+        decoration.split(separator: ",").compactMap { piece in
+            let s = piece.trimmingCharacters(in: .whitespaces)
+            guard !s.isEmpty else { return nil }
+            if let arrow = s.range(of: "HEAD -> ") { return GitRef(kind: .head, name: String(s[arrow.upperBound...])) }
+            if s == "HEAD" { return GitRef(kind: .head, name: "HEAD") }
+            if s.hasPrefix("tag: ") { return GitRef(kind: .tag, name: String(s.dropFirst(5))) }
+            return GitRef(kind: .branch, name: s)
+        }
+    }
+
     // MARK: - Process plumbing
 
     private func runGit(_ arguments: [String]) -> String? {
