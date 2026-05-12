@@ -113,12 +113,9 @@ struct ShareExportView: View {
 
             optionGroup("Appearance") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Picker("Appearance", selection: $scheme) {
-                        Text("Light").tag(ColorScheme.light)
-                        Text("Dark").tag(ColorScheme.dark)
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
+                    UnderlineTabRow(options: [ColorScheme.light, .dark],
+                                    label: { $0 == .light ? "Light" : "Dark" },
+                                    selection: $scheme)
 
                     Toggle(isOn: $showTopBar) {
                         Text("Show top bar").font(.sora(11))
@@ -131,11 +128,7 @@ struct ShareExportView: View {
 
             optionGroup("Timestamp") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Picker("Timestamp", selection: $stampPrecision) {
-                        ForEach(ExportStampPrecision.allCases) { Text($0.label).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
+                    UnderlineTabRow(options: ExportStampPrecision.allCases, label: \.label, selection: $stampPrecision)
                     Text("Today's date in the header corner. Year + month always show; “Day” adds the day, “Time” also adds the hour and minute.")
                         .font(.sora(9))
                         .foregroundStyle(.secondary)
@@ -143,22 +136,15 @@ struct ShareExportView: View {
             }
 
             optionGroup("Pane") {
-                Picker("Pane", selection: $pane) {
-                    ForEach(availablePanes) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
+                UnderlineTabRow(options: availablePanes, label: \.title, selection: $pane)
             }
 
             if pane == .usage {
                 optionGroup("Chart") {
                     VStack(alignment: .leading, spacing: 8) {
-                        Picker("Chart", selection: $chartStyle) {
-                            Text("Line").tag(TrendChartStyle.line)
-                            Text("Bars").tag(TrendChartStyle.bar)
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
+                        UnderlineTabRow(options: [TrendChartStyle.line, .bar],
+                                        label: { $0 == .line ? "Line" : "Bars" },
+                                        selection: $chartStyle)
 
                         Toggle(isOn: $useLog) {
                             Text("ln scale (compress gaps between models)").font(.sora(11))
@@ -175,11 +161,7 @@ struct ShareExportView: View {
             if pane == .activity {
                 optionGroup("Activity range") {
                     VStack(alignment: .leading, spacing: 8) {
-                        Picker("Range", selection: $activityVM.range) {
-                            ForEach(ActivityRange.allCases) { Text($0.shortLabel).tag($0) }
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
+                        UnderlineTabRow(options: ActivityRange.allCases, label: \.shortLabel, selection: $activityVM.range)
 
                         if activityVM.range == .day {
                             DatePicker("Day", selection: dayBinding, in: ...activityVM.today, displayedComponents: .date)
@@ -292,6 +274,57 @@ struct ShareExportView: View {
         pasteboard.clearContents()
         pasteboard.writeObjects([image])
         statusMessage = "Copied to clipboard."
+    }
+}
+
+// MARK: - Underline tab control (matches the panel's pane / period tabs)
+
+/// A left-aligned row of underline tabs, one per option. Mirrors the in-panel
+/// `PaneChip` / `PeriodTab` style: a label that grows an accent underline when
+/// selected.
+private struct UnderlineTabRow<Value: Hashable>: View {
+    let options: [Value]
+    let label: (Value) -> String
+    @Binding var selection: Value
+    var spacing: CGFloat = 16
+
+    var body: some View {
+        HStack(spacing: spacing) {
+            ForEach(options, id: \.self) { value in
+                UnderlineTab(title: label(value), isSelected: value == selection) {
+                    selection = value
+                }
+            }
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+private struct UnderlineTab: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                Text(title.uppercased())
+                    .font(.sora(10, weight: .semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(isSelected ? .primary : (hovering ? Color.primary : Color.primary.opacity(0.40)))
+                Rectangle()
+                    .fill(Color.stxAccent)
+                    .frame(height: 1.5)
+                    .scaleEffect(x: isSelected ? 1 : 0, anchor: .center)
+            }
+            .fixedSize()
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.18), value: isSelected)
+        .animation(.easeOut(duration: 0.12), value: hovering)
     }
 }
 
