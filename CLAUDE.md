@@ -21,6 +21,36 @@ launch by full path (the script does this).
 bash scripts/run-tests.sh
 ```
 
+## Releasing
+
+The version number lives in `project.yml` (`MARKETING_VERSION` / `CURRENT_PROJECT_VERSION`).
+`Info.plist` references those via `$(…)`, and `SettingsView`'s About row reads them back from
+`Bundle.main` at runtime — so a release just needs the version baked into the build.
+
+To cut a release, push a semver tag:
+
+```bash
+git tag v1.2.0 && git push origin v1.2.0
+```
+
+`.github/workflows/release.yml` (runs on `macos-14`) then: writes `1.2.0` into `project.yml`
+(build number = the workflow run number), builds a Release `Claude Stats.app`, packages it,
+publishes a GitHub Release with the artifact(s) attached, and commits the bumped `project.yml`
+back to `master`.
+
+Packaging has two modes, picked automatically:
+
+- **Signed + notarized DMG** — when all six signing secrets are set on the repo
+  (`BUILD_CERTIFICATE_BASE64`, `P12_PASSWORD`, `KEYCHAIN_PASSWORD`, `APPLE_TEAM_ID`,
+  `NOTARY_APPLE_ID`, `NOTARY_PASSWORD`; see the comment block at the top of the workflow).
+- **Un-notarized DMG + .zip** — when those secrets are absent (the default). Gatekeeper warns
+  on first launch; users open it via right-click ▸ Open.
+
+`scripts/release-build.sh` mirrors this: with `SIGN_IDENTITY` (plus `APPLE_TEAM_ID`, `APPLE_ID`,
+`APP_PASSWORD`) it codesigns with hardened runtime, notarizes via `notarytool`, and staples;
+without it, it produces an ad-hoc DMG + zip. Dry-run locally: `bash scripts/release-build.sh 1.2.0`.
+Bump the version without building: `bash scripts/bump-version.sh 1.2.0`.
+
 ## Regenerate the Xcode project
 
 `ClaudeStats.xcodeproj` is generated, not committed. After editing `project.yml`

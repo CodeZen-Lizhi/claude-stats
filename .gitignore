@@ -41,6 +41,9 @@ Package.resolved
 # === Agent skills (project-local AI tooling, not project source) === #
 .agents/
 
+# === Release artifacts === #
+dist/
+
 # === Misc === #
 *.log
 *.orig

@@ -1,0 +1,143 @@
+name: Release
+
+# Trigger: push a semver tag, e.g.
+#   git tag v1.2.0 && git push origin v1.2.0
+#
+# What this does:
+#   1. Writes the tag's version into project.yml (MARKETING_VERSION) and uses the
+#      workflow run number as the build number (CURRENT_PROJECT_VERSION). The app's
+#      Settings ▸ About reads these from the bundle at runtime, so it updates itself.
+#   2. Builds a Release Claude Stats.app and packages it:
+#        • if the Developer ID signing secrets below are configured -> a SIGNED +
+#          NOTARIZED + stapled DMG;
+#        • otherwise -> an ad-hoc-signed (un-notarized) DMG *and* a .zip. Gatekeeper
+#          warns on first launch; users open via right-click ▸ Open.
+#   3. Creates a GitHub Release for the tag with the artifact(s) attached.
+#   4. Commits the bumped project.yml back to master.
+#
+# Optional repository secrets (Settings ▸ Secrets and variables ▸ Actions) — set
+# ALL of these to get a notarized DMG; leave them unset for the zip/un-notarized DMG path:
+#   BUILD_CERTIFICATE_BASE64  Developer ID Application cert exported as .p12, base64-encoded
+#                             (macOS:  base64 -i cert.p12 | pbcopy)
+#   P12_PASSWORD              password set when exporting the .p12
+#   KEYCHAIN_PASSWORD         any string — password for the throwaway CI keychain
+#   APPLE_TEAM_ID             10-character Apple Developer Team ID
+#   NOTARY_APPLE_ID           Apple ID email used for notarization
+#   NOTARY_PASSWORD           app-specific password for that Apple ID (appleid.apple.com)
+#
+# Note: the final step pushes a commit to `master`. If `master` has branch
+# protection that blocks the built-in GITHUB_TOKEN, either relax it for this
+# workflow or swap in a PAT with `contents: write`.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-14
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Resolve version from tag
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::tag '$GITHUB_REF_NAME' is not v<MAJOR>.<MINOR>.<PATCH>"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build=$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Detect signing secrets
+        id: signing
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+        run: |
+          if [[ -n "$BUILD_CERTIFICATE_BASE64" && -n "$P12_PASSWORD" && -n "$KEYCHAIN_PASSWORD" \
+                && -n "$APPLE_TEAM_ID" && -n "$NOTARY_APPLE_ID" && -n "$NOTARY_PASSWORD" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "Signing secrets present — will build a notarized DMG."
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Signing secrets absent — will build an un-notarized DMG + zip."
+          fi
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Import Developer ID signing certificate
+        if: steps.signing.outputs.enabled == 'true'
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          CERT_PATH="$RUNNER_TEMP/cert.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+
+          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          security import "$CERT_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain
+
+          SIGN_IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" \
+            | awk -F'"' '/Developer ID Application/ {print $2; exit}')"
+          if [[ -z "$SIGN_IDENTITY" ]]; then
+            echo "::error::no 'Developer ID Application' identity found in the imported certificate"
+            exit 1
+          fi
+          echo "SIGN_IDENTITY=$SIGN_IDENTITY" >> "$GITHUB_ENV"
+          rm -f "$CERT_PATH"
+
+      - name: Bump version in project.yml
+        run: bash scripts/bump-version.sh "${{ steps.version.outputs.version }}" "${{ steps.version.outputs.build }}"
+
+      - name: Build app and package artifacts
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          APP_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+        run: bash scripts/release-build.sh "${{ steps.version.outputs.version }}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: dist/*
+          generate_release_notes: true
+
+      - name: Commit version bump back to master
+        run: |
+          if git diff --quiet -- project.yml; then
+            echo "project.yml unchanged — nothing to commit."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add project.yml
+          git commit -m "chore(release): v${{ steps.version.outputs.version }} [skip ci]"
+          git push origin HEAD:master
+
+      - name: Clean up keychain
+        if: always() && steps.signing.outputs.enabled == 'true'
+        run: security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" || true
