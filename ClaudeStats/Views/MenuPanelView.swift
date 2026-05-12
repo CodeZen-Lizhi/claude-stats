@@ -14,25 +14,34 @@ enum StatsPane: String, CaseIterable, Identifiable {
     }
 }
 
+/// Per-pane frozen state for an exported panel — the share window resolves all
+/// of these and ``StatsPanelBody`` picks the one matching the selected pane.
+struct StatsExportConfig {
+    /// Usage pane settings. `.period` is also reused by the Sessions pane.
+    var usage: UsageView.ExportConfig
+    var activity: AIActivityView.ExportData
+}
+
 /// The stats panel body: a scanline strip, a header, a Sessions/Usage title bar
 /// with a toggle, and the selected pane. Used both inside ``MenuPanelView`` (the
 /// dropdown, which adds the Settings/Quit footer) and in the share-export window.
 ///
-/// When `exportConfig` is non-nil the view is in "export" mode: the Usage pane's
+/// When `export` is non-nil the view is in "export" mode: the Usage pane's
 /// period picker becomes a static label below the chart, the chart honours the
-/// frozen style/scale from the config, the header's refresh control is hidden,
-/// and the pane content takes its intrinsic height (so `ImageRenderer` captures
-/// the whole thing rather than a clipped/scrolled slice).
+/// frozen style/scale from the config, the Activity pane renders a pre-resolved
+/// snapshot, the header's refresh control is hidden, and the pane content takes
+/// its intrinsic height (so `ImageRenderer` captures the whole thing rather than
+/// a clipped/scrolled slice).
 struct StatsPanelBody: View {
     @Environment(AppEnvironment.self) private var env
     @Binding var pane: StatsPane
-    var exportConfig: UsageView.ExportConfig? = nil
+    var export: StatsExportConfig? = nil
 
-    private var isExport: Bool { exportConfig != nil }
+    private var isExport: Bool { export != nil }
 
     private var availablePanes: [StatsPane] {
         var panes: [StatsPane] = [.sessions, .usage]
-        if !isExport && env.preferences.aiActivityAnalysisEnabled { panes.append(.activity) }
+        if env.preferences.aiActivityAnalysisEnabled { panes.append(.activity) }
         return panes
     }
 
@@ -49,9 +58,9 @@ struct StatsPanelBody: View {
 
             Group {
                 switch effectivePane {
-                case .sessions: SessionListView(mode: exportConfig.map { .export($0.period) } ?? .interactive)
-                case .usage: UsageView(mode: exportConfig.map(UsageView.Mode.export) ?? .interactive)
-                case .activity: AIActivityView()
+                case .sessions: SessionListView(mode: export.map { .export($0.usage.period) } ?? .interactive)
+                case .usage: UsageView(mode: export.map { .export($0.usage) } ?? .interactive)
+                case .activity: AIActivityView(mode: export.map { .export($0.activity) } ?? .interactive)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: isExport ? nil : .infinity)

@@ -3,8 +3,9 @@ import AppKit
 import UniformTypeIdentifiers
 
 /// The "Share Stats" window: a live preview of the exported panel on the left,
-/// the export options (appearance, pane, time range) on the right, and Save /
-/// Copy actions that rasterise the panel to a PNG via `ImageRenderer`.
+/// the export options (appearance, pane, time range / activity range, chart) on
+/// the right, and Save / Copy actions that rasterise the panel to a PNG via
+/// `ImageRenderer`.
 struct ShareExportView: View {
     static let windowID = "share-export"
 
@@ -18,20 +19,50 @@ struct ShareExportView: View {
     @State private var customEnd = Date.now
     @State private var chartStyle: TrendChartStyle = .line
     @State private var useLog = false
+    @State private var activityVM = AIActivityViewModel()
     @State private var statusMessage: String?
+
+    private var availablePanes: [StatsPane] {
+        StatsPane.allCases.filter { $0 != .activity || env.preferences.aiActivityAnalysisEnabled }
+    }
 
     private var selection: PeriodSelection {
         useCustomRange ? .custom(start: customStart, end: customEnd) : .preset(preset)
     }
 
-    private var exportConfig: UsageView.ExportConfig {
-        UsageView.ExportConfig(period: selection, chartStyle: chartStyle, useLog: useLog && chartStyle == .line)
+    private var exportConfig: StatsExportConfig {
+        StatsExportConfig(
+            usage: UsageView.ExportConfig(period: selection, chartStyle: chartStyle, useLog: useLog && chartStyle == .line),
+            activity: AIActivityView.ExportData(
+                range: activityVM.range,
+                selectedDay: activityVM.selectedDay,
+                dayActivity: activityVM.dayActivity,
+                trend: activityVM.trend,
+                permissionDenied: activityVM.permissionState == .needsFullDiskAccess,
+                isLoading: activityVM.isLoading
+            )
+        )
+    }
+
+    private var activityLoading: Bool { pane == .activity && activityVM.isLoading }
+
+    private var activityReloadKey: AnyHashable {
+        [AnyHashable(pane == .activity), AnyHashable(activityVM.reloadToken),
+         AnyHashable(env.store.lastRefreshedAt), AnyHashable(env.preferences.effectiveIDEBundleIDs)]
+    }
+
+    /// A day binding that re-triggers the activity reload when changed.
+    private var dayBinding: Binding<Date> {
+        Binding(
+            get: { activityVM.selectedDay },
+            set: { activityVM.selectedDay = $0; activityVM.bumpReload() }
+        )
     }
 
     /// The panel as it will be exported. Used both for the on-screen preview and
     /// (re-instantiated) as the `ImageRenderer` content.
     private func exportPanel(paneBinding: Binding<StatsPane>) -> some View {
-        StatsPanelBody(pane: paneBinding, exportConfig: exportConfig)
+        StatsPanelBody(pane: paneBinding, export: exportConfig)
             .frame(width: 380)
             .fixedSize(horizontal: false, vertical: true)
             .font(.sora(13))
@@ -42,7 +73,7 @@ struct ShareExportView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            ScrollView {
+            FadingScrollView {
                 exportPanel(paneBinding: $pane)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                     .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.separator, lineWidth: 1))
@@ -58,6 +89,11 @@ struct ShareExportView: View {
                 .padding(20)
         }
         .frame(minHeight: 540)
+        .task(id: activityReloadKey) {
+            guard pane == .activity else { return }
+            await activityVM.reload(sessions: env.store.sessions, bundleIDs: env.preferences.effectiveIDEBundleIDs)
+        }
+        .onAppear { activityVM.refreshPermissionState() }
     }
 
     @ViewBuilder
@@ -78,8 +114,7 @@ struct ShareExportView: View {
 
             optionGroup("Pane") {
                 Picker("Pane", selection: $pane) {
-                    // Activity isn't exportable (it needs live Screen Time data).
-                    ForEach(StatsPane.allCases.filter { $0 != .activity }) { Text($0.title).tag($0) }
+                    ForEach(availablePanes) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
@@ -107,23 +142,40 @@ struct ShareExportView: View {
                 }
             }
 
-            optionGroup("Time range") {
-                VStack(alignment: .leading, spacing: 8) {
-                    Picker("Time range", selection: $preset) {
-                        ForEach(StatsPeriod.allCases) { Text($0.displayName).tag($0) }
-                    }
-                    .labelsHidden()
-                    .disabled(useCustomRange)
-
-                    DisclosureGroup(isExpanded: $useCustomRange) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            DatePicker("From", selection: $customStart, displayedComponents: .date)
-                            DatePicker("To", selection: $customEnd, displayedComponents: .date)
+            if pane == .activity {
+                optionGroup("Activity range") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Picker("Range", selection: $activityVM.range) {
+                            ForEach(ActivityRange.allCases) { Text($0.shortLabel).tag($0) }
                         }
-                        .font(.sora(11))
-                        .padding(.top, 4)
-                    } label: {
-                        Text("Advanced — custom range").font(.sora(11))
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+
+                        if activityVM.range == .day {
+                            DatePicker("Day", selection: dayBinding, in: ...activityVM.today, displayedComponents: .date)
+                                .font(.sora(11))
+                        }
+                    }
+                }
+            } else {
+                optionGroup("Time range") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Picker("Time range", selection: $preset) {
+                            ForEach(StatsPeriod.allCases) { Text($0.displayName).tag($0) }
+                        }
+                        .labelsHidden()
+                        .disabled(useCustomRange)
+
+                        DisclosureGroup(isExpanded: $useCustomRange) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                DatePicker("From", selection: $customStart, displayedComponents: .date)
+                                DatePicker("To", selection: $customEnd, displayedComponents: .date)
+                            }
+                            .font(.sora(11))
+                            .padding(.top, 4)
+                        } label: {
+                            Text("Advanced — custom range").font(.sora(11))
+                        }
                     }
                 }
             }
@@ -142,6 +194,7 @@ struct ShareExportView: View {
                 Button("Save PNG…") { savePNG() }
                     .keyboardShortcut(.defaultAction)
             }
+            .disabled(activityLoading)
         }
     }
 
@@ -190,7 +243,7 @@ struct ShareExportView: View {
         panel.canCreateDirectories = true
         let df = DateFormatter()
         df.dateFormat = "yyyy-MM-dd"
-        panel.nameFieldStringValue = "Claude Stats \(df.string(from: .now)).png"
+        panel.nameFieldStringValue = "Claude Stats \(pane.title) \(df.string(from: .now)).png"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try data.write(to: url)

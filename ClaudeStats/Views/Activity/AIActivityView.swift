@@ -6,8 +6,25 @@ import AppKit
 /// Claude Code activity, on a day timeline (Tyme-style) plus a multi-day trend
 /// of the AI-assisted share. Reads `knowledgeC.db` — needs Full Disk Access.
 struct AIActivityView: View {
+    /// A resolved snapshot for the export render — the share window loads the
+    /// data (via its own ``AIActivityViewModel``) and hands it in, since
+    /// `ImageRenderer` is synchronous and can't wait on `.task`.
+    struct ExportData {
+        var range: ActivityRange
+        var selectedDay: Date
+        var dayActivity: DayActivity?
+        var trend: [DayActivity]
+        var permissionDenied: Bool
+        var isLoading: Bool
+    }
+
+    /// `interactive` is the normal in-panel pane (scrolls, loads its own data);
+    /// `export` renders a static, non-scrolling snapshot for `ImageRenderer`.
+    enum Mode { case interactive, export(ExportData) }
+
     @Environment(AppEnvironment.self) private var env
     @State private var vm = AIActivityViewModel()
+    var mode: Mode = .interactive
 
     private struct ReloadKey: Equatable {
         let token: UInt64
@@ -16,22 +33,30 @@ struct AIActivityView: View {
     }
 
     var body: some View {
+        if case .export(let data) = mode {
+            exportBody(data)
+        } else {
+            interactiveBody
+        }
+    }
+
+    private var interactiveBody: some View {
         @Bindable var vm = vm
         let bundleIDs = env.preferences.effectiveIDEBundleIDs
         let key = ReloadKey(token: vm.reloadToken,
                             lastRefreshed: env.store.lastRefreshedAt,
                             bundleIDs: bundleIDs)
 
-        FadingScrollView {
+        return FadingScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 headerRow
 
                 if vm.permissionState == .needsFullDiskAccess {
                     permissionGate
                 } else if vm.range.isTrend {
-                    trendSection
+                    trendSection(vm.trend)
                 } else {
-                    daySection
+                    daySection(vm.dayActivity)
                 }
             }
             .padding(14)
@@ -40,6 +65,54 @@ struct AIActivityView: View {
             await vm.reload(sessions: env.store.sessions, bundleIDs: bundleIDs)
         }
         .onAppear { vm.refreshPermissionState() }
+    }
+
+    @ViewBuilder
+    private func exportBody(_ d: ExportData) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            staticHeader(range: d.range, selectedDay: d.selectedDay)
+
+            if d.permissionDenied {
+                exportPermissionNote
+            } else if d.isLoading && d.dayActivity == nil && d.trend.isEmpty {
+                Text("Loading activity…")
+                    .font(.sora(10))
+                    .foregroundStyle(Color.stxMuted.opacity(0.7))
+                    .frame(maxWidth: .infinity, minHeight: 80)
+            } else if d.range.isTrend {
+                trendSection(d.trend)
+            } else {
+                daySection(d.dayActivity)
+            }
+        }
+        .padding(14)
+    }
+
+    private func staticHeader(range: ActivityRange, selectedDay: Date) -> some View {
+        HStack(spacing: 10) {
+            BracketBox(spacing: 6) {
+                Text(range == .day ? Format.day(selectedDay).uppercased() : "LAST \(range.dayCount) DAYS")
+                    .font(.sora(11, weight: .semibold))
+                    .tracking(0.6)
+                    .foregroundStyle(.primary)
+                    .monospacedDigit()
+            }
+            Spacer()
+        }
+    }
+
+    private var exportPermissionNote: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("SCREEN TIME ACCESS NOT GRANTED")
+                .font(.sora(13, weight: .semibold))
+                .tracking(1.2)
+                .foregroundStyle(.primary)
+            Text("No editor-activity data to show — Claude Stats needs Full Disk Access to read macOS Screen Time.")
+                .font(.sora(10))
+                .foregroundStyle(Color.stxMuted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .stxPanel(12)
     }
 
     // MARK: Header
@@ -147,8 +220,7 @@ struct AIActivityView: View {
     // MARK: Single-day section
 
     @ViewBuilder
-    private var daySection: some View {
-        let activity = vm.dayActivity
+    private func daySection(_ activity: DayActivity?) -> some View {
         summaryGrid(activity)
         timelinePanel(activity)
         compositionPanel(activity)
@@ -375,18 +447,18 @@ struct AIActivityView: View {
     }
 
     @ViewBuilder
-    private var trendSection: some View {
-        let points = vm.trend.map { TrendPoint(day: $0.day.start, ratio: $0.assistedRatio) }
-        let hasData = vm.trend.contains { !$0.isEmpty }
-        let avgRatio = trendAverage()
+    private func trendSection(_ trend: [DayActivity]) -> some View {
+        let points = trend.map { TrendPoint(day: $0.day.start, ratio: $0.assistedRatio) }
+        let hasData = trend.contains { !$0.isEmpty }
+        let avgRatio = trendAverage(trend)
 
         Grid(horizontalSpacing: 10, verticalSpacing: 8) {
             GridRow {
-                statCell("Editor time", Format.duration(vm.trend.reduce(0) { $0 + $1.ideSeconds }))
-                statCell("AI active", Format.duration(vm.trend.reduce(0) { $0 + $1.aiSeconds }))
+                statCell("Editor time", Format.duration(trend.reduce(0) { $0 + $1.ideSeconds }))
+                statCell("AI active", Format.duration(trend.reduce(0) { $0 + $1.aiSeconds }))
             }
             GridRow {
-                statCell("Overlap", Format.duration(vm.trend.reduce(0) { $0 + $1.overlapSeconds }))
+                statCell("Overlap", Format.duration(trend.reduce(0) { $0 + $1.overlapSeconds }))
                 statCell("Avg AI-assisted", avgRatio.map { Format.percent($0) } ?? "—")
             }
         }
@@ -413,8 +485,8 @@ struct AIActivityView: View {
         .stxPanel(12)
     }
 
-    private func trendAverage() -> Double? {
-        let withEditor = vm.trend.filter { $0.ideSeconds > 0 }
+    private func trendAverage(_ trend: [DayActivity]) -> Double? {
+        let withEditor = trend.filter { $0.ideSeconds > 0 }
         guard !withEditor.isEmpty else { return nil }
         let ide = withEditor.reduce(0) { $0 + $1.ideSeconds }
         let overlap = withEditor.reduce(0) { $0 + $1.overlapSeconds }
