@@ -3,13 +3,14 @@ import AppKit
 
 /// Which pane of the stats panel is shown.
 enum StatsPane: String, CaseIterable, Identifiable {
-    case sessions, usage, activity
+    case sessions, usage, activity, git
     var id: String { rawValue }
     var title: String {
         switch self {
         case .sessions: "Sessions"
         case .usage: "Usage"
         case .activity: "Activity"
+        case .git: "Git"
         }
     }
 }
@@ -34,14 +35,21 @@ struct StatsExportConfig {
 /// a clipped/scrolled slice).
 struct StatsPanelBody: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(\.openWindow) private var openWindow
     @Binding var pane: StatsPane
     var export: StatsExportConfig? = nil
 
     private var isExport: Bool { export != nil }
 
+    /// Git gets a pane only when tracking is on *and* the user wants it in-panel
+    /// (otherwise it lives in its own window, opened from the header button).
+    private var gitInPanel: Bool { env.preferences.gitTrackingEnabled && !env.preferences.gitOpensInWindow }
+    private var gitInWindow: Bool { env.preferences.gitTrackingEnabled && env.preferences.gitOpensInWindow }
+
     private var availablePanes: [StatsPane] {
         var panes: [StatsPane] = [.sessions, .usage]
         if env.preferences.aiActivityAnalysisEnabled { panes.append(.activity) }
+        if gitInPanel { panes.append(.git) }
         return panes
     }
 
@@ -61,12 +69,16 @@ struct StatsPanelBody: View {
                 case .sessions: SessionListView(mode: export.map { .export($0.usage.period) } ?? .interactive)
                 case .usage: UsageView(mode: export.map { .export($0.usage) } ?? .interactive)
                 case .activity: AIActivityView(mode: export.map { .export($0.activity) } ?? .interactive)
+                case .git: GitActivityView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: isExport ? nil : .infinity)
         }
         .onChange(of: env.preferences.aiActivityAnalysisEnabled) { _, enabled in
             if !enabled && pane == .activity { pane = .usage }
+        }
+        .onChange(of: gitInPanel) { _, inPanel in
+            if !inPanel && pane == .git { pane = .usage }
         }
     }
 
@@ -99,6 +111,19 @@ struct StatsPanelBody: View {
                     .font(.sora(9))
                     .tracking(0.5)
                     .foregroundStyle(Color.stxMuted)
+            }
+            if !isExport && gitInWindow {
+                Button {
+                    NSApp.activate(ignoringOtherApps: true)
+                    openWindow(id: GitActivityView.windowID)
+                } label: {
+                    BracketBox(spacing: 4) {
+                        Image(systemName: "arrow.triangle.branch").font(.system(size: 10, weight: .bold))
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.stxMuted)
+                .help("Open Git activity")
             }
             if !isExport {
                 Button {

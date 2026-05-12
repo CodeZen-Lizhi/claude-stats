@@ -34,6 +34,16 @@ final class Preferences {
     var aiActivityAnalysisEnabled: Bool {
         didSet { defaults.set(aiActivityAnalysisEnabled, forKey: Keys.aiActivityAnalysisEnabled) }
     }
+    /// Opt-in to git tracking — adds a view that correlates Claude usage with the
+    /// commit activity of the repos you've used Claude in. Off by default.
+    var gitTrackingEnabled: Bool {
+        didSet { defaults.set(gitTrackingEnabled, forKey: Keys.gitTrackingEnabled) }
+    }
+    /// When git tracking is on: `true` opens the git view in its own window
+    /// (button next to the panel title); `false` shows it as a pane in the panel.
+    var gitOpensInWindow: Bool {
+        didSet { defaults.set(gitOpensInWindow, forKey: Keys.gitOpensInWindow) }
+    }
     /// Extra editor bundle ids the user added on top of ``IDEAppCatalog/defaults``.
     var ideBundleIDsAdded: [String] {
         didSet { defaults.set(ideBundleIDsAdded, forKey: Keys.ideBundleIDsAdded) }
@@ -56,6 +66,8 @@ final class Preferences {
         menuBarMetric = MenuBarMetric(rawValue: defaults.string(forKey: Keys.menuBarMetric) ?? "") ?? .tokens
         menuBarPeriod = StatsPeriod(rawValue: defaults.string(forKey: Keys.menuBarPeriod) ?? "") ?? .allTime
         aiActivityAnalysisEnabled = defaults.bool(forKey: Keys.aiActivityAnalysisEnabled)
+        gitTrackingEnabled = defaults.bool(forKey: Keys.gitTrackingEnabled)
+        gitOpensInWindow = defaults.bool(forKey: Keys.gitOpensInWindow)
         ideBundleIDsAdded = defaults.stringArray(forKey: Keys.ideBundleIDsAdded) ?? []
         ideBundleIDsRemoved = defaults.stringArray(forKey: Keys.ideBundleIDsRemoved) ?? []
     }
@@ -65,6 +77,8 @@ final class Preferences {
         static let menuBarMetric = "menuBarMetric"
         static let menuBarPeriod = "menuBarPeriod"
         static let aiActivityAnalysisEnabled = "aiActivityAnalysisEnabled"
+        static let gitTrackingEnabled = "gitTrackingEnabled"
+        static let gitOpensInWindow = "gitOpensInWindow"
         static let ideBundleIDsAdded = "ideBundleIDsAdded"
         static let ideBundleIDsRemoved = "ideBundleIDsRemoved"
     }

@@ -24,5 +24,13 @@ struct ClaudeStatsApp: App {
                 .environment(appDelegate.env)
         }
         .windowResizability(.contentSize)
+
+        Window("Git Activity", id: GitActivityView.windowID) {
+            GitActivityView()
+                .environment(appDelegate.env)
+                .frame(minWidth: 460, idealWidth: 520, minHeight: 480, idealHeight: 640)
+                .font(.sora(13))
+                .tint(.stxAccent)
+        }
     }
 }

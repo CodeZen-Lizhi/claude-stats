@@ -35,6 +35,8 @@ struct SettingsView: View {
 
             aiActivitySection(prefs: prefs)
 
+            gitTrackingSection(prefs: prefs)
+
             Section("Data") {
                 LabeledContent("Claude config directory") {
                     Text(ClaudePaths.default.configDirectory.path)
@@ -112,6 +114,24 @@ struct SettingsView: View {
                         }
                         .disabled(newIDEBundleID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func gitTrackingSection(prefs: Preferences) -> some View {
+        @Bindable var prefs = prefs
+        Section("Git tracking") {
+            Toggle("Enable git tracking", isOn: $prefs.gitTrackingEnabled)
+            Text("Reads the commit history of the repositories you've used Claude Code in (via the `git` command) and compares it with your Claude activity — churn, recent commits, and a usage-vs-commits timeline.")
+                .font(.sora(11))
+                .foregroundStyle(.secondary)
+
+            if prefs.gitTrackingEnabled {
+                Picker("Open git view in", selection: $prefs.gitOpensInWindow) {
+                    Text("Panel tab").tag(false)
+                    Text("Separate window").tag(true)
                 }
             }
         }

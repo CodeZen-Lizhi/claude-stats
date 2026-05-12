@@ -23,7 +23,9 @@ struct ShareExportView: View {
     @State private var statusMessage: String?
 
     private var availablePanes: [StatsPane] {
-        StatsPane.allCases.filter { $0 != .activity || env.preferences.aiActivityAnalysisEnabled }
+        StatsPane.allCases.filter { pane in
+            pane != .git && (pane != .activity || env.preferences.aiActivityAnalysisEnabled)
+        }
     }
 
     private var selection: PeriodSelection {
