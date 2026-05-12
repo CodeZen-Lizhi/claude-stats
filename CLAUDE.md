@@ -33,7 +33,7 @@ To cut a release, push a semver tag:
 git tag v1.2.0 && git push origin v1.2.0
 ```
 
-`.github/workflows/release.yml` (runs on `macos-14`) then: writes `1.2.0` into `project.yml`
+`.github/workflows/release.yml` (runs on `macos-15` with Xcode 26) then: writes `1.2.0` into `project.yml`
 (build number = the workflow run number), builds a Release `Claude Stats.app`, packages it,
 publishes a GitHub Release with the artifact(s) attached, and commits the bumped `project.yml`
 back to `master`.
