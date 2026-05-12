@@ -13,6 +13,7 @@ struct ShareExportView: View {
 
     @State private var scheme: ColorScheme = .light
     @State private var showTopBar = true
+    @State private var stampPrecision: ExportStampPrecision = .monthOnly
     @State private var pane: StatsPane = .usage
     @State private var preset: StatsPeriod = .today
     @State private var useCustomRange = false
@@ -44,7 +45,9 @@ struct ShareExportView: View {
                 permissionDenied: activityVM.permissionState == .needsFullDiskAccess,
                 isLoading: activityVM.isLoading
             ),
-            showTopBar: showTopBar
+            showTopBar: showTopBar,
+            stampDate: .now,
+            stampPrecision: stampPrecision
         )
     }
 
@@ -121,6 +124,19 @@ struct ShareExportView: View {
                         Text("Show top bar").font(.sora(11))
                     }
                     Text("The platform switcher (or scanline strip) above the title.")
+                        .font(.sora(9))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            optionGroup("Timestamp") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Picker("Timestamp", selection: $stampPrecision) {
+                        ForEach(ExportStampPrecision.allCases) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    Text("Today's date in the header corner. Year + month always show; “Day” adds the day, “Time” also adds the hour and minute.")
                         .font(.sora(9))
                         .foregroundStyle(.secondary)
                 }

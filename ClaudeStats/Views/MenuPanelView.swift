@@ -15,6 +15,27 @@ enum StatsPane: String, CaseIterable, Identifiable {
     }
 }
 
+/// How much of the share timestamp to show in the exported panel's header
+/// corner. Year + month are always shown; this picks the extra precision.
+enum ExportStampPrecision: String, Hashable, CaseIterable, Identifiable {
+    case monthOnly, day, minute
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .monthOnly: "Month"
+        case .day: "Day"
+        case .minute: "Time"
+        }
+    }
+    func string(for date: Date) -> String {
+        switch self {
+        case .monthOnly: date.formatted(.dateTime.month(.abbreviated).year())
+        case .day: date.formatted(.dateTime.month(.abbreviated).day().year())
+        case .minute: date.formatted(.dateTime.month(.abbreviated).day().year().hour().minute())
+        }
+    }
+}
+
 /// Per-pane frozen state for an exported panel — the share window resolves all
 /// of these and ``StatsPanelBody`` picks the one matching the selected pane.
 struct StatsExportConfig {
@@ -24,6 +45,10 @@ struct StatsExportConfig {
     /// Whether the exported snapshot includes the top strip (the platform
     /// switcher when multiple platforms are enabled, otherwise the scanline bar).
     var showTopBar: Bool = true
+    /// The share timestamp shown in the header corner (replaces the live
+    /// "UPD …" readout).
+    var stampDate: Date = .now
+    var stampPrecision: ExportStampPrecision = .monthOnly
 }
 
 /// The stats panel body: a scanline strip, a header, a Sessions/Usage title bar
@@ -117,7 +142,12 @@ struct StatsPanelBody: View {
                 .tracking(1.6)
                 .foregroundStyle(.primary)
             Spacer()
-            if let last = env.store.lastRefreshedAt {
+            if let export {
+                Text(export.stampPrecision.string(for: export.stampDate).uppercased())
+                    .font(.sora(9))
+                    .tracking(0.5)
+                    .foregroundStyle(Color.stxMuted)
+            } else if let last = env.store.lastRefreshedAt {
                 Text("UPD \(Format.relativeDate(last))".uppercased())
                     .font(.sora(9))
                     .tracking(0.5)
