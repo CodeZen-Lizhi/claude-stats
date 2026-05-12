@@ -21,6 +21,9 @@ struct StatsExportConfig {
     /// Usage pane settings. `.period` is also reused by the Sessions pane.
     var usage: UsageView.ExportConfig
     var activity: AIActivityView.ExportData
+    /// Whether the exported snapshot includes the top strip (the platform
+    /// switcher when multiple platforms are enabled, otherwise the scanline bar).
+    var showTopBar: Bool = true
 }
 
 /// The stats panel body: a scanline strip, a header, a Sessions/Usage title bar
@@ -59,10 +62,12 @@ struct StatsPanelBody: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if env.preferences.enabledProviders.count > 1 {
-                ProviderSwitcherBar(interactive: !isExport)
-            } else {
-                TickBar(active: env.store.isLoading)
+            if !isExport || (export?.showTopBar ?? true) {
+                if env.preferences.enabledProviders.count > 1 {
+                    ProviderSwitcherBar(interactive: !isExport)
+                } else {
+                    TickBar(active: env.store.isLoading)
+                }
             }
             header
             StxRule()

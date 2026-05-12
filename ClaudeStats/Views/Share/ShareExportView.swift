@@ -12,6 +12,7 @@ struct ShareExportView: View {
     @Environment(AppEnvironment.self) private var env
 
     @State private var scheme: ColorScheme = .light
+    @State private var showTopBar = true
     @State private var pane: StatsPane = .usage
     @State private var preset: StatsPeriod = .today
     @State private var useCustomRange = false
@@ -42,7 +43,8 @@ struct ShareExportView: View {
                 trend: activityVM.trend,
                 permissionDenied: activityVM.permissionState == .needsFullDiskAccess,
                 isLoading: activityVM.isLoading
-            )
+            ),
+            showTopBar: showTopBar
         )
     }
 
@@ -107,12 +109,21 @@ struct ShareExportView: View {
                 .tracking(1.4)
 
             optionGroup("Appearance") {
-                Picker("Appearance", selection: $scheme) {
-                    Text("Light").tag(ColorScheme.light)
-                    Text("Dark").tag(ColorScheme.dark)
+                VStack(alignment: .leading, spacing: 8) {
+                    Picker("Appearance", selection: $scheme) {
+                        Text("Light").tag(ColorScheme.light)
+                        Text("Dark").tag(ColorScheme.dark)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+
+                    Toggle(isOn: $showTopBar) {
+                        Text("Show top bar").font(.sora(11))
+                    }
+                    Text("The platform switcher (or scanline strip) above the title.")
+                        .font(.sora(9))
+                        .foregroundStyle(.secondary)
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
             }
 
             optionGroup("Pane") {
