@@ -42,11 +42,11 @@ enum ProviderKind: String, CaseIterable, Sendable, Identifiable, Hashable {
     /// in Settings.
     var assetName: String {
         switch self {
-        case .claude: "claudecode-color"
-        case .codex: "codex-color"
-        case .gemini: "gemini-color"
+        case .claude: "claudecode-logo"
+        case .codex: "codex-logo"
+        case .gemini: "gemini-logo"
         case .kimi: "kimi"   // Kimi ships a single logo used in both places.
-        case .minimax: "minimax-color"
+        case .minimax: "minimax-logo"
         }
     }
 

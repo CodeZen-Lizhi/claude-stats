@@ -24,6 +24,8 @@ struct GitGraphView: View {
     private var railWidth: CGFloat {
         CGFloat((layout?.maxColumn ?? 0)) * Self.laneSpacing + Self.railPad * 2
     }
+    private func laneX(_ column: Int) -> CGFloat { Self.railPad + CGFloat(column) * Self.laneSpacing }
+    private func laneColor(_ idx: Int) -> Color { Color.stxRamp[idx % Color.stxRamp.count] }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -96,7 +98,7 @@ struct GitGraphView: View {
                                 toggle(row.commit.hash)
                             }
                             if expandedHash == row.id {
-                                detail(for: row.commit)
+                                detail(for: row)
                             }
                         }
                     }
@@ -112,53 +114,78 @@ struct GitGraphView: View {
         }
     }
 
+    /// The expanded detail block under a commit row. The left rail gutter draws
+    /// the lanes that continue past this row as same-colored *dashed* verticals,
+    /// so the graph reads as connected across the inserted block.
     @ViewBuilder
-    private func detail(for commit: GraphCommit) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Text(commit.shortHash).font(.sora(9).monospacedDigit()).foregroundStyle(Color.stxAccent)
-                Text("\(commit.author) <\(commit.authorEmail)>")
-                    .font(.sora(9)).foregroundStyle(Color.stxMuted).lineLimit(1)
-                Spacer(minLength: 8)
-                Text(Format.shortDate(commit.date)).font(.sora(9).monospacedDigit()).foregroundStyle(Color.stxMuted)
-            }
-            if let changes = fileChanges[commit.hash] {
-                if changes.isEmpty {
-                    Text(commit.isMerge ? "Merge commit — no file diff." : "No file changes.")
-                        .font(.sora(9)).foregroundStyle(Color.stxMuted.opacity(0.7))
-                } else {
-                    ForEach(changes) { fc in
-                        HStack(spacing: 6) {
-                            if fc.isBinary {
-                                Text("bin").font(.sora(9).monospacedDigit()).foregroundStyle(Color.stxMuted)
-                            } else {
-                                Text("+\(fc.insertions)").font(.sora(9).monospacedDigit()).foregroundStyle(GitPalette.add)
-                                Text("−\(fc.deletions)").font(.sora(9).monospacedDigit()).foregroundStyle(GitPalette.del)
+    private func detail(for row: GraphLayout.Row) -> some View {
+        let commit = row.commit
+        HStack(spacing: 8) {
+            railContinuation(for: row).frame(width: railWidth)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(commit.shortHash).font(.sora(9).monospacedDigit()).foregroundStyle(Color.stxAccent)
+                    Text("\(commit.author) <\(commit.authorEmail)>")
+                        .font(.sora(9)).foregroundStyle(Color.stxMuted).lineLimit(1)
+                    Spacer(minLength: 8)
+                    Text(Format.shortDate(commit.date)).font(.sora(9).monospacedDigit()).foregroundStyle(Color.stxMuted)
+                }
+                if let changes = fileChanges[commit.hash] {
+                    if changes.isEmpty {
+                        Text(commit.isMerge ? "Merge commit — no file diff." : "No file changes.")
+                            .font(.sora(9)).foregroundStyle(Color.stxMuted.opacity(0.7))
+                    } else {
+                        ForEach(changes) { fc in
+                            HStack(spacing: 6) {
+                                if fc.isBinary {
+                                    Text("bin").font(.sora(9).monospacedDigit()).foregroundStyle(Color.stxMuted)
+                                } else {
+                                    Text("+\(fc.insertions)").font(.sora(9).monospacedDigit()).foregroundStyle(GitPalette.add)
+                                    Text("−\(fc.deletions)").font(.sora(9).monospacedDigit()).foregroundStyle(GitPalette.del)
+                                }
+                                Text(fc.path)
+                                    .font(.sora(9)).foregroundStyle(.primary)
+                                    .lineLimit(1).truncationMode(.middle)
+                                Spacer(minLength: 0)
                             }
-                            Text(fc.path)
-                                .font(.sora(9)).foregroundStyle(.primary)
-                                .lineLimit(1).truncationMode(.middle)
-                            Spacer(minLength: 0)
                         }
                     }
+                } else {
+                    Text("Loading…").font(.sora(9)).foregroundStyle(Color.stxMuted.opacity(0.7))
                 }
-            } else {
-                Text("Loading…").font(.sora(9)).foregroundStyle(Color.stxMuted.opacity(0.7))
+            }
+            .padding(.vertical, 8)
+            .padding(.trailing, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(Color.primary.opacity(0.05))
+    }
+
+    private func railContinuation(for row: GraphLayout.Row) -> some View {
+        Canvas { ctx, size in
+            var seen = Set<Int>()
+            var lanes: [(column: Int, colorIndex: Int)] = row.passThrough.map { ($0.column, $0.colorIndex) }
+            lanes += row.edgesDown.map { ($0.toColumn, $0.colorIndex) }
+            for lane in lanes where seen.insert(lane.column).inserted {
+                var p = Path()
+                p.move(to: CGPoint(x: laneX(lane.column), y: 0))
+                p.addLine(to: CGPoint(x: laneX(lane.column), y: size.height))
+                ctx.stroke(p, with: .color(laneColor(lane.colorIndex)),
+                           style: StrokeStyle(lineWidth: 1.6, lineCap: .round, dash: [1.5, 3.5]))
             }
         }
-        .padding(.leading, railWidth + 14)
-        .padding(.trailing, 14)
-        .padding(.bottom, 8)
     }
 
     private func toggle(_ hash: String) {
-        if expandedHash == hash { expandedHash = nil; return }
-        expandedHash = hash
-        guard fileChanges[hash] == nil else { return }
+        let willExpand = expandedHash != hash
+        withAnimation(.easeInOut(duration: 0.18)) {
+            expandedHash = willExpand ? hash : nil
+        }
+        guard willExpand, fileChanges[hash] == nil else { return }
         let r = repo
         Task {
             let fc = await Task.detached(priority: .userInitiated) { GitAnalyzer().fileChanges(for: hash, in: r) }.value
-            fileChanges[hash] = fc
+            withAnimation(.easeInOut(duration: 0.15)) { fileChanges[hash] = fc }
         }
     }
 }
@@ -194,9 +221,12 @@ private struct GraphRowView: View {
                 .lineLimit(1)
                 .layoutPriority(1)
             Spacer(minLength: 8)
-            Text(Format.shortDate(row.commit.date))
+            Text(Format.relativeDate(row.commit.date))
                 .font(.sora(9).monospacedDigit())
                 .foregroundStyle(Color.stxMuted)
+                .lineLimit(1)
+                .fixedSize()
+                .help(Format.shortDate(row.commit.date))
         }
         .padding(.trailing, 14)
         .frame(height: rowHeight)

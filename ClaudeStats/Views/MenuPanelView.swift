@@ -89,11 +89,13 @@ struct StatsPanelBody: View {
     private var paneBar: some View {
         HStack(spacing: 10) {
             Text(effectivePane.title.uppercased())
-                .font(.sora(22, weight: .semibold))
-                .tracking(2.5)
+                .font(.sora(18, weight: .semibold))
+                .tracking(1.8)
                 .foregroundStyle(.primary)
-            Spacer()
-            HStack(spacing: 12) {
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+            Spacer(minLength: 8)
+            HStack(spacing: 10) {
                 ForEach(availablePanes) { p in
                     PaneChip(title: p.title, isSelected: p == effectivePane) { pane = p }
                 }
@@ -147,7 +149,7 @@ struct StatsPanelBody: View {
                 .help("Refresh now")
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 14)
         .padding(.vertical, 10)
     }
 }
