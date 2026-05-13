@@ -11,6 +11,7 @@ final class AppEnvironment {
     let pricing: ModelPricing
     let preferences: Preferences
     let store: SessionStore
+    let updater = UpdaterController()
 
     init(pricing: ModelPricing, preferences: Preferences, store: SessionStore) {
         self.pricing = pricing
@@ -31,6 +32,7 @@ final class AppEnvironment {
     func start() {
         Task { await store.refresh() }
         applyAutoRefreshSetting()
+        updater.start()
     }
 
     func applyAutoRefreshSetting() {

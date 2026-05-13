@@ -26,5 +26,17 @@
 	<string>NSApplication</string>
 	<key>NSHumanReadableCopyright</key>
 	<string></string>
+	<!--
+	  Sparkle auto-update. SUPublicEDKey is the EdDSA *public* key produced by
+	  Sparkle's `generate_keys` (the matching private key lives only in the
+	  release workflow's SPARKLE_PRIVATE_ED_KEY secret). Replace the placeholder
+	  below after running `generate_keys` — see CLAUDE.md ▸ Releasing.
+	-->
+	<key>SUFeedURL</key>
+	<string>https://1pitaph.github.io/claude-stats/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>REPLACE_WITH_SPARKLE_ED_PUBLIC_KEY</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
 </dict>
 </plist>

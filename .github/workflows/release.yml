@@ -13,7 +13,10 @@ name: Release
 #        • otherwise -> an ad-hoc-signed (un-notarized) DMG *and* a .zip. Gatekeeper
 #          warns on first launch; users open via right-click ▸ Open.
 #   3. Creates a GitHub Release for the tag with the artifact(s) attached.
-#   4. Commits the bumped project.yml back to master.
+#   4. If SPARKLE_PRIVATE_ED_KEY is set, EdDSA-signs the archive and publishes an
+#      updated appcast.xml to the gh-pages branch (GitHub Pages serves it at the
+#      SUFeedURL baked into Info.plist) so existing installs can auto-update.
+#   5. Commits the bumped project.yml back to master.
 #
 # Optional repository secrets (Settings ▸ Secrets and variables ▸ Actions) — set
 # ALL of these to get a notarized DMG; leave them unset for the zip/un-notarized DMG path:
@@ -24,6 +27,14 @@ name: Release
 #   APPLE_TEAM_ID             10-character Apple Developer Team ID
 #   NOTARY_APPLE_ID           Apple ID email used for notarization
 #   NOTARY_PASSWORD           app-specific password for that Apple ID (appleid.apple.com)
+#
+# Auto-update secret (independent of the signing secrets above):
+#   SPARKLE_PRIVATE_ED_KEY    base64 EdDSA private key from Sparkle's
+#                             `generate_keys -x <file>`. The matching *public*
+#                             key goes in Info.plist as SUPublicEDKey. Without
+#                             this secret the appcast step is skipped (releases
+#                             still publish, but installed apps won't see them).
+#                             Requires GitHub Pages enabled for the gh-pages branch.
 #
 # Note: the final step pushes a commit to `master`. If `master` has branch
 # protection that blocks the built-in GITHUB_TOKEN, either relax it for this
@@ -88,6 +99,19 @@ jobs:
             echo "Signing secrets absent — will build an un-notarized DMG + zip."
           fi
 
+      - name: Detect Sparkle EdDSA key
+        id: sparkle
+        env:
+          SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
+        run: |
+          if [[ -n "$SPARKLE_PRIVATE_ED_KEY" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "SPARKLE_PRIVATE_ED_KEY present — will publish an updated appcast."
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::SPARKLE_PRIVATE_ED_KEY not set — skipping appcast publish; installed apps won't auto-update to this release."
+          fi
+
       - name: Install XcodeGen
         run: brew install xcodegen
 
@@ -140,6 +164,21 @@ jobs:
           tag_name: ${{ github.ref_name }}
           files: dist/*
           generate_release_notes: true
+
+      - name: Build Sparkle appcast
+        if: steps.sparkle.outputs.enabled == 'true'
+        env:
+          SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
+        run: bash scripts/publish-appcast.sh "${{ steps.version.outputs.version }}" "${{ steps.version.outputs.build }}" "${{ github.ref_name }}"
+
+      - name: Deploy appcast to GitHub Pages
+        if: steps.sparkle.outputs.enabled == 'true'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./_site
+          publish_branch: gh-pages
+          keep_files: true
 
       - name: Commit version bump back to master
         run: |

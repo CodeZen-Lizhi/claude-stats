@@ -57,6 +57,7 @@ struct SettingsView: View {
 
             Section("About") {
                 LabeledContent("Version", value: appVersionString)
+                Button("Check for Updates…") { env.updater.checkForUpdates() }
             }
         }
         .formStyle(.grouped)

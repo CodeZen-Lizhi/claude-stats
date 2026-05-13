@@ -51,6 +51,39 @@ Packaging has two modes, picked automatically:
 without it, it produces an ad-hoc DMG + zip. Dry-run locally: `bash scripts/release-build.sh 1.2.0`.
 Bump the version without building: `bash scripts/bump-version.sh 1.2.0`.
 
+## Auto-update (Sparkle)
+
+The app embeds [Sparkle 2](https://sparkle-project.org) (SPM dep in `project.yml`).
+`UpdaterController` wraps `SPUStandardUpdaterController`; it's owned by
+`AppEnvironment` and started from `AppEnvironment.start()`. Because this is an
+`LSUIElement` app, `UpdaterController` flips the activation policy to `.regular`
+while Sparkle's windows are up and back to `.accessory` when the session ends.
+Settings ▸ About has a "Check for Updates…" button; scheduled background checks
+are on by default (`SUEnableAutomaticChecks` in `Info.plist`).
+
+The update feed is `appcast.xml` on the `gh-pages` branch, served at
+`https://1pitaph.github.io/claude-stats/appcast.xml` (`SUFeedURL` in `Info.plist`).
+On each tagged release the workflow EdDSA-signs the archive (`scripts/publish-appcast.sh`
+→ `scripts/update-appcast.py`) and pushes an updated `appcast.xml`. This works the
+same whether the release is the un-notarized zip/DMG or the signed+notarized DMG —
+Sparkle just downloads whichever asset the appcast points at (it prefers the `.zip`
+when present). Release notes in the updater link to the GitHub release page.
+
+**One-time setup (not yet done — see the placeholder in `Info.plist`):**
+
+1. Install Sparkle's tools and generate a key pair:
+   `./bin/generate_keys` then `./bin/generate_keys -x sparkle_private_key` to export it.
+   (`generate_keys` prints the **public** key and stores the private one in the
+   login keychain; `-x` writes the base64 private key to a file.)
+2. Put the public key in `ClaudeStats/App/Info.plist` as `SUPublicEDKey`
+   (replace `REPLACE_WITH_SPARKLE_ED_PUBLIC_KEY`).
+3. Add the private key file's contents as the repo secret `SPARKLE_PRIVATE_ED_KEY`.
+4. Enable GitHub Pages for the repo, source = `gh-pages` branch (the workflow
+   creates that branch on the first release that runs the appcast step).
+
+Until the public key is set, the app still builds and runs; Sparkle just can't
+verify updates, so leave auto-update untested until step 2 is done.
+
 ## Regenerate the Xcode project
 
 `ClaudeStats.xcodeproj` is generated, not committed. After editing `project.yml`
