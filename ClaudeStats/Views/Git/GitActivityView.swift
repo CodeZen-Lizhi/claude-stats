@@ -176,6 +176,7 @@ struct GitActivityView: View {
         Chart(points) { p in
             AreaMark(x: .value("When", p.start), y: .value("Tokens", p.claudeTokens))
                 .foregroundStyle(Color.stxAccent.opacity(0.16))
+                .interpolationMethod(.monotone)
             LineMark(x: .value("When", p.start), y: .value("Tokens", p.claudeTokens))
                 .foregroundStyle(Color.stxAccent)
                 .interpolationMethod(.monotone)
@@ -243,43 +244,15 @@ struct GitActivityView: View {
             }
             ForEach(vm.repos) { activity in
                 StxRule()
-                repoTimelineRow(activity)
+                let buckets = vm.timeline(for: activity)
+                RepoTimelineRow(activity: activity,
+                                buckets: buckets,
+                                domain: barChartDomain(buckets.map(\.start))) {
+                    graphRepo = activity.repo
+                }
             }
         }
         .stxPanel(12)
-    }
-
-    private func repoTimelineRow(_ activity: RepoActivity) -> some View {
-        let buckets = vm.timeline(for: activity)
-        return Button { graphRepo = activity.repo } label: {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(activity.repo.displayName)
-                        .font(.sora(11, weight: .semibold))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(Color.stxMuted)
-                    Spacer(minLength: 8)
-                    Text("\(activity.commitCount) commit\(activity.commitCount == 1 ? "" : "s")")
-                        .font(.sora(9).monospacedDigit())
-                        .foregroundStyle(Color.stxMuted)
-                }
-                Chart(buckets) { b in
-                    BarMark(x: .value("When", b.start), y: .value("Commits", b.commitCount))
-                        .foregroundStyle(Color.stxAccent.opacity(0.85))
-                        .cornerRadius(1)
-                }
-                .chartXScale(domain: barChartDomain(buckets.map(\.start)))
-                .chartYAxis(.hidden)
-                .chartXAxis(.hidden)
-                .chartLegend(.hidden)
-                .frame(height: 28)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: Churn table
@@ -409,6 +382,63 @@ struct GitActivityView: View {
             .onHover { hovering = $0 }
             .animation(.easeOut(duration: 0.18), value: isSelected)
         }
+    }
+}
+
+/// One row of the per-repo commit timeline: repo name + a "drill-in" chevron
+/// (a circular tint fades in behind it on hover) and a sparkline of commits.
+private struct RepoTimelineRow: View {
+    let activity: RepoActivity
+    let buckets: [GitBucket]
+    let domain: ClosedRange<Date>
+    let onTap: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(activity.repo.displayName)
+                        .font(.sora(11, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    chevron
+                    Spacer(minLength: 8)
+                    Text("\(activity.commitCount) commit\(activity.commitCount == 1 ? "" : "s")")
+                        .font(.sora(9).monospacedDigit())
+                        .foregroundStyle(Color.stxMuted)
+                }
+                Chart(buckets) { b in
+                    BarMark(x: .value("When", b.start), y: .value("Commits", b.commitCount))
+                        .foregroundStyle(Color.stxAccent.opacity(0.85))
+                        .cornerRadius(1)
+                }
+                .chartXScale(domain: domain)
+                .chartYAxis(.hidden)
+                .chartXAxis(.hidden)
+                .chartLegend(.hidden)
+                .frame(height: 28)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+    }
+
+    private var chevron: some View {
+        Image(systemName: "chevron.right")
+            .font(.system(size: 8, weight: .bold))
+            .foregroundStyle(hovering ? Color.primary.opacity(0.75) : Color.stxMuted)
+            .frame(width: 16, height: 16)
+            .background {
+                Circle()
+                    .fill(Color.primary.opacity(colorScheme == .dark ? 0.16 : 0.09))
+                    .scaleEffect(hovering ? 1 : 0.6)
+                    .opacity(hovering ? 1 : 0)
+            }
+            .animation(.easeOut(duration: 0.18), value: hovering)
     }
 }
 

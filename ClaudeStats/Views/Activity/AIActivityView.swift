@@ -500,6 +500,7 @@ struct AIActivityView: View {
         Chart(points) { p in
             AreaMark(x: .value("Day", p.day, unit: .day), y: .value("Share", p.ratio))
                 .foregroundStyle(Color.stxAccent.opacity(0.16))
+                .interpolationMethod(.catmullRom)
             LineMark(x: .value("Day", p.day, unit: .day), y: .value("Share", p.ratio))
                 .foregroundStyle(Color.stxAccent)
                 .interpolationMethod(.catmullRom)

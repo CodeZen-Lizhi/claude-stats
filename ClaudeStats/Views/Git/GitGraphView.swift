@@ -12,7 +12,7 @@ struct GitGraphView: View {
     // Rail geometry — `rowHeight` must be fixed so each row's `Canvas` lines up.
     private static let rowHeight: CGFloat = 38
     private static let laneSpacing: CGFloat = 14
-    private static let railPad: CGFloat = 11
+    private static let railPad: CGFloat = 15
     private static let nodeRadius: CGFloat = 3
 
     @State private var graph: GitGraph?
@@ -243,6 +243,7 @@ private struct GraphRowView: View {
             ForEach(Array(row.commit.refs.enumerated()), id: \.offset) { _, ref in
                 RefPill(ref: ref)
             }
+            .layoutPriority(2)
             Text(TitleSanitizer.sanitize(row.commit.subject) ?? row.commit.subject)
                 .font(.sora(11))
                 .foregroundStyle(.primary)
@@ -340,6 +341,7 @@ private struct RefPill: View {
             .background(tint.opacity(ref.kind == .branch ? 0.16 : 0.85), in: Capsule())
             .foregroundStyle(ref.kind == .branch ? Color.primary : Color.white)
             .overlay(Capsule().strokeBorder(tint.opacity(0.35), lineWidth: ref.kind == .branch ? 1 : 0))
+            .fixedSize()
     }
 }
 
