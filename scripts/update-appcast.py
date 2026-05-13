@@ -9,11 +9,15 @@ and republishes it to the gh-pages branch.
 Usage:
   update-appcast.py \
       --version 1.2.0 --build 42 \
-      --url https://github.com/1pitaph/claude-stats/releases/download/v1.2.0/ClaudeStats-1.2.0.zip \
+      --url https://github.com/1pitaph/claude-stats-releases/releases/download/v1.2.0/ClaudeStats-1.2.0.zip \
       --enclosure-attrs 'sparkle:edSignature="..." length="12345"' \
-      --release-notes-link https://github.com/1pitaph/claude-stats/releases/tag/v1.2.0 \
+      --release-notes-file release_notes.html \
       --min-system-version 14.0 \
       --in appcast.xml --out appcast.xml
+
+The release-notes file should contain inline HTML (e.g. `<ul><li>…</li></ul>`).
+It's embedded as CDATA inside the item's <description>, which Sparkle renders
+inline — no webview fetch, no GitHub page chrome.
 
 If --in does not exist (or is empty) a fresh appcast skeleton is created.
 Re-running for a version that's already in the appcast is a no-op.
@@ -42,7 +46,9 @@ ITEM_TEMPLATE = """    <item>
       <sparkle:version>{build}</sparkle:version>
       <sparkle:shortVersionString>{version}</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>{min_sys}</sparkle:minimumSystemVersion>
-      <sparkle:releaseNotesLink>{notes_link}</sparkle:releaseNotesLink>
+      <description><![CDATA[
+{notes_html}
+]]></description>
       <pubDate>{pub_date}</pubDate>
       <enclosure url="{url}" {enclosure_attrs} type="application/octet-stream"/>
     </item>
@@ -56,7 +62,8 @@ def main() -> int:
     p.add_argument("--url", required=True)
     p.add_argument("--enclosure-attrs", required=True,
                    help='the `sparkle:edSignature="..." length="..."` string from sign_update')
-    p.add_argument("--release-notes-link", required=True)
+    p.add_argument("--release-notes-file", required=True,
+                   help="path to an HTML fragment with this release's notes; embedded in CDATA")
     p.add_argument("--min-system-version", default="14.0")
     p.add_argument("--in", dest="infile", default="appcast.xml")
     p.add_argument("--out", dest="outfile", default="appcast.xml")
@@ -75,11 +82,17 @@ def main() -> int:
             fh.write(xml)
         return 0
 
+    with open(args.release_notes_file, encoding="utf-8") as fh:
+        notes_html = fh.read().strip()
+    if "]]>" in notes_html:
+        print("error: release notes contain ']]>' which would break CDATA", file=sys.stderr)
+        return 1
+
     item = ITEM_TEMPLATE.format(
         version=args.version,
         build=args.build,
         min_sys=args.min_system_version,
-        notes_link=args.release_notes_link,
+        notes_html=notes_html,
         pub_date=email.utils.formatdate(time.time(), localtime=False, usegmt=True),
         url=args.url,
         enclosure_attrs=args.enclosure_attrs.strip(),

@@ -73,7 +73,10 @@ archive (`scripts/publish-appcast.sh` → `scripts/update-appcast.py`) and pushe
 updated `appcast.xml` to that branch via `RELEASES_REPO_TOKEN`. This works the same
 whether the release is the un-notarized zip/DMG or the signed+notarized DMG —
 Sparkle just downloads whichever asset the appcast points at (it prefers the `.zip`
-when present). Release notes in the updater link to the GitHub release page.
+when present). Release notes are generated from the source repo's commit log
+between this tag and the previous semver tag, written as both markdown (used as
+the GitHub Release body) and minimal HTML (embedded directly in the appcast's
+`<description>` CDATA so Sparkle renders them inline without a webview fetch).
 
 **One-time setup:**
 

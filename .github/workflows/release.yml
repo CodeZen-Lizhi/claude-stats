@@ -172,28 +172,55 @@ jobs:
       - name: Generate release notes from source commits
         # GitHub's auto-generated notes come from the *target* repo's history,
         # which on `claude-stats-releases` is just the README — useless. Build
-        # the body here from the private source repo's commits between this tag
+        # the notes here from the private source repo's commits between this tag
         # and the previous semver tag (or from the start if this is the first
         # release). `actions/checkout` with fetch-depth: 0 above fetched all tags.
+        #
+        # We emit two files with the same content in different formats:
+        #   • release_notes.md   → body of the GitHub Release page (markdown)
+        #   • release_notes.html → embedded in the appcast's <description>
+        #     CDATA so Sparkle renders bullets inline instead of loading a URL
         run: |
           set -euo pipefail
           PREV_TAG="$(git tag --sort=-creatordate --list 'v*.*.*' \
                         | grep -vFx "${GITHUB_REF_NAME}" \
                         | head -1 || true)"
+          if [[ -n "$PREV_TAG" ]]; then
+            RANGE="${PREV_TAG}..${GITHUB_REF_NAME}"
+          else
+            RANGE="${GITHUB_REF_NAME}"
+          fi
+          # Capture commit subjects, one per line, no merges
+          COMMITS="$(git log --no-merges --pretty=format:'%s' "$RANGE")"
+
+          # Markdown for GitHub Release
           {
             echo "## Changes"
             echo
             if [[ -n "$PREV_TAG" ]]; then
               echo "Since [\`$PREV_TAG\`](https://github.com/1pitaph/claude-stats-releases/releases/tag/$PREV_TAG):"
               echo
-              git log --no-merges --pretty=format:'- %s' "${PREV_TAG}..${GITHUB_REF_NAME}"
-            else
-              git log --no-merges --pretty=format:'- %s' "${GITHUB_REF_NAME}"
             fi
-            echo
+            while IFS= read -r line; do
+              [[ -n "$line" ]] && echo "- $line"
+            done <<< "$COMMITS"
           } > release_notes.md
+
+          # HTML for Sparkle's update dialog — minimal, escape &<> in subjects
+          {
+            echo "<ul>"
+            while IFS= read -r line; do
+              [[ -z "$line" ]] && continue
+              escaped="$(printf '%s' "$line" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')"
+              printf '<li>%s</li>\n' "$escaped"
+            done <<< "$COMMITS"
+            echo "</ul>"
+          } > release_notes.html
+
           echo "----- release_notes.md -----"
           cat release_notes.md
+          echo "----- release_notes.html -----"
+          cat release_notes.html
 
       - name: Create GitHub Release (in public releases repo)
         uses: softprops/action-gh-release@v2

@@ -55,12 +55,15 @@ ENCLOSURE_ATTRS="$("$WORK/bin/sign_update" "$ARCHIVE" --ed-key-file "$KEY_FILE")
 curl -fsSL "$FEED_URL" -o "$WORK/appcast.xml" || rm -f "$WORK/appcast.xml"
 
 mkdir -p _site
+NOTES_FILE="${RELEASE_NOTES_FILE:-release_notes.html}"
+[[ -f "$NOTES_FILE" ]] || { echo "error: release notes file '$NOTES_FILE' not found" >&2; exit 1; }
+
 python3 scripts/update-appcast.py \
     --version "$VERSION" \
     --build "$BUILD" \
     --url "https://github.com/$REPO/releases/download/$TAG/$ARCHIVE_NAME" \
     --enclosure-attrs "$ENCLOSURE_ATTRS" \
-    --release-notes-link "https://github.com/$REPO/releases/tag/$TAG" \
+    --release-notes-file "$NOTES_FILE" \
     --in "$WORK/appcast.xml" \
     --out "_site/appcast.xml"
 
