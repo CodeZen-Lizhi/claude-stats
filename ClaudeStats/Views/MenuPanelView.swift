@@ -194,6 +194,7 @@ struct StatsPanelBody: View {
 struct MenuPanelView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
 
     @State private var pane: StatsPane = .usage
 
@@ -210,7 +211,10 @@ struct MenuPanelView: View {
 
     private var footer: some View {
         HStack(spacing: 10) {
-            SettingsLink {
+            Button {
+                NSApp.activate(ignoringOtherApps: true)
+                openSettings()
+            } label: {
                 BracketBox(spacing: 5) {
                     Label("SETTINGS", systemImage: "gearshape")
                         .labelStyle(.titleAndIcon)
