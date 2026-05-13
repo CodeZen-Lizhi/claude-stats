@@ -68,6 +68,36 @@ xcodebuild \
 
 [[ -d "$APP" ]] || { echo "error: build did not produce $APP" >&2; exit 1; }
 
+if [[ $SIGNED -eq 1 ]]; then
+    # xcodebuild signs the main app and the immediate framework bundle, but does
+    # NOT recurse into Sparkle.framework to re-sign its XPC services, helper app,
+    # or helper executable — they keep Sparkle's own distribution signature,
+    # which Apple's notary rejects ("not signed with a valid Developer ID
+    # certificate" + "signature does not include a secure timestamp"). Re-sign
+    # each nested binary bottom-up, then the framework, then the main app. The
+    # final re-sign of the main app, with our entitlements file passed
+    # explicitly, also strips Xcode's auto-injected `get-task-allow` entitlement
+    # (also rejected by notary).
+    echo "==> Deep re-signing Sparkle.framework contents + main app"
+    SPARKLE_FW="$APP/Contents/Frameworks/Sparkle.framework"
+    if [[ -d "$SPARKLE_FW" ]]; then
+        for item in \
+            "$SPARKLE_FW/Versions/B/XPCServices/Downloader.xpc" \
+            "$SPARKLE_FW/Versions/B/XPCServices/Installer.xpc" \
+            "$SPARKLE_FW/Versions/B/Updater.app" \
+            "$SPARKLE_FW/Versions/B/Autoupdate"; do
+            [[ -e "$item" ]] && codesign --force --options runtime --timestamp \
+                --sign "$SIGN_IDENTITY" "$item"
+        done
+        codesign --force --options runtime --timestamp \
+            --sign "$SIGN_IDENTITY" "$SPARKLE_FW"
+    fi
+    codesign --force --options runtime --timestamp \
+        --sign "$SIGN_IDENTITY" \
+        --entitlements "ClaudeStats/App/ClaudeStats.entitlements" \
+        "$APP"
+fi
+
 make_dmg() {
     local stage; stage="$(mktemp -d)"
     cp -R "$APP" "$stage/"
@@ -104,7 +134,19 @@ else
     echo "error: notarization needs NOTARY_KEYCHAIN_PROFILE or APPLE_ID + APP_PASSWORD + APPLE_TEAM_ID" >&2
     exit 1
 fi
-xcrun notarytool submit "$DMG" "${NOTARY_ARGS[@]}" --wait
+
+# notarytool returns 0 even when status=Invalid (submission "completed",
+# content was rejected), so parse the status ourselves and fail loudly with
+# the actual log instead of letting stapler fail with a misleading error.
+SUBMIT_LOG="$DIST/notarytool-submit.log"
+xcrun notarytool submit "$DMG" "${NOTARY_ARGS[@]}" --wait | tee "$SUBMIT_LOG"
+SUBMIT_STATUS="$(awk -F': *' '/^[[:space:]]*status:/ {print $2; exit}' "$SUBMIT_LOG" | tr -d '[:space:]')"
+if [[ "$SUBMIT_STATUS" != "Accepted" ]]; then
+    SUBMIT_ID="$(awk -F': *' '/^[[:space:]]*id:/ {print $2; exit}' "$SUBMIT_LOG" | tr -d '[:space:]')"
+    echo "==> Notarization failed (status: $SUBMIT_STATUS) — fetching log" >&2
+    [[ -n "$SUBMIT_ID" ]] && xcrun notarytool log "$SUBMIT_ID" "${NOTARY_ARGS[@]}" >&2 || true
+    exit 1
+fi
 
 echo "==> Stapling notarization ticket"
 xcrun stapler staple "$DMG"
