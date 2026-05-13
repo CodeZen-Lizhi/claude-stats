@@ -35,7 +35,7 @@
 	<key>SUFeedURL</key>
 	<string>https://1pitaph.github.io/claude-stats/appcast.xml</string>
 	<key>SUPublicEDKey</key>
-	<string>REPLACE_WITH_SPARKLE_ED_PUBLIC_KEY</string>
+	<string>q08NR2AvmmN/WuX7o7jQmYMsaL/5bPmiX/xlo3flCZY=</string>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 </dict>
