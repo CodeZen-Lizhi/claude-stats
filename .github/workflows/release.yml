@@ -60,10 +60,11 @@ permissions:
 
 jobs:
   release:
-    # Needs Xcode 26 (the project.yml targets it; older Xcode can't even open the
-    # generated .xcodeproj — "future Xcode project file format"). macos-15 ships it;
-    # the Select Xcode step pins it explicitly.
-    runs-on: macos-15
+    # Needs Xcode 26.4+: earlier 26.x ship an `actool` that crashes on the Icon
+    # Composer `AppIcon.icon` bundle ("AssetCatalogAgent closed the connection").
+    # The macos-15 runner image only goes up to 26.3; macos-26 is the first image
+    # that preinstalls 26.4.1 stable.
+    runs-on: macos-26
     steps:
       - name: Checkout master
         uses: actions/checkout@v4
@@ -72,12 +73,12 @@ jobs:
           fetch-depth: 0
 
       - name: Select Xcode
-        # Needs Xcode 26.4+: earlier 26.x ship an `actool` that crashes compiling
-        # the Icon Composer `AppIcon.icon` bundle ("AssetCatalogAgent closed the
-        # connection"). latest-stable on the macos-15 image is 26.4.x.
+        # Pinned, NOT `latest-stable`: the macos-26 image also preinstalls 26.5
+        # beta, which can be removed or replaced without warning. 26.4.1 is the
+        # newest stable Xcode that fixes the Icon Composer actool crash.
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable
+          xcode-version: "26.4.1"
 
       - name: Resolve version from tag
         id: version
