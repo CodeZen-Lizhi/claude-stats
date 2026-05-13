@@ -54,6 +54,76 @@ struct GitAnalyzerTests {
         #expect(commits[0].subject == "ok")
     }
 
+    // MARK: - parseNumstat / parseCommitShow / parseUnifiedDiff (no git needed)
+
+    @Test("parseNumstat reads ins/del/path and maps binary '-' to -1")
+    func parseNumstatBasics() {
+        let out = "12\t3\tSources/A.swift\n0\t9\tSources/B.swift\n-\t-\tassets/logo.png\nmalformed line\n"
+        let files = GitAnalyzer.parseNumstat(out)
+        #expect(files.count == 3)
+        #expect(files[0].path == "Sources/A.swift" && files[0].insertions == 12 && files[0].deletions == 3)
+        #expect(files[0].directory == "Sources" && files[0].fileName == "A.swift")
+        #expect(files[2].isBinary && files[2].insertions == -1 && files[2].deletions == -1)
+    }
+
+    @Test("parseCommitShow reads metadata, body and numstat")
+    func parseCommitShowBasics() throws {
+        let f = Self.FS, r = Self.RS
+        let fields = ["abc123def456", "abc123d", "p1 p2",
+                      "Ada", "ada@example.com", "1705314600",
+                      "Grace", "grace@example.com", "1705315020",
+                      "feat: do the thing", "Body line one\n\nBody line two\n"].joined(separator: f)
+        let out = "\(r)\(fields)\(r)\n\n5\t1\tSources/A.swift\n-\t-\tlogo.png\n"
+        let detail = try #require(GitAnalyzer.parseCommitShow(out))
+        #expect(detail.hash == "abc123def456")
+        #expect(detail.abbreviatedHash == "abc123d")
+        #expect(detail.parentHashes == ["p1", "p2"])
+        #expect(detail.isMerge)
+        #expect(detail.authorName == "Ada" && detail.authorEmail == "ada@example.com")
+        #expect(detail.authorDate == Date(timeIntervalSince1970: 1_705_314_600))
+        #expect(detail.committerName == "Grace" && detail.commitDate == Date(timeIntervalSince1970: 1_705_315_020))
+        #expect(detail.subject == "feat: do the thing")
+        #expect(detail.body == "Body line one\n\nBody line two")
+        #expect(detail.files.count == 2)
+        #expect(detail.totalInsertions == 5 && detail.totalDeletions == 1)   // binary excluded
+    }
+
+    @Test("parseCommitShow on a merge commit (no numstat) yields empty files")
+    func parseCommitShowMerge() throws {
+        let f = Self.FS, r = Self.RS
+        let fields = ["h", "h", "p1 p2", "A", "a@x", "1", "A", "a@x", "1", "Merge branch 'x'", ""].joined(separator: f)
+        let detail = try #require(GitAnalyzer.parseCommitShow("\(r)\(fields)\(r)\n"))
+        #expect(detail.isMerge && detail.files.isEmpty && detail.body.isEmpty)
+    }
+
+    @Test("parseUnifiedDiff classifies headers, hunk lines and tracks line numbers")
+    func parseUnifiedDiffBasics() throws {
+        let diff = """
+        diff --git a/A.swift b/A.swift
+        index 111..222 100644
+        --- a/A.swift
+        +++ b/A.swift
+        @@ -10,3 +10,4 @@ func f() {
+             let a = 1
+        -    let b = 2
+        +    let b = 3
+        +    let c = 4
+             return a
+        """
+        let lines = GitAnalyzer.parseUnifiedDiff(diff)
+        #expect(lines.prefix(4).allSatisfy { $0.kind == .fileHeader })
+        let hunk = try #require(lines.first { $0.kind == .hunkHeader })
+        #expect(hunk.text.hasPrefix("@@ -10,3 +10,4 @@"))
+        let body = lines.drop(while: { $0.kind != .hunkHeader }).dropFirst()
+        #expect(Array(body).map(\.kind) == [.context, .deletion, .addition, .addition, .context])
+        let firstContext = try #require(body.first)
+        #expect(firstContext.oldLine == 10 && firstContext.newLine == 10)
+        let delLine = try #require(body.first { $0.kind == .deletion })
+        #expect(delLine.text == "    let b = 2" && delLine.oldLine == 11 && delLine.newLine == nil)
+        let lastContext = try #require(body.last)
+        #expect(lastContext.oldLine == 12 && lastContext.newLine == 13)
+    }
+
     // MARK: - bucketing
 
     @Test("RepoActivity.buckets groups commits per repo per calendar unit")

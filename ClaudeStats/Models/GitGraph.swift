@@ -43,4 +43,50 @@ struct CommitFileChange: Sendable, Identifiable, Hashable {
     let deletions: Int
     var id: String { path }
     var isBinary: Bool { insertions < 0 || deletions < 0 }
+
+    /// The directory the file lives in (`""` ⇒ repo root); used to group the
+    /// file list in ``CommitDetailView``.
+    var directory: String { (path as NSString).deletingLastPathComponent }
+    var fileName: String { (path as NSString).lastPathComponent }
+}
+
+/// Full metadata + per-file churn for one commit — the ``CommitDetailView``
+/// model, loaded via ``GitAnalyzer/commitDetail(for:in:)`` (`git show --numstat`).
+struct CommitDetail: Sendable, Hashable, Identifiable {
+    let hash: String
+    let abbreviatedHash: String
+    let parentHashes: [String]
+    let authorName: String
+    let authorEmail: String
+    let authorDate: Date
+    let committerName: String
+    let committerEmail: String
+    let commitDate: Date
+    let subject: String
+    /// The commit message body (everything after the subject), trimmed; may be empty.
+    let body: String
+    let files: [CommitFileChange]
+
+    var id: String { hash }
+    var isMerge: Bool { parentHashes.count > 1 }
+    var totalInsertions: Int { files.lazy.filter { !$0.isBinary }.reduce(0) { $0 + $1.insertions } }
+    var totalDeletions: Int { files.lazy.filter { !$0.isBinary }.reduce(0) { $0 + $1.deletions } }
+}
+
+/// One line of a unified diff, for the ``FileDiffView``.
+struct DiffLine: Sendable, Hashable, Identifiable {
+    enum Kind: Sendable, Hashable { case fileHeader, hunkHeader, context, addition, deletion }
+    let kind: Kind
+    /// The line text without the leading `+`/`-`/space marker.
+    let text: String
+    let oldLine: Int?
+    let newLine: Int?
+    let id = UUID()
+}
+
+/// The unified diff of one file within a commit (`git show -- <path>`).
+struct FileDiff: Sendable, Hashable {
+    let path: String
+    let isBinary: Bool
+    let lines: [DiffLine]
 }

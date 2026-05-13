@@ -111,13 +111,108 @@ struct GitAnalyzer: Sendable {
     func fileChanges(for hash: String, in repo: GitRepo) -> [CommitFileChange] {
         guard isAvailable, !hash.isEmpty else { return [] }
         guard let output = runGit(["-C", repo.rootPath, "show", "--numstat", "--format=", "--no-color", hash]) else { return [] }
-        return output.split(separator: "\n").compactMap { line in
+        return Self.parseNumstat(output)
+    }
+
+    /// Parse `git`'s `--numstat` block (`<ins>\t<del>\t<path>` lines; binary
+    /// files print `-`/`-`, mapped to `-1`/`-1`). Renames printed as
+    /// `old => new` are kept verbatim.
+    static func parseNumstat(_ output: String) -> [CommitFileChange] {
+        output.split(separator: "\n").compactMap { line in
             let cols = line.split(separator: "\t", maxSplits: 2, omittingEmptySubsequences: false)
             guard cols.count >= 3 else { return nil }
             let ins = cols[0] == "-" ? -1 : (Int(cols[0]) ?? 0)
             let del = cols[1] == "-" ? -1 : (Int(cols[1]) ?? 0)
             return CommitFileChange(path: String(cols[2]), insertions: ins, deletions: del)
         }
+    }
+
+    /// Full metadata + per-file churn for one commit (`git show --numstat`).
+    /// `nil` if `git` couldn't be run; `files` is empty for merge commits (git
+    /// prints no diff for them by default).
+    func commitDetail(for hash: String, in repo: GitRepo) -> CommitDetail? {
+        guard isAvailable, !hash.isEmpty else { return nil }
+        let f = Self.fieldSep, r = Self.recordSep
+        let format = "format:\(r)%H\(f)%h\(f)%P\(f)%an\(f)%ae\(f)%at\(f)%cn\(f)%ce\(f)%ct\(f)%s\(f)%b\(r)"
+        guard let output = runGit(["-C", repo.rootPath, "show", "--numstat", "--no-color", "--pretty=\(format)", hash]) else { return nil }
+        return Self.parseCommitShow(output)
+    }
+
+    /// Parse `git show --numstat --pretty=format:<rec>%H<f>%h<f>%P<f>%an<f>%ae<f>%at<f>%cn<f>%ce<f>%ct<f>%s<f>%b<rec>`.
+    /// The output is `<rec>field0<f>…<f>body<rec>\n\n<numstat lines>`.
+    static func parseCommitShow(_ output: String) -> CommitDetail? {
+        let parts = output.components(separatedBy: recordSep)
+        guard parts.count >= 2 else { return nil }
+        let fields = parts[1].components(separatedBy: fieldSep)
+        guard fields.count >= 11 else { return nil }
+        let hash = fields[0]
+        guard !hash.isEmpty else { return nil }
+        func date(_ s: String) -> Date { Double(s).map { Date(timeIntervalSince1970: $0) } ?? .distantPast }
+        let parents = fields[2].split(separator: " ").map(String.init)
+        let body = fields[10...].joined(separator: fieldSep).trimmingCharacters(in: .whitespacesAndNewlines)
+        let numstat = parts.count >= 3 ? parts[2] : ""
+        return CommitDetail(
+            hash: hash, abbreviatedHash: fields[1], parentHashes: parents,
+            authorName: fields[3], authorEmail: fields[4], authorDate: date(fields[5]),
+            committerName: fields[6], committerEmail: fields[7], commitDate: date(fields[8]),
+            subject: fields[9], body: body, files: parseNumstat(numstat)
+        )
+    }
+
+    /// The unified diff of one file within a commit (`git show -- <path>`).
+    /// `nil` if `git` couldn't be run.
+    func fileDiff(for hash: String, path: String, in repo: GitRepo) -> FileDiff? {
+        guard isAvailable, !hash.isEmpty, !path.isEmpty else { return nil }
+        guard let output = runGit(["-C", repo.rootPath, "show", "--format=", "--no-color", hash, "--", path]) else { return nil }
+        let lines = Self.parseUnifiedDiff(output)
+        let isBinary = lines.isEmpty && output.contains("Binary files")
+        return FileDiff(path: path, isBinary: isBinary, lines: lines)
+    }
+
+    /// Parse a unified diff (the body of `git show`/`git diff` after the
+    /// `diff --git` headers). Lines outside any hunk (`diff --git`, `index`,
+    /// `---`, `+++`, `new file mode`, …) become `.fileHeader`; `@@ … @@`
+    /// becomes `.hunkHeader` and seeds the old/new line counters.
+    static func parseUnifiedDiff(_ output: String) -> [DiffLine] {
+        var result: [DiffLine] = []
+        var oldNo = 0, newNo = 0
+        var inHunk = false
+        for rawLine in output.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = String(rawLine)
+            if line.hasPrefix("diff --git ") { inHunk = false }
+            if line.hasPrefix("@@") {
+                inHunk = true
+                if let (o, n) = parseHunkHeader(line) { oldNo = o; newNo = n }
+                result.append(DiffLine(kind: .hunkHeader, text: line, oldLine: nil, newLine: nil))
+                continue
+            }
+            if !inHunk {
+                if line.isEmpty { continue }
+                result.append(DiffLine(kind: .fileHeader, text: line, oldLine: nil, newLine: nil))
+                continue
+            }
+            if line.hasPrefix("+") {
+                result.append(DiffLine(kind: .addition, text: String(line.dropFirst()), oldLine: nil, newLine: newNo)); newNo += 1
+            } else if line.hasPrefix("-") {
+                result.append(DiffLine(kind: .deletion, text: String(line.dropFirst()), oldLine: oldNo, newLine: nil)); oldNo += 1
+            } else if line.hasPrefix("\\") {
+                // "\ No newline at end of file" — render as context, no numbers.
+                result.append(DiffLine(kind: .context, text: line, oldLine: nil, newLine: nil))
+            } else {
+                let text = line.hasPrefix(" ") ? String(line.dropFirst()) : line
+                result.append(DiffLine(kind: .context, text: text, oldLine: oldNo, newLine: newNo)); oldNo += 1; newNo += 1
+            }
+        }
+        return result
+    }
+
+    /// `"@@ -12,7 +12,9 @@ context"` → `(oldStart: 12, newStart: 12)`.
+    private static func parseHunkHeader(_ line: String) -> (Int, Int)? {
+        let parts = line.split(separator: " ")
+        guard parts.count >= 3, parts[1].hasPrefix("-"), parts[2].hasPrefix("+") else { return nil }
+        let old = Int(parts[1].dropFirst().split(separator: ",").first ?? "") ?? 0
+        let new = Int(parts[2].dropFirst().split(separator: ",").first ?? "") ?? 0
+        return (old, new)
     }
 
     /// Parse `git log --pretty=format:<rec>%H<f>%P<f>%D<f>%an<f>%ae<f>%at<f>%s`.

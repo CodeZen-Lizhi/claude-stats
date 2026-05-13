@@ -19,8 +19,10 @@ struct GitGraphView: View {
     @State private var layout: GraphLayout?
     @State private var isLoading = false
     @State private var limit = 200
+    @State private var loadedLimit = 0
     @State private var expandedHash: String?
     @State private var fileChanges: [String: [CommitFileChange]] = [:]
+    @State private var detailHash: String?
 
     init(repo: GitRepo, onBack: @escaping () -> Void) {
         self.repo = repo
@@ -51,6 +53,23 @@ struct GitGraphView: View {
     private func laneColor(_ idx: Int) -> Color { Color.stxRamp[idx % Color.stxRamp.count] }
 
     var body: some View {
+        if let detailHash {
+            #if DEBUG
+            if isPreview, let commit = graph?.commits.first(where: { $0.hash == detailHash }) {
+                CommitDetailView(detail: .preview(from: commit, files: fileChanges[detailHash] ?? []),
+                                 repo: repo, onBack: { self.detailHash = nil })
+            } else {
+                CommitDetailView(repo: repo, hash: detailHash, onBack: { self.detailHash = nil })
+            }
+            #else
+            CommitDetailView(repo: repo, hash: detailHash, onBack: { self.detailHash = nil })
+            #endif
+        } else {
+            graphBody
+        }
+    }
+
+    private var graphBody: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
             StxRule()
@@ -58,12 +77,14 @@ struct GitGraphView: View {
         }
         .task(id: [repo.id, "\(limit)"]) {
             if isPreview { return }
+            if graph != nil, loadedLimit == limit { return }   // keep state when returning from a detail screen
             isLoading = true
             let r = repo
             let n = limit
             let g = await Task.detached(priority: .userInitiated) { GitAnalyzer().graph(for: r, limit: n) }.value
             graph = g
             layout = g.map { GraphLayout.build($0.commits) }
+            loadedLimit = n
             isLoading = false
         }
     }
@@ -72,14 +93,7 @@ struct GitGraphView: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            Button(action: onBack) {
-                BracketBox(spacing: 4) {
-                    Image(systemName: "chevron.left").font(.system(size: 10, weight: .bold))
-                }
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(Color.stxMuted)
-            .help("Back to git overview")
+            GitBackButton(help: "Back to git overview", action: onBack)
 
             Text(repo.displayName.uppercased())
                 .font(.sora(13, weight: .semibold))
@@ -177,6 +191,19 @@ struct GitGraphView: View {
                 } else {
                     Text("Loading…").font(.sora(9)).foregroundStyle(Color.stxMuted.opacity(0.7))
                 }
+                HStack(spacing: 0) {
+                    Spacer()
+                    Button { detailHash = commit.hash } label: {
+                        BracketBox(spacing: 4) {
+                            Text("MORE").font(.sora(9, weight: .semibold)).tracking(0.8)
+                            Image(systemName: "arrow.up.right").font(.system(size: 9, weight: .bold))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.stxAccent)
+                    .help("Open the full commit detail")
+                }
+                .padding(.top, 2)
             }
             .padding(.vertical, 8)
             .padding(.trailing, 14)
@@ -314,11 +341,36 @@ private struct GraphRowView: View {
 
 // MARK: - Bits
 
-private enum GitPalette {
-    static let add = Color(red: 0.36, green: 0.68, blue: 0.34)
-    static let del = Color(red: 0.86, green: 0.30, blue: 0.24)
-    static let head = Color(red: 0.20, green: 0.48, blue: 0.86)
-    static let tag = Color(red: 0.78, green: 0.58, blue: 0.10)
+/// The `[ ‹ ]` back button used in the headers of the git drill-in views
+/// (graph → commit detail → file diff). Brightens and shows a faint pill on
+/// hover so it reads as a target.
+struct GitBackButton: View {
+    var help: String
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                // Nudge the brackets up so they sit vertically centred on the
+                // chevron glyph (the `[`/`]` cap box is taller than the symbol).
+                Text("[").foregroundStyle(Color.stxBracket).offset(y: -1)
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(hovering ? Color.primary : Color.stxMuted)
+                Text("]").foregroundStyle(Color.stxBracket).offset(y: -1)
+            }
+            .padding(.horizontal, 3)
+            .padding(.vertical, 2)
+            .background(RoundedRectangle(cornerRadius: 3).fill(Color.primary.opacity(hovering ? 0.06 : 0)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.15), value: hovering)
+        .help(help)
+    }
 }
 
 private struct RefPill: View {

@@ -177,4 +177,77 @@ extension GitGraph {
         ]
     }
 }
+
+extension CommitDetail {
+    /// Default sample files for the `#Preview`s, exercising directory grouping
+    /// and a binary file.
+    static let previewFiles: [CommitFileChange] = [
+        CommitFileChange(path: "Sources/Net/ConnectionCoordinator.swift", insertions: 188, deletions: 12),
+        CommitFileChange(path: "Sources/Net/Reconnect.swift", insertions: 96, deletions: 0),
+        CommitFileChange(path: "Sources/Net/Backoff.swift", insertions: 54, deletions: 4),
+        CommitFileChange(path: "Tests/ReconnectTests.swift", insertions: 124, deletions: 6),
+        CommitFileChange(path: "Resources/state-machine.png", insertions: -1, deletions: -1),
+        CommitFileChange(path: "CHANGELOG.md", insertions: 3, deletions: 0),
+    ]
+
+    /// A sample commit (the `feat: websocket reconnect with backoff` commit from
+    /// ``GitGraph/preview()``) for the ``CommitDetailView`` `#Preview`.
+    static func preview() -> CommitDetail {
+        let cal = Calendar.current
+        let authored = cal.date(byAdding: .hour, value: -14, to: .now) ?? .now
+        return CommitDetail(
+            hash: "d4e5f607182930415263748596a7b8c9d0e1f203",
+            abbreviatedHash: "d4e5f60",
+            parentHashes: ["f607182930415263"],
+            authorName: "Grace Hopper", authorEmail: "grace@example.com", authorDate: authored,
+            committerName: "Ada Lovelace", committerEmail: "ada@example.com",
+            commitDate: authored.addingTimeInterval(420),
+            subject: "feat: websocket reconnect with backoff",
+            body: "Reconnect with exponential backoff and full jitter, capped at 30s.\n\nDrops stale subscriptions on close so a reconnect doesn't double-deliver.",
+            files: previewFiles
+        )
+    }
+
+    /// Build a `CommitDetail` from a ``GraphCommit`` for previews — used when the
+    /// ``GitGraphView`` preview drills into a commit (the live view shells out to
+    /// `git show`). Falls back to ``previewFiles`` when no churn was supplied.
+    static func preview(from commit: GraphCommit, files: [CommitFileChange]) -> CommitDetail {
+        CommitDetail(
+            hash: commit.hash,
+            abbreviatedHash: String(commit.hash.prefix(7)),
+            parentHashes: commit.parentHashes,
+            authorName: commit.author, authorEmail: commit.authorEmail, authorDate: commit.date,
+            committerName: commit.author, committerEmail: commit.authorEmail, commitDate: commit.date,
+            subject: commit.subject,
+            body: "Sample commit body for the Xcode preview — the live view loads the real message via `git show`.",
+            files: commit.isMerge ? [] : (files.isEmpty ? previewFiles : files)
+        )
+    }
+}
+
+extension FileDiff {
+    /// A small hand-written unified diff for the ``FileDiffView`` `#Preview` (and
+    /// the previewed double-click flow from ``CommitDetailView``).
+    static func preview(path: String = "Sources/Net/Reconnect.swift") -> FileDiff {
+        FileDiff(path: path, isBinary: false, lines: GitAnalyzer.parseUnifiedDiff("""
+        diff --git a/\(path) b/\(path)
+        index 1a2b3c4..5d6e7f8 100644
+        --- a/\(path)
+        +++ b/\(path)
+        @@ -12,7 +12,11 @@ final class Reconnector {
+             private let maxDelay: TimeInterval = 30
+        -    private var attempt = 0
+        +    private var attempt = 0 { didSet { onAttemptChange?(attempt) } }
+        +    var onAttemptChange: ((Int) -> Void)?
+
+             func nextDelay() -> TimeInterval {
+        -        let base = pow(2, Double(attempt))
+        +        let base = min(pow(2, Double(attempt)), maxDelay)
+        +        attempt += 1
+                 return base + Double.random(in: 0..<base)
+             }
+         }
+        """))
+    }
+}
 #endif
