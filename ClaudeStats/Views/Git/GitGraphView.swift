@@ -7,6 +7,7 @@ import SwiftUI
 struct GitGraphView: View {
     let repo: GitRepo
     var onBack: () -> Void
+    private let isPreview: Bool
 
     // Rail geometry — `rowHeight` must be fixed so each row's `Canvas` lines up.
     private static let rowHeight: CGFloat = 38
@@ -21,6 +22,28 @@ struct GitGraphView: View {
     @State private var expandedHash: String?
     @State private var fileChanges: [String: [CommitFileChange]] = [:]
 
+    init(repo: GitRepo, onBack: @escaping () -> Void) {
+        self.repo = repo
+        self.onBack = onBack
+        self.isPreview = false
+    }
+
+    #if DEBUG
+    /// Preview-only: starts already populated with a canned commit DAG (and
+    /// optionally per-commit file churn) so the Xcode canvas renders the lanes,
+    /// merges and detail rows — the live view shells out to `git`.
+    init(previewGraph: GitGraph,
+         fileChanges: [String: [CommitFileChange]] = [:],
+         onBack: @escaping () -> Void = {}) {
+        self.repo = previewGraph.repo
+        self.onBack = onBack
+        self.isPreview = true
+        _graph = State(initialValue: previewGraph)
+        _layout = State(initialValue: GraphLayout.build(previewGraph.commits))
+        _fileChanges = State(initialValue: fileChanges)
+    }
+    #endif
+
     private var railWidth: CGFloat {
         CGFloat((layout?.maxColumn ?? 0)) * Self.laneSpacing + Self.railPad * 2
     }
@@ -34,6 +57,7 @@ struct GitGraphView: View {
             content
         }
         .task(id: [repo.id, "\(limit)"]) {
+            if isPreview { return }
             isLoading = true
             let r = repo
             let n = limit
@@ -182,6 +206,10 @@ struct GitGraphView: View {
             expandedHash = willExpand ? hash : nil
         }
         guard willExpand, fileChanges[hash] == nil else { return }
+        if isPreview {
+            withAnimation(.easeInOut(duration: 0.15)) { fileChanges[hash] = [] }
+            return
+        }
         let r = repo
         Task {
             let fc = await Task.detached(priority: .userInitiated) { GitAnalyzer().fileChanges(for: hash, in: r) }.value
@@ -347,7 +375,15 @@ struct GitAvatar: View {
 
 #if DEBUG
 #Preview("Git graph") {
-    GitGraphView(repo: GitRepo(rootPath: FileManager.default.currentDirectoryPath), onBack: {})
+    GitGraphView(previewGraph: .preview(), fileChanges: GitGraph.previewFileChanges())
+        .environment(AppEnvironment.preview())
+        .frame(width: 420, height: 520)
+        .background(Color.stxBackground)
+}
+
+#Preview("Git graph — empty") {
+    GitGraphView(previewGraph: GitGraph(repo: GitRepo(rootPath: "/Users/dev/projects/empty"),
+                                        commits: [], truncated: false))
         .environment(AppEnvironment.preview())
         .frame(width: 420, height: 520)
         .background(Color.stxBackground)

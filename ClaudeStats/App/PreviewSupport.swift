@@ -118,4 +118,63 @@ extension Session {
 
     static var previewSamples: [Session] { previewSamples() }
 }
+
+extension GitGraph {
+    /// A small hand-built commit DAG (linear `main` with one feature branch
+    /// merged back in, plus a tag) so the `GitGraphView` `#Preview` shows the
+    /// real lane/merge rendering — the live view shells out to `git log`.
+    static func preview() -> GitGraph {
+        let repo = GitRepo(rootPath: "/Users/dev/projects/aurora")
+        let cal = Calendar.current
+        let now = Date.now
+        func at(_ hoursAgo: Int) -> Date { cal.date(byAdding: .hour, value: -hoursAgo, to: now) ?? now }
+
+        func commit(_ hash: String, parents: [String], _ subject: String,
+                    _ hoursAgo: Int, mine: Bool = true, refs: [GitRef] = []) -> GraphCommit {
+            GraphCommit(hash: hash, parentHashes: parents, refs: refs,
+                        author: mine ? "Ada Lovelace" : "Grace Hopper",
+                        authorEmail: mine ? "ada@example.com" : "grace@example.com",
+                        date: at(hoursAgo), subject: subject)
+        }
+
+        // newest first, --date-order; parents always appear below their children
+        let commits: [GraphCommit] = [
+            commit("a1b2c3d4e5f60718", parents: ["b2c3d4e5f6071829", "c3d4e5f607182930"],
+                   "Merge branch 'feature/reconnect'", 2,
+                   refs: [GitRef(kind: .head, name: "HEAD"), GitRef(kind: .branch, name: "main")]),
+            commit("c3d4e5f607182930", parents: ["d4e5f60718293041"],
+                   "fix: drop stale subscriptions on close", 5, mine: false,
+                   refs: [GitRef(kind: .branch, name: "feature/reconnect")]),
+            commit("b2c3d4e5f6071829", parents: ["e5f6071829304152"],
+                   "chore: bump design-tokens to 2.3.0", 9),
+            commit("d4e5f60718293041", parents: ["f607182930415263"],
+                   "feat: websocket reconnect with backoff", 14, mine: false),
+            commit("e5f6071829304152", parents: ["f607182930415263"],
+                   "docs: document the transport layer", 20),
+            commit("f607182930415263", parents: ["0718293041526374"],
+                   "feat: initial websocket transport", 30,
+                   refs: [GitRef(kind: .tag, name: "v1.0")]),
+            commit("0718293041526374", parents: [],
+                   "chore: project scaffolding", 48),
+        ]
+        return GitGraph(repo: repo, commits: commits, truncated: false)
+    }
+
+    /// Sample per-commit file churn for a couple of the `preview()` commits, so
+    /// expanding those rows shows the detail block.
+    static func previewFileChanges() -> [String: [CommitFileChange]] {
+        [
+            "d4e5f60718293041": [
+                CommitFileChange(path: "Sources/Net/ConnectionCoordinator.swift", insertions: 188, deletions: 12),
+                CommitFileChange(path: "Sources/Net/Reconnect.swift", insertions: 96, deletions: 0),
+                CommitFileChange(path: "Tests/ReconnectTests.swift", insertions: 124, deletions: 6),
+            ],
+            "f607182930415263": [
+                CommitFileChange(path: "Sources/Net/Transport.swift", insertions: 410, deletions: 0),
+                CommitFileChange(path: "Resources/architecture.png", insertions: -1, deletions: -1),
+            ],
+            "a1b2c3d4e5f60718": [],
+        ]
+    }
+}
 #endif

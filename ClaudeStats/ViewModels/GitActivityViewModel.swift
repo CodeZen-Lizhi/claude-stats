@@ -152,3 +152,69 @@ final class GitActivityViewModel {
         return out
     }
 }
+
+#if DEBUG
+extension GitActivityViewModel {
+    /// A view model pre-populated with canned commit activity for `#Preview`.
+    /// Repo paths line up with `Session.previewSamples` so the usage/commit
+    /// correlation chart lights up too.
+    static func preview() -> GitActivityViewModel {
+        let vm = GitActivityViewModel()
+        vm.range = .last30Days
+        let cal = Calendar.current
+        let now = Date.now
+        func at(_ daysAgo: Int, _ hour: Int = 11) -> Date {
+            let day = cal.date(byAdding: .day, value: -daysAgo, to: cal.startOfDay(for: now)) ?? now
+            return cal.date(byAdding: .hour, value: hour, to: day) ?? day
+        }
+        func commit(_ repo: GitRepo, _ daysAgo: Int, _ subject: String,
+                    _ insertions: Int, _ deletions: Int, _ files: Int,
+                    mine: Bool = true) -> GitCommit {
+            GitCommit(hash: UUID().uuidString.replacingOccurrences(of: "-", with: ""),
+                      date: at(daysAgo), author: mine ? "Ada Lovelace" : "Grace Hopper",
+                      authorEmail: mine ? "ada@example.com" : "grace@example.com",
+                      subject: subject, insertions: insertions, deletions: deletions,
+                      filesChanged: files, repoID: repo.id)
+        }
+        let aurora = GitRepo(rootPath: "/Users/dev/projects/aurora")
+        let ledger = GitRepo(rootPath: "/Users/dev/projects/ledger")
+        let designSystem = GitRepo(rootPath: "/Users/dev/work/design-system")
+
+        let activity = [
+            RepoActivity(repo: aurora, commits: [
+                commit(aurora, 0, "feat: websocket reconnect with backoff", 312, 48, 7),
+                commit(aurora, 0, "fix: drop stale subscriptions on close", 24, 11, 2),
+                commit(aurora, 1, "refactor: extract ConnectionCoordinator", 188, 164, 5),
+                commit(aurora, 3, "test: reconnect timing fixtures", 240, 6, 4),
+                commit(aurora, 9, "feat: migrate settings screen to new design", 470, 90, 11),
+                commit(aurora, 10, "chore: bump design-tokens dependency", 8, 8, 3, mine: false),
+                commit(aurora, 16, "feat: initial websocket transport", 640, 12, 9),
+            ]),
+            RepoActivity(repo: ledger, commits: [
+                commit(ledger, 2, "fix: off-by-one in pagination cursor", 18, 22, 3),
+                commit(ledger, 2, "test: pagination edge cases", 130, 4, 2),
+                commit(ledger, 6, "perf: batch balance recomputation", 92, 140, 6),
+                commit(ledger, 13, "refactor: split ledger into modules", 280, 260, 8),
+            ]),
+            RepoActivity(repo: designSystem, commits: [
+                commit(designSystem, 4, "feat: liquid-glass surface tokens", 150, 30, 5, mine: false),
+                commit(designSystem, 12, "fix: dark-mode contrast on chips", 40, 38, 6),
+                commit(designSystem, 22, "docs: component usage guide", 92, 4, 3),
+            ]),
+        ]
+        vm.repos = activity.sorted { $0.churn != $1.churn ? $0.churn > $1.churn : $0.commitCount > $1.commitCount }
+        vm.userEmail = "ada@example.com"
+        vm.gitAvailable = true
+        return vm
+    }
+
+    /// A view model in the "no git activity" state — same as the live view when
+    /// none of your projects are git repos with commits in the window.
+    static func previewEmpty() -> GitActivityViewModel {
+        let vm = GitActivityViewModel()
+        vm.gitAvailable = true
+        vm.userEmail = "ada@example.com"
+        return vm
+    }
+}
+#endif

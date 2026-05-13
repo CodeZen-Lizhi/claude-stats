@@ -203,7 +203,7 @@ struct MenuPanelView: View {
             StxRule()
             footer
         }
-        .frame(width: 380, height: 480)
+        .frame(width: 380, height: 560)
         .font(.sora(13))
         .tint(.stxAccent)
     }

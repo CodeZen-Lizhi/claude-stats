@@ -13,8 +13,23 @@ struct GitActivityView: View {
     static let windowID = "git-activity"
 
     @Environment(AppEnvironment.self) private var env
-    @State private var vm = GitActivityViewModel()
+    @State private var vm: GitActivityViewModel
     @State private var graphRepo: GitRepo?
+    private let isPreview: Bool
+
+    init() {
+        _vm = State(wrappedValue: GitActivityViewModel())
+        isPreview = false
+    }
+
+    #if DEBUG
+    /// Preview-only: injects a view model already populated with canned data so
+    /// the Xcode canvas shows the real layout (the live view shells out to `git`).
+    init(previewModel: GitActivityViewModel) {
+        _vm = State(wrappedValue: previewModel)
+        isPreview = true
+    }
+    #endif
 
     private static let addColor = Color(red: 0.36, green: 0.68, blue: 0.34)
     private static let delColor = Color(red: 0.86, green: 0.30, blue: 0.24)
@@ -58,6 +73,7 @@ struct GitActivityView: View {
             .padding(14)
         }
         .task(id: key) {
+            if isPreview { return }
             await vm.reload(sessions: env.store.sessions(for: provider))
         }
     }
@@ -173,6 +189,7 @@ struct GitActivityView: View {
                 }
             }
         }
+        .chartXScale(domain: barChartDomain(points.map(\.start)))
         .chartXAxis(.hidden)
         .chartLegend(.hidden)
         .frame(height: hasTokens ? 70 : 36)
@@ -193,6 +210,7 @@ struct GitActivityView: View {
                 }
             }
         }
+        .chartXScale(domain: barChartDomain(points.map(\.start)))
         .chartXAxis {
             AxisMarks { value in
                 AxisGridLine().foregroundStyle(Color.stxStroke)
@@ -253,6 +271,7 @@ struct GitActivityView: View {
                         .foregroundStyle(Color.stxAccent.opacity(0.85))
                         .cornerRadius(1)
                 }
+                .chartXScale(domain: barChartDomain(buckets.map(\.start)))
                 .chartYAxis(.hidden)
                 .chartXAxis(.hidden)
                 .chartLegend(.hidden)
@@ -354,6 +373,18 @@ struct GitActivityView: View {
             .frame(maxWidth: .infinity, minHeight: 60)
     }
 
+    /// X-domain for a bucketed bar chart, padded by half a bucket on each side so
+    /// the first/last bars (centred on their bucket start) aren't clipped at the
+    /// plot edge. Buckets are evenly spaced, so half the step is the bar's reach.
+    private func barChartDomain(_ starts: [Date]) -> ClosedRange<Date> {
+        guard let first = starts.first, let last = starts.last else {
+            let now = Date.now
+            return now ... now.addingTimeInterval(1)
+        }
+        let step = starts.count >= 2 ? starts[1].timeIntervalSince(starts[0]) : 86_400
+        return first.addingTimeInterval(-step / 2) ... last.addingTimeInterval(step / 2)
+    }
+
     private struct RangeChip: View {
         let label: String
         let isSelected: Bool
@@ -383,9 +414,16 @@ struct GitActivityView: View {
 
 #if DEBUG
 #Preview("Git") {
-    GitActivityView()
+    GitActivityView(previewModel: .preview())
         .environment(AppEnvironment.preview())
-        .frame(width: 380, height: 480)
+        .frame(width: 380, height: 560)
+        .background(Color.stxBackground)
+}
+
+#Preview("Git — empty") {
+    GitActivityView(previewModel: .previewEmpty())
+        .environment(AppEnvironment.preview(populated: false))
+        .frame(width: 380, height: 560)
         .background(Color.stxBackground)
 }
 #endif
