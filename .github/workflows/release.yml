@@ -169,6 +169,32 @@ jobs:
           sudo killall -9 com.apple.CoreSimulator.CoreSimulatorService 2>/dev/null || true
           bash scripts/release-build.sh "${{ steps.version.outputs.version }}"
 
+      - name: Generate release notes from source commits
+        # GitHub's auto-generated notes come from the *target* repo's history,
+        # which on `claude-stats-releases` is just the README — useless. Build
+        # the body here from the private source repo's commits between this tag
+        # and the previous semver tag (or from the start if this is the first
+        # release). `actions/checkout` with fetch-depth: 0 above fetched all tags.
+        run: |
+          set -euo pipefail
+          PREV_TAG="$(git tag --sort=-creatordate --list 'v*.*.*' \
+                        | grep -vFx "${GITHUB_REF_NAME}" \
+                        | head -1 || true)"
+          {
+            echo "## Changes"
+            echo
+            if [[ -n "$PREV_TAG" ]]; then
+              echo "Since [\`$PREV_TAG\`](https://github.com/1pitaph/claude-stats-releases/releases/tag/$PREV_TAG):"
+              echo
+              git log --no-merges --pretty=format:'- %s' "${PREV_TAG}..${GITHUB_REF_NAME}"
+            else
+              git log --no-merges --pretty=format:'- %s' "${GITHUB_REF_NAME}"
+            fi
+            echo
+          } > release_notes.md
+          echo "----- release_notes.md -----"
+          cat release_notes.md
+
       - name: Create GitHub Release (in public releases repo)
         uses: softprops/action-gh-release@v2
         with:
@@ -176,7 +202,7 @@ jobs:
           token: ${{ secrets.RELEASES_REPO_TOKEN }}
           tag_name: ${{ github.ref_name }}
           files: dist/*
-          generate_release_notes: true
+          body_path: release_notes.md
 
       - name: Build Sparkle appcast
         if: steps.sparkle.outputs.enabled == 'true'
