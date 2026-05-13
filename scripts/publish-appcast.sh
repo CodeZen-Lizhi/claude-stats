@@ -23,8 +23,8 @@ BUILD="${2:?usage: publish-appcast.sh <version> <build> <tag>}"
 TAG="${3:?usage: publish-appcast.sh <version> <build> <tag>}"
 : "${SPARKLE_PRIVATE_ED_KEY:?SPARKLE_PRIVATE_ED_KEY is not set}"
 
-REPO="1pitaph/claude-stats"
-FEED_URL="https://1pitaph.github.io/claude-stats/appcast.xml"
+REPO="1pitaph/claude-stats-releases"
+FEED_URL="https://1pitaph.github.io/claude-stats-releases/appcast.xml"
 SPARKLE_TOOLS_VERSION="2.9.1"   # the version of sign_update to download; stable across 2.x
 
 # Sparkle updates from a .zip when one is present (no disk image to mount),

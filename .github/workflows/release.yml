@@ -12,10 +12,12 @@ name: Release
 #          NOTARIZED + stapled DMG;
 #        • otherwise -> an ad-hoc-signed (un-notarized) DMG *and* a .zip. Gatekeeper
 #          warns on first launch; users open via right-click ▸ Open.
-#   3. Creates a GitHub Release for the tag with the artifact(s) attached.
+#   3. Creates a GitHub Release for the tag in the PUBLIC releases repo
+#      (1pitaph/claude-stats-releases) with the artifact(s) attached — the source
+#      repo is private, but the binaries need to be downloadable by anyone.
 #   4. If SPARKLE_PRIVATE_ED_KEY is set, EdDSA-signs the archive and publishes an
-#      updated appcast.xml to the gh-pages branch (GitHub Pages serves it at the
-#      SUFeedURL baked into Info.plist) so existing installs can auto-update.
+#      updated appcast.xml to the gh-pages branch of the public releases repo
+#      (served at SUFeedURL by GitHub Pages) so existing installs can auto-update.
 #   5. Commits the bumped project.yml back to master.
 #
 # Optional repository secrets (Settings ▸ Secrets and variables ▸ Actions) — set
@@ -28,13 +30,21 @@ name: Release
 #   NOTARY_APPLE_ID           Apple ID email used for notarization
 #   NOTARY_PASSWORD           app-specific password for that Apple ID (appleid.apple.com)
 #
+# Required secret for publishing to the public releases repo:
+#   RELEASES_REPO_TOKEN       fine-grained PAT scoped to 1pitaph/claude-stats-releases
+#                             with Contents: Read and write. The built-in
+#                             GITHUB_TOKEN can only write to the source repo, so a
+#                             cross-repo token is required for the Release upload
+#                             and the gh-pages deploy.
+#
 # Auto-update secret (independent of the signing secrets above):
 #   SPARKLE_PRIVATE_ED_KEY    base64 EdDSA private key from Sparkle's
 #                             `generate_keys -x <file>`. The matching *public*
 #                             key goes in Info.plist as SUPublicEDKey. Without
 #                             this secret the appcast step is skipped (releases
 #                             still publish, but installed apps won't see them).
-#                             Requires GitHub Pages enabled for the gh-pages branch.
+#                             Requires GitHub Pages enabled for the gh-pages
+#                             branch on the public releases repo.
 #
 # Note: the final step pushes a commit to `master`. If `master` has branch
 # protection that blocks the built-in GITHUB_TOKEN, either relax it for this
@@ -158,9 +168,11 @@ jobs:
           sudo killall -9 com.apple.CoreSimulator.CoreSimulatorService 2>/dev/null || true
           bash scripts/release-build.sh "${{ steps.version.outputs.version }}"
 
-      - name: Create GitHub Release
+      - name: Create GitHub Release (in public releases repo)
         uses: softprops/action-gh-release@v2
         with:
+          repository: 1pitaph/claude-stats-releases
+          token: ${{ secrets.RELEASES_REPO_TOKEN }}
           tag_name: ${{ github.ref_name }}
           files: dist/*
           generate_release_notes: true
@@ -171,11 +183,12 @@ jobs:
           SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
         run: bash scripts/publish-appcast.sh "${{ steps.version.outputs.version }}" "${{ steps.version.outputs.build }}" "${{ github.ref_name }}"
 
-      - name: Deploy appcast to GitHub Pages
+      - name: Deploy appcast to GitHub Pages (public releases repo)
         if: steps.sparkle.outputs.enabled == 'true'
         uses: peaceiris/actions-gh-pages@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          personal_token: ${{ secrets.RELEASES_REPO_TOKEN }}
+          external_repository: 1pitaph/claude-stats-releases
           publish_dir: ./_site
           publish_branch: gh-pages
           keep_files: true
