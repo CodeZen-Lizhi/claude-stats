@@ -16,6 +16,15 @@ struct TokenUsage: Sendable, Hashable {
             + cacheCreation5mTokens + cacheCreation1hTokens
     }
 
+    /// Headline token count with optional cache-read exclusion. `cache_read` is
+    /// re-reported on every assistant turn (the cached context is "read" again
+    /// each time), so including it can inflate the visible total by 10–100×
+    /// versus what flowed end-to-end. `cache_creation` is a one-time event per
+    /// cache block and is always counted.
+    func total(includingCacheRead: Bool) -> Int {
+        includingCacheRead ? total : total - cacheReadTokens
+    }
+
     var cacheCreationTotalTokens: Int { cacheCreation5mTokens + cacheCreation1hTokens }
 
     /// Fraction of cache-touching traffic that hit, in `0...1`. Hits are

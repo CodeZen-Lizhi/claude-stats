@@ -6,6 +6,8 @@ struct SettingsView: View {
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
     @State private var fullDiskAccessOK = ScreenTimeService.canRead()
     @State private var newIDEBundleID = ""
+    @State private var tokenDraft: String = ""
+    @State private var githubError: String?
 
     private static let refreshOptions = [1, 2, 5, 10, 15, 30, 60]
 
@@ -27,6 +29,11 @@ struct SettingsView: View {
                 Text("When off, the app starts on the first enabled platform each launch instead of the one you last viewed.")
                     .font(.sora(11))
                     .foregroundStyle(.secondary)
+
+                Toggle("Include cache reads in token counts", isOn: $prefs.includeCacheInTokens)
+                Text("Anthropic's API re-reports the cached context on every assistant turn, so the same tokens get counted many times. Turn this off to show only \u{201C}new\u{201D} traffic (input + output + cache writes). Estimated cost is always calculated per-category and is unaffected.")
+                    .font(.sora(11))
+                    .foregroundStyle(.secondary)
             }
 
             platformsSection(prefs: prefs)
@@ -38,11 +45,16 @@ struct SettingsView: View {
                 Picker("For", selection: $prefs.menuBarPeriod) {
                     ForEach(StatsPeriod.allCases) { Text($0.displayName).tag($0) }
                 }
+                if prefs.menuBarMetric == .tokens {
+                    Toggle("Include cache reads", isOn: $prefs.menuBarIncludesCache)
+                }
             }
 
             aiActivitySection(prefs: prefs)
 
             gitTrackingSection(prefs: prefs)
+
+            githubSection(prefs: prefs)
 
             Section("Data") {
                 LabeledContent("Claude config directory") {
@@ -168,6 +180,104 @@ struct SettingsView: View {
                     Text("Panel tab").tag(false)
                     Text("Separate window").tag(true)
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func githubSection(prefs: Preferences) -> some View {
+        @Bindable var prefs = prefs
+        Section("GitHub") {
+            Toggle("Enable GitHub comparison", isOn: $prefs.githubEnabled)
+            Text("Adds a GitHub contributions heatmap to the Dashboard plus an Overlap view that classifies each day as Both / Local-only / GitHub-only / Neither. Reads only your contribution counts via the GitHub GraphQL API — no code, issues, or PR data.")
+                .font(.sora(11))
+                .foregroundStyle(.secondary)
+
+            if prefs.githubEnabled {
+                githubStatusRow
+
+                switch env.dashboard.githubStatus {
+                case .disconnected, .failed:
+                    githubTokenInput
+                case .connecting:
+                    HStack { ProgressView().controlSize(.mini); Text("Connecting…").font(.sora(11)) }
+                case .connected:
+                    githubConnectedControls
+                }
+
+                Picker("Overlap palette", selection: $prefs.overlapPalette) {
+                    ForEach(OverlapPalette.allCases) { Text($0.displayName).tag($0) }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var githubStatusRow: some View {
+        LabeledContent("Status") {
+            switch env.dashboard.githubStatus {
+            case .disconnected:
+                Text("Not connected").foregroundStyle(.secondary)
+            case .connecting:
+                ProgressView().controlSize(.mini)
+            case .connected(let login, let syncedAt, let isStale):
+                HStack(spacing: 6) {
+                    Text("@\(login)")
+                    if let syncedAt {
+                        Text("· UPD \(Format.relativeDate(syncedAt))")
+                            .foregroundStyle(.secondary)
+                    }
+                    if isStale {
+                        Text("(stale)").foregroundStyle(Color.stxAccent)
+                    }
+                }
+            case .failed(let reason):
+                Text(reason).foregroundStyle(Color.stxAccent)
+            }
+        }
+    }
+
+    private var githubTokenInput: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                SecureField("Personal access token", text: $tokenDraft)
+                Button("Save") { saveGitHubToken() }
+                    .disabled(tokenDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            if let githubError {
+                Text(githubError)
+                    .font(.sora(11))
+                    .foregroundStyle(Color.stxAccent)
+            }
+            Link("Create a fine-grained token (no scopes needed)…",
+                 destination: URL(string: "https://github.com/settings/personal-access-tokens/new")!)
+                .font(.sora(11))
+        }
+    }
+
+    private var githubConnectedControls: some View {
+        HStack {
+            Button("Sync now") { Task { await env.dashboard.syncGitHubNow() } }
+            Button("Disconnect", role: .destructive) {
+                env.dashboard.disconnectGitHub(login: env.preferences.githubLogin)
+                env.preferences.githubLogin = ""
+            }
+        }
+    }
+
+    private func saveGitHubToken() {
+        let token = tokenDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else { return }
+        githubError = nil
+        Task {
+            do {
+                let login = try await env.dashboard.connectGitHub(token: token)
+                env.preferences.githubLogin = login
+                tokenDraft = ""
+            } catch let err as GitHubClient.ClientError {
+                githubError = String(describing: err)
+            } catch {
+                githubError = error.localizedDescription
             }
         }
     }

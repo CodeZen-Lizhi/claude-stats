@@ -79,9 +79,10 @@ struct UsageView: View {
     // MARK: Stat readouts
 
     private func statGrid(_ s: UsageSummary) -> some View {
-        Grid(horizontalSpacing: 10, verticalSpacing: 8) {
+        let includeCache = env.preferences.includeCacheInTokens
+        return Grid(horizontalSpacing: 10, verticalSpacing: 8) {
             GridRow {
-                statCell("Tokens", Format.tokens(s.totalTokens))
+                statCell("Tokens", Format.tokens(s.totalTokens(includingCacheRead: includeCache)))
                 statCell("Est. cost", Format.cost(s.totalCost))
             }
             GridRow {
@@ -449,7 +450,8 @@ struct UsageView: View {
                     .font(.sora(10))
                     .foregroundStyle(Color.stxMuted.opacity(0.7))
             } else {
-                let maxTokens = max(1, s.models.map(\.usage.total).max() ?? 1)
+                let includeCache = env.preferences.includeCacheInTokens
+                let maxTokens = max(1, s.models.map { $0.usage.total(includingCacheRead: includeCache) }.max() ?? 1)
                 ForEach(Array(s.models.enumerated()), id: \.element.id) { idx, model in
                     let color = ModelPalette.color(at: series.models.firstIndex(of: model.model) ?? idx)
                     VStack(alignment: .leading, spacing: 4) {
@@ -461,7 +463,7 @@ struct UsageView: View {
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                             Spacer(minLength: 8)
-                            Text(Format.tokens(model.usage.total))
+                            Text(Format.tokens(model.usage.total(includingCacheRead: includeCache)))
                                 .font(.sora(10).monospacedDigit())
                                 .foregroundStyle(.primary)
                             Text(Format.cost(model.estimatedCost))
@@ -474,7 +476,7 @@ struct UsageView: View {
                             let solid = max(0, total - cached)
                             let max = CGFloat(maxTokens)
                             let solidWidth = geo.size.width * solid / max
-                            let cachedWidth = geo.size.width * cached / max
+                            let cachedWidth = includeCache ? geo.size.width * cached / max : 0
                             ZStack(alignment: .leading) {
                                 Rectangle().fill(Color.primary.opacity(0.09))
                                 HStack(spacing: 0) {

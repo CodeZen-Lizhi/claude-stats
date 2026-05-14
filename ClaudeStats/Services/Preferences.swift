@@ -28,6 +28,21 @@ final class Preferences {
     var menuBarPeriod: StatsPeriod {
         didSet { defaults.set(menuBarPeriod.rawValue, forKey: Keys.menuBarPeriod) }
     }
+    /// Whether token totals shown in the app (Usage stats, BY MODEL, sessions
+    /// list) include `cache_read` tokens. On by default — `cache_read` is what
+    /// Anthropic's API reports per turn, so excluding it disagrees with the
+    /// Console. Off gives a "real flow-through" figure closer to billed
+    /// (non-cached) traffic. ``cache_creation`` is always counted regardless;
+    /// only the per-turn cache-read re-reporting is what this gates.
+    var includeCacheInTokens: Bool {
+        didSet { defaults.set(includeCacheInTokens, forKey: Keys.includeCacheInTokens) }
+    }
+    /// Same setting, but specifically for the menu-bar status item. Independent
+    /// so users can keep the app totals canonical while the menu bar shows a
+    /// less inflated figure (or vice versa).
+    var menuBarIncludesCache: Bool {
+        didSet { defaults.set(menuBarIncludesCache, forKey: Keys.menuBarIncludesCache) }
+    }
 
     /// Which platforms the user has turned on. The switcher bar only appears
     /// when this has more than one entry; otherwise the panel shows the single
@@ -71,6 +86,21 @@ final class Preferences {
     var gitOpensInWindow: Bool {
         didSet { defaults.set(gitOpensInWindow, forKey: Keys.gitOpensInWindow) }
     }
+    /// Opt-in to comparing local activity against the GitHub contribution
+    /// graph on the Dashboard. Off by default — the dashboard's GitHub panel
+    /// only appears when this is on and a PAT is configured.
+    var githubEnabled: Bool {
+        didSet { defaults.set(githubEnabled, forKey: Keys.githubEnabled) }
+    }
+    /// Last known GitHub login, for the Dashboard / Settings status row.
+    /// Empty when not connected. The PAT itself lives in the Keychain.
+    var githubLogin: String {
+        didSet { defaults.set(githubLogin, forKey: Keys.githubLogin) }
+    }
+    /// Which colour scheme the Overlap heatmap should use.
+    var overlapPalette: OverlapPalette {
+        didSet { defaults.set(overlapPalette.rawValue, forKey: Keys.overlapPalette) }
+    }
     /// Extra editor bundle ids the user added on top of ``IDEAppCatalog/defaults``.
     var ideBundleIDsAdded: [String] {
         didSet { defaults.set(ideBundleIDsAdded, forKey: Keys.ideBundleIDsAdded) }
@@ -92,9 +122,14 @@ final class Preferences {
         autoRefreshMinutes = (defaults.object(forKey: Keys.autoRefreshMinutes) as? Int) ?? 5
         menuBarMetric = MenuBarMetric(rawValue: defaults.string(forKey: Keys.menuBarMetric) ?? "") ?? .tokens
         menuBarPeriod = StatsPeriod(rawValue: defaults.string(forKey: Keys.menuBarPeriod) ?? "") ?? .allTime
+        includeCacheInTokens = (defaults.object(forKey: Keys.includeCacheInTokens) as? Bool) ?? true
+        menuBarIncludesCache = (defaults.object(forKey: Keys.menuBarIncludesCache) as? Bool) ?? true
         aiActivityAnalysisEnabled = defaults.bool(forKey: Keys.aiActivityAnalysisEnabled)
         gitTrackingEnabled = defaults.bool(forKey: Keys.gitTrackingEnabled)
         gitOpensInWindow = defaults.bool(forKey: Keys.gitOpensInWindow)
+        githubEnabled = defaults.bool(forKey: Keys.githubEnabled)
+        githubLogin = defaults.string(forKey: Keys.githubLogin) ?? ""
+        overlapPalette = OverlapPalette(rawValue: defaults.string(forKey: Keys.overlapPalette) ?? "") ?? .appCohesive
         ideBundleIDsAdded = defaults.stringArray(forKey: Keys.ideBundleIDsAdded) ?? []
         ideBundleIDsRemoved = defaults.stringArray(forKey: Keys.ideBundleIDsRemoved) ?? []
 
@@ -119,6 +154,8 @@ final class Preferences {
         static let autoRefreshMinutes = "autoRefreshMinutes"
         static let menuBarMetric = "menuBarMetric"
         static let menuBarPeriod = "menuBarPeriod"
+        static let includeCacheInTokens = "includeCacheInTokens"
+        static let menuBarIncludesCache = "menuBarIncludesCache"
         static let aiActivityAnalysisEnabled = "aiActivityAnalysisEnabled"
         static let gitTrackingEnabled = "gitTrackingEnabled"
         static let gitOpensInWindow = "gitOpensInWindow"
@@ -127,5 +164,8 @@ final class Preferences {
         static let enabledProviders = "enabledProviders"
         static let selectedProvider = "selectedProvider"
         static let rememberSelectedProvider = "rememberSelectedProvider"
+        static let githubEnabled = "githubEnabled"
+        static let githubLogin = "githubLogin"
+        static let overlapPalette = "overlapPalette"
     }
 }

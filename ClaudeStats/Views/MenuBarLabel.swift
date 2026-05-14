@@ -19,7 +19,8 @@ struct MenuBarLabel: View {
     private func valueText(summary: UsageSummary, metric: MenuBarMetric) -> String {
         if env.store.sessions(for: env.preferences.selectedProvider).isEmpty && env.store.isLoading { return "…" }
         switch metric {
-        case .tokens: return Format.tokens(summary.totalTokens)
+        case .tokens:
+            return Format.tokens(summary.totalTokens(includingCacheRead: env.preferences.menuBarIncludesCache))
         case .cost: return Format.cost(summary.totalCost)
         }
     }

@@ -19,4 +19,8 @@ struct SessionStats: Sendable, Hashable {
     var totalUsage: TokenUsage { models.reduce(.zero) { $0 + $1.usage } }
     var totalTokens: Int { totalUsage.total }
     var totalCost: Double { models.reduce(0) { $0 + $1.estimatedCost } }
+
+    func totalTokens(includingCacheRead: Bool) -> Int {
+        totalUsage.total(includingCacheRead: includingCacheRead)
+    }
 }

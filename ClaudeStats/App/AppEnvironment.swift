@@ -12,6 +12,11 @@ final class AppEnvironment {
     let preferences: Preferences
     let store: SessionStore
     let updater = UpdaterController()
+    /// The Dashboard's view model lives in the environment so the Settings
+    /// window can call `connectGitHub` / `syncGitHubNow` / `disconnectGitHub`
+    /// without smuggling closures through SwiftUI. The VM persists across
+    /// main-window open/close cycles, so reopening doesn't refire a fetch.
+    let dashboard = DashboardViewModel()
 
     init(pricing: ModelPricing, preferences: Preferences, store: SessionStore) {
         self.pricing = pricing

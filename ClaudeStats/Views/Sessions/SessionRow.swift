@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 
 struct SessionRow: View {
+    @Environment(AppEnvironment.self) private var env
     let session: Session
 
     var body: some View {
@@ -31,8 +32,11 @@ struct SessionRow: View {
                 HStack(spacing: 6) {
                     if let stats = session.stats {
                         modelDots(stats.models)
-                        Label(Format.tokens(stats.totalTokens), systemImage: "number")
-                            .labelStyle(.titleAndIcon)
+                        Label(
+                            Format.tokens(stats.totalTokens(includingCacheRead: env.preferences.includeCacheInTokens)),
+                            systemImage: "number"
+                        )
+                        .labelStyle(.titleAndIcon)
                         Text(Format.cost(stats.totalCost))
                     }
                 }
@@ -77,6 +81,7 @@ struct SessionRow: View {
     VStack(spacing: 0) {
         ForEach(Session.previewSamples) { SessionRow(session: $0).padding(8) }
     }
+    .environment(AppEnvironment.preview())
     .frame(width: 380, height: 200)
     .background(Color.stxBackground)
     .preferredColorScheme(.dark)

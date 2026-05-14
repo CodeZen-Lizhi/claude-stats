@@ -3,7 +3,7 @@ import Foundation
 /// One day-cell on a heatmap: the local-day start date and the metric value.
 /// `value` is whatever the source produces — commit count for commits, token
 /// count for Claude sessions.
-struct HeatmapCell: Sendable, Hashable {
+struct HeatmapCell: Sendable, Hashable, Codable {
     let date: Date
     let value: Int
 }

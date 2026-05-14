@@ -13,6 +13,10 @@ struct UsageSummary: Sendable, Hashable {
     var totalCost: Double { models.reduce(0) { $0 + $1.estimatedCost } }
     var messageCount: Int { models.reduce(0) { $0 + $1.messageCount } }
 
+    func totalTokens(includingCacheRead: Bool) -> Int {
+        totalUsage.total(includingCacheRead: includingCacheRead)
+    }
+
     static func empty(period: StatsPeriod) -> UsageSummary {
         UsageSummary(period: period, sessionCount: 0, models: [], timeline: [])
     }

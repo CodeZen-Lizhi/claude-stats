@@ -1,9 +1,18 @@
 import SwiftUI
 
+/// Shared sizing constants for the heatmap variants. Pulled out of the
+/// generic ``CalendarGridSkeleton`` so callers can pad legends and labels
+/// against the same dimensions without specifying a type parameter.
+enum HeatmapMetrics {
+    static let cellSize: CGFloat = 11
+    static let spacing: CGFloat = 2
+    static let weekdayColumnWidth: CGFloat = 16
+}
+
 /// GitHub-style yearly heatmap: a 7-row grid of week columns, with cell colour
 /// driven by a quartile bucketing over the visible window's non-zero values.
 ///
-/// The ramp uses the app's warm `.stxAccent` at four opacity stops, so it sits
+/// The ramp uses the app's warm `.stxAccent` at four opacity stops so it sits
 /// inside the instrument-panel chrome instead of borrowing GitHub's green.
 struct HeatmapView: View {
     let cells: [HeatmapCell]
@@ -12,10 +21,6 @@ struct HeatmapView: View {
     /// raw `value`; the view appends the date.
     let valueLabel: (Int) -> String
 
-    private let cellSize: CGFloat = 11
-    private let spacing: CGFloat = 2
-
-    private var grid: CalendarGrid { CalendarGrid(spanning: range) }
     private var valuesByDay: [Date: Int] {
         Dictionary(uniqueKeysWithValues: cells.map { ($0.date, $0.value) })
     }
@@ -31,70 +36,18 @@ struct HeatmapView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            monthLabels
-            HStack(alignment: .top, spacing: 6) {
-                weekdayLabels
-                gridBody
-            }
-            legend
-        }
-    }
-
-    // MARK: - Sub-views
-
-    private var monthLabels: some View {
-        let positions = grid.monthLabelPositions()
-        let columnStride = cellSize + spacing
-        // Width = (weeks * columnStride) - spacing, but pad enough that the
-        // last month label has room.
-        return ZStack(alignment: .topLeading) {
-            ForEach(positions, id: \.weekIndex) { pos in
-                Text(pos.label)
-                    .font(.sora(9))
-                    .foregroundStyle(Color.stxMuted)
-                    .offset(x: CGFloat(pos.weekIndex) * columnStride)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: 11)
-        .padding(.leading, 22) // align past the weekday label column
-    }
-
-    private var weekdayLabels: some View {
-        VStack(spacing: spacing) {
-            ForEach(0..<7, id: \.self) { row in
-                let visible = row.isMultiple(of: 2) == false // rows 1, 3, 5
-                Text(visible ? grid.weekdaySymbols[row] : " ")
-                    .font(.sora(9))
-                    .foregroundStyle(Color.stxMuted)
-                    .frame(width: 16, height: cellSize, alignment: .trailing)
-            }
-        }
-    }
-
-    private var gridBody: some View {
-        HStack(alignment: .top, spacing: spacing) {
-            ForEach(0..<grid.weeks.count, id: \.self) { weekIdx in
-                VStack(spacing: spacing) {
-                    ForEach(0..<7, id: \.self) { dayIdx in
-                        cell(for: grid.weeks[weekIdx][dayIdx])
-                    }
+            CalendarGridSkeleton(range: range) { date, inRange in
+                if inRange {
+                    let value = valuesByDay[date] ?? 0
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(color(for: value))
+                        .frame(width: HeatmapMetrics.cellSize, height: HeatmapMetrics.cellSize)
+                        .help("\(valueLabel(value)) · \(Self.dateFormatter.string(from: date))")
+                } else {
+                    Color.clear.frame(width: HeatmapMetrics.cellSize, height: HeatmapMetrics.cellSize)
                 }
             }
-        }
-    }
-
-    @ViewBuilder
-    private func cell(for date: Date) -> some View {
-        if range.contains(date) {
-            let value = valuesByDay[date] ?? 0
-            RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .fill(color(for: value))
-                .frame(width: cellSize, height: cellSize)
-                .help("\(valueLabel(value)) · \(Self.dateFormatter.string(from: date))")
-        } else {
-            // Out-of-range padding day (first/last partial week).
-            Color.clear.frame(width: cellSize, height: cellSize)
+            legend
         }
     }
 
@@ -104,11 +57,11 @@ struct HeatmapView: View {
             ForEach(0..<5, id: \.self) { step in
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
                     .fill(rampColor(step: step))
-                    .frame(width: cellSize, height: cellSize)
+                    .frame(width: HeatmapMetrics.cellSize, height: HeatmapMetrics.cellSize)
             }
             Text("More").font(.sora(9)).foregroundStyle(Color.stxMuted)
         }
-        .padding(.leading, 22)
+        .padding(.leading, HeatmapMetrics.weekdayColumnWidth + 6)
     }
 
     // MARK: - Colour ramp
@@ -136,12 +89,74 @@ struct HeatmapView: View {
         }
     }
 
-    private static let dateFormatter: DateFormatter = {
+    static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateStyle = .medium
         f.timeStyle = .none
         return f
     }()
+}
+
+/// Shared skeleton for the week-column grid: month-label strip, weekday
+/// labels, and a 7-row × N-week grid where each cell's content is provided by
+/// the caller. `OverlapHeatmapView` and `HeatmapView` both render through
+/// this so the layout stays in lockstep across panels.
+struct CalendarGridSkeleton<Cell: View>: View {
+    let range: DateInterval
+    @ViewBuilder var cell: (Date, Bool) -> Cell
+
+    private var grid: CalendarGrid { CalendarGrid(spanning: range) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            monthLabels
+            HStack(alignment: .top, spacing: 6) {
+                weekdayLabels
+                gridBody
+            }
+        }
+    }
+
+    private var monthLabels: some View {
+        let positions = grid.monthLabelPositions()
+        let columnStride = HeatmapMetrics.cellSize + HeatmapMetrics.spacing
+        return ZStack(alignment: .topLeading) {
+            ForEach(positions, id: \.weekIndex) { pos in
+                Text(pos.label)
+                    .font(.sora(9))
+                    .foregroundStyle(Color.stxMuted)
+                    .offset(x: CGFloat(pos.weekIndex) * columnStride)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: 11)
+        .padding(.leading, HeatmapMetrics.weekdayColumnWidth + 6)
+    }
+
+    private var weekdayLabels: some View {
+        VStack(spacing: HeatmapMetrics.spacing) {
+            ForEach(0..<7, id: \.self) { row in
+                let visible = !row.isMultiple(of: 2) // rows 1, 3, 5
+                Text(visible ? grid.weekdaySymbols[row] : " ")
+                    .font(.sora(9))
+                    .foregroundStyle(Color.stxMuted)
+                    .frame(width: HeatmapMetrics.weekdayColumnWidth, height: HeatmapMetrics.cellSize, alignment: .trailing)
+            }
+        }
+    }
+
+    private var gridBody: some View {
+        HStack(alignment: .top, spacing: HeatmapMetrics.spacing) {
+            ForEach(0..<grid.weeks.count, id: \.self) { weekIdx in
+                VStack(spacing: HeatmapMetrics.spacing) {
+                    ForEach(0..<7, id: \.self) { dayIdx in
+                        let date = grid.weeks[weekIdx][dayIdx]
+                        cell(date, range.contains(date))
+                    }
+                }
+            }
+        }
+    }
 }
 
 #if DEBUG
