@@ -11,6 +11,11 @@ struct OverlapHeatmapView: View {
     /// day. The view appends the date.
     let valueLabel: (OverlapStats.DayState) -> String
 
+    /// Pre-formatted tooltip per day. Built off `stats.byDay` + `range`;
+    /// keeps `DateFormatter.string` out of the per-cell render path so the
+    /// heatmap doesn't get expensive when its container resizes.
+    @State private var helpByDay: [Date: String] = [:]
+
     var body: some View {
         ResponsiveHeatmap(weekCount: HeatmapMetrics.weekCount(for: range)) { cellSize in
             VStack(alignment: .leading, spacing: 6) {
@@ -18,7 +23,7 @@ struct OverlapHeatmapView: View {
                     if inRange {
                         let state = stats.byDay[date] ?? .neither
                         cell(for: state, cellSize: cellSize)
-                            .help("\(valueLabel(state)) · \(Self.dateFormatter.string(from: date))")
+                            .help(helpByDay[date] ?? "")
                     } else {
                         Color.clear.frame(width: cellSize, height: cellSize)
                     }
@@ -26,6 +31,23 @@ struct OverlapHeatmapView: View {
                 legend(cellSize: cellSize)
             }
         }
+        .onAppear { recomputeHelp() }
+        .onChange(of: stats) { _, _ in recomputeHelp() }
+        .onChange(of: range) { _, _ in recomputeHelp() }
+    }
+
+    private func recomputeHelp() {
+        let grid = CalendarGrid(spanning: range)
+        var help: [Date: String] = [:]
+        help.reserveCapacity(grid.weeks.count * 7)
+        let fmt = Self.dateFormatter
+        for week in grid.weeks {
+            for day in week where range.contains(day) {
+                let state = stats.byDay[day] ?? .neither
+                help[day] = "\(valueLabel(state)) · \(fmt.string(from: day))"
+            }
+        }
+        helpByDay = help
     }
 
     private func cell(for state: OverlapStats.DayState, cellSize: CGFloat) -> some View {

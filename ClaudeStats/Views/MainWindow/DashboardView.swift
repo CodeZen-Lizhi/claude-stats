@@ -13,6 +13,15 @@ struct DashboardView: View {
     @SceneStorage("dashboard.section") private var sectionRaw: String = DashboardViewModel.Section.overview.rawValue
     @SceneStorage("dashboard.period") private var periodRaw: String = StatsPeriod.last30Days.rawValue
 
+    /// GitHub cells filtered to the current heatmap window, cached so both
+    /// `githubHeatmapSection` and `overlapCard` don't independently re-filter
+    /// per body pass.
+    @State private var githubCellsInRange: [HeatmapCell] = []
+    /// Cached overlap stats. `nil` until inputs are available; recomputed via
+    /// `refreshDerived()` when the inputs change. Saves two dict builds + two
+    /// 90-day correlation walks per body pass.
+    @State private var overlap: OverlapStats? = nil
+
     private var vm: DashboardViewModel { env.dashboard }
 
     private struct ReloadKey: Equatable {
@@ -43,11 +52,16 @@ struct DashboardView: View {
             .padding(.top, 52)
             .padding(.bottom, 22)
             .frame(maxWidth: 980, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
-        .onAppear { syncFromSceneStorage() }
+        .onAppear {
+            syncFromSceneStorage()
+            refreshDerived()
+        }
         .onChange(of: vm.section) { _, new in sectionRaw = new.rawValue }
         .onChange(of: vm.period) { _, new in periodRaw = new.rawValue }
+        .onChange(of: vm.heatmapCells) { _, _ in refreshDerived() }
+        .onChange(of: env.github.cells) { _, _ in refreshDerived() }
         .task(id: reloadKey) {
             let sessions = env.store.sessions(for: env.preferences.selectedProvider)
             await vm.reload(sessions: sessions)
@@ -62,6 +76,17 @@ struct DashboardView: View {
                 env.preferences.githubLogin = login
             }
         }
+    }
+
+    private func refreshDerived() {
+        let range = vm.heatmapInterval()
+        let github = env.github.cells.filter { range.contains($0.date) }
+        githubCellsInRange = github
+        overlap = OverlapStats.compute(
+            local: vm.heatmapCells,
+            github: github,
+            range: range
+        )
     }
 
     private var reloadKey: ReloadKey {
@@ -155,9 +180,8 @@ struct DashboardView: View {
     }
 
     private var claudeHeatmapSection: some View {
-        let activeDays = vm.heatmapCells.lazy.filter { $0.value > 0 }.count
-        return VStack(alignment: .leading, spacing: 10) {
-            heatmapHeader(title: "CLAUDE ACTIVITY", subtitle: "\(activeDays) active days · last 3 months")
+        VStack(alignment: .leading, spacing: 10) {
+            heatmapHeader(title: "CLAUDE ACTIVITY", subtitle: "\(vm.heatmapActiveDays) active days · last 3 months")
             CompactHeatmap(
                 cells: vm.heatmapCells,
                 range: vm.heatmapInterval(),
@@ -204,17 +228,14 @@ struct DashboardView: View {
     private var overlapSection: some View {
         if env.preferences.githubEnabled,
            case .connected = env.github.status,
-           !env.github.cells.isEmpty {
-            overlapCard
+           !env.github.cells.isEmpty,
+           let overlap {
+            overlapCard(overlap: overlap)
         }
     }
 
-    private var overlapCard: some View {
-        let range = vm.heatmapInterval()
-        let claudeCells = vm.heatmapCells   // already scoped to the 3-month interval
-        let githubCells = env.github.cells.filter { range.contains($0.date) }
-        let overlap = OverlapStats.compute(local: claudeCells, github: githubCells, range: range)
-        return VStack(alignment: .leading, spacing: 10) {
+    private func overlapCard(overlap: OverlapStats) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text("OVERLAP")
                     .font(.sora(9, weight: .medium)).tracking(0.4)
@@ -230,7 +251,7 @@ struct DashboardView: View {
             }
             OverlapHeatmapView(
                 stats: overlap,
-                range: range,
+                range: vm.heatmapInterval(),
                 palette: env.preferences.overlapPalette,
                 valueLabel: overlapStateLabel
             )
@@ -269,10 +290,8 @@ struct DashboardView: View {
         case .connecting:
             return .placeholder(message: "Fetching contribution graph…", isCTA: false)
         case .connected, .failed:
-            let interval = vm.heatmapInterval()
-            let cellsInRange = env.github.cells.filter { interval.contains($0.date) }
-            let total = cellsInRange.reduce(0) { $0 + $1.value }
-            return .heatmap(cells: cellsInRange, totalInRange: total)
+            let total = githubCellsInRange.reduce(0) { $0 + $1.value }
+            return .heatmap(cells: githubCellsInRange, totalInRange: total)
         }
     }
 

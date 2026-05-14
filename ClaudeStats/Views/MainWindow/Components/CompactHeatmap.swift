@@ -16,6 +16,12 @@ struct CompactHeatmap: View {
 
     @State private var valuesByDay: [Date: Int] = [:]
     @State private var quartiles: [Int] = []
+    /// Pre-formatted tooltip strings keyed by day. Built in `recompute()`
+    /// alongside `valuesByDay` so the cell builder doesn't call
+    /// `DateFormatter.string` per cell on every body pass — critical because
+    /// the dashboard re-evaluates the heatmap body when the container resize
+    /// crosses an integer cellSize boundary.
+    @State private var helpByDay: [Date: String] = [:]
 
     var body: some View {
         ResponsiveHeatmap(weekCount: HeatmapMetrics.weekCount(for: range)) { cellSize in
@@ -25,9 +31,7 @@ struct CompactHeatmap: View {
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
                         .fill(color(for: value))
                         .frame(width: cellSize, height: cellSize)
-                        .help(value == 0
-                              ? Self.dateFormatter.string(from: date)
-                              : "\(valueLabel(value)) · \(Self.dateFormatter.string(from: date))")
+                        .help(helpByDay[date] ?? "")
                 } else {
                     Color.clear.frame(width: cellSize, height: cellSize)
                 }
@@ -35,17 +39,39 @@ struct CompactHeatmap: View {
         }
         .onAppear { recompute() }
         .onChange(of: cells) { _, _ in recompute() }
+        .onChange(of: range) { _, _ in recompute() }
     }
 
     private func recompute() {
-        valuesByDay = Dictionary(uniqueKeysWithValues: cells.map { ($0.date, $0.value) })
+        let valuesByDay = Dictionary(uniqueKeysWithValues: cells.map { ($0.date, $0.value) })
+        self.valuesByDay = valuesByDay
         let nonZero = cells.compactMap { $0.value > 0 ? $0.value : nil }.sorted()
-        guard !nonZero.isEmpty else { quartiles = []; return }
-        func q(_ p: Double) -> Int {
-            let idx = min(max(Int(Double(nonZero.count - 1) * p), 0), nonZero.count - 1)
-            return nonZero[idx]
+        if nonZero.isEmpty {
+            quartiles = []
+        } else {
+            func q(_ p: Double) -> Int {
+                let idx = min(max(Int(Double(nonZero.count - 1) * p), 0), nonZero.count - 1)
+                return nonZero[idx]
+            }
+            quartiles = [q(0.25), q(0.50), q(0.75)]
         }
-        quartiles = [q(0.25), q(0.50), q(0.75)]
+
+        // Precompute one tooltip per in-range day. Iterates the calendar grid
+        // (not `cells`) so empty days get tooltips too. Same `valueLabel`
+        // closure as the cell builder used to call inline.
+        let grid = CalendarGrid(spanning: range)
+        var help: [Date: String] = [:]
+        help.reserveCapacity(grid.weeks.count * 7)
+        let fmt = Self.dateFormatter
+        for week in grid.weeks {
+            for day in week where range.contains(day) {
+                let value = valuesByDay[day] ?? 0
+                help[day] = value == 0
+                    ? fmt.string(from: day)
+                    : "\(valueLabel(value)) · \(fmt.string(from: day))"
+            }
+        }
+        helpByDay = help
     }
 
     private func color(for value: Int) -> Color {

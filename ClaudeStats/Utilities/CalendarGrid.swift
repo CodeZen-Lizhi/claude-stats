@@ -8,19 +8,28 @@ import Foundation
 /// The grid is built once from a `DateInterval` and rendered as a `LazyHGrid`
 /// of 7 rows × N columns; row labels come from `weekdaySymbols`.
 struct CalendarGrid: Sendable {
+    /// One entry per week-column where the represented month changes from the
+    /// previous column. Drives the month-label strip on top of the grid.
+    struct MonthLabel: Sendable, Equatable {
+        let weekIndex: Int
+        let label: String
+    }
+
     /// The columns, oldest-week first. Inner arrays are always length 7.
     let weeks: [[Date]]
     /// Localized one-letter weekday symbols (M/T/W/…), aligned to the rows.
     let weekdaySymbols: [String]
+    /// Precomputed `(weekIndex, monthAbbrev)` pairs marking the first column
+    /// of each visible month. Built once at init so renderers don't allocate
+    /// a `DateFormatter` per body pass.
+    let monthLabels: [MonthLabel]
     /// The interval the grid was built for. Useful for callers that want to
     /// filter out-of-range days during rendering.
     let range: DateInterval
     /// First weekday (1 = Sunday … 7 = Saturday) used to align rows.
     let firstWeekday: Int
-    private let calendar: Calendar
 
     init(spanning range: DateInterval, calendar: Calendar = .current) {
-        self.calendar = calendar
         self.range = range
         self.firstWeekday = calendar.firstWeekday
 
@@ -50,25 +59,43 @@ struct CalendarGrid: Sendable {
             rotated.append(idx < standalone.count ? standalone[idx] : "")
         }
         self.weekdaySymbols = rotated
+
+        self.monthLabels = Self.buildMonthLabels(weeks: weeks, range: range, calendar: calendar)
     }
 
-    /// Indices of weeks where the Monday-of-week (or the row that lands on the
-    /// 1st of any month) starts a new month — for the month-label strip at the
-    /// top of the grid. Returns `(weekIndex, abbreviated month)` pairs.
-    func monthLabelPositions(calendar: Calendar = .current) -> [(weekIndex: Int, label: String)] {
-        var out: [(Int, String)] = []
-        var lastMonth = -1
+    /// Walks the week columns once, emitting a label whenever the month
+    /// changes. Anchors each column on the first in-range day; if no day in
+    /// the column is in range, falls back to the first in-range day of any
+    /// later week so the label still corresponds to a visible month.
+    private static func buildMonthLabels(
+        weeks: [[Date]],
+        range: DateInterval,
+        calendar: Calendar
+    ) -> [MonthLabel] {
+        guard !weeks.isEmpty else { return [] }
         let fmt = DateFormatter()
         fmt.calendar = calendar
         fmt.locale = calendar.locale ?? .current
         fmt.dateFormat = "MMM"
+
+        var out: [MonthLabel] = []
+        var lastMonth = -1
         for (i, week) in weeks.enumerated() {
-            // Use the first day of the week that's inside the visible range,
-            // else the first day of the week.
-            let representative = week.first(where: { range.contains($0) }) ?? week[0]
+            // Prefer the first in-range day in this week; if none, look forward
+            // through later weeks until one is found. Avoids landing on `week[0]`
+            // when that date is outside `range` (would mislabel boundary weeks
+            // if the range ever starts mid-week).
+            let representative: Date? = {
+                if let inWeek = week.first(where: { range.contains($0) }) { return inWeek }
+                for j in (i + 1)..<weeks.count {
+                    if let next = weeks[j].first(where: { range.contains($0) }) { return next }
+                }
+                return nil
+            }()
+            guard let representative else { continue }
             let month = calendar.component(.month, from: representative)
             if month != lastMonth {
-                out.append((i, fmt.string(from: representative)))
+                out.append(MonthLabel(weekIndex: i, label: fmt.string(from: representative)))
                 lastMonth = month
             }
         }

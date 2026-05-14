@@ -52,14 +52,16 @@ struct ModelTable: View {
                     .foregroundStyle(Color.stxMuted)
                     .frame(minWidth: 56, alignment: .trailing)
             }
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(Color.primary.opacity(0.06))
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
-                        .fill(swatch.opacity(0.85))
-                        .frame(width: max(2, geo.size.width * ratio))
-                }
+            // Two stacked rounded rectangles. The foreground bar fills the
+            // full row width and then horizontally scales to `ratio` from the
+            // leading edge — avoids a per-row `GeometryReader` that would
+            // re-measure on every container resize.
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(Color.primary.opacity(0.06))
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(swatch.opacity(0.85))
+                    .scaleEffect(x: max(0.002, ratio), y: 1, anchor: .leading)
             }
             .frame(height: 6)
         }

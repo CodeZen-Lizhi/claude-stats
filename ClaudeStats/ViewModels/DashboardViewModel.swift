@@ -56,6 +56,10 @@ final class DashboardViewModel {
 
     private(set) var stats: DashboardStats = .empty
     private(set) var heatmapCells: [HeatmapCell] = []
+    /// Count of cells in the 3-month heatmap with positive activity. Mirrors
+    /// `heatmapCells.filter { $0.value > 0 }.count` but computed off-main
+    /// during `reload(sessions:)` so the view body doesn't walk the array.
+    private(set) var heatmapActiveDays: Int = 0
     private(set) var modelBreakdown: [ModelUsage] = []
     private(set) var isLoading = false
     private(set) var reloadToken: UInt64 = 0
@@ -101,6 +105,7 @@ final class DashboardViewModel {
 
             // 2. Heatmap: tokens per day across the 3-month window.
             let heatmap = Self.heatmapCells(sessions: sessions, range: heatmapInterval, calendar: cal)
+            let heatmapActive = heatmap.reduce(0) { $0 + ($1.value > 0 ? 1 : 0) }
 
             // 3. Models tab: top models in the period, already sorted desc.
             let models = summary.models
@@ -118,18 +123,21 @@ final class DashboardViewModel {
                     favoriteModel: models.first?.model
                 ),
                 heatmapCells: heatmap,
+                heatmapActiveDays: heatmapActive,
                 modelBreakdown: models
             )
         }.value
 
         stats = result.stats
         heatmapCells = result.heatmapCells
+        heatmapActiveDays = result.heatmapActiveDays
         modelBreakdown = result.modelBreakdown
     }
 
     private struct ReloadResult: Sendable {
         let stats: DashboardStats
         let heatmapCells: [HeatmapCell]
+        let heatmapActiveDays: Int
         let modelBreakdown: [ModelUsage]
     }
 

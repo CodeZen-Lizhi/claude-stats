@@ -38,7 +38,12 @@ struct FadingScrollView<Content: View>: View {
             GeometryReader { proxy in
                 Color.clear
                     .onChange(of: proxy.size.height, initial: true) { _, height in
-                        model.viewportHeight = height
+                        // Sub-pixel layout passes during a resize can ripple
+                        // updates through the indicator subtree even when the
+                        // value hasn't meaningfully changed. Clamp to 0.5pt.
+                        if abs(height - model.viewportHeight) > 0.5 {
+                            model.viewportHeight = height
+                        }
                     }
                     .allowsHitTesting(false)
             }
@@ -198,6 +203,15 @@ private struct NativeScrollerSuppressor: NSViewRepresentable {
 
         @objc func suppress() {
             guard let scrollView = targetScrollView else { return }
+            // `layout()` runs unbounded times during a resize. Skip the AppKit
+            // writes when the scroll view is already in the desired state so
+            // the per-layout cost is just four property reads.
+            if scrollView.scrollerStyle == .overlay,
+               scrollView.autohidesScrollers,
+               !scrollView.hasVerticalScroller,
+               !scrollView.hasHorizontalScroller {
+                return
+            }
             scrollView.scrollerStyle = .overlay
             scrollView.autohidesScrollers = true
             scrollView.hasVerticalScroller = false

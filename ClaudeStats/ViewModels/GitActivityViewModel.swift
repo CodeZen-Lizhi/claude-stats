@@ -33,6 +33,10 @@ final class GitActivityViewModel {
         didSet { if onlyMyCommits != oldValue { reloadToken &+= 1 } }
     }
     private(set) var repos: [RepoActivity] = []
+    /// Precomputed correlation points for the chart. Populated by `reload(...)`
+    /// off-main so the view body reads a finished array instead of walking all
+    /// session timelines on every Observable change.
+    private(set) var correlationPoints: [CorrelationPoint] = []
     private(set) var isLoading = false
     private(set) var gitAvailable = true
     private(set) var userEmail: String?
@@ -58,19 +62,35 @@ final class GitActivityViewModel {
         let cwds = Array(Set(sessions.compactMap(\.cwd)))
         let since = windowStart
         let onlyMine = onlyMyCommits
+        let unit = range.bucketUnit
+        let cal = calendar
+        let endExclusive = cal.dateInterval(of: .day, for: .now)?.end ?? Date.now
 
-        let result = await Task.detached(priority: .userInitiated) { () -> (repos: [RepoActivity], email: String?, available: Bool) in
+        let result = await Task.detached(priority: .userInitiated) {
+            () -> (repos: [RepoActivity], email: String?, available: Bool, correlation: [CorrelationPoint]) in
             let git = GitAnalyzer()
-            guard git.isAvailable else { return ([], nil, false) }
+            guard git.isAvailable else { return ([], nil, false, []) }
             let email = git.currentUserEmail()
-            let repos = git.repos(forCwds: cwds)
-            let activity = git.activity(for: repos, since: since, authorEmail: onlyMine ? email : nil)
-            return (activity, email, true)
+            let reposList = git.repos(forCwds: cwds)
+            let activity = git.activity(for: reposList, since: since, authorEmail: onlyMine ? email : nil)
+            let sorted = activity.sorted {
+                $0.churn != $1.churn ? $0.churn > $1.churn : $0.commitCount > $1.commitCount
+            }
+            let correlation = Self.makeCorrelationPoints(
+                sessions: sessions,
+                repos: sorted,
+                unit: unit,
+                since: since,
+                endExclusive: endExclusive,
+                calendar: cal
+            )
+            return (sorted, email, true, correlation)
         }.value
 
         gitAvailable = result.available
         userEmail = result.email
-        repos = result.repos.sorted { $0.churn != $1.churn ? $0.churn > $1.churn : $0.commitCount > $1.commitCount }
+        repos = result.repos
+        correlationPoints = result.correlation
     }
 
     // MARK: - Derived data
@@ -107,12 +127,45 @@ final class GitActivityViewModel {
         var id: TimeInterval { start.timeIntervalSinceReferenceDate }
     }
 
-    /// One point per time bucket: Claude tokens spent in repos we found commits
-    /// for, alongside the commit count / churn in the same bucket.
-    func correlation(sessions: [Session]) -> [CorrelationPoint] {
-        guard hasData else { return [] }
-        let unit = range.bucketUnit
-        let since = windowStart
+    /// Every bucket-start in the current window, oldest→newest.
+    private func slots(unit: Calendar.Component) -> [Date] {
+        let endExclusive = calendar.dateInterval(of: .day, for: .now)?.end ?? Date.now
+        return Self.slots(
+            unit: unit,
+            windowStart: windowStart,
+            endExclusive: endExclusive,
+            calendar: calendar
+        )
+    }
+
+    nonisolated private static func slots(
+        unit: Calendar.Component,
+        windowStart: Date,
+        endExclusive: Date,
+        calendar: Calendar
+    ) -> [Date] {
+        var cursor = calendar.dateInterval(of: unit, for: windowStart)?.start ?? windowStart
+        var out: [Date] = []
+        while cursor < endExclusive {
+            out.append(cursor)
+            guard let next = calendar.date(byAdding: unit, value: 1, to: cursor), next > cursor else { break }
+            cursor = next
+        }
+        return out
+    }
+
+    /// Off-main builder for correlation points; mirrors what the old
+    /// `correlation(sessions:)` method did but takes its inputs as parameters
+    /// so it can run inside `Task.detached`.
+    nonisolated private static func makeCorrelationPoints(
+        sessions: [Session],
+        repos: [RepoActivity],
+        unit: Calendar.Component,
+        since: Date,
+        endExclusive: Date,
+        calendar: Calendar
+    ) -> [CorrelationPoint] {
+        guard !repos.isEmpty else { return [] }
         let roots = repos.map(\.repo.rootPath)
         func belongsToTrackedRepo(_ cwd: String) -> Bool {
             roots.contains { cwd == $0 || cwd.hasPrefix($0 + "/") }
@@ -133,23 +186,10 @@ final class GitActivityViewModel {
             byStart[bucket.start, default: (0, 0, 0)].churn += bucket.churn
         }
 
-        return slots(unit: unit).map { start in
+        return Self.slots(unit: unit, windowStart: since, endExclusive: endExclusive, calendar: calendar).map { start in
             let v = byStart[start] ?? (0, 0, 0)
             return CorrelationPoint(start: start, claudeTokens: v.tokens, commitCount: v.commits, churn: v.churn)
         }
-    }
-
-    /// Every bucket-start in the current window, oldest→newest.
-    private func slots(unit: Calendar.Component) -> [Date] {
-        let endExclusive = calendar.dateInterval(of: .day, for: .now)?.end ?? Date.now
-        var cursor = calendar.dateInterval(of: unit, for: windowStart)?.start ?? windowStart
-        var out: [Date] = []
-        while cursor < endExclusive {
-            out.append(cursor)
-            guard let next = calendar.date(byAdding: unit, value: 1, to: cursor), next > cursor else { break }
-            cursor = next
-        }
-        return out
     }
 }
 
@@ -205,6 +245,15 @@ extension GitActivityViewModel {
         vm.repos = activity.sorted { $0.churn != $1.churn ? $0.churn > $1.churn : $0.commitCount > $1.commitCount }
         vm.userEmail = "ada@example.com"
         vm.gitAvailable = true
+        let endExclusive = cal.dateInterval(of: .day, for: now)?.end ?? now
+        vm.correlationPoints = Self.makeCorrelationPoints(
+            sessions: Session.previewSamples,
+            repos: vm.repos,
+            unit: vm.range.bucketUnit,
+            since: vm.windowStart,
+            endExclusive: endExclusive,
+            calendar: cal
+        )
         return vm
     }
 

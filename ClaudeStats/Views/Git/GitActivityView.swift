@@ -147,7 +147,7 @@ struct GitActivityView: View {
     // MARK: Correlation
 
     private var correlationPanel: some View {
-        let points = vm.correlation(sessions: env.store.sessions(for: env.preferences.selectedProvider))
+        let points = vm.correlationPoints
         let hasTokens = points.contains { $0.claudeTokens > 0 }
         return VStack(alignment: .leading, spacing: 10) {
             Text("CLAUDE USAGE vs COMMITS")

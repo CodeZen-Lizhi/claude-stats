@@ -23,22 +23,29 @@ enum HeatmapMetrics {
 /// Renders a single heatmap variant whose cell size is computed from the
 /// container's width. Replaces the old `ViewThatFits`-based design that paid
 /// to lay out every candidate cell size on every layout pass.
+///
+/// `cellSize` is the @State (not the raw width). The geometry observer maps
+/// width → cellSize in its transform and only writes back when the result
+/// actually changes — so body re-runs only ~6 times across a full resize
+/// sweep (one per integer cellSize crossing) instead of per pixel.
 struct ResponsiveHeatmap<Content: View>: View {
     let weekCount: Int
     @ViewBuilder var content: (CGFloat) -> Content
-    @State private var width: CGFloat = 760  // sensible default for first frame
+    @State private var cellSize: CGFloat = HeatmapMetrics.cellSizeMax
 
     var body: some View {
-        content(cellSize(for: width))
+        content(cellSize)
             .frame(maxWidth: .infinity, alignment: .leading)
             .onGeometryChange(for: CGFloat.self) { proxy in
-                proxy.size.width
-            } action: { newWidth in
-                if newWidth > 0 { width = newWidth }
+                Self.cellSize(forWidth: proxy.size.width, weekCount: weekCount)
+            } action: { newCellSize in
+                if newCellSize > 0, newCellSize != cellSize {
+                    cellSize = newCellSize
+                }
             }
     }
 
-    private func cellSize(for width: CGFloat) -> CGFloat {
+    static func cellSize(forWidth width: CGFloat, weekCount: Int) -> CGFloat {
         guard weekCount > 0 else { return HeatmapMetrics.cellSizeMax }
         let labelWidth = HeatmapMetrics.weekdayColumnWidth + HeatmapMetrics.weekdayGap
         let available = max(0, width - labelWidth)
@@ -63,6 +70,9 @@ struct HeatmapView: View {
     /// Recomputed via ``recompute()`` only when ``cells`` actually changes.
     @State private var valuesByDay: [Date: Int] = [:]
     @State private var quartiles: [Int] = []
+    /// Pre-formatted tooltips per day. Same rationale as in `CompactHeatmap`:
+    /// keep `DateFormatter.string` out of the per-cell body path.
+    @State private var helpByDay: [Date: String] = [:]
 
     var body: some View {
         ResponsiveHeatmap(weekCount: HeatmapMetrics.weekCount(for: range)) { cellSize in
@@ -73,7 +83,7 @@ struct HeatmapView: View {
                         RoundedRectangle(cornerRadius: 2, style: .continuous)
                             .fill(color(for: value))
                             .frame(width: cellSize, height: cellSize)
-                            .help("\(valueLabel(value)) · \(Self.dateFormatter.string(from: date))")
+                            .help(helpByDay[date] ?? "")
                     } else {
                         Color.clear.frame(width: cellSize, height: cellSize)
                     }
@@ -83,17 +93,34 @@ struct HeatmapView: View {
         }
         .onAppear { recompute() }
         .onChange(of: cells) { _, _ in recompute() }
+        .onChange(of: range) { _, _ in recompute() }
     }
 
     private func recompute() {
-        valuesByDay = Dictionary(uniqueKeysWithValues: cells.map { ($0.date, $0.value) })
+        let valuesByDay = Dictionary(uniqueKeysWithValues: cells.map { ($0.date, $0.value) })
+        self.valuesByDay = valuesByDay
         let nonZero = cells.compactMap { $0.value > 0 ? $0.value : nil }.sorted()
-        guard !nonZero.isEmpty else { quartiles = []; return }
-        func q(_ p: Double) -> Int {
-            let idx = min(max(Int(Double(nonZero.count - 1) * p), 0), nonZero.count - 1)
-            return nonZero[idx]
+        if nonZero.isEmpty {
+            quartiles = []
+        } else {
+            func q(_ p: Double) -> Int {
+                let idx = min(max(Int(Double(nonZero.count - 1) * p), 0), nonZero.count - 1)
+                return nonZero[idx]
+            }
+            quartiles = [q(0.25), q(0.50), q(0.75)]
         }
-        quartiles = [q(0.25), q(0.50), q(0.75)]
+
+        let grid = CalendarGrid(spanning: range)
+        var help: [Date: String] = [:]
+        help.reserveCapacity(grid.weeks.count * 7)
+        let fmt = Self.dateFormatter
+        for week in grid.weeks {
+            for day in week where range.contains(day) {
+                let value = valuesByDay[day] ?? 0
+                help[day] = "\(valueLabel(value)) · \(fmt.string(from: day))"
+            }
+        }
+        helpByDay = help
     }
 
     private func legend(cellSize: CGFloat) -> some View {
@@ -178,10 +205,9 @@ struct CalendarGridSkeleton<Cell: View>: View {
     }
 
     private var monthLabels: some View {
-        let positions = grid.monthLabelPositions()
         let columnStride = cellSize + HeatmapMetrics.spacing
         return ZStack(alignment: .topLeading) {
-            ForEach(positions, id: \.weekIndex) { pos in
+            ForEach(grid.monthLabels, id: \.weekIndex) { pos in
                 Text(pos.label)
                     .font(.sora(9))
                     .foregroundStyle(Color.stxMuted)
