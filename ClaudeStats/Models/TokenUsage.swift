@@ -18,6 +18,17 @@ struct TokenUsage: Sendable, Hashable {
 
     var cacheCreationTotalTokens: Int { cacheCreation5mTokens + cacheCreation1hTokens }
 
+    /// Fraction of cache-touching traffic that hit, in `0...1`. Hits are
+    /// `cache_read` (the cache had what we asked for); misses are
+    /// `cache_creation` (we had to write to prime it). `input_tokens` is the
+    /// new-user-message part we weren't even trying to cache, so it isn't in
+    /// the denominator. Returns `nil` when there's no cache activity at all.
+    var cacheHitRate: Double? {
+        let denom = cacheReadTokens + cacheCreationTotalTokens
+        guard denom > 0 else { return nil }
+        return Double(cacheReadTokens) / Double(denom)
+    }
+
     static func + (lhs: TokenUsage, rhs: TokenUsage) -> TokenUsage {
         TokenUsage(
             inputTokens: lhs.inputTokens + rhs.inputTokens,

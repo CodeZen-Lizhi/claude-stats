@@ -7,10 +7,11 @@ import Sparkle
 ///
 /// Claude Stats runs as a menu-bar (`LSUIElement`) app, so it has no Dock icon
 /// and its windows don't normally come to the front. While Sparkle's update
-/// windows are on screen we temporarily promote the app to a regular,
-/// Dock-visible app, then drop back to `.accessory` when the update session
-/// ends — otherwise the "update available" dialog can appear behind everything
-/// with no way to focus it.
+/// windows are on screen we route through ``DockVisibilityCoordinator`` to
+/// promote the app to a regular, Dock-visible app, then release back to
+/// `.accessory` when the update session ends — otherwise the "update available"
+/// dialog can appear behind everything with no way to focus it. The coordinator
+/// is ref-counted so this composes with other consumers (e.g. the main window).
 final class UpdaterController: NSObject {
     private var controller: SPUStandardUpdaterController?
 
@@ -33,9 +34,11 @@ final class UpdaterController: NSObject {
     }
 
     /// Trigger a user-initiated update check (e.g. from Settings ▸ About).
+    /// Just brings the app forward; the Dock-policy flip happens once Sparkle
+    /// is about to show its update UI.
     @MainActor
     func checkForUpdates() {
-        DockVisibility.promoteToRegular()
+        NSApp.activate(ignoringOtherApps: true)
         controller?.checkForUpdates(nil)
     }
 }
@@ -50,25 +53,10 @@ extension UpdaterController: SPUStandardUserDriverDelegate {
         forUpdate update: SUAppcastItem,
         state: SPUUserUpdateState
     ) {
-        MainActor.assumeIsolated { DockVisibility.promoteToRegular() }
+        MainActor.assumeIsolated { DockVisibilityCoordinator.shared.acquire() }
     }
 
     func standardUserDriverWillFinishUpdateSession() {
-        MainActor.assumeIsolated { DockVisibility.demoteToAccessory() }
-    }
-}
-
-private enum DockVisibility {
-    @MainActor
-    static func promoteToRegular() {
-        if NSApp.activationPolicy() != .regular {
-            NSApp.setActivationPolicy(.regular)
-        }
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
-    @MainActor
-    static func demoteToAccessory() {
-        NSApp.setActivationPolicy(.accessory)
+        MainActor.assumeIsolated { DockVisibilityCoordinator.shared.release() }
     }
 }

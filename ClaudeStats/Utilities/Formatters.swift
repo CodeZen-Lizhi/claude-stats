@@ -2,13 +2,13 @@ import Foundation
 
 /// Small display formatters shared across views.
 enum Format {
-    /// Compact token counts: `847`, `12.3K`, `4.1M`, `2.0B`.
+    /// Compact token counts: `847`, `12.34K`, `4.12M`, `2.00B`.
     static func tokens(_ count: Int) -> String {
         let n = Double(count)
         switch abs(count) {
-        case 1_000_000_000...: return trim(n / 1_000_000_000) + "B"
-        case 1_000_000...:     return trim(n / 1_000_000) + "M"
-        case 1_000...:         return trim(n / 1_000) + "K"
+        case 1_000_000_000...: return String(format: "%.2fB", n / 1_000_000_000)
+        case 1_000_000...:     return String(format: "%.2fM", n / 1_000_000)
+        case 1_000...:         return String(format: "%.2fK", n / 1_000)
         default:               return "\(count)"
         }
     }
@@ -47,11 +47,5 @@ enum Format {
     /// `0%`, `48%`, `100%` from a `0...1` ratio.
     static func percent(_ ratio: Double) -> String {
         "\(Int((ratio * 100).rounded()))%"
-    }
-
-    private static func trim(_ value: Double) -> String {
-        // One decimal place, but drop a trailing `.0`.
-        let s = String(format: "%.1f", value)
-        return s.hasSuffix(".0") ? String(s.dropLast(2)) : s
     }
 }

@@ -182,6 +182,18 @@ struct StatsPanelBody: View {
                 .foregroundStyle(Color.stxMuted)
                 .disabled(env.store.isLoading)
                 .help("Refresh now")
+
+                Button {
+                    NSApp.activate(ignoringOtherApps: true)
+                    openWindow(id: MainWindowView.windowID)
+                } label: {
+                    BracketBox(spacing: 4) {
+                        Image(systemName: "macwindow").font(.system(size: 10, weight: .bold))
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.stxMuted)
+                .help("Open the main window")
             }
         }
         .padding(.horizontal, 14)

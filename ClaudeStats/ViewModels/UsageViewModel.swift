@@ -20,6 +20,10 @@ final class UsageViewModel {
     var chartStyle: TrendChartStyle = .line
     /// Linear vs. ln scaling (only used in line mode on non-Today periods).
     var scaleMode: TrendScaleMode = .linear
+    /// When on, the trend panel stacks by token *type* (Output / Input /
+    /// Cache Write / Cache Read) instead of by model — surfaces cache-hit
+    /// efficiency at a glance.
+    var stackByType: Bool = false
 
     func summary(from store: SessionStore, provider: ProviderKind) -> UsageSummary {
         store.summary(for: period, provider: provider)
