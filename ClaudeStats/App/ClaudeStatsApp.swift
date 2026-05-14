@@ -14,11 +14,6 @@ struct ClaudeStatsApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        Settings {
-            SettingsView()
-                .environment(appDelegate.env)
-        }
-
         Window("Share Stats", id: ShareExportView.windowID) {
             ShareExportView()
                 .environment(appDelegate.env)
@@ -40,6 +35,7 @@ struct ClaudeStatsApp: App {
                 .font(.sora(13))
                 .tint(.stxAccent)
         }
+        .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
     }
 }

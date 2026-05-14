@@ -1,25 +1,25 @@
 import SwiftUI
 
-/// The Dashboard page: a Local heatmap (with a Commits / Claude-sessions
-/// toggle), a GitHub contributions heatmap (when connected), and an Overlap
-/// heatmap comparing the two. Persists toggle + range selection per scene
-/// via `@SceneStorage`.
+/// Claude-style overview Dashboard: 8 stat cards (4×2) scoped by an
+/// "All / 30d / 7d" range, then a side-by-side row with the 3-month Claude
+/// heatmap on the left and the 3-month GitHub contributions heatmap on the
+/// right, followed by the 3-month Claude↔GitHub overlap, and a humorous
+/// comparison footer. The "Models" tab swaps the stat grid for a per-model
+/// breakdown table.
 struct DashboardView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(\.openSettings) private var openSettings
 
-    @SceneStorage("dashboard.localSource") private var sourceRaw: String = DashboardViewModel.LocalSource.commits.rawValue
-    @SceneStorage("dashboard.range") private var rangeRaw: String = DashboardViewModel.Range.last12Months.rawValue
-    @SceneStorage("dashboard.onlyMyCommits") private var onlyMyCommits: Bool = true
+    @SceneStorage("dashboard.section") private var sectionRaw: String = DashboardViewModel.Section.overview.rawValue
+    @SceneStorage("dashboard.period") private var periodRaw: String = StatsPeriod.last30Days.rawValue
 
     private var vm: DashboardViewModel { env.dashboard }
 
     private struct ReloadKey: Equatable {
-        let source: DashboardViewModel.LocalSource
-        let range: DashboardViewModel.Range
-        let onlyMine: Bool
-        let lastRefresh: Date?
+        let period: StatsPeriod
         let provider: ProviderKind
+        let lastRefresh: Date?
+        let token: UInt64
         let githubEnabled: Bool
         let githubLogin: String
     }
@@ -29,32 +29,36 @@ struct DashboardView: View {
             VStack(alignment: .leading, spacing: 20) {
                 header
                 controls
-                localPanel
-                githubPanel
-                if let overlap = vm.overlap {
-                    overlapPanel(overlap: overlap)
+                Group {
+                    switch vm.section {
+                    case .overview: overviewBody
+                    case .models: modelsBody
+                    }
                 }
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 28)
-            .padding(.vertical, 22)
+            // Horizontal padding trimmed (28 → 20) so the 4-column stat grid
+            // fits inside the detail panel at the window's minimum width.
+            .padding(.horizontal, 20)
+            .padding(.top, 52)
+            .padding(.bottom, 22)
             .frame(maxWidth: 980, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .onAppear { syncFromSceneStorage() }
-        .onChange(of: vm.localSource) { _, new in sourceRaw = new.rawValue }
-        .onChange(of: vm.range) { _, new in rangeRaw = new.rawValue }
-        .onChange(of: vm.onlyMyCommits) { _, new in onlyMyCommits = new }
+        .onChange(of: vm.section) { _, new in sectionRaw = new.rawValue }
+        .onChange(of: vm.period) { _, new in periodRaw = new.rawValue }
         .task(id: reloadKey) {
             let sessions = env.store.sessions(for: env.preferences.selectedProvider)
-            await vm.reload(
-                sessions: sessions,
-                githubLogin: env.preferences.githubLogin,
-                enableGitHub: env.preferences.githubEnabled
+            await vm.reload(sessions: sessions)
+            await env.github.reload(
+                expectedLogin: env.preferences.githubLogin,
+                enabled: env.preferences.githubEnabled
             )
-            // If the fetch resolved a different login (rare — e.g. PAT now
-            // points at a different user), keep prefs in sync.
-            if case let .connected(login, _, _) = vm.githubStatus, login != env.preferences.githubLogin {
+            // If GitHub resolved a different login (rare — token now points
+            // at a different user), keep prefs in sync.
+            if case let .connected(login, _, _) = env.github.status,
+               login != env.preferences.githubLogin {
                 env.preferences.githubLogin = login
             }
         }
@@ -62,23 +66,24 @@ struct DashboardView: View {
 
     private var reloadKey: ReloadKey {
         ReloadKey(
-            source: vm.localSource,
-            range: vm.range,
-            onlyMine: vm.onlyMyCommits,
-            lastRefresh: env.store.lastRefreshedAt,
+            period: vm.period,
             provider: env.preferences.selectedProvider,
+            lastRefresh: env.store.lastRefreshedAt,
+            token: vm.reloadToken,
             githubEnabled: env.preferences.githubEnabled,
             githubLogin: env.preferences.githubLogin
         )
     }
 
     private func syncFromSceneStorage() {
-        if let s = DashboardViewModel.LocalSource(rawValue: sourceRaw) { vm.localSource = s }
-        if let r = DashboardViewModel.Range(rawValue: rangeRaw) { vm.range = r }
-        vm.onlyMyCommits = onlyMyCommits
+        if let s = DashboardViewModel.Section(rawValue: sectionRaw) { vm.section = s }
+        if let p = StatsPeriod(rawValue: periodRaw),
+           RangeChips.supported.contains(p) {
+            vm.period = p
+        }
     }
 
-    // MARK: - Header / controls
+    // MARK: - Header & controls
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -88,7 +93,7 @@ struct DashboardView: View {
                 .foregroundStyle(Color.stxMuted)
             Text("Coding activity")
                 .font(.sora(24, weight: .semibold))
-            Text("How often you ship code, day by day.")
+            Text("Your Claude sessions, day by day.")
                 .font(.sora(12))
                 .foregroundStyle(Color.stxMuted)
         }
@@ -96,301 +101,218 @@ struct DashboardView: View {
 
     private var controls: some View {
         @Bindable var bvm = vm
-        return HStack(alignment: .center, spacing: 18) {
-            HStack(spacing: 8) {
-                Text("RANGE")
-                    .font(.sora(10, weight: .semibold))
-                    .tracking(0.8)
-                    .foregroundStyle(Color.stxMuted)
-                ForEach(DashboardViewModel.Range.allCases) { r in
-                    DashboardChip(label: r.shortLabel, isSelected: vm.range == r) { vm.range = r }
-                }
-            }
+        return HStack(alignment: .center, spacing: 12) {
+            OverviewTabs(section: $bvm.section)
             Spacer()
-            HStack(spacing: 8) {
-                Text("LOCAL SOURCE")
-                    .font(.sora(10, weight: .semibold))
-                    .tracking(0.8)
-                    .foregroundStyle(Color.stxMuted)
-                Menu {
-                    ForEach(DashboardViewModel.LocalSource.allCases) { source in
-                        Button(source.label) { vm.localSource = source }
-                    }
-                } label: {
-                    BracketBox(spacing: 5) {
-                        Label(vm.localSource.label, systemImage: "chevron.down")
-                            .labelStyle(.titleAndIcon)
-                            .font(.sora(11))
-                    }
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
+            if vm.section == .overview {
+                RangeChips(period: $bvm.period)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: vm.section)
+    }
 
-                if vm.localSource == .commits {
-                    Toggle(isOn: $bvm.onlyMyCommits) {
-                        Text("Only my commits").font(.sora(11)).foregroundStyle(Color.stxMuted)
-                    }
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-                    .fixedSize()
-                }
+    // MARK: - Overview body
+
+    private var overviewBody: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            statsGrid
+            heatmapsRow
+            overlapSection
+            ComparisonFooter(totalTokens: vm.stats.totalTokens)
+        }
+    }
+
+    /// Eight stat cards in a 4×2 manual `Grid`. Hard-coded to four columns so
+    /// the value baselines line up across both rows — `LazyVGrid` would
+    /// reflow them and lose that alignment.
+    private var statsGrid: some View {
+        let s = vm.stats
+        return Grid(horizontalSpacing: 12, verticalSpacing: 12) {
+            GridRow {
+                StatCard(label: "Sessions", value: "\(s.sessions)")
+                StatCard(label: "Messages", value: Format.tokens(s.messages))
+                StatCard(label: "Total tokens", value: Format.tokens(s.totalTokens))
+                StatCard(label: "Active days", value: "\(s.activeDays)")
+            }
+            GridRow {
+                StatCard(label: "Current streak", value: "\(s.currentStreak)d")
+                StatCard(label: "Longest streak", value: "\(s.longestStreak)d")
+                StatCard(label: "Peak hour", value: peakHourLabel(s.peakHour))
+                StatCard(label: "Favorite model", value: favoriteModelLabel(s.favoriteModel))
             }
         }
     }
 
-    // MARK: - Local panel
+    // MARK: - Heatmap row (Claude + GitHub side-by-side, no card chrome)
 
-    private var localPanel: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("LOCAL")
-                    .font(.sora(11, weight: .semibold))
-                    .tracking(1.2)
-                    .foregroundStyle(Color.stxMuted)
-                Spacer()
-                if vm.isLoading {
-                    ProgressView().controlSize(.mini)
-                } else {
-                    Text(localSummaryText)
-                        .font(.sora(11))
-                        .foregroundStyle(Color.stxMuted)
-                }
-            }
-            if !vm.gitAvailable && vm.localSource == .commits {
-                notice("GIT NOT AVAILABLE",
-                       "Install the Xcode command-line tools to count commits.")
-            } else if vm.cells.isEmpty && !vm.isLoading {
-                notice("NO ACTIVITY", localEmptyHint)
-            } else {
-                HeatmapView(
-                    cells: vm.cells,
-                    range: vm.currentInterval(),
-                    valueLabel: localHeatmapValueLabel
-                )
-            }
+    private var heatmapsRow: some View {
+        HStack(alignment: .top, spacing: 32) {
+            claudeHeatmapSection
+            githubHeatmapSection
         }
-        .stxPanel(16)
+        .padding(.top, 4)
     }
 
-    // MARK: - GitHub panel
+    private var claudeHeatmapSection: some View {
+        let activeDays = vm.heatmapCells.lazy.filter { $0.value > 0 }.count
+        return VStack(alignment: .leading, spacing: 10) {
+            heatmapHeader(title: "CLAUDE ACTIVITY", subtitle: "\(activeDays) active days · last 3 months")
+            CompactHeatmap(
+                cells: vm.heatmapCells,
+                range: vm.heatmapInterval(),
+                valueLabel: { Format.tokens($0) + " tokens" }
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 
     @ViewBuilder
-    private var githubPanel: some View {
-        if !env.preferences.githubEnabled {
-            githubDisabledPanel
-        } else {
-            switch vm.githubStatus {
-            case .disconnected:
-                githubConnectCTA
-            case .connecting:
-                githubConnectingPanel
-            case .connected(let login, let syncedAt, let isStale):
-                githubConnectedPanel(login: login, syncedAt: syncedAt, isStale: isStale)
-            case .failed(let reason):
-                githubFailedPanel(reason: reason)
-            }
-        }
-    }
-
-    private var githubDisabledPanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("GITHUB")
-                    .font(.sora(11, weight: .semibold))
-                    .tracking(1.2)
-                    .foregroundStyle(Color.stxMuted)
-                Spacer()
-                Text("Disabled")
-                    .font(.sora(10))
-                    .foregroundStyle(Color.stxMuted)
-            }
-            Text("Enable GitHub comparison in Settings to see your contribution graph alongside the local heatmap.")
-                .font(.sora(11))
-                .foregroundStyle(Color.stxMuted)
-            Button {
-                openSettings()
-            } label: {
-                BracketBox(spacing: 5) {
-                    Label("OPEN SETTINGS", systemImage: "gearshape")
-                        .labelStyle(.titleAndIcon)
-                        .font(.sora(10))
-                        .tracking(0.8)
-                }
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(Color.stxMuted)
-        }
-        .stxPanel(16)
-    }
-
-    private var githubConnectCTA: some View {
+    private var githubHeatmapSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("GITHUB")
-                    .font(.sora(11, weight: .semibold))
-                    .tracking(1.2)
-                    .foregroundStyle(Color.stxMuted)
-                Spacer()
-                Text("Not connected")
-                    .font(.sora(10))
-                    .foregroundStyle(Color.stxMuted)
-            }
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "chevron.left.forwardslash.chevron.right")
-                    .foregroundStyle(Color.stxAccent)
-                    .font(.system(size: 14))
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Connect a GitHub account to compare contribution patterns.")
-                        .font(.sora(11))
-                    Text("We only read your contribution counts — no code, issues, or PR data.")
-                        .font(.sora(10))
-                        .foregroundStyle(Color.stxMuted)
-                }
-            }
-            Button {
-                openSettings()
-            } label: {
-                BracketBox(spacing: 5) {
-                    Label("CONNECT IN SETTINGS", systemImage: "key")
-                        .labelStyle(.titleAndIcon)
-                        .font(.sora(10))
-                        .tracking(0.8)
-                }
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(Color.stxAccent)
-        }
-        .stxPanel(16)
-    }
-
-    private var githubConnectingPanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("GITHUB")
-                    .font(.sora(11, weight: .semibold))
-                    .tracking(1.2)
-                    .foregroundStyle(Color.stxMuted)
-                Spacer()
-                ProgressView().controlSize(.mini)
-            }
-            Text("Fetching contribution graph…")
-                .font(.sora(11))
-                .foregroundStyle(Color.stxMuted)
-        }
-        .stxPanel(16)
-    }
-
-    private func githubConnectedPanel(login: String, syncedAt: Date?, isStale: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("GITHUB")
-                    .font(.sora(11, weight: .semibold))
-                    .tracking(1.2)
-                    .foregroundStyle(Color.stxMuted)
-                Spacer()
-                HStack(spacing: 8) {
-                    if isStale {
-                        Text("STALE")
-                            .font(.sora(9, weight: .semibold))
-                            .tracking(0.8)
-                            .foregroundStyle(Color.stxAccent)
-                    }
-                    Text("\(vm.githubTotalContributions) contributions · @\(login)")
-                        .font(.sora(11))
-                        .foregroundStyle(Color.stxMuted)
-                    if let syncedAt {
-                        Text("· UPD \(Format.relativeDate(syncedAt))".uppercased())
-                            .font(.sora(9))
-                            .tracking(0.5)
-                            .foregroundStyle(Color.stxMuted)
-                    }
-                    Button { Task { await vm.syncGitHubNow() } } label: {
-                        BracketBox(spacing: 4) {
-                            Image(systemName: "arrow.clockwise").font(.system(size: 10, weight: .bold))
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Color.stxMuted)
-                    .help("Sync now")
-                }
-            }
-            if vm.githubCells.isEmpty {
-                notice("NO CONTRIBUTIONS",
-                       "GitHub returned zero contributions for this window. If you expected activity, check the token's scopes.")
-            } else {
-                HeatmapView(
-                    cells: vm.githubCells,
-                    range: vm.currentInterval(),
-                    valueLabel: { value in value == 1 ? "1 contribution" : "\(value) contributions" }
+            heatmapHeader(title: "GITHUB", subtitle: githubSubtitle)
+            switch githubDisplay {
+            case .placeholder(let message, let isCTA):
+                githubPlaceholder(message: message, isCTA: isCTA)
+            case .heatmap(let cells, _):
+                CompactHeatmap(
+                    cells: cells,
+                    range: vm.heatmapInterval(),
+                    valueLabel: { $0 == 1 ? "1 contribution" : "\($0) contributions" }
                 )
             }
         }
-        .stxPanel(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func githubFailedPanel(reason: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("GITHUB")
-                    .font(.sora(11, weight: .semibold))
-                    .tracking(1.2)
-                    .foregroundStyle(Color.stxAccent)
-                Spacer()
-                Button { Task { await vm.syncGitHubNow() } } label: {
-                    BracketBox(spacing: 4) {
-                        Image(systemName: "arrow.clockwise").font(.system(size: 10, weight: .bold))
-                    }
-                }
-                .buttonStyle(.plain)
+    private func heatmapHeader(title: String, subtitle: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .font(.sora(9, weight: .medium)).tracking(0.4)
                 .foregroundStyle(Color.stxMuted)
-                .help("Retry")
-            }
-            Text(reason)
-                .font(.sora(11))
+            Spacer()
+            Text(subtitle)
+                .font(.sora(9))
                 .foregroundStyle(Color.stxMuted)
-            // Show stale cached cells if we have them.
-            if !vm.githubCells.isEmpty {
-                HeatmapView(
-                    cells: vm.githubCells,
-                    range: vm.currentInterval(),
-                    valueLabel: { value in value == 1 ? "1 contribution" : "\(value) contributions" }
-                )
-            }
+                .lineLimit(1)
         }
-        .stxPanel(16)
     }
 
-    // MARK: - Overlap panel
+    // MARK: - Overlap section
 
-    private func overlapPanel(overlap: OverlapStats) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
+    @ViewBuilder
+    private var overlapSection: some View {
+        if env.preferences.githubEnabled,
+           case .connected = env.github.status,
+           !env.github.cells.isEmpty {
+            overlapCard
+        }
+    }
+
+    private var overlapCard: some View {
+        let range = vm.heatmapInterval()
+        let claudeCells = vm.heatmapCells   // already scoped to the 3-month interval
+        let githubCells = env.github.cells.filter { range.contains($0.date) }
+        let overlap = OverlapStats.compute(local: claudeCells, github: githubCells, range: range)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text("OVERLAP")
-                    .font(.sora(11, weight: .semibold))
-                    .tracking(1.2)
+                    .font(.sora(9, weight: .medium)).tracking(0.4)
                     .foregroundStyle(Color.stxMuted)
-
                 Text("\(Format.percent(overlap.jaccard)) aligned")
                     .font(.sora(13, weight: .semibold))
                     .help(pearsonHelp(for: overlap))
-
                 Spacer()
                 Text(overlapBreakdown(overlap))
-                    .font(.sora(11))
+                    .font(.sora(10))
                     .foregroundStyle(Color.stxMuted)
+                    .lineLimit(1)
             }
             OverlapHeatmapView(
                 stats: overlap,
-                range: vm.currentInterval(),
+                range: range,
                 palette: env.preferences.overlapPalette,
-                valueLabel: overlapLabel
+                valueLabel: overlapStateLabel
             )
         }
-        .stxPanel(16)
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.stxStroke, lineWidth: 1))
     }
 
+    // MARK: - Models body
+
+    private var modelsBody: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ModelTable(
+                models: vm.modelBreakdown,
+                includeCacheInTotals: env.preferences.includeCacheInTokens
+            )
+        }
+    }
+
+    // MARK: - GitHub display state
+
+    private enum GitHubDisplay {
+        case placeholder(message: String, isCTA: Bool)
+        case heatmap(cells: [HeatmapCell], totalInRange: Int)
+    }
+
+    private var githubDisplay: GitHubDisplay {
+        guard env.preferences.githubEnabled else {
+            return .placeholder(message: "Enable GitHub in Settings to compare your contributions.", isCTA: true)
+        }
+        switch env.github.status {
+        case .disconnected:
+            return .placeholder(message: "Connect a GitHub account in Settings to see your contribution graph.", isCTA: true)
+        case .connecting:
+            return .placeholder(message: "Fetching contribution graph…", isCTA: false)
+        case .connected, .failed:
+            let interval = vm.heatmapInterval()
+            let cellsInRange = env.github.cells.filter { interval.contains($0.date) }
+            let total = cellsInRange.reduce(0) { $0 + $1.value }
+            return .heatmap(cells: cellsInRange, totalInRange: total)
+        }
+    }
+
+    private var githubSubtitle: String {
+        guard env.preferences.githubEnabled else { return "Disabled" }
+        switch env.github.status {
+        case .disconnected: return "Not connected"
+        case .connecting: return "Connecting…"
+        case .connected(let login, _, _):
+            return "@\(login)"
+        case .failed: return "Error"
+        }
+    }
+
+    private func githubPlaceholder(message: String, isCTA: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(message)
+                .font(.sora(11))
+                .foregroundStyle(Color.stxMuted)
+                .fixedSize(horizontal: false, vertical: true)
+            if isCTA {
+                Button { openSettings() } label: {
+                    BracketBox(spacing: 5) {
+                        Label("OPEN SETTINGS", systemImage: "gearshape")
+                            .labelStyle(.titleAndIcon)
+                            .font(.sora(10))
+                            .tracking(0.8)
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.stxAccent)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Overlap formatting helpers
+
     private func overlapBreakdown(_ s: OverlapStats) -> String {
-        "\(s.bothCount) both · \(s.localOnlyCount) local · \(s.githubOnlyCount) GitHub · \(s.neitherCount) neither"
+        "\(s.bothCount) both · \(s.localOnlyCount) Claude · \(s.githubOnlyCount) GitHub · \(s.neitherCount) neither"
     }
 
     private func pearsonHelp(for s: OverlapStats) -> String {
@@ -398,80 +320,30 @@ struct DashboardView: View {
         return String(format: "Pearson r = %.2f", r)
     }
 
-    private func overlapLabel(_ state: OverlapStats.DayState) -> String {
+    private func overlapStateLabel(_ state: OverlapStats.DayState) -> String {
         switch state {
-        case .both: "Both local and GitHub activity"
-        case .localOnly: "Local activity only"
+        case .both: "Both Claude and GitHub activity"
+        case .localOnly: "Claude activity only"
         case .githubOnly: "GitHub activity only"
         case .neither: "No activity"
         }
     }
 
-    // MARK: - Shared
+    // MARK: - Stat-card formatting helpers
 
-    private func notice(_ title: String, _ message: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.sora(11, weight: .semibold))
-                .tracking(1.2)
-                .foregroundStyle(Color.stxAccent)
-            Text(message)
-                .font(.sora(11))
-                .foregroundStyle(Color.stxMuted)
-        }
-        .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+    /// `"5 PM"` for hour 17 in the current locale. Returns "—" when no
+    /// activity has been recorded yet.
+    private func peakHourLabel(_ hour: Int?) -> String {
+        guard let hour,
+              let date = Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: .now)
+        else { return "—" }
+        return date.formatted(.dateTime.hour(.defaultDigits(amPM: .abbreviated)))
     }
 
-    private var localSummaryText: String {
-        switch vm.localSource {
-        case .commits:
-            return "\(vm.totalValue) commits · \(vm.activeDays) active days"
-        case .sessions:
-            return "\(Format.tokens(vm.totalValue)) tokens · \(vm.activeDays) active days"
-        }
-    }
-
-    private var localEmptyHint: String {
-        switch vm.localSource {
-        case .commits:
-            return "No commits in the selected window from the repos Claude has touched."
-        case .sessions:
-            return "No Claude sessions in the selected window for the current provider."
-        }
-    }
-
-    private func localHeatmapValueLabel(_ value: Int) -> String {
-        switch vm.localSource {
-        case .commits: return value == 1 ? "1 commit" : "\(value) commits"
-        case .sessions: return "\(Format.tokens(value)) tokens"
-        }
-    }
-}
-
-/// Same animated underline chip used elsewhere in the app (Activity / Git).
-private struct DashboardChip: View {
-    let label: String
-    let isSelected: Bool
-    let action: () -> Void
-    @State private var hovering = false
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 3) {
-                Text(label.uppercased())
-                    .font(.sora(10, weight: .semibold))
-                    .tracking(0.8)
-                    .foregroundStyle(isSelected ? .primary : (hovering ? Color.primary : Color.primary.opacity(0.40)))
-                Rectangle()
-                    .fill(Color.stxAccent)
-                    .frame(height: 1.5)
-                    .scaleEffect(x: isSelected ? 1 : 0, anchor: .center)
-            }
-            .fixedSize()
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .animation(.easeOut(duration: 0.18), value: isSelected)
+    /// Trim noisy prefixes like `claude-` so the card stays readable.
+    private func favoriteModelLabel(_ model: String?) -> String {
+        guard let model, !model.isEmpty else { return "—" }
+        return model.replacingOccurrences(of: "claude-", with: "").capitalized
     }
 }
 
@@ -480,5 +352,6 @@ private struct DashboardChip: View {
     DashboardView()
         .environment(AppEnvironment.preview())
         .frame(width: 1040, height: 720)
+        .background(Color.stxBackground)
 }
 #endif

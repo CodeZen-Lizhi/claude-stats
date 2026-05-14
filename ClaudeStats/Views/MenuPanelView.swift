@@ -206,7 +206,6 @@ struct StatsPanelBody: View {
 struct MenuPanelView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(\.openWindow) private var openWindow
-    @Environment(\.openSettings) private var openSettings
 
     @State private var pane: StatsPane = .usage
 
@@ -225,7 +224,8 @@ struct MenuPanelView: View {
         HStack(spacing: 10) {
             Button {
                 NSApp.activate(ignoringOtherApps: true)
-                openSettings()
+                openWindow(id: MainWindowView.windowID)
+                NotificationCenter.default.post(name: .openSettingsInMainWindow, object: nil)
             } label: {
                 BracketBox(spacing: 5) {
                     Label("SETTINGS", systemImage: "gearshape")

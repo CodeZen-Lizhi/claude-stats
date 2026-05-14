@@ -1,247 +1,216 @@
 import Foundation
 import Observation
 
-/// Drives the Dashboard heatmap(s). Holds the user's choice of local data
-/// source (commits vs Claude session tokens) and the visible time window,
-/// plus the GitHub state (cells, status, total) and the computed Overlap.
+/// Per-period summary of the user's Claude activity. All numbers are derived
+/// from already-parsed sessions; `reload(...)` populates this off-main so view
+/// bodies only read precomputed values.
+struct DashboardStats: Sendable, Hashable {
+    var sessions: Int
+    var messages: Int
+    var totalTokens: Int
+    var totalCost: Double
+    var activeDays: Int
+    /// Consecutive days, counting back from today (or yesterday if today is
+    /// empty), where there was any session activity.
+    var currentStreak: Int
+    /// Longest run of consecutive active days across all of history.
+    var longestStreak: Int
+    /// Hour-of-day (0…23) with the most token spend; `nil` when there is no
+    /// activity at all.
+    var peakHour: Int?
+    /// Canonical model id with the most tokens spent across `period`.
+    var favoriteModel: String?
+
+    static let empty = DashboardStats(
+        sessions: 0,
+        messages: 0,
+        totalTokens: 0,
+        totalCost: 0,
+        activeDays: 0,
+        currentStreak: 0,
+        longestStreak: 0,
+        peakHour: nil,
+        favoriteModel: nil
+    )
+}
+
+/// Drives the Dashboard page: 8 stat cards keyed by `period`, a fixed
+/// 3-month heatmap, and a model breakdown for the Models tab. GitHub state
+/// lives in `GitHubViewModel` and is rendered from the Git page.
 ///
-/// `reload(...)` runs the local and GitHub arms in parallel; both are async
-/// off-main builders, so the main actor stays responsive.
+/// `reload(sessions:)` runs the full aggregation off-main in a single
+/// `Task.detached`, so view bodies stay cheap and SwiftUI's update cycle
+/// receives one batched assignment.
 @MainActor
 @Observable
 final class DashboardViewModel {
-    enum LocalSource: String, CaseIterable, Identifiable, Sendable {
-        case commits, sessions
+    enum Section: String, CaseIterable, Identifiable, Sendable {
+        case overview, models
         var id: String { rawValue }
-        var label: String {
-            switch self {
-            case .commits: "Commits"
-            case .sessions: "Claude sessions"
-            }
-        }
-        var unitLabel: String {
-            switch self {
-            case .commits: "commits"
-            case .sessions: "tokens"
-            }
-        }
     }
 
-    enum Range: String, CaseIterable, Identifiable, Sendable {
-        case last12Months, thisYear
-        var id: String { rawValue }
-        var shortLabel: String {
-            switch self {
-            case .last12Months: "12M"
-            case .thisYear: "YTD"
-            }
-        }
-        func interval(now: Date = .now, calendar: Calendar = .current) -> DateInterval {
-            switch self {
-            case .last12Months:
-                let endExclusive = calendar.dateInterval(of: .day, for: now)?.end ?? now
-                let start = calendar.date(byAdding: .day, value: -364, to: calendar.startOfDay(for: now)) ?? now
-                return DateInterval(start: start, end: endExclusive)
-            case .thisYear:
-                let start = calendar.dateInterval(of: .year, for: now)?.start ?? now
-                let endExclusive = calendar.dateInterval(of: .day, for: now)?.end ?? now
-                return DateInterval(start: start, end: endExclusive)
-            }
-        }
+    var section: Section = .overview
+    var period: StatsPeriod = .last30Days {
+        didSet { if period != oldValue { reloadToken &+= 1 } }
     }
 
-    enum GitHubStatus: Sendable, Equatable {
-        case disconnected
-        case connecting
-        case connected(login: String, syncedAt: Date?, isStale: Bool)
-        case failed(reason: String)
-    }
-
-    // MARK: - User-driven state
-
-    var localSource: LocalSource = .commits {
-        didSet { if localSource != oldValue { bumpReload() } }
-    }
-    var range: Range = .last12Months {
-        didSet { if range != oldValue { bumpReload() } }
-    }
-    var onlyMyCommits: Bool = true {
-        didSet { if onlyMyCommits != oldValue { bumpReload() } }
-    }
-
-    // MARK: - Derived state (read-only to the view)
-
-    private(set) var cells: [HeatmapCell] = []
+    private(set) var stats: DashboardStats = .empty
+    private(set) var heatmapCells: [HeatmapCell] = []
+    private(set) var modelBreakdown: [ModelUsage] = []
     private(set) var isLoading = false
-    private(set) var gitAvailable = true
     private(set) var reloadToken: UInt64 = 0
 
-    private(set) var githubCells: [HeatmapCell] = []
-    private(set) var githubStatus: GitHubStatus = .disconnected
-    private(set) var githubTotalContributions: Int = 0
-    private(set) var overlap: OverlapStats?
+    private let calendar = Calendar.current
+    private let pricing: ModelPricing
 
-    // MARK: - Collaborators
+    /// Number of trailing days the heatmap spans (rolling, ends today).
+    static let heatmapDayCount = 90
 
-    private let builder = DashboardActivityBuilder()
-    private let github = GitHubClient()
-    private let cache = GitHubCalendarCache()
-    private let creds = GitHubCredentialsStore.shared
+    init(pricing: ModelPricing = .fallback) {
+        self.pricing = pricing
+    }
 
     func bumpReload() { reloadToken &+= 1 }
 
-    func currentInterval(now: Date = .now) -> DateInterval {
-        range.interval(now: now)
+    /// Rolling interval the heatmap covers: `[today − (heatmapDayCount − 1), today + 1d)`.
+    func heatmapInterval(now: Date = .now) -> DateInterval {
+        let cal = calendar
+        let endExclusive = cal.dateInterval(of: .day, for: now)?.end ?? now
+        let start = cal.date(byAdding: .day, value: -(Self.heatmapDayCount - 1), to: cal.startOfDay(for: now)) ?? now
+        return DateInterval(start: start, end: endExclusive)
     }
 
-    /// Total `value` over all local cells.
-    var totalValue: Int { cells.reduce(0) { $0 + $1.value } }
-    /// Distinct days with non-zero local activity.
-    var activeDays: Int { cells.lazy.filter { $0.value > 0 }.count }
-
-    // MARK: - Reload
-
-    /// Reload both arms. `githubLogin` is the persisted login from
-    /// `Preferences` — used to look up the cache when the VM has just been
-    /// constructed (e.g. at app launch). `enableGitHub` lets the caller turn
-    /// off the GitHub arm entirely when the user disabled it in Settings.
-    func reload(sessions: [Session], githubLogin: String, enableGitHub: Bool) async {
+    /// Recompute the overview off-main. Captures a local `Calendar` so the
+    /// detached block stays Sendable under Swift 6 strict concurrency.
+    func reload(sessions: [Session]) async {
         isLoading = true
         defer { isLoading = false }
-        let interval = currentInterval()
 
-        async let local: Void = reloadLocal(sessions: sessions, interval: interval)
-        async let remote: Void = reloadGitHub(interval: interval, expectedLogin: githubLogin, enabled: enableGitHub)
-        _ = await (local, remote)
+        let cal = calendar
+        let pricing = pricing
+        let period = period
+        let now = Date.now
+        let heatmapInterval = heatmapInterval(now: now)
 
-        if enableGitHub, !githubCells.isEmpty {
-            overlap = OverlapStats.compute(local: cells, github: githubCells, range: interval)
-        } else {
-            overlap = nil
-        }
+        let result = await Task.detached(priority: .userInitiated) { () -> ReloadResult in
+            // 1. Stats for the selected period — reuses the existing aggregator.
+            let summary = UsageSummary.make(period: period, sessions: sessions, pricing: pricing, now: now)
+            let activeDays = Self.activeDayCount(sessions: sessions, period: period, calendar: cal, now: now)
+            let (current, longest) = Self.streaks(sessions: sessions, calendar: cal, now: now)
+            let peakHour = Self.peakHour(timeline: summary.timeline, calendar: cal)
+
+            // 2. Heatmap: tokens per day across the 3-month window.
+            let heatmap = Self.heatmapCells(sessions: sessions, range: heatmapInterval, calendar: cal)
+
+            // 3. Models tab: top models in the period, already sorted desc.
+            let models = summary.models
+
+            return ReloadResult(
+                stats: DashboardStats(
+                    sessions: summary.sessionCount,
+                    messages: summary.messageCount,
+                    totalTokens: summary.totalTokens,
+                    totalCost: summary.totalCost,
+                    activeDays: activeDays,
+                    currentStreak: current,
+                    longestStreak: longest,
+                    peakHour: peakHour,
+                    favoriteModel: models.first?.model
+                ),
+                heatmapCells: heatmap,
+                modelBreakdown: models
+            )
+        }.value
+
+        stats = result.stats
+        heatmapCells = result.heatmapCells
+        modelBreakdown = result.modelBreakdown
     }
 
-    private func reloadLocal(sessions: [Session], interval: DateInterval) async {
-        switch localSource {
-        case .commits:
-            let result = await builder.commitCells(sessions: sessions, range: interval, onlyMyCommits: onlyMyCommits)
-            gitAvailable = result.gitAvailable
-            cells = result.cells
-        case .sessions:
-            gitAvailable = true
-            cells = await builder.sessionCells(sessions: sessions, range: interval)
-        }
+    private struct ReloadResult: Sendable {
+        let stats: DashboardStats
+        let heatmapCells: [HeatmapCell]
+        let modelBreakdown: [ModelUsage]
     }
 
-    private func reloadGitHub(interval: DateInterval, expectedLogin: String, enabled: Bool) async {
-        guard enabled else {
-            githubCells = []
-            githubStatus = .disconnected
-            return
+    // MARK: - Pure aggregations (nonisolated, called from Task.detached)
+
+    /// Days in `period` that contain at least one session's last activity.
+    nonisolated private static func activeDayCount(sessions: [Session], period: StatsPeriod, calendar cal: Calendar, now: Date) -> Int {
+        var days: Set<Date> = []
+        for session in sessions {
+            let when = session.stats?.lastActivity ?? session.lastModified
+            guard period.contains(when, now: now, calendar: cal) else { continue }
+            days.insert(cal.startOfDay(for: when))
         }
-        guard let token = creds.readToken(), !token.isEmpty else {
-            githubCells = []
-            githubStatus = .disconnected
-            return
-        }
-        // First, try cache so the panel renders instantly.
-        let cached = expectedLogin.isEmpty ? nil : cache.read(login: expectedLogin)
-        if let cached {
-            githubCells = cached.snapshot.cells
-            githubTotalContributions = cached.snapshot.totalContributions
-            githubStatus = .connected(login: cached.snapshot.login, syncedAt: cached.snapshot.fetchedAt, isStale: cached.isStale)
-            if !cached.isStale { return }
-        } else {
-            githubStatus = .connecting
-        }
-        await performFetch(token: token, interval: interval)
+        return days.count
     }
 
-    /// Force a fetch ignoring cache TTL. Caller-driven (Settings ▸ Sync now).
-    func syncGitHubNow() async {
-        guard let token = creds.readToken(), !token.isEmpty else {
-            githubStatus = .disconnected
-            return
+    /// `(currentStreak, longestStreak)` walking the set of days with any
+    /// session activity across all history (streaks are a long-term motivation
+    /// signal and don't depend on the selected range).
+    nonisolated private static func streaks(sessions: [Session], calendar cal: Calendar, now: Date) -> (Int, Int) {
+        var days: Set<Date> = []
+        for session in sessions {
+            let when = session.stats?.lastActivity ?? session.lastModified
+            days.insert(cal.startOfDay(for: when))
         }
-        let interval = currentInterval()
-        await performFetch(token: token, interval: interval)
-        if !githubCells.isEmpty {
-            overlap = OverlapStats.compute(local: cells, github: githubCells, range: interval)
-        }
-    }
+        guard !days.isEmpty else { return (0, 0) }
 
-    private func performFetch(token: String, interval: DateInterval) async {
-        // Don't clobber a populated cached state with "connecting" — we
-        // already show stale cells.
-        if githubCells.isEmpty { githubStatus = .connecting }
-        do {
-            let snapshot = try await github.fetchCalendar(token: token, from: interval.start, to: interval.end)
-            githubCells = snapshot.cells
-            githubTotalContributions = snapshot.totalContributions
-            githubStatus = .connected(login: snapshot.login, syncedAt: snapshot.fetchedAt, isStale: false)
-            do {
-                try cache.write(snapshot)
-            } catch {
-                Log.network.error("GitHub cache write failed: \(error.localizedDescription, privacy: .public)")
+        // Longest streak: sort ascending, walk and accumulate.
+        let sorted = days.sorted()
+        var longest = 1
+        var run = 1
+        for i in 1..<sorted.count {
+            if let prevPlusOne = cal.date(byAdding: .day, value: 1, to: sorted[i - 1]), prevPlusOne == sorted[i] {
+                run += 1
+                longest = max(longest, run)
+            } else {
+                run = 1
             }
-        } catch let err as GitHubClient.ClientError {
-            handle(err)
-        } catch {
-            githubStatus = .failed(reason: "Unexpected error: \(error.localizedDescription)")
         }
+
+        // Current streak: count back from today; allow one-day grace if today
+        // is empty (user hasn't started yet but was active yesterday).
+        let today = cal.startOfDay(for: now)
+        var current = 0
+        var cursor = today
+        if !days.contains(cursor) {
+            cursor = cal.date(byAdding: .day, value: -1, to: today) ?? today
+            if !days.contains(cursor) { return (0, longest) }
+        }
+        while days.contains(cursor) {
+            current += 1
+            guard let prev = cal.date(byAdding: .day, value: -1, to: cursor) else { break }
+            cursor = prev
+        }
+        return (current, longest)
     }
 
-    private func handle(_ error: GitHubClient.ClientError) {
-        switch error {
-        case .unauthorized:
-            creds.deleteToken()
-            githubCells = []
-            githubTotalContributions = 0
-            githubStatus = .failed(reason: "Token rejected. Re-enter your PAT in Settings.")
-        case .rateLimited:
-            // Keep cached cells if any; surface retry hint.
-            githubStatus = .failed(reason: String(describing: error))
-        case .graphQL, .http, .network, .decoding:
-            // Keep whatever cached cells we showed first; surface reason.
-            githubStatus = .failed(reason: String(describing: error))
+    /// Hour 0…23 with the most token spend across `timeline`; `nil` if empty.
+    nonisolated private static func peakHour(timeline: [ModelBucket], calendar cal: Calendar) -> Int? {
+        guard !timeline.isEmpty else { return nil }
+        var byHour: [Int: Int] = [:]
+        for bucket in timeline {
+            let hour = cal.component(.hour, from: bucket.start)
+            byHour[hour, default: 0] += bucket.tokens
         }
+        return byHour.max(by: { $0.value < $1.value })?.key
     }
 
-    // MARK: - User actions
-
-    /// Save the token, force-fetch once, return the resolved login on
-    /// success. Throws on Keychain save / network / GraphQL failure so the
-    /// Settings view can show the error inline.
-    @discardableResult
-    func connectGitHub(token: String) async throws -> String {
-        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { throw GitHubClient.ClientError.unauthorized }
-        try creds.saveToken(trimmed)
-        githubStatus = .connecting
-        let interval = currentInterval()
-        do {
-            let snapshot = try await github.fetchCalendar(token: trimmed, from: interval.start, to: interval.end)
-            githubCells = snapshot.cells
-            githubTotalContributions = snapshot.totalContributions
-            githubStatus = .connected(login: snapshot.login, syncedAt: snapshot.fetchedAt, isStale: false)
-            try? cache.write(snapshot)
-            overlap = OverlapStats.compute(local: cells, github: githubCells, range: interval)
-            return snapshot.login
-        } catch {
-            // Don't keep a bad token in the keychain.
-            creds.deleteToken()
-            githubStatus = .disconnected
-            throw error
+    /// Tokens-per-day cells across `range`. Mirrors the bucketing in
+    /// `DashboardActivityBuilder.bucket(sessions:range:)` but inlined so we
+    /// don't roundtrip through another detached task.
+    nonisolated private static func heatmapCells(sessions: [Session], range: DateInterval, calendar cal: Calendar) -> [HeatmapCell] {
+        var byDay: [Date: Int] = [:]
+        for session in sessions {
+            guard let timeline = session.stats?.timeline else { continue }
+            for bucket in timeline.rebucketed(by: .day, calendar: cal) where range.contains(bucket.start) {
+                byDay[bucket.start, default: 0] += bucket.tokens
+            }
         }
-    }
-
-    /// Wipe token, cells, and cache for `login`.
-    func disconnectGitHub(login: String) {
-        creds.deleteToken()
-        if !login.isEmpty { cache.delete(login: login) }
-        githubCells = []
-        githubTotalContributions = 0
-        githubStatus = .disconnected
-        overlap = nil
+        return byDay
+            .map { HeatmapCell(date: $0.key, value: $0.value) }
+            .sorted { $0.date < $1.date }
     }
 }

@@ -1,12 +1,50 @@
 import SwiftUI
 
-/// Shared sizing constants for the heatmap variants. Pulled out of the
-/// generic ``CalendarGridSkeleton`` so callers can pad legends and labels
-/// against the same dimensions without specifying a type parameter.
+/// Shared sizing constants for the heatmap variants. ``ResponsiveHeatmap``
+/// reads container width and computes the actual `cellSize` directly, clamping
+/// to `[cellSizeMin, cellSizeMax]`.
 enum HeatmapMetrics {
-    static let cellSize: CGFloat = 11
     static let spacing: CGFloat = 2
     static let weekdayColumnWidth: CGFloat = 16
+    static let weekdayGap: CGFloat = 6
+    static let cellSizeMax: CGFloat = 11
+    static let cellSizeMin: CGFloat = 6
+
+    /// Number of week-columns spanned by `range`. Cheap — uses a few
+    /// `Calendar` calls instead of materializing the full ``CalendarGrid``.
+    static func weekCount(for range: DateInterval, calendar: Calendar = .current) -> Int {
+        let firstWeekStart = calendar.dateInterval(of: .weekOfYear, for: range.start)?.start ?? range.start
+        let lastWeekStart = calendar.dateInterval(of: .weekOfYear, for: range.end)?.start ?? range.end
+        let weeks = calendar.dateComponents([.weekOfYear], from: firstWeekStart, to: lastWeekStart).weekOfYear ?? 0
+        return max(1, weeks + 1)
+    }
+}
+
+/// Renders a single heatmap variant whose cell size is computed from the
+/// container's width. Replaces the old `ViewThatFits`-based design that paid
+/// to lay out every candidate cell size on every layout pass.
+struct ResponsiveHeatmap<Content: View>: View {
+    let weekCount: Int
+    @ViewBuilder var content: (CGFloat) -> Content
+    @State private var width: CGFloat = 760  // sensible default for first frame
+
+    var body: some View {
+        content(cellSize(for: width))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.width
+            } action: { newWidth in
+                if newWidth > 0 { width = newWidth }
+            }
+    }
+
+    private func cellSize(for width: CGFloat) -> CGFloat {
+        guard weekCount > 0 else { return HeatmapMetrics.cellSizeMax }
+        let labelWidth = HeatmapMetrics.weekdayColumnWidth + HeatmapMetrics.weekdayGap
+        let available = max(0, width - labelWidth)
+        let perCell = (available - CGFloat(weekCount - 1) * HeatmapMetrics.spacing) / CGFloat(weekCount)
+        return min(HeatmapMetrics.cellSizeMax, max(HeatmapMetrics.cellSizeMin, floor(perCell)))
+    }
 }
 
 /// GitHub-style yearly heatmap: a 7-row grid of week columns, with cell colour
@@ -21,47 +59,54 @@ struct HeatmapView: View {
     /// raw `value`; the view appends the date.
     let valueLabel: (Int) -> String
 
-    private var valuesByDay: [Date: Int] {
-        Dictionary(uniqueKeysWithValues: cells.map { ($0.date, $0.value) })
+    /// Cached so we don't rebuild a 365-entry dictionary on every body call.
+    /// Recomputed via ``recompute()`` only when ``cells`` actually changes.
+    @State private var valuesByDay: [Date: Int] = [:]
+    @State private var quartiles: [Int] = []
+
+    var body: some View {
+        ResponsiveHeatmap(weekCount: HeatmapMetrics.weekCount(for: range)) { cellSize in
+            VStack(alignment: .leading, spacing: 6) {
+                CalendarGridSkeleton(range: range, cellSize: cellSize) { date, inRange in
+                    if inRange {
+                        let value = valuesByDay[date] ?? 0
+                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                            .fill(color(for: value))
+                            .frame(width: cellSize, height: cellSize)
+                            .help("\(valueLabel(value)) · \(Self.dateFormatter.string(from: date))")
+                    } else {
+                        Color.clear.frame(width: cellSize, height: cellSize)
+                    }
+                }
+                legend(cellSize: cellSize)
+            }
+        }
+        .onAppear { recompute() }
+        .onChange(of: cells) { _, _ in recompute() }
     }
-    private var quartiles: [Int] {
+
+    private func recompute() {
+        valuesByDay = Dictionary(uniqueKeysWithValues: cells.map { ($0.date, $0.value) })
         let nonZero = cells.compactMap { $0.value > 0 ? $0.value : nil }.sorted()
-        guard !nonZero.isEmpty else { return [] }
+        guard !nonZero.isEmpty else { quartiles = []; return }
         func q(_ p: Double) -> Int {
             let idx = min(max(Int(Double(nonZero.count - 1) * p), 0), nonZero.count - 1)
             return nonZero[idx]
         }
-        return [q(0.25), q(0.50), q(0.75)]
+        quartiles = [q(0.25), q(0.50), q(0.75)]
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            CalendarGridSkeleton(range: range) { date, inRange in
-                if inRange {
-                    let value = valuesByDay[date] ?? 0
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(color(for: value))
-                        .frame(width: HeatmapMetrics.cellSize, height: HeatmapMetrics.cellSize)
-                        .help("\(valueLabel(value)) · \(Self.dateFormatter.string(from: date))")
-                } else {
-                    Color.clear.frame(width: HeatmapMetrics.cellSize, height: HeatmapMetrics.cellSize)
-                }
-            }
-            legend
-        }
-    }
-
-    private var legend: some View {
+    private func legend(cellSize: CGFloat) -> some View {
         HStack(spacing: 6) {
             Text("Less").font(.sora(9)).foregroundStyle(Color.stxMuted)
             ForEach(0..<5, id: \.self) { step in
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
                     .fill(rampColor(step: step))
-                    .frame(width: HeatmapMetrics.cellSize, height: HeatmapMetrics.cellSize)
+                    .frame(width: cellSize, height: cellSize)
             }
             Text("More").font(.sora(9)).foregroundStyle(Color.stxMuted)
         }
-        .padding(.leading, HeatmapMetrics.weekdayColumnWidth + 6)
+        .padding(.leading, HeatmapMetrics.weekdayColumnWidth + HeatmapMetrics.weekdayGap)
     }
 
     // MARK: - Colour ramp
@@ -100,26 +145,41 @@ struct HeatmapView: View {
 /// Shared skeleton for the week-column grid: month-label strip, weekday
 /// labels, and a 7-row × N-week grid where each cell's content is provided by
 /// the caller. `OverlapHeatmapView` and `HeatmapView` both render through
-/// this so the layout stays in lockstep across panels.
+/// this so the layout stays in lockstep across panels. `cellSize` flexes per
+/// container width via ``ResponsiveHeatmap``.
 struct CalendarGridSkeleton<Cell: View>: View {
     let range: DateInterval
+    let cellSize: CGFloat
     @ViewBuilder var cell: (Date, Bool) -> Cell
 
-    private var grid: CalendarGrid { CalendarGrid(spanning: range) }
+    /// Cached so we don't rebuild ~370 `Date` objects on every layout pass.
+    /// Refreshed only when `range` actually changes (e.g. user toggles 12M/YTD).
+    @State private var grid: CalendarGrid
+
+    init(range: DateInterval, cellSize: CGFloat,
+         @ViewBuilder cell: @escaping (Date, Bool) -> Cell) {
+        self.range = range
+        self.cellSize = cellSize
+        self.cell = cell
+        self._grid = State(initialValue: CalendarGrid(spanning: range))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             monthLabels
-            HStack(alignment: .top, spacing: 6) {
+            HStack(alignment: .top, spacing: HeatmapMetrics.weekdayGap) {
                 weekdayLabels
                 gridBody
             }
+        }
+        .onChange(of: range) { _, new in
+            grid = CalendarGrid(spanning: new)
         }
     }
 
     private var monthLabels: some View {
         let positions = grid.monthLabelPositions()
-        let columnStride = HeatmapMetrics.cellSize + HeatmapMetrics.spacing
+        let columnStride = cellSize + HeatmapMetrics.spacing
         return ZStack(alignment: .topLeading) {
             ForEach(positions, id: \.weekIndex) { pos in
                 Text(pos.label)
@@ -128,9 +188,8 @@ struct CalendarGridSkeleton<Cell: View>: View {
                     .offset(x: CGFloat(pos.weekIndex) * columnStride)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: 11)
-        .padding(.leading, HeatmapMetrics.weekdayColumnWidth + 6)
+        .frame(height: 11, alignment: .leading)
+        .padding(.leading, HeatmapMetrics.weekdayColumnWidth + HeatmapMetrics.weekdayGap)
     }
 
     private var weekdayLabels: some View {
@@ -140,7 +199,7 @@ struct CalendarGridSkeleton<Cell: View>: View {
                 Text(visible ? grid.weekdaySymbols[row] : " ")
                     .font(.sora(9))
                     .foregroundStyle(Color.stxMuted)
-                    .frame(width: HeatmapMetrics.weekdayColumnWidth, height: HeatmapMetrics.cellSize, alignment: .trailing)
+                    .frame(width: HeatmapMetrics.weekdayColumnWidth, height: cellSize, alignment: .trailing)
             }
         }
     }

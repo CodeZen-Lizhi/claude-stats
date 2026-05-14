@@ -12,25 +12,27 @@ struct OverlapHeatmapView: View {
     let valueLabel: (OverlapStats.DayState) -> String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            CalendarGridSkeleton(range: range) { date, inRange in
-                if inRange {
-                    let state = stats.byDay[date] ?? .neither
-                    cell(for: state)
-                        .help("\(valueLabel(state)) · \(Self.dateFormatter.string(from: date))")
-                } else {
-                    Color.clear.frame(width: HeatmapMetrics.cellSize, height: HeatmapMetrics.cellSize)
+        ResponsiveHeatmap(weekCount: HeatmapMetrics.weekCount(for: range)) { cellSize in
+            VStack(alignment: .leading, spacing: 6) {
+                CalendarGridSkeleton(range: range, cellSize: cellSize) { date, inRange in
+                    if inRange {
+                        let state = stats.byDay[date] ?? .neither
+                        cell(for: state, cellSize: cellSize)
+                            .help("\(valueLabel(state)) · \(Self.dateFormatter.string(from: date))")
+                    } else {
+                        Color.clear.frame(width: cellSize, height: cellSize)
+                    }
                 }
+                legend(cellSize: cellSize)
             }
-            legend
         }
     }
 
-    private func cell(for state: OverlapStats.DayState) -> some View {
+    private func cell(for state: OverlapStats.DayState, cellSize: CGFloat) -> some View {
         let shape = RoundedRectangle(cornerRadius: 2, style: .continuous)
         return shape
             .fill(palette.color(for: state))
-            .frame(width: HeatmapMetrics.cellSize, height: HeatmapMetrics.cellSize)
+            .frame(width: cellSize, height: cellSize)
             .overlay {
                 if palette.dashedBorder(for: state) {
                     shape.strokeBorder(Color.stxAccent, style: StrokeStyle(lineWidth: 1, dash: [2, 1.5]))
@@ -38,14 +40,14 @@ struct OverlapHeatmapView: View {
             }
     }
 
-    private var legend: some View {
+    private func legend(cellSize: CGFloat) -> some View {
         HStack(spacing: 12) {
             ForEach(OverlapStats.DayState.allCases, id: \.self) { state in
                 HStack(spacing: 4) {
                     let shape = RoundedRectangle(cornerRadius: 2, style: .continuous)
                     shape
                         .fill(palette.color(for: state))
-                        .frame(width: HeatmapMetrics.cellSize, height: HeatmapMetrics.cellSize)
+                        .frame(width: cellSize, height: cellSize)
                         .overlay {
                             if palette.dashedBorder(for: state) {
                                 shape.strokeBorder(Color.stxAccent, style: StrokeStyle(lineWidth: 1, dash: [2, 1.5]))
@@ -57,7 +59,7 @@ struct OverlapHeatmapView: View {
                 }
             }
         }
-        .padding(.leading, HeatmapMetrics.weekdayColumnWidth + 6)
+        .padding(.leading, HeatmapMetrics.weekdayColumnWidth + HeatmapMetrics.weekdayGap)
     }
 
     private static func legendLabel(for state: OverlapStats.DayState) -> String {

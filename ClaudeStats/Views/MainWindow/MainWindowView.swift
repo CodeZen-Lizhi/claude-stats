@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Top-level page shown in the main window's detail column.
+/// Top-level page shown in the main window's detail column. Settings live in
+/// their own "settings mode" (see ``SettingsModeView``), not as a `MainPage`.
 enum MainPage: String, CaseIterable, Identifiable, Sendable {
-    case dashboard, sessions, usage, activity, git, settings
+    case dashboard, sessions, usage, activity, git
     var id: String { rawValue }
 
     var title: String {
@@ -12,7 +13,6 @@ enum MainPage: String, CaseIterable, Identifiable, Sendable {
         case .usage: "Usage"
         case .activity: "Activity"
         case .git: "Git"
-        case .settings: "Settings"
         }
     }
 
@@ -23,40 +23,76 @@ enum MainPage: String, CaseIterable, Identifiable, Sendable {
         case .usage: "chart.bar.xaxis"
         case .activity: "waveform"
         case .git: "arrow.triangle.branch"
-        case .settings: "gearshape"
         }
     }
 }
 
-/// The main app window: a `NavigationSplitView` with a fixed sidebar of pages
-/// and a detail column that swaps content. The window holds an
-/// activation-policy reference for its lifetime so the app shows a Dock icon
-/// while it's open (see ``DockVisibilityCoordinator``).
+extension Notification.Name {
+    /// Posted by the menu-bar Settings button to ask the main window to enter
+    /// settings mode (opening the window first if needed).
+    static let openSettingsInMainWindow = Notification.Name("ClaudeStats.openSettingsInMainWindow")
+}
+
+/// The main app window: a vibrancy-backed sidebar with a floating rounded
+/// detail "card" sitting visually above it (Codex-style shell). The window
+/// holds an activation-policy reference for its lifetime so the app shows a
+/// Dock icon while it's open (see ``DockVisibilityCoordinator``).
 struct MainWindowView: View {
     static let windowID = "main-window"
 
     @Environment(AppEnvironment.self) private var env
     @SceneStorage("mainWindow.selectedPage") private var pageRaw: String = MainPage.dashboard.rawValue
+    @SceneStorage("mainWindow.sidebarVisible") private var sidebarVisible: Bool = true
+    @SceneStorage("mainWindow.inSettingsMode") private var inSettingsMode: Bool = false
     @State private var page: MainPage = .dashboard
+    @State private var toggleHovering = false
+    @State private var trafficLights = TrafficLightPositioner()
 
     private var availablePages: [MainPage] {
         var pages: [MainPage] = [.dashboard, .sessions, .usage]
         if env.preferences.aiActivityAnalysisEnabled { pages.append(.activity) }
         if env.preferences.gitTrackingEnabled { pages.append(.git) }
-        pages.append(.settings)
         return pages
     }
 
     var body: some View {
-        NavigationSplitView {
-            sidebar
-                .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 240)
-        } detail: {
-            detail
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.stxBackground)
+        ZStack(alignment: .topLeading) {
+            VisualEffectBackground(material: .sidebar, blendingMode: .behindWindow)
+
+            if inSettingsMode {
+                SettingsModeView(onExit: {
+                    withAnimation(.easeInOut(duration: 0.2)) { inSettingsMode = false }
+                })
+                .transition(.opacity)
+            } else {
+                HStack(spacing: 0) {
+                    if sidebarVisible {
+                        SidebarColumn(
+                            page: $page,
+                            availablePages: availablePages,
+                            onOpenSettings: {
+                                withAnimation(.easeInOut(duration: 0.2)) { inSettingsMode = true }
+                            }
+                        )
+                        .frame(width: 220)
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+                    }
+
+                    DetailPanel(roundedLeading: sidebarVisible) { detail }
+                }
+                .transition(.opacity)
+            }
+
+            if !inSettingsMode {
+                sidebarToggle
+                    .padding(.leading, 81)
+                    .padding(.top, 11)
+            }
         }
-        .navigationTitle("")
+        .ignoresSafeArea()
+        .background(WindowAccessor { window in
+            trafficLights.attach(to: window)
+        })
         .onAppear {
             page = MainPage(rawValue: pageRaw) ?? .dashboard
             if !availablePages.contains(page) { page = .dashboard }
@@ -74,48 +110,32 @@ struct MainWindowView: View {
         .onChange(of: env.preferences.gitTrackingEnabled) { _, on in
             if !on && page == .git { page = .dashboard }
         }
-    }
-
-    // MARK: - Sidebar
-
-    private var sidebar: some View {
-        List(selection: $page) {
-            Section {
-                row(.dashboard)
-            }
-            Section("Stats") {
-                row(.sessions)
-                row(.usage)
-                if env.preferences.aiActivityAnalysisEnabled { row(.activity) }
-                if env.preferences.gitTrackingEnabled { row(.git) }
-            }
-            Section {
-                row(.settings)
-            }
+        .onReceive(NotificationCenter.default.publisher(for: .openSettingsInMainWindow)) { _ in
+            withAnimation(.easeInOut(duration: 0.2)) { inSettingsMode = true }
         }
-        .listStyle(.sidebar)
-        .safeAreaInset(edge: .top, spacing: 0) { sidebarHeader }
     }
 
-    private var sidebarHeader: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "chart.bar.doc.horizontal")
-                .foregroundStyle(Color.stxAccent)
-            Text("CLAUDE STATS")
-                .font(.sora(11, weight: .semibold))
-                .tracking(1.2)
-                .foregroundStyle(.primary)
-            Spacer()
+    // MARK: - Sidebar toggle
+
+    private var sidebarToggle: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.22)) { sidebarVisible.toggle() }
+        } label: {
+            Image(systemName: "sidebar.left")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(toggleHovering ? .primary : Color.stxMuted)
+                .frame(width: 24, height: 22)
+                .background {
+                    if toggleHovering {
+                        RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.08))
+                    }
+                }
+                .contentShape(Rectangle())
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 14)
-        .padding(.bottom, 8)
-    }
-
-    private func row(_ p: MainPage) -> some View {
-        Label(p.title, systemImage: p.symbol)
-            .font(.sora(12))
-            .tag(p)
+        .buttonStyle(.plain)
+        .onHover { toggleHovering = $0 }
+        .help(sidebarVisible ? "Hide Sidebar" : "Show Sidebar")
+        .keyboardShortcut("s", modifiers: [.command, .control])
     }
 
     // MARK: - Detail
@@ -133,8 +153,6 @@ struct MainWindowView: View {
             CenteredPaneContainer { AIActivityView(mode: .interactive) }
         case .git:
             CenteredPaneContainer { GitActivityView() }
-        case .settings:
-            CenteredPaneContainer { SettingsView() }
         }
     }
 }
