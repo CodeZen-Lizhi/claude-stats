@@ -52,6 +52,13 @@ final class SessionStore {
         registry.provider(for: provider)?.dataDirectoryPath
     }
 
+    /// Pretty label for a model id under `provider`. Falls back to the raw id
+    /// when the provider is unknown — never returns a placeholder so callers
+    /// can drop it straight into a label.
+    func displayName(forModel id: String, provider: ProviderKind) -> String {
+        registry.provider(for: provider)?.displayName(forModel: id) ?? id
+    }
+
     func summary(for period: StatsPeriod, provider: ProviderKind? = nil, now: Date = .now) -> UsageSummary {
         UsageSummary.make(period: period, sessions: sessions(matching: provider), pricing: pricing, now: now)
     }

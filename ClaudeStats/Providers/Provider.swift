@@ -25,8 +25,15 @@ protocol Provider: Sendable {
     /// Parse one transcript into ``SessionStats``. `nil` if the file is gone
     /// or unreadable.
     func parse(_ session: Session) async -> SessionStats?
+
+    /// Pretty label for a canonical model id. Used wherever a model surfaces
+    /// to the user (Dashboard breakdown, "Favorite model" stat, …). Default
+    /// returns the id unchanged — providers override when their ids carry a
+    /// readable structure (e.g. Claude's `claude-opus-4-7` → `Opus 4.7`).
+    func displayName(forModel id: String) -> String
 }
 
 extension Provider {
     var dataDirectoryPath: String? { nil }
+    func displayName(forModel id: String) -> String { id }
 }

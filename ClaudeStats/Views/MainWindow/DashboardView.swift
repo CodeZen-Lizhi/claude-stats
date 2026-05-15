@@ -129,12 +129,8 @@ struct DashboardView: View {
         return HStack(alignment: .center, spacing: 12) {
             OverviewTabs(section: $bvm.section)
             Spacer()
-            if vm.section == .overview {
-                RangeChips(period: $bvm.period)
-                    .transition(.opacity)
-            }
+            RangeChips(period: $bvm.period)
         }
-        .animation(.easeOut(duration: 0.15), value: vm.section)
     }
 
     // MARK: - Overview body
@@ -266,11 +262,22 @@ struct DashboardView: View {
 
     private var modelsBody: some View {
         VStack(alignment: .leading, spacing: 12) {
+            ModelsTrendChart(
+                series: vm.modelTrend,
+                includeCacheInTotals: env.preferences.includeCacheInTokens,
+                displayName: modelDisplayName
+            )
             ModelTable(
                 models: vm.modelBreakdown,
-                includeCacheInTotals: env.preferences.includeCacheInTokens
+                includeCacheInTotals: env.preferences.includeCacheInTokens,
+                displayName: modelDisplayName
             )
         }
+    }
+
+    /// Pretty label for a canonical model id, scoped to the active provider.
+    private func modelDisplayName(_ id: String) -> String {
+        env.store.displayName(forModel: id, provider: env.preferences.selectedProvider)
     }
 
     // MARK: - GitHub display state
@@ -359,10 +366,12 @@ struct DashboardView: View {
         return date.formatted(.dateTime.hour(.defaultDigits(amPM: .abbreviated)))
     }
 
-    /// Trim noisy prefixes like `claude-` so the card stays readable.
+    /// Pretty display name for the favorite-model stat card. Goes through the
+    /// provider so the format matches the Models tab (`Opus 4.7`, not
+    /// `claude-opus-4-7` or `Opus-4-7`).
     private func favoriteModelLabel(_ model: String?) -> String {
         guard let model, !model.isEmpty else { return "—" }
-        return model.replacingOccurrences(of: "claude-", with: "").capitalized
+        return modelDisplayName(model)
     }
 }
 

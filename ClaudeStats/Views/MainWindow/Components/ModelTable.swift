@@ -1,12 +1,15 @@
 import SwiftUI
 
-/// Compact per-model token bars, sorted by total token usage descending.
-/// Rendered inside the Dashboard's "Models" tab. Inspired by the BY MODEL
-/// breakdown in `UsageView`, but slimmer (no cache-read stripes, no headers)
-/// because the dashboard cards already provide context.
+/// Per-model breakdown for the Dashboard's "Models" tab. Each row pairs a
+/// swatch with the model's pretty name, raw input/output token counts, and
+/// its share of the period's total tokens. Doubles as the legend for the
+/// adjacent ``ModelsTrendChart``: same row order, same colours.
 struct ModelTable: View {
     let models: [ModelUsage]
     var includeCacheInTotals: Bool = false
+    /// Resolves a canonical model id to its display name. Passed in so the
+    /// table stays provider-agnostic.
+    let displayName: (String) -> String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -14,11 +17,12 @@ struct ModelTable: View {
                 Text("No model data in this range.")
                     .font(.sora(11))
                     .foregroundStyle(Color.stxMuted)
-                    .frame(maxWidth: .infinity, minHeight: 80, alignment: .leading)
+                    .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
             } else {
-                let maxTokens = max(1, models.first?.usage.total(includingCacheRead: includeCacheInTotals) ?? 1)
+                let totals = models.map { $0.usage.total(includingCacheRead: includeCacheInTotals) }
+                let sum = max(1, totals.reduce(0, +))
                 ForEach(Array(models.enumerated()), id: \.element.id) { (index, usage) in
-                    row(usage, index: index, maxTokens: maxTokens)
+                    row(usage, index: index, share: Double(totals[index]) / Double(sum))
                 }
             }
         }
@@ -29,41 +33,24 @@ struct ModelTable: View {
     }
 
     @ViewBuilder
-    private func row(_ usage: ModelUsage, index: Int, maxTokens: Int) -> some View {
-        let total = usage.usage.total(includingCacheRead: includeCacheInTotals)
-        let ratio = max(0, min(1, Double(total) / Double(maxTokens)))
-        let swatch = Color.stxRamp[index % Color.stxRamp.count]
-
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(swatch)
-                    .frame(width: 10, height: 10)
-                Text(usage.model)
-                    .font(.sora(12, weight: .medium))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                Spacer(minLength: 12)
-                Text(Format.tokens(total))
-                    .font(.sora(11, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(.primary)
-                Text(Format.cost(usage.estimatedCost))
-                    .font(.sora(11).monospacedDigit())
-                    .foregroundStyle(Color.stxMuted)
-                    .frame(minWidth: 56, alignment: .trailing)
-            }
-            // Two stacked rounded rectangles. The foreground bar fills the
-            // full row width and then horizontally scales to `ratio` from the
-            // leading edge — avoids a per-row `GeometryReader` that would
-            // re-measure on every container resize.
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 3, style: .continuous)
-                    .fill(Color.primary.opacity(0.06))
-                RoundedRectangle(cornerRadius: 3, style: .continuous)
-                    .fill(swatch.opacity(0.85))
-                    .scaleEffect(x: max(0.002, ratio), y: 1, anchor: .leading)
-            }
-            .frame(height: 6)
+    private func row(_ usage: ModelUsage, index: Int, share: Double) -> some View {
+        HStack(spacing: 10) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(ModelPalette.color(at: index))
+                .frame(width: 10, height: 10)
+            Text(displayName(usage.model))
+                .font(.sora(13, weight: .medium))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+            Spacer(minLength: 12)
+            Text("\(Format.tokens(usage.usage.inputTokens)) in · \(Format.tokens(usage.usage.outputTokens)) out")
+                .font(.sora(11).monospacedDigit())
+                .foregroundStyle(Color.stxMuted)
+                .lineLimit(1)
+            Text(Format.percent(share))
+                .font(.sora(12, weight: .semibold).monospacedDigit())
+                .foregroundStyle(.primary)
+                .frame(minWidth: 52, alignment: .trailing)
         }
     }
 }
@@ -71,20 +58,23 @@ struct ModelTable: View {
 #if DEBUG
 #Preview {
     let pricing = ModelPricing.fallback
-    let mu: (String, Int, Int) -> ModelUsage = { name, msgs, total in
+    let mu: (String, Int, Int, Int) -> ModelUsage = { name, msgs, input, output in
         ModelUsage(
             model: name,
             messageCount: msgs,
-            usage: TokenUsage(inputTokens: total / 2, outputTokens: total / 4, cacheReadTokens: total / 4, cacheCreation5mTokens: 0, cacheCreation1hTokens: 0),
+            usage: TokenUsage(inputTokens: input, outputTokens: output, cacheReadTokens: 0, cacheCreation5mTokens: 0, cacheCreation1hTokens: 0),
             pricing: pricing
         )
     }
-    return ModelTable(models: [
-        mu("claude-opus-4-7", 410, 90_000_000),
-        mu("claude-sonnet-4-6", 220, 18_500_000),
-        mu("claude-haiku-4-5", 110, 5_400_000),
-        mu("claude-3.5-sonnet", 80, 950_000),
-    ])
+    return ModelTable(
+        models: [
+            mu("claude-opus-4-7", 410, 6_300_000, 81_700_000),
+            mu("claude-opus-4-6", 220, 1_500_000, 15_600_000),
+            mu("claude-haiku-4-5", 110, 9_600_000, 4_100_000),
+            mu("claude-sonnet-4-6", 80, 3_100, 177_200),
+        ],
+        displayName: { ClaudeProvider.prettyName(for: $0) }
+    )
     .padding(24)
     .frame(width: 760)
     .background(Color.stxBackground)

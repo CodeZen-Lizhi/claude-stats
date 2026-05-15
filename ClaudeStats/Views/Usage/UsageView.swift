@@ -503,26 +503,6 @@ struct UsageView: View {
     }
 }
 
-/// Repeating 45° lines from top-right to bottom-left. Used to overlay the
-/// cache-hit portion of the per-model bar so it reads as "same color, different
-/// fill" — the stroke colour is supplied by the caller (a light translucent
-/// grey/white on the warm model colour).
-private struct DiagonalStripes: Shape {
-    var spacing: CGFloat = 4
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        let h = rect.height
-        // Start past the left edge so the leftmost diagonals are drawn fully.
-        var x = -h
-        while x < rect.width {
-            p.move(to: CGPoint(x: x, y: h))
-            p.addLine(to: CGPoint(x: x + h, y: 0))
-            x += spacing
-        }
-        return p
-    }
-}
-
 #if DEBUG
 #Preview("Light") {
     UsageView()

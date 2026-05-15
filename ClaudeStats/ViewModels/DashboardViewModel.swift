@@ -61,6 +61,9 @@ final class DashboardViewModel {
     /// during `reload(sessions:)` so the view body doesn't walk the array.
     private(set) var heatmapActiveDays: Int = 0
     private(set) var modelBreakdown: [ModelUsage] = []
+    /// Per-model daily series for the Models tab's stacked bar chart. Daily
+    /// granularity for every dashboard period (we never select `.today` here).
+    private(set) var modelTrend: TrendSeries = TrendSeries(granularity: .day, models: [], buckets: [])
     private(set) var isLoading = false
     private(set) var reloadToken: UInt64 = 0
 
@@ -107,8 +110,10 @@ final class DashboardViewModel {
             let heatmap = Self.heatmapCells(sessions: sessions, range: heatmapInterval, calendar: cal)
             let heatmapActive = heatmap.reduce(0) { $0 + ($1.value > 0 ? 1 : 0) }
 
-            // 3. Models tab: top models in the period, already sorted desc.
+            // 3. Models tab: top models in the period (sorted desc) plus a
+            //    zero-filled daily per-model series for the stacked chart.
             let models = summary.models
+            let trend = summary.trendSeries(now: now, calendar: cal)
 
             return ReloadResult(
                 stats: DashboardStats(
@@ -124,7 +129,8 @@ final class DashboardViewModel {
                 ),
                 heatmapCells: heatmap,
                 heatmapActiveDays: heatmapActive,
-                modelBreakdown: models
+                modelBreakdown: models,
+                modelTrend: trend
             )
         }.value
 
@@ -132,6 +138,7 @@ final class DashboardViewModel {
         heatmapCells = result.heatmapCells
         heatmapActiveDays = result.heatmapActiveDays
         modelBreakdown = result.modelBreakdown
+        modelTrend = result.modelTrend
     }
 
     private struct ReloadResult: Sendable {
@@ -139,6 +146,7 @@ final class DashboardViewModel {
         let heatmapCells: [HeatmapCell]
         let heatmapActiveDays: Int
         let modelBreakdown: [ModelUsage]
+        let modelTrend: TrendSeries
     }
 
     // MARK: - Pure aggregations (nonisolated, called from Task.detached)
