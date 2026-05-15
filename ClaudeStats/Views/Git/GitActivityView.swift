@@ -15,6 +15,7 @@ struct GitActivityView: View {
     @Environment(AppEnvironment.self) private var env
     @State private var vm: GitActivityViewModel
     @State private var graphRepo: GitRepo?
+    @State private var recentCommitsExpanded = false
     private let isPreview: Bool
 
     init() {
@@ -33,6 +34,8 @@ struct GitActivityView: View {
 
     private static let addColor = Color(red: 0.36, green: 0.68, blue: 0.34)
     private static let delColor = Color(red: 0.86, green: 0.30, blue: 0.24)
+    private static let collapsedRecentCommitCount = 3
+    private static let expandedRecentCommitCount = 7
 
     private struct ReloadKey: Equatable {
         let token: UInt64
@@ -63,11 +66,11 @@ struct GitActivityView: View {
                     notice("NO GIT ACTIVITY",
                            "None of the projects you've used Claude Code in are git repositories with commits in this window — or the window is too short. Try a wider range.")
                 } else {
+                    recentCommitsPanel
                     summaryGrid
                     correlationPanel
                     repoTimelinesPanel
                     churnPanel
-                    recentCommitsPanel
                 }
             }
             .padding(14)
@@ -291,36 +294,15 @@ struct GitActivityView: View {
     // MARK: Recent commits
 
     private var recentCommitsPanel: some View {
-        let commits = vm.recentCommits()
+        let commits = vm.recentCommits(limit: Self.expandedRecentCommitCount)
         let repoNamesByID = Dictionary(vm.repos.map { ($0.repo.id, $0.repo.displayName) }, uniquingKeysWith: { a, _ in a })
-        return VStack(alignment: .leading, spacing: 8) {
-            Text("RECENT COMMITS")
-                .font(.sora(13, weight: .semibold))
-                .tracking(1.5)
-                .foregroundStyle(.primary)
-            ForEach(commits) { commit in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(TitleSanitizer.sanitize(commit.subject) ?? commit.subject)
-                        .font(.sora(11))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                    HStack(spacing: 6) {
-                        Text(repoNamesByID[commit.repoID] ?? "—")
-                            .font(.sora(9))
-                            .foregroundStyle(Color.stxMuted)
-                        Text("·").foregroundStyle(Color.stxMuted)
-                        Text("+\(commit.insertions) −\(commit.deletions)")
-                            .font(.sora(9).monospacedDigit())
-                            .foregroundStyle(Color.stxMuted)
-                        Spacer(minLength: 8)
-                        Text(Format.relativeDate(commit.date))
-                            .font(.sora(9))
-                            .foregroundStyle(Color.stxMuted)
-                    }
-                }
-                .padding(.vertical, 2)
-            }
-        }
+        return RecentCommitsPanel(
+            commits: commits,
+            repoNamesByID: repoNamesByID,
+            collapsedCount: Self.collapsedRecentCommitCount,
+            expandedCount: Self.expandedRecentCommitCount,
+            isExpanded: $recentCommitsExpanded
+        )
     }
 
     // MARK: Bits
@@ -382,6 +364,132 @@ struct GitActivityView: View {
             .onHover { hovering = $0 }
             .animation(.easeOut(duration: 0.18), value: isSelected)
         }
+    }
+}
+
+private struct RecentCommitsPanel: View {
+    let commits: [GitCommit]
+    let repoNamesByID: [String: String]
+    let collapsedCount: Int
+    let expandedCount: Int
+    @Binding private var isExpanded: Bool
+
+    init(
+        commits: [GitCommit],
+        repoNamesByID: [String: String],
+        collapsedCount: Int,
+        expandedCount: Int,
+        isExpanded: Binding<Bool>
+    ) {
+        self.commits = commits
+        self.repoNamesByID = repoNamesByID
+        self.collapsedCount = collapsedCount
+        self.expandedCount = expandedCount
+        self._isExpanded = isExpanded
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            titleRow
+
+            ForEach(visibleCommits) { commit in
+                RecentCommitRow(
+                    commit: commit,
+                    repoName: repoNamesByID[commit.repoID] ?? "—",
+                    isNewest: commit.id == commits.first?.id
+                )
+            }
+        }
+        .animation(.easeOut(duration: 0.18), value: visibleCommits.count)
+    }
+
+    private var titleRow: some View {
+        HStack(spacing: 8) {
+            Text("RECENT COMMITS")
+                .font(.sora(13, weight: .semibold))
+                .tracking(1.5)
+                .foregroundStyle(.primary)
+            Spacer(minLength: 8)
+            if showsDisclosure {
+                disclosureButton
+            }
+        }
+    }
+
+    private var disclosureButton: some View {
+        let visibleCount = visibleCommits.count
+        return Button {
+            withAnimation(.easeOut(duration: 0.18)) {
+                isExpanded.toggle()
+            }
+        } label: {
+            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(Color.stxMuted)
+                .frame(width: 18, height: 18)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(isExpanded ? "Show the latest \(collapsedCount) commits" : "Show the latest \(expandedCount) commits")
+        .accessibilityLabel(isExpanded ? "Collapse recent commits" : "Expand recent commits")
+        .accessibilityValue("Showing \(visibleCount) of \(commits.count) commits")
+    }
+
+    private var visibleCommits: [GitCommit] {
+        let count = isExpanded ? expandedCount : collapsedCount
+        return Array(commits.prefix(count))
+    }
+
+    private var showsDisclosure: Bool {
+        commits.count > collapsedCount
+    }
+}
+
+private struct RecentCommitRow: View {
+    let commit: GitCommit
+    let repoName: String
+    let isNewest: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(subject)
+                .font(.sora(11, weight: isNewest ? .semibold : .regular))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            HStack(spacing: 6) {
+                Text(repoName)
+                    .font(.sora(9))
+                    .foregroundStyle(Color.stxMuted)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text("·").foregroundStyle(Color.stxMuted)
+                Text(commit.shortHash)
+                    .font(.sora(9).monospacedDigit())
+                    .foregroundStyle(Color.stxMuted)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                Text("·").foregroundStyle(Color.stxMuted)
+                Text("+\(Format.tokens(commit.insertions)) −\(Format.tokens(commit.deletions))")
+                    .font(.sora(9).monospacedDigit())
+                    .foregroundStyle(Color.stxMuted)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                Spacer(minLength: 8)
+                Text(Format.relativeDate(commit.date))
+                    .font(.sora(9))
+                    .foregroundStyle(Color.stxMuted)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+        }
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(subject), \(repoName), commit \(commit.shortHash), \(Format.relativeDate(commit.date)), \(commit.insertions) insertions, \(commit.deletions) deletions")
+    }
+
+    private var subject: String {
+        TitleSanitizer.sanitize(commit.subject) ?? commit.subject
     }
 }
 
