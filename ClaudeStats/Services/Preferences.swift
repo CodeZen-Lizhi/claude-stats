@@ -101,6 +101,26 @@ final class Preferences {
     var overlapPalette: OverlapPalette {
         didSet { defaults.set(overlapPalette.rawValue, forKey: Keys.overlapPalette) }
     }
+    /// Opt-in to publishing aggregate, privacy-preserving leaderboard scores to
+    /// CloudKit's public database. Off by default.
+    var leaderboardsEnabled: Bool {
+        didSet { defaults.set(leaderboardsEnabled, forKey: Keys.leaderboardsEnabled) }
+    }
+    /// Public display name shown next to submitted leaderboard scores. Stored
+    /// locally in defaults; CloudKit receives only this nickname and aggregate
+    /// scores.
+    var leaderboardNickname: String {
+        didSet { defaults.set(leaderboardNickname, forKey: Keys.leaderboardNickname) }
+    }
+    var leaderboardLastSyncedAt: Date? {
+        didSet { defaults.set(leaderboardLastSyncedAt, forKey: Keys.leaderboardLastSyncedAt) }
+    }
+    var leaderboardLastSyncError: String {
+        didSet { defaults.set(leaderboardLastSyncError, forKey: Keys.leaderboardLastSyncError) }
+    }
+    var leaderboardLastSubmittedPeriodKeys: [String] {
+        didSet { defaults.set(leaderboardLastSubmittedPeriodKeys, forKey: Keys.leaderboardLastSubmittedPeriodKeys) }
+    }
     /// Extra editor bundle ids the user added on top of ``IDEAppCatalog/defaults``.
     var ideBundleIDsAdded: [String] {
         didSet { defaults.set(ideBundleIDsAdded, forKey: Keys.ideBundleIDsAdded) }
@@ -130,6 +150,11 @@ final class Preferences {
         githubEnabled = defaults.bool(forKey: Keys.githubEnabled)
         githubLogin = defaults.string(forKey: Keys.githubLogin) ?? ""
         overlapPalette = OverlapPalette(rawValue: defaults.string(forKey: Keys.overlapPalette) ?? "") ?? .appCohesive
+        leaderboardsEnabled = defaults.bool(forKey: Keys.leaderboardsEnabled)
+        leaderboardNickname = defaults.string(forKey: Keys.leaderboardNickname) ?? ""
+        leaderboardLastSyncedAt = defaults.object(forKey: Keys.leaderboardLastSyncedAt) as? Date
+        leaderboardLastSyncError = defaults.string(forKey: Keys.leaderboardLastSyncError) ?? ""
+        leaderboardLastSubmittedPeriodKeys = defaults.stringArray(forKey: Keys.leaderboardLastSubmittedPeriodKeys) ?? []
         ideBundleIDsAdded = defaults.stringArray(forKey: Keys.ideBundleIDsAdded) ?? []
         ideBundleIDsRemoved = defaults.stringArray(forKey: Keys.ideBundleIDsRemoved) ?? []
 
@@ -167,5 +192,10 @@ final class Preferences {
         static let githubEnabled = "githubEnabled"
         static let githubLogin = "githubLogin"
         static let overlapPalette = "overlapPalette"
+        static let leaderboardsEnabled = "leaderboardsEnabled"
+        static let leaderboardNickname = "leaderboardNickname"
+        static let leaderboardLastSyncedAt = "leaderboardLastSyncedAt"
+        static let leaderboardLastSyncError = "leaderboardLastSyncError"
+        static let leaderboardLastSubmittedPeriodKeys = "leaderboardLastSubmittedPeriodKeys"
     }
 }

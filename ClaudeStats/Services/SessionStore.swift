@@ -59,6 +59,10 @@ final class SessionStore {
         registry.provider(for: provider)?.displayName(forModel: id) ?? id
     }
 
+    func cacheHitRate(for usage: TokenUsage, provider: ProviderKind) -> Double? {
+        registry.provider(for: provider)?.cacheHitRate(for: usage) ?? usage.cacheHitRate
+    }
+
     func summary(for period: StatsPeriod, provider: ProviderKind? = nil, now: Date = .now) -> UsageSummary {
         UsageSummary.make(period: period, sessions: sessions(matching: provider), pricing: pricing, now: now)
     }

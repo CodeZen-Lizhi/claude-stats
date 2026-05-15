@@ -18,6 +18,9 @@
 # Environment (signed mode):
 #   SIGN_IDENTITY              codesign identity, e.g. "Developer ID Application: Foo (TEAMID)"
 #   APPLE_TEAM_ID              10-char Apple Developer Team ID
+#   PROVISIONING_PROFILE_SPECIFIER
+#                              Developer ID provisioning profile with the
+#                              iCloud/CloudKit capability enabled
 #   APPLE_ID + APP_PASSWORD    Apple ID + app-specific password for notarytool
 #   NOTARY_KEYCHAIN_PROFILE    (alternative to APPLE_ID/APP_PASSWORD) a stored notarytool profile
 #
@@ -29,6 +32,7 @@ DERIVED=/tmp/claude-stats-release
 PRODUCTS="$DERIVED/Build/Products/Release"
 APP="$PRODUCTS/Claude Stats.app"
 DIST="$PWD/dist"
+CLOUDKIT_ENTITLEMENTS="ClaudeStats/App/ClaudeStatsCloudKit.entitlements"
 
 VERSION="${1:-$(grep -E '^[[:space:]]*MARKETING_VERSION:' project.yml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')}"
 [[ -n "$VERSION" ]] || { echo "error: could not determine version" >&2; exit 1; }
@@ -46,14 +50,25 @@ mkdir -p "$DIST"
 
 XCODE_SIGN_ARGS=()
 if [[ $SIGNED -eq 1 ]]; then
+    [[ -n "${APPLE_TEAM_ID:-}" ]] || {
+        echo "error: signed CloudKit builds require APPLE_TEAM_ID" >&2
+        exit 1
+    }
+    [[ -n "${PROVISIONING_PROFILE_SPECIFIER:-}" || -n "${PROVISIONING_PROFILE:-}" ]] || {
+        echo "error: signed CloudKit builds require PROVISIONING_PROFILE_SPECIFIER (or PROVISIONING_PROFILE) for a CloudKit-capable Developer ID profile" >&2
+        exit 1
+    }
     echo "==> Signing with: $SIGN_IDENTITY (hardened runtime)"
     XCODE_SIGN_ARGS=(
         CODE_SIGN_STYLE=Manual
         CODE_SIGN_IDENTITY="$SIGN_IDENTITY"
+        DEVELOPMENT_TEAM="$APPLE_TEAM_ID"
+        CODE_SIGN_ENTITLEMENTS="$CLOUDKIT_ENTITLEMENTS"
         ENABLE_HARDENED_RUNTIME=YES
         OTHER_CODE_SIGN_FLAGS="--timestamp"
     )
-    [[ -n "${APPLE_TEAM_ID:-}" ]] && XCODE_SIGN_ARGS+=(DEVELOPMENT_TEAM="$APPLE_TEAM_ID")
+    [[ -n "${PROVISIONING_PROFILE_SPECIFIER:-}" ]] && XCODE_SIGN_ARGS+=(PROVISIONING_PROFILE_SPECIFIER="$PROVISIONING_PROFILE_SPECIFIER")
+    [[ -n "${PROVISIONING_PROFILE:-}" ]] && XCODE_SIGN_ARGS+=(PROVISIONING_PROFILE="$PROVISIONING_PROFILE")
 else
     XCODE_SIGN_ARGS=(CODE_SIGN_IDENTITY="-" CODE_SIGN_STYLE=Automatic ENABLE_HARDENED_RUNTIME=NO)
 fi
@@ -94,7 +109,7 @@ if [[ $SIGNED -eq 1 ]]; then
     fi
     codesign --force --options runtime --timestamp \
         --sign "$SIGN_IDENTITY" \
-        --entitlements "ClaudeStats/App/ClaudeStats.entitlements" \
+        --entitlements "$CLOUDKIT_ENTITLEMENTS" \
         "$APP"
 fi
 
@@ -117,6 +132,12 @@ fi
 
 echo "==> Verifying app signature"
 codesign --verify --deep --strict --verbose=2 "$APP"
+ENTITLEMENTS_OUT="$DIST/entitlements.plist"
+codesign -dvvv --entitlements :- "$APP" > "$ENTITLEMENTS_OUT"
+grep -q "com.apple.developer.icloud-services" "$ENTITLEMENTS_OUT" || {
+    echo "error: signed app is missing the CloudKit entitlement" >&2
+    exit 1
+}
 
 echo "==> Packaging DMG"
 make_dmg

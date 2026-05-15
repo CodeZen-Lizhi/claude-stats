@@ -20,6 +20,15 @@ enum HeatmapMetrics {
     }
 }
 
+/// Visual treatment for one heatmap day. Keeping this as plain data lets the
+/// grid render every cell in one Canvas instead of allocating one SwiftUI view
+/// per day during window resizes.
+struct HeatmapCellStyle {
+    let fill: Color
+    var border: Color? = nil
+    var borderStyle = StrokeStyle(lineWidth: 1)
+}
+
 /// Renders a single heatmap variant whose cell size is computed from the
 /// container's width. Replaces the old `ViewThatFits`-based design that paid
 /// to lay out every candidate cell size on every layout pass.
@@ -77,16 +86,8 @@ struct HeatmapView: View {
     var body: some View {
         ResponsiveHeatmap(weekCount: HeatmapMetrics.weekCount(for: range)) { cellSize in
             VStack(alignment: .leading, spacing: 6) {
-                CalendarGridSkeleton(range: range, cellSize: cellSize) { date, inRange in
-                    if inRange {
-                        let value = valuesByDay[date] ?? 0
-                        RoundedRectangle(cornerRadius: 2, style: .continuous)
-                            .fill(color(for: value))
-                            .frame(width: cellSize, height: cellSize)
-                            .help(helpByDay[date] ?? "")
-                    } else {
-                        Color.clear.frame(width: cellSize, height: cellSize)
-                    }
+                CalendarGridCanvas(range: range, cellSize: cellSize, help: { helpByDay[$0] ?? "" }) { date, _ in
+                    HeatmapCellStyle(fill: color(for: valuesByDay[date] ?? 0))
                 }
                 legend(cellSize: cellSize)
             }
@@ -170,24 +171,28 @@ struct HeatmapView: View {
 }
 
 /// Shared skeleton for the week-column grid: month-label strip, weekday
-/// labels, and a 7-row × N-week grid where each cell's content is provided by
-/// the caller. `OverlapHeatmapView` and `HeatmapView` both render through
-/// this so the layout stays in lockstep across panels. `cellSize` flexes per
-/// container width via ``ResponsiveHeatmap``.
-struct CalendarGridSkeleton<Cell: View>: View {
+/// labels, and a 7-row × N-week Canvas grid. Earlier versions rendered one
+/// SwiftUI shape per day; with three dashboard heatmaps that made resize
+/// compression expensive because layout had to visit hundreds of cell views.
+/// Canvas keeps the view tree flat while preserving the same responsive sizing.
+struct CalendarGridCanvas: View {
     let range: DateInterval
     let cellSize: CGFloat
-    @ViewBuilder var cell: (Date, Bool) -> Cell
+    var help: (Date) -> String = { _ in "" }
+    var style: (Date, Bool) -> HeatmapCellStyle
 
     /// Cached so we don't rebuild ~370 `Date` objects on every layout pass.
     /// Refreshed only when `range` actually changes (e.g. user toggles 12M/YTD).
     @State private var grid: CalendarGrid
+    @State private var hoveredHelp = ""
 
     init(range: DateInterval, cellSize: CGFloat,
-         @ViewBuilder cell: @escaping (Date, Bool) -> Cell) {
+         help: @escaping (Date) -> String = { _ in "" },
+         style: @escaping (Date, Bool) -> HeatmapCellStyle) {
         self.range = range
         self.cellSize = cellSize
-        self.cell = cell
+        self.help = help
+        self.style = style
         self._grid = State(initialValue: CalendarGrid(spanning: range))
     }
 
@@ -196,11 +201,12 @@ struct CalendarGridSkeleton<Cell: View>: View {
             monthLabels
             HStack(alignment: .top, spacing: HeatmapMetrics.weekdayGap) {
                 weekdayLabels
-                gridBody
+                canvasGrid
             }
         }
         .onChange(of: range) { _, new in
             grid = CalendarGrid(spanning: new)
+            hoveredHelp = ""
         }
     }
 
@@ -214,7 +220,7 @@ struct CalendarGridSkeleton<Cell: View>: View {
                     .offset(x: CGFloat(pos.weekIndex) * columnStride)
             }
         }
-        .frame(height: 11, alignment: .leading)
+        .frame(width: gridWidth, height: 11, alignment: .leading)
         .padding(.leading, HeatmapMetrics.weekdayColumnWidth + HeatmapMetrics.weekdayGap)
     }
 
@@ -230,17 +236,72 @@ struct CalendarGridSkeleton<Cell: View>: View {
         }
     }
 
-    private var gridBody: some View {
-        HStack(alignment: .top, spacing: HeatmapMetrics.spacing) {
-            ForEach(0..<grid.weeks.count, id: \.self) { weekIdx in
-                VStack(spacing: HeatmapMetrics.spacing) {
-                    ForEach(0..<7, id: \.self) { dayIdx in
-                        let date = grid.weeks[weekIdx][dayIdx]
-                        cell(date, range.contains(date))
+    private var canvasGrid: some View {
+        Canvas { context, _ in
+            let stride = cellSize + HeatmapMetrics.spacing
+            let cornerRadius = min(2, cellSize / 3)
+
+            for (weekIdx, week) in grid.weeks.enumerated() {
+                for (dayIdx, date) in week.enumerated() where range.contains(date) {
+                    let origin = CGPoint(
+                        x: CGFloat(weekIdx) * stride,
+                        y: CGFloat(dayIdx) * stride
+                    )
+                    let rect = CGRect(origin: origin, size: CGSize(width: cellSize, height: cellSize))
+                    let path = Path(roundedRect: rect, cornerRadius: cornerRadius)
+                    let cellStyle = style(date, true)
+
+                    context.fill(path, with: .color(cellStyle.fill))
+                    if let border = cellStyle.border {
+                        let borderRect = rect.insetBy(dx: 0.5, dy: 0.5)
+                        let borderPath = Path(roundedRect: borderRect, cornerRadius: cornerRadius)
+                        context.stroke(borderPath, with: .color(border), style: cellStyle.borderStyle)
                     }
                 }
             }
         }
+        .frame(width: gridWidth, height: gridHeight)
+        .contentShape(Rectangle())
+        .help(hoveredHelp)
+        .onContinuousHover(coordinateSpace: .local) { phase in
+            switch phase {
+            case .active(let location):
+                updateHover(at: location)
+            case .ended:
+                if !hoveredHelp.isEmpty { hoveredHelp = "" }
+            }
+        }
+    }
+
+    private var gridWidth: CGFloat {
+        guard !grid.weeks.isEmpty else { return 0 }
+        return CGFloat(grid.weeks.count) * cellSize + CGFloat(grid.weeks.count - 1) * HeatmapMetrics.spacing
+    }
+
+    private var gridHeight: CGFloat {
+        7 * cellSize + 6 * HeatmapMetrics.spacing
+    }
+
+    private func updateHover(at location: CGPoint) {
+        guard cellSize > 0, !grid.weeks.isEmpty else { return setHoveredHelp("") }
+
+        let stride = cellSize + HeatmapMetrics.spacing
+        let weekIdx = Int(location.x / stride)
+        let dayIdx = Int(location.y / stride)
+        guard weekIdx >= 0, weekIdx < grid.weeks.count, dayIdx >= 0, dayIdx < 7 else {
+            return setHoveredHelp("")
+        }
+
+        let cellX = location.x - CGFloat(weekIdx) * stride
+        let cellY = location.y - CGFloat(dayIdx) * stride
+        guard cellX <= cellSize, cellY <= cellSize else { return setHoveredHelp("") }
+
+        let date = grid.weeks[weekIdx][dayIdx]
+        setHoveredHelp(range.contains(date) ? help(date) : "")
+    }
+
+    private func setHoveredHelp(_ value: String) {
+        if hoveredHelp != value { hoveredHelp = value }
     }
 }
 

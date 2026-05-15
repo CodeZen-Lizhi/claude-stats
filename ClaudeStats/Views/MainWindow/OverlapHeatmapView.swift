@@ -19,14 +19,8 @@ struct OverlapHeatmapView: View {
     var body: some View {
         ResponsiveHeatmap(weekCount: HeatmapMetrics.weekCount(for: range)) { cellSize in
             VStack(alignment: .leading, spacing: 6) {
-                CalendarGridSkeleton(range: range, cellSize: cellSize) { date, inRange in
-                    if inRange {
-                        let state = stats.byDay[date] ?? .neither
-                        cell(for: state, cellSize: cellSize)
-                            .help(helpByDay[date] ?? "")
-                    } else {
-                        Color.clear.frame(width: cellSize, height: cellSize)
-                    }
+                CalendarGridCanvas(range: range, cellSize: cellSize, help: { helpByDay[$0] ?? "" }) { date, _ in
+                    style(for: stats.byDay[date] ?? .neither)
                 }
                 legend(cellSize: cellSize)
             }
@@ -50,16 +44,12 @@ struct OverlapHeatmapView: View {
         helpByDay = help
     }
 
-    private func cell(for state: OverlapStats.DayState, cellSize: CGFloat) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 2, style: .continuous)
-        return shape
-            .fill(palette.color(for: state))
-            .frame(width: cellSize, height: cellSize)
-            .overlay {
-                if palette.dashedBorder(for: state) {
-                    shape.strokeBorder(Color.stxAccent, style: StrokeStyle(lineWidth: 1, dash: [2, 1.5]))
-                }
-            }
+    private func style(for state: OverlapStats.DayState) -> HeatmapCellStyle {
+        HeatmapCellStyle(
+            fill: palette.color(for: state),
+            border: palette.dashedBorder(for: state) ? Color.stxAccent : nil,
+            borderStyle: StrokeStyle(lineWidth: 1, dash: [2, 1.5])
+        )
     }
 
     private func legend(cellSize: CGFloat) -> some View {

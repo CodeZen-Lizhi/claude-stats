@@ -31,6 +31,19 @@ struct CodexTranscriptParserTests {
         #expect(abs(m.estimatedCost - (0.003 + 0.005 + 0.0011)) < 1e-9)
     }
 
+    @Test("Codex cache rate uses cached input over total prompt input")
+    func codexCacheRate() async throws {
+        let stats = try await parseSample()
+        let usage = try #require(stats.models.first?.usage)
+        let provider = CodexProvider(
+            paths: CodexPaths(homeDirectory: URL(fileURLWithPath: "/tmp/codex-test", isDirectory: true)),
+            pricing: CodexSampleTranscript.pricing
+        )
+
+        let rate = try #require(provider.cacheHitRate(for: usage))
+        #expect(abs(rate - (1100.0 / 1400.0)) < 1e-9)
+    }
+
     @Test("Counts user + agent messages, prefers thread name as title")
     func messagesAndTitle() async throws {
         let stats = try await parseSample()

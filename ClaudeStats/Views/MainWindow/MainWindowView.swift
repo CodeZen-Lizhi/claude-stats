@@ -2,15 +2,18 @@ import SwiftUI
 
 /// Top-level page shown in the main window's detail column. Settings live in
 /// their own "settings mode" (see ``SettingsModeView``), not as a `MainPage`.
+/// Sessions are no longer a top-level page — they live as a sidebar section
+/// whose project/session rows drive a separate ``Session`` selection that
+/// overrides the page detail.
 enum MainPage: String, CaseIterable, Identifiable, Sendable {
-    case dashboard, sessions, usage, activity, git
+    case dashboard, usage, leaderboards, activity, git
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .dashboard: "Dashboard"
-        case .sessions: "Sessions"
         case .usage: "Usage"
+        case .leaderboards: "Leaderboards"
         case .activity: "Activity"
         case .git: "Git"
         }
@@ -19,8 +22,8 @@ enum MainPage: String, CaseIterable, Identifiable, Sendable {
     var symbol: String {
         switch self {
         case .dashboard: "square.grid.2x2"
-        case .sessions: "list.bullet.rectangle"
         case .usage: "chart.bar.xaxis"
+        case .leaderboards: "trophy"
         case .activity: "waveform"
         case .git: "arrow.triangle.branch"
         }
@@ -45,14 +48,24 @@ struct MainWindowView: View {
     @SceneStorage("mainWindow.sidebarVisible") private var sidebarVisible: Bool = true
     @SceneStorage("mainWindow.inSettingsMode") private var inSettingsMode: Bool = false
     @State private var page: MainPage = .dashboard
+    /// When non-nil, the detail pane shows session detail instead of the page.
+    /// Held here (not in the sidebar) because the detail view needs it too.
+    @State private var selectedSessionID: String?
     @State private var toggleHovering = false
     @State private var trafficLights = TrafficLightPositioner()
 
     private var availablePages: [MainPage] {
-        var pages: [MainPage] = [.dashboard, .sessions, .usage]
+        var pages: [MainPage] = [.dashboard, .usage, .leaderboards]
         if env.preferences.aiActivityAnalysisEnabled { pages.append(.activity) }
         if env.preferences.gitTrackingEnabled { pages.append(.git) }
         return pages
+    }
+
+    /// Resolves the currently selected session against the store. Returns nil
+    /// if the id was set but the session has since been removed.
+    private var selectedSession: Session? {
+        guard let id = selectedSessionID else { return nil }
+        return env.store.sessions.first { $0.id == id }
     }
 
     var body: some View {
@@ -69,12 +82,13 @@ struct MainWindowView: View {
                     if sidebarVisible {
                         SidebarColumn(
                             page: $page,
+                            selectedSessionID: $selectedSessionID,
                             availablePages: availablePages,
                             onOpenSettings: {
                                 withAnimation(.easeInOut(duration: 0.2)) { inSettingsMode = true }
                             }
                         )
-                        .frame(width: 220)
+                        .frame(width: 240)
                         .transition(.move(edge: .leading).combined(with: .opacity))
                     }
 
@@ -142,17 +156,21 @@ struct MainWindowView: View {
 
     @ViewBuilder
     private var detail: some View {
-        switch page {
-        case .dashboard:
-            DashboardView()
-        case .sessions:
-            CenteredPaneContainer { SessionListView(mode: .interactive) }
-        case .usage:
-            CenteredPaneContainer { UsageView(mode: .interactive) }
-        case .activity:
-            CenteredPaneContainer { AIActivityView(mode: .interactive) }
-        case .git:
-            CenteredPaneContainer { GitActivityView() }
+        if let session = selectedSession {
+            CenteredPaneContainer { SessionDetailView(session: session) }
+        } else {
+            switch page {
+            case .dashboard:
+                DashboardView()
+            case .usage:
+                CenteredPaneContainer { UsageView(mode: .interactive) }
+            case .leaderboards:
+                CenteredPaneContainer { LeaderboardsView() }
+            case .activity:
+                CenteredPaneContainer { AIActivityView(mode: .interactive) }
+            case .git:
+                CenteredPaneContainer { GitActivityView() }
+            }
         }
     }
 }

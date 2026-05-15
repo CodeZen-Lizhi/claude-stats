@@ -23,4 +23,8 @@ struct CodexProvider: Provider {
             .parse(transcriptAt: URL(fileURLWithPath: session.filePath),
                    fallbackTitle: session.projectDisplayName)
     }
+
+    func cacheHitRate(for usage: TokenUsage) -> Double? {
+        usage.cachedInputRate
+    }
 }

@@ -40,6 +40,7 @@ struct SettingsModeView: View {
         case .menuBar:   MenuBarSettingsView()
         case .platforms: PlatformsSettingsView()
         case .tracking:  TrackingSettingsView()
+        case .leaderboards: LeaderboardsSettingsView()
         case .github:    GitHubSettingsView()
         case .about:     AboutSettingsView()
         }

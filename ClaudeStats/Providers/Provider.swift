@@ -31,9 +31,14 @@ protocol Provider: Sendable {
     /// returns the id unchanged — providers override when their ids carry a
     /// readable structure (e.g. Claude's `claude-opus-4-7` → `Opus 4.7`).
     func displayName(forModel id: String) -> String
+
+    /// Cache percentage shown in the Usage panel. Providers can override when
+    /// their transcript format reports cache fields with different semantics.
+    func cacheHitRate(for usage: TokenUsage) -> Double?
 }
 
 extension Provider {
     var dataDirectoryPath: String? { nil }
     func displayName(forModel id: String) -> String { id }
+    func cacheHitRate(for usage: TokenUsage) -> Double? { usage.cacheHitRate }
 }

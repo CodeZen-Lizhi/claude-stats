@@ -27,6 +27,16 @@ struct TokenUsage: Sendable, Hashable {
 
     var cacheCreationTotalTokens: Int { cacheCreation5mTokens + cacheCreation1hTokens }
 
+    /// Fraction of prompt input served from cache. Providers like Codex report
+    /// cached input as a subset of total input, without a separate cache-write
+    /// count, so this uses the reconstructed prompt-input denominator.
+    var cachedInputRate: Double? {
+        guard cacheReadTokens > 0 || cacheCreationTotalTokens > 0 else { return nil }
+        let denom = inputTokens + cacheReadTokens + cacheCreationTotalTokens
+        guard denom > 0 else { return nil }
+        return Double(cacheReadTokens) / Double(denom)
+    }
+
     /// Fraction of cache-touching traffic that hit, in `0...1`. Hits are
     /// `cache_read` (the cache had what we asked for); misses are
     /// `cache_creation` (we had to write to prime it). `input_tokens` is the

@@ -7,6 +7,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
     case menuBar
     case platforms
     case tracking
+    case leaderboards
     case github
     case about
 
@@ -18,6 +19,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
         case .menuBar:   "Menu Bar"
         case .platforms: "Platforms"
         case .tracking:  "Tracking"
+        case .leaderboards: "Leaderboards"
         case .github:    "GitHub"
         case .about:     "About"
         }
@@ -29,6 +31,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
         case .menuBar:   "menubar.rectangle"
         case .platforms: "square.stack.3d.up"
         case .tracking:  "waveform.path.ecg"
+        case .leaderboards: "trophy"
         case .github:    "chevron.left.forwardslash.chevron.right"
         case .about:     "info.circle"
         }

@@ -25,16 +25,8 @@ struct CompactHeatmap: View {
 
     var body: some View {
         ResponsiveHeatmap(weekCount: HeatmapMetrics.weekCount(for: range)) { cellSize in
-            CalendarGridSkeleton(range: range, cellSize: cellSize) { date, inRange in
-                if inRange {
-                    let value = valuesByDay[date] ?? 0
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(color(for: value))
-                        .frame(width: cellSize, height: cellSize)
-                        .help(helpByDay[date] ?? "")
-                } else {
-                    Color.clear.frame(width: cellSize, height: cellSize)
-                }
+            CalendarGridCanvas(range: range, cellSize: cellSize, help: { helpByDay[$0] ?? "" }) { date, _ in
+                HeatmapCellStyle(fill: color(for: valuesByDay[date] ?? 0))
             }
         }
         .onAppear { recompute() }

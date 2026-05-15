@@ -96,7 +96,8 @@ struct UsageView: View {
     /// plus the raw cache-read token volume the rate is based on.
     private func cacheStats(_ s: UsageSummary) -> some View {
         let usage = s.totalUsage
-        let hitText = usage.cacheHitRate.map(Format.percent) ?? "—"
+        let hitText = env.store.cacheHitRate(for: usage, provider: env.preferences.selectedProvider)
+            .map(Format.percent) ?? "—"
         return Grid(horizontalSpacing: 10, verticalSpacing: 8) {
             GridRow {
                 statCell("Cache hit", hitText)

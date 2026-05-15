@@ -1,37 +1,64 @@
 import SwiftUI
+import AppKit
 
-/// The main window's left column: brand header, custom nav rows grouped by
-/// section, with Settings pinned to the bottom. Lives over a window-level
-/// `NSVisualEffectView` (`.sidebar` material), so its own background stays
-/// transparent and the system vibrancy shows through.
+/// The main window's left column. Two regions stacked vertically:
+///   - Top nav (Dashboard, then a STATS section for Usage/Activity/Git).
+///   - SESSIONS section: a Codex-style collapsible tree of projects, each
+///     expanding to its own sessions. The header carries a "collapse all"
+///     button (active only when any project is expanded) and a sort menu.
+/// Settings stays pinned at the bottom.
+///
+/// Picking a project row toggles its disclosure. Picking a session row sets
+/// ``selectedSessionID`` on the parent and the detail pane switches to
+/// ``SessionDetailView``. Picking a top nav row clears ``selectedSessionID``.
+///
+/// Lives over a window-level `NSVisualEffectView` (`.sidebar` material), so
+/// its own background stays transparent.
 struct SidebarColumn: View {
     @Binding var page: MainPage
+    @Binding var selectedSessionID: String?
     var availablePages: [MainPage]
     var onOpenSettings: () -> Void
+
     @Environment(AppEnvironment.self) private var env
+    @State private var sessionsVM = SessionListViewModel()
+    @SceneStorage("mainWindow.sessionsSectionExpanded") private var sessionsExpanded: Bool = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Clear the traffic-light buttons (they float over the top-left
-            // since the window uses `.hiddenTitleBar`).
+            // Clear the traffic-light buttons (window uses `.hiddenTitleBar`).
             Color.clear.frame(height: 44)
 
-            row(.dashboard)
+            navRow(.dashboard)
 
             sectionHeader("STATS")
-            row(.sessions)
-            row(.usage)
-            if env.preferences.aiActivityAnalysisEnabled { row(.activity) }
-            if env.preferences.gitTrackingEnabled { row(.git) }
+            navRow(.usage)
+            navRow(.leaderboards)
+            if env.preferences.aiActivityAnalysisEnabled { navRow(.activity) }
+            if env.preferences.gitTrackingEnabled { navRow(.git) }
 
-            Spacer(minLength: 0)
+            sessionsSection
 
             SidebarRow(title: "Settings", symbol: "gearshape", isSelected: false, action: onOpenSettings)
         }
         .padding(.bottom, 10)
     }
 
-    // MARK: - Section header
+    // MARK: - Top nav
+
+    @ViewBuilder
+    private func navRow(_ p: MainPage) -> some View {
+        if availablePages.contains(p) {
+            SidebarRow(
+                title: p.title,
+                symbol: p.symbol,
+                isSelected: selectedSessionID == nil && page == p
+            ) {
+                selectedSessionID = nil
+                page = p
+            }
+        }
+    }
 
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
@@ -43,15 +70,149 @@ struct SidebarColumn: View {
             .padding(.bottom, 4)
     }
 
-    // MARK: - Row
+    // MARK: - SESSIONS section
 
     @ViewBuilder
-    private func row(_ p: MainPage) -> some View {
-        if availablePages.contains(p) {
-            SidebarRow(title: p.title, symbol: p.symbol, isSelected: page == p) { page = p }
+    private var sessionsSection: some View {
+        @Bindable var vm = sessionsVM
+        sessionsHeader
+
+        if sessionsExpanded {
+            searchField(vm: vm)
+            sessionsTree(vm: vm)
+        } else {
+            // Take up the remaining space so Settings stays pinned at the bottom.
+            Spacer(minLength: 0)
         }
     }
+
+    private var sessionsHeader: some View {
+        HStack(spacing: 6) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) { sessionsExpanded.toggle() }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .semibold))
+                        .rotationEffect(.degrees(sessionsExpanded ? 0 : -90))
+                    Text("SESSIONS")
+                        .font(.sora(10, weight: .semibold))
+                        .tracking(1.0)
+                }
+                .foregroundStyle(Color.stxMuted)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Spacer(minLength: 0)
+
+            if sessionsExpanded {
+                HeaderIconButton(
+                    systemName: "arrow.down.right.and.arrow.up.left",
+                    help: "Collapse all projects",
+                    enabled: !sessionsVM.expandedProjects.isEmpty
+                ) {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        sessionsVM.expandedProjects.removeAll()
+                    }
+                }
+
+                Menu {
+                    Picker("Sort by", selection: $sessionsVM.sortOrder) {
+                        ForEach(SessionListViewModel.SortOrder.allCases) { order in
+                            Text(order.displayName).tag(order)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "line.3.horizontal.decrease")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Color.stxMuted)
+                        .frame(width: 22, height: 20)
+                        .contentShape(Rectangle())
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("Sort sessions")
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 14)
+        .padding(.bottom, 4)
+    }
+
+    @ViewBuilder
+    private func searchField(vm: SessionListViewModel) -> some View {
+        @Bindable var vm = vm
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 11))
+                .foregroundStyle(Color.stxMuted)
+            TextField("Search", text: $vm.searchText)
+                .textFieldStyle(.plain)
+                .font(.sora(11))
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.06)))
+        .padding(.horizontal, 10)
+        .padding(.bottom, 6)
+    }
+
+    @ViewBuilder
+    private func sessionsTree(vm: SessionListViewModel) -> some View {
+        let provider = env.preferences.selectedProvider
+        let groups = vm.projectGroups(from: env.store, provider: provider)
+
+        if groups.isEmpty {
+            sessionsEmptyState(provider: provider, hasQuery: !vm.searchText.isEmpty)
+                .frame(maxHeight: .infinity, alignment: .top)
+        } else {
+            FadingScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(groups) { group in
+                        let isExpanded = vm.expandedProjects.contains(group.id)
+                        ProjectSidebarRow(
+                            name: group.displayName,
+                            count: group.count,
+                            isExpanded: isExpanded
+                        ) {
+                            withAnimation(.easeInOut(duration: 0.18)) { vm.toggle(group.id) }
+                        }
+                        if isExpanded {
+                            ForEach(group.sessions) { session in
+                                SessionSidebarRow(
+                                    session: session,
+                                    isSelected: selectedSessionID == session.id
+                                ) {
+                                    selectedSessionID = session.id
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func sessionsEmptyState(provider: ProviderKind, hasQuery: Bool) -> some View {
+        let isLoading = env.store.isLoading && env.store.sessions(for: provider).isEmpty
+        VStack(alignment: .leading, spacing: 4) {
+            if isLoading {
+                Text("Scanning…").font(.sora(11)).foregroundStyle(Color.stxMuted)
+            } else if hasQuery {
+                Text("No matches").font(.sora(11)).foregroundStyle(Color.stxMuted)
+            } else {
+                Text("No sessions yet").font(.sora(11)).foregroundStyle(Color.stxMuted)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+    }
 }
+
+// MARK: - Top nav row
 
 /// One sidebar nav row: an icon + label inside a rounded selection chip.
 struct SidebarRow: View {
@@ -92,16 +253,151 @@ struct SidebarRow: View {
     }
 }
 
+// MARK: - Project & session rows
+
+/// A project header row inside the SESSIONS tree: folder glyph, name, count,
+/// and a disclosure chevron that rotates when the group is expanded.
+private struct ProjectSidebarRow: View {
+    let name: String
+    let count: Int
+    let isExpanded: Bool
+    let toggle: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: toggle) {
+            HStack(spacing: 8) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(Color.stxMuted)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    .frame(width: 10)
+                Image(systemName: "folder")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.stxMuted)
+                    .frame(width: 16)
+                Text(name)
+                    .font(.sora(12, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+                Text("\(count)")
+                    .font(.sora(9).monospacedDigit())
+                    .foregroundStyle(Color.stxMuted)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background {
+                if hovering {
+                    RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.05))
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 8)
+        .onHover { hovering = $0 }
+    }
+}
+
+/// A session leaf row under an expanded project: title + relative date.
+/// Indented to align under the project's folder glyph.
+private struct SessionSidebarRow: View {
+    @Environment(AppEnvironment.self) private var env
+    let session: Session
+    let isSelected: Bool
+    let select: () -> Void
+    @State private var hovering = false
+
+    private var title: String {
+        if let t = session.stats?.title, !t.isEmpty { return t }
+        return session.externalID
+    }
+
+    var body: some View {
+        Button(action: select) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.sora(11))
+                    .foregroundStyle(isSelected ? .primary : Color.stxMuted.opacity(0.95))
+                    .lineLimit(1)
+                Text(Format.relativeDate(session.stats?.lastActivity ?? session.lastModified))
+                    .font(.sora(9))
+                    .foregroundStyle(Color.stxMuted.opacity(0.7))
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.10))
+                } else if hovering {
+                    RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.05))
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.leading, 36) // align under the project's folder glyph
+        .padding(.trailing, 8)
+        .onHover { hovering = $0 }
+        .contextMenu {
+            Button("Reveal Transcript in Finder") {
+                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: session.filePath)])
+            }
+            if let cwd = session.cwd, FileManager.default.fileExists(atPath: cwd) {
+                Button("Open Project Folder") {
+                    NSWorkspace.shared.open(URL(fileURLWithPath: cwd))
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Header icon button
+
+/// Small icon-only button used in the SESSIONS section header. Dims to muted
+/// when disabled (no expanded projects to collapse, etc.).
+private struct HeaderIconButton: View {
+    let systemName: String
+    let help: String
+    var enabled: Bool = true
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(enabled ? Color.stxMuted : Color.stxMuted.opacity(0.35))
+                .frame(width: 22, height: 20)
+                .background {
+                    if enabled && hovering {
+                        RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.08))
+                    }
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .onHover { hovering = $0 }
+        .help(help)
+    }
+}
+
 #if DEBUG
 #Preview("Sidebar column") {
     @Previewable @State var page: MainPage = .dashboard
+    @Previewable @State var sessionID: String? = nil
     return SidebarColumn(
         page: $page,
-        availablePages: [.dashboard, .sessions, .usage, .activity, .git],
+        selectedSessionID: $sessionID,
+        availablePages: [.dashboard, .usage, .activity, .git],
         onOpenSettings: {}
     )
     .environment(AppEnvironment.preview())
-    .frame(width: 220, height: 600)
+    .frame(width: 240, height: 600)
     .background(VisualEffectBackground())
 }
 #endif

@@ -17,12 +17,14 @@ final class AppEnvironment {
     /// main-window open/close cycles (reopening doesn't refire a fetch).
     let dashboard: DashboardViewModel
     let github = GitHubViewModel()
+    let leaderboards: LeaderboardSyncViewModel
 
     init(pricing: ModelPricing, preferences: Preferences, store: SessionStore) {
         self.pricing = pricing
         self.preferences = preferences
         self.store = store
         self.dashboard = DashboardViewModel(pricing: pricing)
+        self.leaderboards = LeaderboardSyncViewModel(preferences: preferences, store: store)
     }
 
     convenience init() {
@@ -36,7 +38,10 @@ final class AppEnvironment {
 
     /// Kick off the first scan and the periodic refresh. Call once at launch.
     func start() {
-        Task { await store.refresh() }
+        Task {
+            await store.refresh()
+            leaderboards.start()
+        }
         applyAutoRefreshSetting()
         updater.start()
     }
