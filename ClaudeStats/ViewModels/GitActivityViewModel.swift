@@ -37,6 +37,9 @@ final class GitActivityViewModel {
     /// off-main so the view body reads a finished array instead of walking all
     /// session timelines on every Observable change.
     private(set) var correlationPoints: [CorrelationPoint] = []
+    /// Preformatted, main-window overview data. This keeps resize/layout passes
+    /// from rebuilding tables, stat strings, chart ticks, and recent commit rows.
+    private(set) var overviewSnapshot: OverviewSnapshot = .empty
     private(set) var isLoading = false
     private(set) var gitAvailable = true
     private(set) var userEmail: String?
@@ -67,9 +70,9 @@ final class GitActivityViewModel {
         let endExclusive = cal.dateInterval(of: .day, for: .now)?.end ?? Date.now
 
         let result = await Task.detached(priority: .userInitiated) {
-            () -> (repos: [RepoActivity], email: String?, available: Bool, correlation: [CorrelationPoint]) in
+            () -> (repos: [RepoActivity], email: String?, available: Bool, correlation: [CorrelationPoint], overview: OverviewSnapshot) in
             let git = GitAnalyzer()
-            guard git.isAvailable else { return ([], nil, false, []) }
+            guard git.isAvailable else { return ([], nil, false, [], .empty) }
             let email = git.currentUserEmail()
             let reposList = git.repos(forCwds: cwds)
             let activity = git.activity(for: reposList, since: since, authorEmail: onlyMine ? email : nil)
@@ -84,13 +87,15 @@ final class GitActivityViewModel {
                 endExclusive: endExclusive,
                 calendar: cal
             )
-            return (sorted, email, true, correlation)
+            let overview = Self.makeOverviewSnapshot(repos: sorted, correlation: correlation)
+            return (sorted, email, true, correlation, overview)
         }.value
 
         gitAvailable = result.available
         userEmail = result.email
         repos = result.repos
         correlationPoints = result.correlation
+        overviewSnapshot = result.overview
     }
 
     // MARK: - Derived data
@@ -125,6 +130,209 @@ final class GitActivityViewModel {
         let commitCount: Int
         let churn: Int
         var id: TimeInterval { start.timeIntervalSinceReferenceDate }
+    }
+
+    struct OverviewSnapshot: Sendable {
+        let stats: [OverviewStat]
+        let correlation: OverviewCorrelation
+        let churnRows: [OverviewRepoRow]
+        let churnRowsDetail: String
+        let recentRows: [OverviewCommitRow]
+        let totalCommits: Int
+        let totalChurn: Int
+
+        static let empty = OverviewSnapshot(
+            stats: [
+                OverviewStat(id: "repos", label: "Repos", value: "0"),
+                OverviewStat(id: "commits", label: "Commits", value: "0"),
+                OverviewStat(id: "lines", label: "Lines +/-", value: "0/0"),
+                OverviewStat(id: "files", label: "Files touched", value: "0"),
+            ],
+            correlation: .empty,
+            churnRows: [],
+            churnRowsDetail: "0 repos",
+            recentRows: [],
+            totalCommits: 0,
+            totalChurn: 0
+        )
+    }
+
+    struct OverviewStat: Identifiable, Sendable {
+        let id: String
+        let label: String
+        let value: String
+    }
+
+    struct OverviewRepoRow: Identifiable, Sendable {
+        let id: String
+        let name: String
+        let insertionsLabel: String
+        let deletionsLabel: String
+        let filesLabel: String
+    }
+
+    struct OverviewCommitRow: Identifiable, Sendable {
+        let id: String
+        let subject: String
+        let repoName: String
+        let shortHash: String
+        let churnLabel: String
+        let dateLabel: String
+    }
+
+    struct OverviewCorrelation: Sendable {
+        let points: [CorrelationPoint]
+        let tokenValues: [Int]
+        let commitValues: [Int]
+        let commitCountLabel: String
+        let hasTokens: Bool
+        let tokenMax: Int
+        let commitMax: Int
+        let tokenTicks: [OverviewAxisTick]
+        let commitTicks: [OverviewAxisTick]
+        let dateTicks: [OverviewDateTick]
+
+        static let empty = OverviewCorrelation(
+            points: [],
+            tokenValues: [],
+            commitValues: [],
+            commitCountLabel: "0 commits",
+            hasTokens: false,
+            tokenMax: 0,
+            commitMax: 0,
+            tokenTicks: [OverviewAxisTick(value: 0, label: "0")],
+            commitTicks: [OverviewAxisTick(value: 0, label: "0")],
+            dateTicks: []
+        )
+    }
+
+    struct OverviewAxisTick: Identifiable, Sendable {
+        let value: Int
+        let label: String
+        var id: String { "\(value)|\(label)" }
+    }
+
+    struct OverviewDateTick: Identifiable, Sendable {
+        let index: Int
+        let label: String
+        var id: String { "\(index)|\(label)" }
+    }
+
+    nonisolated private static func makeOverviewSnapshot(
+        repos: [RepoActivity],
+        correlation: [CorrelationPoint]
+    ) -> OverviewSnapshot {
+        let totalCommits = repos.reduce(0) { $0 + $1.commitCount }
+        let totalInsertions = repos.reduce(0) { $0 + $1.insertions }
+        let totalDeletions = repos.reduce(0) { $0 + $1.deletions }
+        let totalFilesChanged = repos.reduce(0) { $0 + $1.filesChanged }
+        let totalChurn = totalInsertions + totalDeletions
+        let churnRowLimit = 40
+
+        let stats = [
+            OverviewStat(id: "repos", label: "Repos", value: "\(repos.count)"),
+            OverviewStat(id: "commits", label: "Commits", value: "\(totalCommits)"),
+            OverviewStat(id: "lines", label: "Lines +/-", value: "\(Format.tokens(totalInsertions))/\(Format.tokens(totalDeletions))"),
+            OverviewStat(id: "files", label: "Files touched", value: "\(totalFilesChanged)"),
+        ]
+
+        let churnRows = repos.prefix(churnRowLimit).map { activity in
+            OverviewRepoRow(
+                id: activity.id,
+                name: activity.repo.displayName,
+                insertionsLabel: "+\(Format.tokens(activity.insertions))",
+                deletionsLabel: "-\(Format.tokens(activity.deletions))",
+                filesLabel: "\(activity.filesChanged) files"
+            )
+        }
+        let churnRowsDetail = repos.count > churnRowLimit ? "top \(churnRows.count) of \(repos.count)" : "\(repos.count) repos"
+
+        let repoNamesByID = Dictionary(
+            repos.map { ($0.repo.id, $0.repo.displayName) },
+            uniquingKeysWith: { a, _ in a }
+        )
+        let recentRows = Array(repos.allCommitsNewestFirst.prefix(40)).map { commit in
+            OverviewCommitRow(
+                id: commit.id,
+                subject: TitleSanitizer.sanitize(commit.subject) ?? commit.subject,
+                repoName: repoNamesByID[commit.repoID] ?? "-",
+                shortHash: commit.shortHash,
+                churnLabel: "+\(Format.tokens(commit.insertions)) -\(Format.tokens(commit.deletions))",
+                dateLabel: Format.relativeDate(commit.date)
+            )
+        }
+
+        return OverviewSnapshot(
+            stats: stats,
+            correlation: makeOverviewCorrelation(points: correlation),
+            churnRows: churnRows,
+            churnRowsDetail: churnRowsDetail,
+            recentRows: recentRows,
+            totalCommits: totalCommits,
+            totalChurn: totalChurn
+        )
+    }
+
+    nonisolated private static func makeOverviewCorrelation(points: [CorrelationPoint]) -> OverviewCorrelation {
+        guard !points.isEmpty else { return .empty }
+
+        let tokenValues = points.map(\.claudeTokens)
+        let commitValues = points.map(\.commitCount)
+        let tokenMax = niceCeiling(tokenValues.max() ?? 0)
+        let commitMax = niceCeiling(commitValues.max() ?? 0)
+        let totalCommits = commitValues.reduce(0, +)
+
+        return OverviewCorrelation(
+            points: points,
+            tokenValues: tokenValues,
+            commitValues: commitValues,
+            commitCountLabel: "\(totalCommits) commits",
+            hasTokens: tokenValues.contains { $0 > 0 },
+            tokenMax: tokenMax,
+            commitMax: commitMax,
+            tokenTicks: axisTicks(maxValue: tokenMax, formatter: Format.tokens),
+            commitTicks: axisTicks(maxValue: commitMax, formatter: { "\($0)" }),
+            dateTicks: dateTicks(for: points)
+        )
+    }
+
+    nonisolated private static func axisTicks(
+        maxValue: Int,
+        formatter: (Int) -> String
+    ) -> [OverviewAxisTick] {
+        guard maxValue > 0 else {
+            return [OverviewAxisTick(value: 0, label: formatter(0))]
+        }
+
+        let values: [Int]
+        if maxValue == 1 {
+            values = [1, 0]
+        } else {
+            values = [maxValue, maxValue / 2, 0]
+        }
+        return values.map { OverviewAxisTick(value: $0, label: formatter($0)) }
+    }
+
+    nonisolated private static func dateTicks(for points: [CorrelationPoint]) -> [OverviewDateTick] {
+        guard !points.isEmpty else { return [] }
+        let indices = Set([0, points.count / 2, points.count - 1]).sorted()
+        return indices.map { index in
+            OverviewDateTick(index: index, label: Format.day(points[index].start))
+        }
+    }
+
+    nonisolated private static func niceCeiling(_ value: Int) -> Int {
+        guard value > 0 else { return 0 }
+        let magnitude = pow(10.0, floor(log10(Double(value))))
+        let scaled = Double(value) / magnitude
+        let nice: Double
+        switch scaled {
+        case ...1: nice = 1
+        case ...2: nice = 2
+        case ...5: nice = 5
+        default: nice = 10
+        }
+        return max(1, Int(nice * magnitude))
     }
 
     /// Every bucket-start in the current window, oldest→newest.
@@ -254,6 +462,7 @@ extension GitActivityViewModel {
             endExclusive: endExclusive,
             calendar: cal
         )
+        vm.overviewSnapshot = Self.makeOverviewSnapshot(repos: vm.repos, correlation: vm.correlationPoints)
         return vm
     }
 

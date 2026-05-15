@@ -7,10 +7,23 @@ import Observation
 @MainActor
 @Observable
 final class SessionListViewModel {
-    var searchText: String = ""
-    var sortOrder: SortOrder = .recent
+    var searchText: String = "" {
+        didSet {
+            if searchText != oldValue { rebuildProjectGroups() }
+        }
+    }
+    var sortOrder: SortOrder = .recent {
+        didSet {
+            if sortOrder != oldValue { rebuildProjectGroups() }
+        }
+    }
     /// Project groups (keyed by ``Session/projectDirectoryName``) that are open.
     var expandedProjects: Set<String> = []
+    private(set) var projectGroups: [ProjectGroup] = []
+    private(set) var hasProviderSessions = false
+
+    @ObservationIgnored private var sourceSessions: [Session] = []
+    @ObservationIgnored private var sourceProvider: ProviderKind?
 
     enum SortOrder: String, CaseIterable, Identifiable {
         case recent, tokens, cost
@@ -41,8 +54,25 @@ final class SessionListViewModel {
         }
     }
 
+    func refresh(from store: SessionStore, provider: ProviderKind) {
+        let sessions = store.sessions(for: provider)
+        guard sourceProvider != provider || sourceSessions != sessions else { return }
+        sourceProvider = provider
+        sourceSessions = sessions
+        hasProviderSessions = !sessions.isEmpty
+        rebuildProjectGroups()
+    }
+
     func projectGroups(from store: SessionStore, provider: ProviderKind) -> [ProjectGroup] {
-        var sessions = store.sessions(for: provider)
+        makeProjectGroups(from: store.sessions(for: provider))
+    }
+
+    private func rebuildProjectGroups() {
+        projectGroups = makeProjectGroups(from: sourceSessions)
+    }
+
+    private func makeProjectGroups(from sourceSessions: [Session]) -> [ProjectGroup] {
+        var sessions = sourceSessions
 
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if !query.isEmpty {

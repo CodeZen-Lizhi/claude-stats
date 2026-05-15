@@ -1,5 +1,4 @@
 import SwiftUI
-import Charts
 
 /// Main-window Git surface. Unlike the compact menu-bar pane, this view is a
 /// repository-oriented workspace with stable selection and a denser desktop
@@ -61,8 +60,8 @@ struct MainGitActivityView: View {
             HStack(spacing: 0) {
                 GitRepoSelectionColumn(
                     repos: vm.repos,
-                    totalCommits: vm.totalCommits,
-                    totalChurn: vm.totalInsertions + vm.totalDeletions,
+                    totalCommits: vm.overviewSnapshot.totalCommits,
+                    totalChurn: vm.overviewSnapshot.totalChurn,
                     selection: currentSelection,
                     isLoading: vm.isLoading,
                     onSelect: setSelection
@@ -135,15 +134,7 @@ struct MainGitActivityView: View {
             GitRepoWorkspaceView(repo: activity.repo)
             #endif
         } else {
-            GitOverviewContent(
-                repos: vm.repos,
-                points: vm.correlationPoints,
-                recentCommits: vm.recentCommits(),
-                totalCommits: vm.totalCommits,
-                totalInsertions: vm.totalInsertions,
-                totalDeletions: vm.totalDeletions,
-                totalFilesChanged: vm.totalFilesChanged
-            )
+            GitOverviewContent(snapshot: vm.overviewSnapshot)
         }
     }
 
@@ -174,7 +165,7 @@ private struct GitRepoSelectionColumn: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             columnHeader
-            FadingScrollView {
+            FadingScrollView(chrome: .plain) {
                 LazyVStack(alignment: .leading, spacing: 4) {
                     GitRepoSelectionRow(
                         title: "All Repos",
@@ -279,38 +270,35 @@ private struct GitRepoSelectionRow: View {
     }
 }
 
-private struct GitOverviewContent: View {
-    let repos: [RepoActivity]
-    let points: [GitActivityViewModel.CorrelationPoint]
-    let recentCommits: [GitCommit]
-    let totalCommits: Int
-    let totalInsertions: Int
-    let totalDeletions: Int
-    let totalFilesChanged: Int
+private enum GitOverviewTableLayout: Equatable {
+    case wide
+    case narrow
 
-    private var repoNamesByID: [String: String] {
-        Dictionary(repos.map { ($0.repo.id, $0.repo.displayName) }, uniquingKeysWith: { a, _ in a })
+    static func forWidth(_ width: CGFloat) -> Self {
+        width >= 680 ? .wide : .narrow
     }
+}
+
+private struct GitOverviewContent: View {
+    let snapshot: GitActivityViewModel.OverviewSnapshot
+
+    @State private var tableLayout: GitOverviewTableLayout = .wide
 
     var body: some View {
-        FadingScrollView {
+        FadingScrollView(chrome: .plain) {
             VStack(alignment: .leading, spacing: 16) {
                 metricsGrid
-                GitCorrelationPanel(points: points)
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: 16) {
-                        GitChurnTable(repos: repos)
-                            .frame(minWidth: 260, maxWidth: .infinity)
-                        GitRecentCommitsTable(commits: recentCommits, repoNamesByID: repoNamesByID)
-                            .frame(minWidth: 320, maxWidth: .infinity)
-                    }
-                    VStack(alignment: .leading, spacing: 16) {
-                        GitChurnTable(repos: repos)
-                        GitRecentCommitsTable(commits: recentCommits, repoNamesByID: repoNamesByID)
-                    }
-                }
+                GitCorrelationPanel(correlation: snapshot.correlation)
+                tables
             }
             .padding(20)
+            .onGeometryChange(for: GitOverviewTableLayout.self) { proxy in
+                GitOverviewTableLayout.forWidth(proxy.size.width)
+            } action: { newLayout in
+                if tableLayout != newLayout {
+                    tableLayout = newLayout
+                }
+            }
         }
     }
 
@@ -320,18 +308,33 @@ private struct GitOverviewContent: View {
             alignment: .leading,
             spacing: 12
         ) {
-            StatCard(label: "Repos", value: "\(repos.count)")
-            StatCard(label: "Commits", value: "\(totalCommits)")
-            StatCard(label: "Lines +/-", value: "\(Format.tokens(totalInsertions))/\(Format.tokens(totalDeletions))")
-            StatCard(label: "Files touched", value: "\(totalFilesChanged)")
+            ForEach(snapshot.stats) { stat in
+                StatCard(label: stat.label, value: stat.value)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var tables: some View {
+        switch tableLayout {
+        case .wide:
+            HStack(alignment: .top, spacing: 16) {
+                GitChurnTable(rows: snapshot.churnRows, detail: snapshot.churnRowsDetail)
+                    .frame(minWidth: 260, maxWidth: .infinity)
+                GitRecentCommitsTable(rows: snapshot.recentRows)
+                    .frame(minWidth: 320, maxWidth: .infinity)
+            }
+        case .narrow:
+            VStack(alignment: .leading, spacing: 16) {
+                GitChurnTable(rows: snapshot.churnRows, detail: snapshot.churnRowsDetail)
+                GitRecentCommitsTable(rows: snapshot.recentRows)
+            }
         }
     }
 }
 
 private struct GitCorrelationPanel: View {
-    let points: [GitActivityViewModel.CorrelationPoint]
-
-    private var hasTokens: Bool { points.contains { $0.claudeTokens > 0 } }
+    let correlation: GitActivityViewModel.OverviewCorrelation
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -340,21 +343,21 @@ private struct GitCorrelationPanel: View {
                     .font(.sora(13, weight: .semibold))
                     .tracking(1.0)
                 Spacer()
-                Text("\(points.reduce(0) { $0 + $1.commitCount }) commits")
+                Text(correlation.commitCountLabel)
                     .font(.sora(10).monospacedDigit())
                     .foregroundStyle(Color.stxMuted)
             }
-            if points.isEmpty {
+            if correlation.points.isEmpty {
                 GitInlineEmptyState("Nothing to plot for this range.")
             } else {
                 Text("CLAUDE TOKENS")
                     .font(.sora(9, weight: .medium))
                     .foregroundStyle(Color.stxMuted)
-                tokensChart
+                GitTokenOverviewChart(correlation: correlation)
                 Text("COMMITS")
                     .font(.sora(9, weight: .medium))
                     .foregroundStyle(Color.stxMuted)
-                commitsChart
+                GitCommitOverviewChart(correlation: correlation)
             }
         }
         .padding(14)
@@ -362,151 +365,265 @@ private struct GitCorrelationPanel: View {
         .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.stxStroke, lineWidth: 1))
     }
+}
 
-    private var tokensChart: some View {
-        Chart(points) { point in
-            AreaMark(x: .value("When", point.start), y: .value("Tokens", point.claudeTokens))
-                .foregroundStyle(Color.stxAccent.opacity(0.16))
-                .interpolationMethod(.monotone)
-            LineMark(x: .value("When", point.start), y: .value("Tokens", point.claudeTokens))
-                .foregroundStyle(Color.stxAccent)
-                .interpolationMethod(.monotone)
-                .lineStyle(StrokeStyle(lineWidth: 2))
-        }
-        .chartYAxis {
-            AxisMarks { value in
-                AxisGridLine().foregroundStyle(Color.stxStroke)
-                AxisValueLabel {
-                    if let v = value.as(Int.self) {
-                        Text(Format.tokens(v))
-                            .font(.sora(8))
-                            .foregroundStyle(Color.stxMuted)
-                    }
-                }
-            }
-        }
-        .chartXScale(domain: chartDomain(points.map(\.start)))
-        .chartXAxis(.hidden)
-        .chartLegend(.hidden)
-        .frame(height: hasTokens ? 96 : 44)
-        .opacity(hasTokens ? 1 : 0.5)
+private struct GitTokenOverviewChart: View {
+    let correlation: GitActivityViewModel.OverviewCorrelation
+
+    private var height: CGFloat {
+        correlation.hasTokens ? 96 : 44
     }
 
-    private var commitsChart: some View {
-        Chart(points) { point in
-            BarMark(x: .value("When", point.start), y: .value("Commits", point.commitCount))
-                .foregroundStyle(Color.primary.opacity(0.55))
-                .cornerRadius(1)
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            GitOverviewYAxis(ticks: correlation.tokenTicks)
+                .frame(height: height)
+            Canvas { context, size in
+                GitOverviewChartDrawing.drawGrid(
+                    context: &context,
+                    size: size,
+                    tickCount: correlation.tokenTicks.count
+                )
+                GitOverviewChartDrawing.drawLineArea(
+                    context: &context,
+                    size: size,
+                    values: correlation.tokenValues,
+                    maxValue: max(correlation.tokenMax, 1),
+                    color: Color.stxAccent
+                )
+            }
+            .frame(height: height)
         }
-        .chartYAxis {
-            AxisMarks { value in
-                AxisGridLine().foregroundStyle(Color.stxStroke)
-                AxisValueLabel {
-                    if let v = value.as(Int.self) {
-                        Text("\(v)")
-                            .font(.sora(8))
-                            .foregroundStyle(Color.stxMuted)
-                    }
+        .opacity(correlation.hasTokens ? 1 : 0.5)
+    }
+}
+
+private struct GitCommitOverviewChart: View {
+    let correlation: GitActivityViewModel.OverviewCorrelation
+
+    var body: some View {
+        VStack(spacing: 4) {
+            HStack(alignment: .top, spacing: 8) {
+                GitOverviewYAxis(ticks: correlation.commitTicks)
+                    .frame(height: 96)
+                Canvas { context, size in
+                    GitOverviewChartDrawing.drawGrid(
+                        context: &context,
+                        size: size,
+                        tickCount: correlation.commitTicks.count
+                    )
+                    GitOverviewChartDrawing.drawBars(
+                        context: &context,
+                        size: size,
+                        values: correlation.commitValues,
+                        maxValue: max(correlation.commitMax, 1),
+                        color: Color.primary.opacity(0.55)
+                    )
+                }
+                .frame(height: 96)
+            }
+            GitOverviewXAxisLabels(ticks: correlation.dateTicks)
+                .padding(.leading, 52)
+        }
+    }
+}
+
+private struct GitOverviewYAxis: View {
+    let ticks: [GitActivityViewModel.OverviewAxisTick]
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 0) {
+            ForEach(Array(ticks.enumerated()), id: \.element.id) { index, tick in
+                Text(tick.label)
+                    .font(.sora(8).monospacedDigit())
+                    .foregroundStyle(Color.stxMuted)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                if index < ticks.count - 1 {
+                    Spacer(minLength: 0)
                 }
             }
         }
-        .chartXScale(domain: chartDomain(points.map(\.start)))
-        .chartXAxis {
-            AxisMarks { value in
-                AxisGridLine().foregroundStyle(Color.stxStroke)
-                AxisValueLabel {
-                    if let date = value.as(Date.self) {
-                        Text(date, format: .dateTime.month(.abbreviated).day())
-                            .font(.sora(8))
-                            .foregroundStyle(Color.stxMuted)
-                    }
+        .frame(width: 44)
+    }
+}
+
+private struct GitOverviewXAxisLabels: View {
+    let ticks: [GitActivityViewModel.OverviewDateTick]
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(ticks.enumerated()), id: \.element.id) { index, tick in
+                Text(tick.label)
+                    .font(.sora(8))
+                    .foregroundStyle(Color.stxMuted)
+                    .lineLimit(1)
+                if index < ticks.count - 1 {
+                    Spacer(minLength: 8)
                 }
             }
         }
-        .chartLegend(.hidden)
-        .frame(height: 96)
+    }
+}
+
+private enum GitOverviewChartDrawing {
+    static func drawGrid(context: inout GraphicsContext, size: CGSize, tickCount: Int) {
+        let count = max(tickCount, 2)
+        for index in 0..<count {
+            let y = size.height * CGFloat(index) / CGFloat(count - 1)
+            var path = Path()
+            path.move(to: CGPoint(x: 0, y: y))
+            path.addLine(to: CGPoint(x: size.width, y: y))
+            context.stroke(path, with: .color(Color.stxStroke), lineWidth: 1)
+        }
     }
 
-    private func chartDomain(_ starts: [Date]) -> ClosedRange<Date> {
-        guard let first = starts.first, let last = starts.last else {
-            let now = Date.now
-            return now ... now.addingTimeInterval(1)
+    static func drawLineArea(
+        context: inout GraphicsContext,
+        size: CGSize,
+        values: [Int],
+        maxValue: Int,
+        color: Color
+    ) {
+        let points = values.enumerated().map { index, value in
+            point(index: index, count: values.count, value: value, maxValue: maxValue, size: size)
         }
-        let step = starts.count >= 2 ? starts[1].timeIntervalSince(starts[0]) : 86_400
-        return first.addingTimeInterval(-step / 2) ... last.addingTimeInterval(step / 2)
+        guard let first = points.first, let last = points.last else { return }
+
+        var line = Path()
+        line.move(to: first)
+        for point in points.dropFirst() {
+            line.addLine(to: point)
+        }
+
+        var area = Path()
+        area.move(to: CGPoint(x: first.x, y: size.height))
+        for point in points {
+            area.addLine(to: point)
+        }
+        area.addLine(to: CGPoint(x: last.x, y: size.height))
+        area.closeSubpath()
+
+        context.fill(area, with: .color(color.opacity(0.16)))
+        context.stroke(line, with: .color(color), style: StrokeStyle(lineWidth: 2, lineJoin: .round))
+    }
+
+    static func drawBars(
+        context: inout GraphicsContext,
+        size: CGSize,
+        values: [Int],
+        maxValue: Int,
+        color: Color
+    ) {
+        guard !values.isEmpty else { return }
+        let slotWidth = size.width / CGFloat(values.count)
+        let barWidth = max(2, min(18, slotWidth * 0.55))
+
+        for (index, value) in values.enumerated() where value > 0 {
+            let normalized = CGFloat(value) / CGFloat(max(maxValue, 1))
+            let height = max(2, size.height * min(max(normalized, 0), 1))
+            let x = CGFloat(index) * slotWidth + (slotWidth - barWidth) / 2
+            let rect = CGRect(x: x, y: size.height - height, width: barWidth, height: height)
+            var path = Path()
+            path.addRoundedRect(in: rect, cornerSize: CGSize(width: 1, height: 1))
+            context.fill(path, with: .color(color))
+        }
+    }
+
+    private static func point(index: Int, count: Int, value: Int, maxValue: Int, size: CGSize) -> CGPoint {
+        let x = count <= 1 ? size.width / 2 : size.width * CGFloat(index) / CGFloat(count - 1)
+        let normalized = CGFloat(value) / CGFloat(max(maxValue, 1))
+        let y = size.height - size.height * min(max(normalized, 0), 1)
+        return CGPoint(x: x, y: y)
     }
 }
 
 private struct GitChurnTable: View {
-    let repos: [RepoActivity]
+    let rows: [GitActivityViewModel.OverviewRepoRow]
+    let detail: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            GitTableTitle(title: "CODE CHURN BY REPO", detail: "\(repos.count) repos")
+            GitTableTitle(title: "CODE CHURN BY REPO", detail: detail)
             StxRule()
-            ForEach(repos) { activity in
-                HStack(spacing: 8) {
-                    Text(activity.repo.displayName)
-                        .font(.sora(11, weight: .semibold))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Spacer(minLength: 8)
-                    Text("+\(Format.tokens(activity.insertions))")
-                        .font(.sora(10).monospacedDigit())
-                        .foregroundStyle(GitPalette.add)
-                    Text("-\(Format.tokens(activity.deletions))")
-                        .font(.sora(10).monospacedDigit())
-                        .foregroundStyle(GitPalette.del)
-                    Text("\(activity.filesChanged) files")
-                        .font(.sora(10).monospacedDigit())
-                        .foregroundStyle(Color.stxMuted)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                if activity.id != repos.last?.id { StxRule() }
+            ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                GitChurnTableRow(row: row)
+                if index < rows.count - 1 { StxRule() }
             }
         }
         .gitMainCard()
     }
 }
 
+private struct GitChurnTableRow: View {
+    let row: GitActivityViewModel.OverviewRepoRow
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(row.name)
+                .font(.sora(11, weight: .semibold))
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer(minLength: 8)
+            Text(row.insertionsLabel)
+                .font(.sora(10).monospacedDigit())
+                .foregroundStyle(GitPalette.add)
+            Text(row.deletionsLabel)
+                .font(.sora(10).monospacedDigit())
+                .foregroundStyle(GitPalette.del)
+            Text(row.filesLabel)
+                .font(.sora(10).monospacedDigit())
+                .foregroundStyle(Color.stxMuted)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+}
+
 private struct GitRecentCommitsTable: View {
-    let commits: [GitCommit]
-    let repoNamesByID: [String: String]
+    let rows: [GitActivityViewModel.OverviewCommitRow]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            GitTableTitle(title: "RECENT COMMITS", detail: "\(commits.count) shown")
+            GitTableTitle(title: "RECENT COMMITS", detail: "\(rows.count) shown")
             StxRule()
-            if commits.isEmpty {
+            if rows.isEmpty {
                 GitInlineEmptyState("No commits in this range.")
                     .padding(14)
             } else {
-                ForEach(commits) { commit in
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(TitleSanitizer.sanitize(commit.subject) ?? commit.subject)
-                            .font(.sora(11, weight: .medium))
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                        HStack(spacing: 6) {
-                            Text(repoNamesByID[commit.repoID] ?? "-")
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                            Text(commit.shortHash)
-                            Text("+\(commit.insertions) -\(commit.deletions)")
-                            Spacer(minLength: 6)
-                            Text(Format.relativeDate(commit.date))
-                        }
-                        .font(.sora(9).monospacedDigit())
-                        .foregroundStyle(Color.stxMuted)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    if commit.id != commits.last?.id { StxRule() }
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                    GitRecentCommitTableRow(row: row)
+                    if index < rows.count - 1 { StxRule() }
                 }
             }
         }
         .gitMainCard()
+    }
+}
+
+private struct GitRecentCommitTableRow: View {
+    let row: GitActivityViewModel.OverviewCommitRow
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(row.subject)
+                .font(.sora(11, weight: .medium))
+                .lineLimit(1)
+                .truncationMode(.tail)
+            HStack(spacing: 6) {
+                Text(row.repoName)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(row.shortHash)
+                Text(row.churnLabel)
+                Spacer(minLength: 6)
+                Text(row.dateLabel)
+            }
+            .font(.sora(9).monospacedDigit())
+            .foregroundStyle(Color.stxMuted)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
     }
 }
 

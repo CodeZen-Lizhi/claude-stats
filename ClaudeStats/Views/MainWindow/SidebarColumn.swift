@@ -42,6 +42,9 @@ struct SidebarColumn: View {
             SidebarRow(title: "Settings", symbol: "gearshape", isSelected: false, action: onOpenSettings)
         }
         .padding(.bottom, 10)
+        .onAppear { refreshSessionGroups() }
+        .onChange(of: env.store.lastRefreshedAt) { _, _ in refreshSessionGroups() }
+        .onChange(of: env.preferences.selectedProvider) { _, _ in refreshSessionGroups() }
     }
 
     // MARK: - Top nav
@@ -161,14 +164,17 @@ struct SidebarColumn: View {
 
     @ViewBuilder
     private func sessionsTree(vm: SessionListViewModel) -> some View {
-        let provider = env.preferences.selectedProvider
-        let groups = vm.projectGroups(from: env.store, provider: provider)
+        let groups = vm.projectGroups
 
         if groups.isEmpty {
-            sessionsEmptyState(provider: provider, hasQuery: !vm.searchText.isEmpty)
+            sessionsEmptyState(
+                hasQuery: !vm.searchText.isEmpty,
+                isLoading: env.store.isLoading,
+                hasProviderSessions: vm.hasProviderSessions
+            )
                 .frame(maxHeight: .infinity, alignment: .top)
         } else {
-            FadingScrollView {
+            FadingScrollView(chrome: .plain) {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(groups) { group in
                         let isExpanded = vm.expandedProjects.contains(group.id)
@@ -196,10 +202,9 @@ struct SidebarColumn: View {
     }
 
     @ViewBuilder
-    private func sessionsEmptyState(provider: ProviderKind, hasQuery: Bool) -> some View {
-        let isLoading = env.store.isLoading && env.store.sessions(for: provider).isEmpty
+    private func sessionsEmptyState(hasQuery: Bool, isLoading: Bool, hasProviderSessions: Bool) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            if isLoading {
+            if isLoading && !hasProviderSessions {
                 Text("Scanning…").font(.sora(11)).foregroundStyle(Color.stxMuted)
             } else if hasQuery {
                 Text("No matches").font(.sora(11)).foregroundStyle(Color.stxMuted)
@@ -209,6 +214,10 @@ struct SidebarColumn: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
+    }
+
+    private func refreshSessionGroups() {
+        sessionsVM.refresh(from: env.store, provider: env.preferences.selectedProvider)
     }
 }
 
@@ -303,7 +312,6 @@ private struct ProjectSidebarRow: View {
 /// A session leaf row under an expanded project: title + relative date.
 /// Indented to align under the project's folder glyph.
 private struct SessionSidebarRow: View {
-    @Environment(AppEnvironment.self) private var env
     let session: Session
     let isSelected: Bool
     let select: () -> Void

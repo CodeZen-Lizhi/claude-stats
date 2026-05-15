@@ -207,6 +207,8 @@ struct MenuPanelView: View {
     @Environment(AppEnvironment.self) private var env
     @Environment(\.openWindow) private var openWindow
 
+    private static let panelSize = CGSize(width: 380, height: 560)
+
     @State private var pane: StatsPane = .usage
 
     var body: some View {
@@ -215,7 +217,10 @@ struct MenuPanelView: View {
             StxRule()
             footer
         }
-        .frame(width: 380, height: 560)
+        .frame(width: Self.panelSize.width, height: Self.panelSize.height, alignment: .topLeading)
+        .fixedSize(horizontal: true, vertical: true)
+        .clipped()
+        .background(MenuPanelWindowSizeLock(size: Self.panelSize))
         .font(.sora(13))
         .tint(.stxAccent)
     }
@@ -265,6 +270,64 @@ struct MenuPanelView: View {
         .foregroundStyle(Color.stxMuted)
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
+    }
+}
+
+/// `MenuBarExtra` with `.window` derives its NSPanel size from SwiftUI's
+/// preferred size on every interaction. The compact stats panel intentionally
+/// contains flexible scroll/chart content, so we pin the host panel to the
+/// product's fixed compact size and avoid a click-triggered resize feedback loop.
+private struct MenuPanelWindowSizeLock: NSViewRepresentable {
+    let size: CGSize
+
+    func makeNSView(context: Context) -> LockView {
+        let view = LockView()
+        view.size = size
+        return view
+    }
+
+    func updateNSView(_ nsView: LockView, context: Context) {
+        nsView.size = size
+        nsView.applySoon()
+    }
+
+    final class LockView: NSView {
+        var size: CGSize = .zero
+        private weak var lockedWindow: NSWindow?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            lockedWindow = window
+            applySoon()
+        }
+
+        override func layout() {
+            super.layout()
+            applyIfNeeded()
+        }
+
+        func applySoon() {
+            DispatchQueue.main.async { [weak self] in
+                self?.applyIfNeeded()
+            }
+        }
+
+        private func applyIfNeeded() {
+            guard let window = window ?? lockedWindow, size != .zero else { return }
+            lockedWindow = window
+            let target = NSSize(width: size.width, height: size.height)
+            if window.contentMinSize != target {
+                window.contentMinSize = target
+            }
+            if window.contentMaxSize != target {
+                window.contentMaxSize = target
+            }
+            guard let contentView = window.contentView else { return }
+            let current = contentView.bounds.size
+            if abs(current.width - target.width) > 0.5 || abs(current.height - target.height) > 0.5 {
+                window.setContentSize(target)
+            }
+        }
     }
 }
 

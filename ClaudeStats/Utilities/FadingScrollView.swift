@@ -10,30 +10,54 @@ import AppKit
 /// regardless of system settings or whether the content is a `ScrollView` or a
 /// `List`.
 struct FadingScrollView<Content: View>: View {
+    enum Chrome {
+        case fading
+        case plain
+    }
+
+    private let chrome: Chrome
     private let content: () -> Content
     @State private var model = ScrollIndicatorModel()
+    @State private var coordinateSpaceName = UUID()
 
-    private let coordinateSpace = "FadingScrollView"
-
-    init(@ViewBuilder content: @escaping () -> Content) {
+    init(chrome: Chrome = .fading, @ViewBuilder content: @escaping () -> Content) {
+        self.chrome = chrome
         self.content = content
     }
 
+    @ViewBuilder
     var body: some View {
+        switch chrome {
+        case .fading:
+            fadingBody
+        case .plain:
+            plainBody
+        }
+    }
+
+    private var plainBody: some View {
+        ScrollView {
+            content()
+        }
+    }
+
+    private var fadingBody: some View {
         ScrollView {
             content()
                 .background(NativeScrollerSuppressor())
                 .background(
                     GeometryReader { proxy in
                         Color.clear
-                            .preference(key: ContentFrameKey.self,
-                                        value: proxy.frame(in: .named(coordinateSpace)))
+                            .preference(
+                                key: ContentFrameKey.self,
+                                value: ContentFrameMetrics(frame: proxy.frame(in: .named(coordinateSpaceName)))
+                            )
                             .allowsHitTesting(false)
                     }
                 )
         }
         .scrollIndicators(.hidden)
-        .coordinateSpace(.named(coordinateSpace))
+        .coordinateSpace(.named(coordinateSpaceName))
         .background(
             GeometryReader { proxy in
                 Color.clear
@@ -48,8 +72,8 @@ struct FadingScrollView<Content: View>: View {
                     .allowsHitTesting(false)
             }
         )
-        .onPreferenceChange(ContentFrameKey.self) { [model] frame in
-            MainActor.assumeIsolated { model.contentFrameChanged(frame) }
+        .onPreferenceChange(ContentFrameKey.self) { [model] metrics in
+            MainActor.assumeIsolated { model.contentFrameChanged(metrics) }
         }
         .mask { EdgeFadeMask(model: model) }
         .overlay(alignment: .topTrailing) { ScrollThumb(model: model) }
@@ -114,11 +138,14 @@ private final class ScrollIndicatorModel {
 
     @ObservationIgnored private var hideTask: Task<Void, Never>?
 
-    func contentFrameChanged(_ frame: CGRect) {
-        contentHeight = frame.height
-        let newOffset = -frame.minY
-        if abs(newOffset - offset) > 0.5 { flash() }
-        offset = newOffset
+    func contentFrameChanged(_ metrics: ContentFrameMetrics) {
+        if abs(metrics.contentHeight - contentHeight) > 0.5 {
+            contentHeight = metrics.contentHeight
+        }
+        if abs(metrics.offsetY - offset) > 0.5 {
+            offset = metrics.offsetY
+            flash()
+        }
     }
 
     private func flash() {
@@ -134,9 +161,26 @@ private final class ScrollIndicatorModel {
     }
 }
 
+private struct ContentFrameMetrics: Equatable {
+    var contentHeight: CGFloat
+    var offsetY: CGFloat
+
+    static let zero = ContentFrameMetrics(contentHeight: 0, offsetY: 0)
+
+    init(contentHeight: CGFloat, offsetY: CGFloat) {
+        self.contentHeight = contentHeight
+        self.offsetY = offsetY
+    }
+
+    init(frame: CGRect) {
+        contentHeight = frame.height
+        offsetY = -frame.minY
+    }
+}
+
 private struct ContentFrameKey: PreferenceKey {
-    static let defaultValue: CGRect = .zero
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+    static let defaultValue: ContentFrameMetrics = .zero
+    static func reduce(value: inout ContentFrameMetrics, nextValue: () -> ContentFrameMetrics) {
         let next = nextValue()
         if next != .zero { value = next }
     }

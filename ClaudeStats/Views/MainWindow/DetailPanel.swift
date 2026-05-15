@@ -22,6 +22,5 @@ struct DetailPanel<Content: View>: View {
         content()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.stxBackground, in: shape)
-            .clipShape(shape)
     }
 }

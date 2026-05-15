@@ -18,6 +18,14 @@ enum HeatmapMetrics {
         let weeks = calendar.dateComponents([.weekOfYear], from: firstWeekStart, to: lastWeekStart).weekOfYear ?? 0
         return max(1, weeks + 1)
     }
+
+    static func cellSize(forWidth width: CGFloat, weekCount: Int) -> CGFloat {
+        guard weekCount > 0 else { return cellSizeMax }
+        let labelWidth = weekdayColumnWidth + weekdayGap
+        let available = max(0, width - labelWidth)
+        let perCell = (available - CGFloat(weekCount - 1) * spacing) / CGFloat(weekCount)
+        return min(cellSizeMax, max(cellSizeMin, floor(perCell)))
+    }
 }
 
 /// Visual treatment for one heatmap day. Keeping this as plain data lets the
@@ -43,23 +51,16 @@ struct ResponsiveHeatmap<Content: View>: View {
     @State private var cellSize: CGFloat = HeatmapMetrics.cellSizeMax
 
     var body: some View {
-        content(cellSize)
+        let weeks = weekCount
+        return content(cellSize)
             .frame(maxWidth: .infinity, alignment: .leading)
             .onGeometryChange(for: CGFloat.self) { proxy in
-                Self.cellSize(forWidth: proxy.size.width, weekCount: weekCount)
+                HeatmapMetrics.cellSize(forWidth: proxy.size.width, weekCount: weeks)
             } action: { newCellSize in
                 if newCellSize > 0, newCellSize != cellSize {
                     cellSize = newCellSize
                 }
             }
-    }
-
-    static func cellSize(forWidth width: CGFloat, weekCount: Int) -> CGFloat {
-        guard weekCount > 0 else { return HeatmapMetrics.cellSizeMax }
-        let labelWidth = HeatmapMetrics.weekdayColumnWidth + HeatmapMetrics.weekdayGap
-        let available = max(0, width - labelWidth)
-        let perCell = (available - CGFloat(weekCount - 1) * HeatmapMetrics.spacing) / CGFloat(weekCount)
-        return min(HeatmapMetrics.cellSizeMax, max(HeatmapMetrics.cellSizeMin, floor(perCell)))
     }
 }
 

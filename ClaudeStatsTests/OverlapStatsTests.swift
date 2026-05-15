@@ -73,7 +73,7 @@ struct OverlapStatsTests {
     }
 
     @Test("Pearson is ~+1 when series move together")
-    func pearsonPerfectPositive() {
+    func pearsonPerfectPositive() throws {
         let anchor = Date.now
         let range = makeRange(daysBack: 5, anchor: anchor)
         let values = [1, 2, 3, 4, 5]
@@ -84,7 +84,7 @@ struct OverlapStatsTests {
             HeatmapCell(date: day(-idx, from: anchor), value: v * 3)
         }
         let stats = OverlapStats.compute(local: local, github: github, range: range)
-        let r = try? #require(stats.pearson)
-        #expect(abs((r ?? 0) - 1.0) < 1e-9)
+        let r = try #require(stats.pearson)
+        #expect(abs(r - 1.0) < 1e-9)
     }
 }

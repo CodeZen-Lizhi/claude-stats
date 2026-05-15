@@ -33,13 +33,23 @@ struct GitCommit: Sendable, Identifiable, Hashable {
 struct RepoActivity: Sendable, Identifiable {
     let repo: GitRepo
     let commits: [GitCommit]
+    let commitCount: Int
+    let insertions: Int
+    let deletions: Int
+    let filesChanged: Int
+    let churn: Int
+
+    init(repo: GitRepo, commits: [GitCommit]) {
+        self.repo = repo
+        self.commits = commits
+        commitCount = commits.count
+        insertions = commits.reduce(0) { $0 + $1.insertions }
+        deletions = commits.reduce(0) { $0 + $1.deletions }
+        filesChanged = commits.reduce(0) { $0 + $1.filesChanged }
+        churn = insertions + deletions
+    }
 
     var id: String { repo.id }
-    var commitCount: Int { commits.count }
-    var insertions: Int { commits.reduce(0) { $0 + $1.insertions } }
-    var deletions: Int { commits.reduce(0) { $0 + $1.deletions } }
-    var filesChanged: Int { commits.reduce(0) { $0 + $1.filesChanged } }
-    var churn: Int { insertions + deletions }
 }
 
 /// Commit activity for one repo in one time bucket — the git analogue of ``ModelBucket``.

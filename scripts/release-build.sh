@@ -115,10 +115,62 @@ fi
 
 make_dmg() {
     local stage; stage="$(mktemp -d)"
+    local rw_dmg="$DIST/.ClaudeStats-$VERSION-rw.dmg"
+    local mount_dir; mount_dir="$(mktemp -d)"
+    local attached=0
+
+    cleanup_dmg_stage() {
+        if [[ $attached -eq 1 ]]; then
+            hdiutil detach "$mount_dir" -quiet || hdiutil detach "$mount_dir" -force || true
+        fi
+        rm -f "$rw_dmg"
+        rmdir "$mount_dir" 2>/dev/null || true
+        rm -rf "$stage"
+    }
+    trap cleanup_dmg_stage RETURN
+
     cp -R "$APP" "$stage/"
     ln -s /Applications "$stage/Applications"
-    hdiutil create -volname "Claude Stats" -srcfolder "$stage" -ov -format UDZO "$DMG"
-    rm -rf "$stage"
+    mkdir -p "$stage/.background"
+    swift scripts/render-dmg-background.swift "$stage/.background/dmg-background.png"
+
+    hdiutil create -volname "Claude Stats" -srcfolder "$stage" -ov -fs HFS+ -format UDRW "$rw_dmg"
+    hdiutil attach "$rw_dmg" -mountpoint "$mount_dir" -nobrowse -noverify -noautoopen
+    attached=1
+
+    osascript <<APPLESCRIPT
+tell application "Finder"
+    tell disk "Claude Stats"
+        open
+        set current view of container window to icon view
+        set toolbar visible of container window to false
+        set statusbar visible of container window to false
+        set the bounds of container window to {220, 120, 1140, 682}
+
+        set viewOptions to the icon view options of container window
+        set arrangement of viewOptions to not arranged
+        set icon size of viewOptions to 128
+        set text size of viewOptions to 16
+        set background picture of viewOptions to file ".background:dmg-background.png"
+
+        set position of item "Claude Stats.app" to {235, 255}
+        set position of item "Applications" to {665, 255}
+        select item "Claude Stats.app"
+
+        close
+        open
+        update without registering applications
+        delay 1
+    end tell
+end tell
+APPLESCRIPT
+
+    sync
+    hdiutil detach "$mount_dir" -quiet || hdiutil detach "$mount_dir" -force
+    attached=0
+    hdiutil convert "$rw_dmg" -format UDZO -imagekey zlib-level=9 -o "$DMG" -ov
+    trap - RETURN
+    cleanup_dmg_stage
 }
 
 if [[ $SIGNED -eq 0 ]]; then
