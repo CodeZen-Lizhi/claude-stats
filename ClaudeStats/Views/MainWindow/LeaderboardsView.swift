@@ -10,7 +10,7 @@ struct LeaderboardsView: View {
     }
 
     var body: some View {
-        ScrollView {
+        FadingScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 header
                 if env.preferences.leaderboardsEnabled {

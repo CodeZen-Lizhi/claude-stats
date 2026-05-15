@@ -8,7 +8,7 @@ struct CenteredPaneContainer<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        ScrollView {
+        FadingScrollView {
             content()
                 .frame(maxWidth: maxWidth)
                 .frame(maxWidth: .infinity)

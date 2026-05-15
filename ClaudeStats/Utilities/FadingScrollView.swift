@@ -84,18 +84,20 @@ private struct EdgeFadeMask: View {
 
 private struct ScrollThumb: View {
     let model: ScrollIndicatorModel
+    private let verticalInset: CGFloat = 10
 
     var body: some View {
         let overflow = model.contentHeight - model.viewportHeight
         if overflow > 1, model.viewportHeight > 1 {
-            let track = model.viewportHeight
+            let inset = min(verticalInset, model.viewportHeight / 3)
+            let track = max(model.viewportHeight - inset * 2, 1)
             let thumbHeight = min(track, max(28, track * (model.viewportHeight / model.contentHeight)))
             let progress = min(max(model.offset / overflow, 0), 1)
             Capsule()
                 .fill(Color.primary.opacity(0.32))
                 .frame(width: 4, height: thumbHeight)
                 .padding(.trailing, 2.5)
-                .offset(y: (track - thumbHeight) * progress)
+                .offset(y: inset + (track - thumbHeight) * progress)
                 .opacity(model.indicatorShown ? 1 : 0)
                 .allowsHitTesting(false)
         }

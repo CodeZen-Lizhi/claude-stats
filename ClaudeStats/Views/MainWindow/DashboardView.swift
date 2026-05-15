@@ -34,7 +34,7 @@ struct DashboardView: View {
     }
 
     var body: some View {
-        ScrollView {
+        FadingScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
                 controls

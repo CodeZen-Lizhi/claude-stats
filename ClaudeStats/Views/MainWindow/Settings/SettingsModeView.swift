@@ -15,7 +15,7 @@ struct SettingsModeView: View {
                 .frame(width: 220)
 
             DetailPanel(roundedLeading: true) {
-                ScrollView {
+                FadingScrollView {
                     VStack(alignment: .leading, spacing: 32) {
                         Text(section.title)
                             .font(.sora(28, weight: .semibold))

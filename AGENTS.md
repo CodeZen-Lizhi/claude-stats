@@ -15,6 +15,10 @@ the same bundle id cause Launch Services conflicts and the menu-bar item silentl
 fails to appear. Always use `/tmp/Codex-stats-build` as the `-derivedDataPath` and
 launch by full path (the script does this).
 
+After every round that changes code, run `bash scripts/run-debug.sh` before
+responding so the latest build is compiled and launched from the canonical
+DerivedData path.
+
 ## Tests
 
 ```bash
