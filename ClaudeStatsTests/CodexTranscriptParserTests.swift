@@ -51,6 +51,21 @@ struct CodexTranscriptParserTests {
         #expect(stats.title == CodexSampleTranscript.threadName)
     }
 
+    @Test("Extracts displayable conversation messages")
+    func displayMessages() async throws {
+        let root = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let url = root.appendingPathComponent("rollout.jsonl")
+        try TempDir.write(CodexSampleTranscript.text, to: url)
+
+        let messages = await CodexTranscriptParser(pricing: CodexSampleTranscript.pricing)
+            .messages(transcriptAt: url)
+
+        #expect(messages.map(\.role) == [.user, .assistant, .user, .assistant])
+        #expect(messages.map(\.text) == ["please refactor the parser", "on it", "more please", "sure"])
+        #expect(messages.first?.timestamp == (try Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse("2026-01-10T09:00:02.000Z")))
+    }
+
     @Test("First/last activity span the transcript; timeline has one bucket per hour")
     func activityWindow() async throws {
         let stats = try await parseSample()

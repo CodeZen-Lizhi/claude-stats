@@ -96,6 +96,41 @@ struct CodexTranscriptParser: Sendable {
         )
     }
 
+    func messages(transcriptAt url: URL) async -> [SessionTranscriptMessage] {
+        guard let data = try? Data(contentsOf: url) else { return [] }
+
+        var messages: [SessionTranscriptMessage] = []
+        let decoder = JSONDecoder()
+        for (index, lineBytes) in data.split(separator: 0x0A /* \n */, omittingEmptySubsequences: true).enumerated() {
+            guard let line = try? decoder.decode(CodexLine.self, from: Data(lineBytes)),
+                  line.type == "event_msg",
+                  let payload = line.payload else { continue }
+
+            let role: SessionTranscriptMessage.Role
+            switch payload.type {
+            case "user_message":
+                role = .user
+            case "agent_message":
+                role = .assistant
+            default:
+                continue
+            }
+
+            guard let text = payload.message?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !text.isEmpty else { continue }
+
+            messages.append(SessionTranscriptMessage(
+                id: "codex-\(index)",
+                role: role,
+                text: text,
+                timestamp: ISO8601.parse(line.timestamp),
+                model: nil
+            ))
+        }
+
+        return messages
+    }
+
     private func track(_ date: Date?, _ first: inout Date?, _ last: inout Date?) {
         guard let date else { return }
         if first == nil || date < first! { first = date }

@@ -24,6 +24,11 @@ struct CodexProvider: Provider {
                    fallbackTitle: session.projectDisplayName)
     }
 
+    func transcriptMessages(for session: Session) async -> [SessionTranscriptMessage] {
+        await CodexTranscriptParser(pricing: pricing)
+            .messages(transcriptAt: URL(fileURLWithPath: session.filePath))
+    }
+
     func cacheHitRate(for usage: TokenUsage) -> Double? {
         usage.cachedInputRate
     }

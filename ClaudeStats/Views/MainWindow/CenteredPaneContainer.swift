@@ -4,7 +4,7 @@ import SwiftUI
 /// intentional inside the wide main window: a centered column at `maxWidth`,
 /// padded and vertically scrollable. Avoids redesigning each pane in Phase A.
 struct CenteredPaneContainer<Content: View>: View {
-    var maxWidth: CGFloat = 680
+    var maxWidth: CGFloat = 980
     var topPadding: CGFloat = 52
     var bottomPadding: CGFloat = 20
     @ViewBuilder var content: () -> Content
@@ -14,7 +14,7 @@ struct CenteredPaneContainer<Content: View>: View {
             content()
                 .frame(maxWidth: maxWidth)
                 .frame(maxWidth: .infinity)
-                .padding(.horizontal, 24)
+                .padding(.horizontal, 20)
                 .padding(.top, topPadding)
                 .padding(.bottom, bottomPadding)
         }

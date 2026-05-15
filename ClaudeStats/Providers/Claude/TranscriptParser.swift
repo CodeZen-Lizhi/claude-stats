@@ -62,7 +62,7 @@ struct TranscriptParser: Sendable {
                 let date = ISO8601.parse(line.timestamp)
                 track(date, &firstActivity, &lastActivity)
                 if let date { messageTimestamps.append(date) }
-                if firstUserTitle == nil, case .text(let raw)? = line.message?.content,
+                if firstUserTitle == nil, let raw = line.message?.content?.titleText,
                    let cleaned = TitleSanitizer.sanitize(raw) {
                     firstUserTitle = cleaned
                 }
@@ -92,6 +92,39 @@ struct TranscriptParser: Sendable {
             timeline: timeline,
             activityIntervals: Self.coalesceBursts(messageTimestamps)
         )
+    }
+
+    func messages(transcriptAt url: URL) async -> [SessionTranscriptMessage] {
+        guard let data = try? Data(contentsOf: url) else { return [] }
+
+        var messages: [SessionTranscriptMessage] = []
+        let decoder = JSONDecoder()
+        for (index, lineBytes) in data.split(separator: 0x0A /* \n */, omittingEmptySubsequences: true).enumerated() {
+            guard let line = try? decoder.decode(TranscriptLine.self, from: Data(lineBytes)),
+                  let content = line.message?.content,
+                  let text = content.displayText?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !text.isEmpty else { continue }
+
+            let role: SessionTranscriptMessage.Role
+            switch line.type {
+            case "user":
+                role = content.isToolOnly ? .tool : .user
+            case "assistant":
+                role = .assistant
+            default:
+                continue
+            }
+
+            messages.append(SessionTranscriptMessage(
+                id: "claude-\(index)",
+                role: role,
+                text: text,
+                timestamp: ISO8601.parse(line.timestamp),
+                model: line.message?.model
+            ))
+        }
+
+        return messages
     }
 
     private func track(_ date: Date?, _ first: inout Date?, _ last: inout Date?) {
@@ -186,14 +219,97 @@ private struct TranscriptLine: Decodable {
         }
     }
 
-    /// `message.content` is a string for plain prompts, or an array of
-    /// content blocks otherwise. We only need to recover a string prompt.
+    /// `message.content` is a string for plain prompts, or an array of content
+    /// blocks otherwise. Text feeds both titles and the transcript detail pane;
+    /// tool blocks get a short readable label instead of raw JSON.
     enum Content: Decodable {
         case text(String)
-        case blocks
+        case blocks([ContentBlock])
+
         init(from decoder: Decoder) throws {
             let container = try decoder.singleValueContainer()
-            if let s = try? container.decode(String.self) { self = .text(s) } else { self = .blocks }
+            if let s = try? container.decode(String.self) {
+                self = .text(s)
+            } else {
+                self = .blocks((try? container.decode([ContentBlock].self)) ?? [])
+            }
+        }
+
+        var titleText: String? {
+            switch self {
+            case .text(let text):
+                return text
+            case .blocks(let blocks):
+                return blocks.first { $0.type == "text" }?.text
+            }
+        }
+
+        var displayText: String? {
+            let parts: [String]
+            switch self {
+            case .text(let text):
+                parts = [text]
+            case .blocks(let blocks):
+                parts = blocks.compactMap(\.displayText)
+            }
+            let text = parts
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .joined(separator: "\n\n")
+            return text.isEmpty ? nil : text
+        }
+
+        var isToolOnly: Bool {
+            guard case .blocks(let blocks) = self, !blocks.isEmpty else { return false }
+            return blocks.allSatisfy { $0.isToolBlock }
+        }
+    }
+
+    struct ContentBlock: Decodable {
+        let type: String?
+        let text: String?
+        let name: String?
+        let content: BlockContent?
+
+        var displayText: String? {
+            switch type {
+            case "text":
+                return text
+            case "tool_use":
+                return name.map { "Tool call: \($0)" }
+            case "tool_result":
+                if let content = content?.text, !content.isEmpty {
+                    return "Tool result:\n\(content)"
+                }
+                return "Tool result"
+            default:
+                return text ?? content?.text
+            }
+        }
+
+        var isToolBlock: Bool {
+            type == "tool_use" || type == "tool_result"
+        }
+    }
+
+    enum BlockContent: Decodable {
+        case text(String)
+        case ignored
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if let text = try? container.decode(String.self) {
+                self = .text(text)
+            } else {
+                self = .ignored
+            }
+        }
+
+        var text: String? {
+            switch self {
+            case .text(let text): text
+            case .ignored: nil
+            }
         }
     }
 }

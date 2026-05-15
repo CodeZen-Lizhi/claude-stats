@@ -22,9 +22,9 @@ struct SettingsModeView: View {
                             .padding(.bottom, 4)
                         sectionContent
                     }
-                    .frame(maxWidth: 720, alignment: .leading)
+                    .frame(maxWidth: 980, alignment: .leading)
                     .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 32)
+                    .padding(.horizontal, 20)
                     .padding(.top, 52)
                     .padding(.bottom, 28)
                 }

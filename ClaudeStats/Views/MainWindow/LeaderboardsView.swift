@@ -21,7 +21,7 @@ struct LeaderboardsView: View {
                     disabledPanel
                 }
             }
-            .frame(maxWidth: 760, alignment: .leading)
+            .frame(maxWidth: 980, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 6)
         }

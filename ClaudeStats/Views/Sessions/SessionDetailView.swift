@@ -12,6 +12,8 @@ import AppKit
 struct SessionDetailView: View {
     @Environment(AppEnvironment.self) private var env
     let session: Session
+    @State private var transcriptMessages: [SessionTranscriptMessage] = []
+    @State private var transcriptIsLoading = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -24,9 +26,13 @@ struct SessionDetailView: View {
                 missingStatsPlaceholder
             }
 
+            transcriptSection
             actionRow
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .task(id: session.id) {
+            await loadTranscript()
+        }
     }
 
     // MARK: - Header
@@ -91,6 +97,66 @@ struct SessionDetailView: View {
         }
     }
 
+    // MARK: - Transcript
+
+    private var transcriptSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("CONVERSATION")
+                    .font(.sora(10, weight: .semibold))
+                    .tracking(0.6)
+                    .foregroundStyle(Color.stxMuted)
+
+                Spacer(minLength: 0)
+
+                if transcriptIsLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                        .scaleEffect(0.72)
+                } else if !transcriptMessages.isEmpty {
+                    Text("\(transcriptMessages.count) messages")
+                        .font(.sora(10))
+                        .foregroundStyle(Color.stxMuted)
+                }
+            }
+
+            if transcriptIsLoading && transcriptMessages.isEmpty {
+                transcriptPlaceholder("Loading transcript…")
+            } else if transcriptMessages.isEmpty {
+                transcriptPlaceholder("No readable conversation content found in this transcript.")
+            } else {
+                LazyVStack(alignment: .leading, spacing: 10) {
+                    ForEach(transcriptMessages) { message in
+                        TranscriptMessageRow(
+                            message: message,
+                            modelDisplayName: message.model.map {
+                                env.store.displayName(forModel: $0, provider: session.provider)
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private func transcriptPlaceholder(_ text: String) -> some View {
+        Text(text)
+            .font(.sora(12))
+            .foregroundStyle(Color.stxMuted)
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.stxStroke, lineWidth: 1))
+    }
+
+    private func loadTranscript() async {
+        transcriptIsLoading = true
+        let messages = await env.store.transcriptMessages(for: session)
+        guard !Task.isCancelled else { return }
+        transcriptMessages = messages
+        transcriptIsLoading = false
+    }
+
     // MARK: - Missing stats placeholder
 
     private var missingStatsPlaceholder: some View {
@@ -126,6 +192,66 @@ struct SessionDetailView: View {
             Spacer(minLength: 0)
         }
         .font(.sora(11))
+    }
+}
+
+private struct TranscriptMessageRow: View {
+    let message: SessionTranscriptMessage
+    let modelDisplayName: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Label(message.role.displayName, systemImage: message.role.symbol)
+                    .font(.sora(10, weight: .semibold))
+                    .foregroundStyle(message.role.accentColor)
+
+                if let modelDisplayName {
+                    Text(modelDisplayName)
+                        .font(.sora(10))
+                        .foregroundStyle(Color.stxMuted)
+                }
+
+                Spacer(minLength: 0)
+
+                if let timestamp = message.timestamp {
+                    Text(Format.shortDate(timestamp))
+                        .font(.sora(10).monospacedDigit())
+                        .foregroundStyle(Color.stxMuted)
+                }
+            }
+
+            Text(message.text)
+                .font(.sora(12))
+                .foregroundStyle(.primary)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.stxStroke, lineWidth: 1))
+    }
+}
+
+private extension SessionTranscriptMessage.Role {
+    var symbol: String {
+        switch self {
+        case .user: "person"
+        case .assistant: "sparkles"
+        case .tool: "wrench.and.screwdriver"
+        case .system: "gearshape"
+        }
+    }
+
+    var accentColor: Color {
+        switch self {
+        case .user: .stxAccent
+        case .assistant: .primary
+        case .tool: .stxMuted
+        case .system: .stxMuted
+        }
     }
 }
 

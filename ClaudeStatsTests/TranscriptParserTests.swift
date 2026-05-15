@@ -71,6 +71,27 @@ struct TranscriptParserTests {
         #expect(stats.title == "Build the thing")
     }
 
+    @Test("Extracts displayable conversation messages")
+    func displayMessages() async throws {
+        let dir = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("session.jsonl")
+        try TempDir.write(SampleTranscript.text, to: url)
+
+        let messages = await TranscriptParser(pricing: TestPricing.table)
+            .messages(transcriptAt: url)
+
+        #expect(messages.map(\.role) == [.user, .assistant, .tool, .assistant, .assistant])
+        #expect(messages.map(\.text) == [
+            "please refactor the parser",
+            "on it",
+            "Tool result:\nok",
+            "done",
+            "more",
+        ])
+        #expect(messages[1].model == "model-a")
+    }
+
     @Test("Returns nil for a transcript with no real messages")
     func returnsNilForEmptyTranscript() async throws {
         let dir = try TempDir.make()

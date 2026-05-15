@@ -63,6 +63,11 @@ final class SessionStore {
         registry.provider(for: provider)?.cacheHitRate(for: usage) ?? usage.cacheHitRate
     }
 
+    func transcriptMessages(for session: Session) async -> [SessionTranscriptMessage] {
+        guard let provider = registry.provider(for: session.provider) else { return [] }
+        return await provider.transcriptMessages(for: session)
+    }
+
     func summary(for period: StatsPeriod, provider: ProviderKind? = nil, now: Date = .now) -> UsageSummary {
         UsageSummary.make(period: period, sessions: sessions(matching: provider), pricing: pricing, now: now)
     }

@@ -26,6 +26,10 @@ protocol Provider: Sendable {
     /// or unreadable.
     func parse(_ session: Session) async -> SessionStats?
 
+    /// Parse one transcript into displayable conversation entries. Providers
+    /// decide which provider-specific events are useful enough to show.
+    func transcriptMessages(for session: Session) async -> [SessionTranscriptMessage]
+
     /// Pretty label for a canonical model id. Used wherever a model surfaces
     /// to the user (Dashboard breakdown, "Favorite model" stat, …). Default
     /// returns the id unchanged — providers override when their ids carry a
@@ -39,6 +43,7 @@ protocol Provider: Sendable {
 
 extension Provider {
     var dataDirectoryPath: String? { nil }
+    func transcriptMessages(for session: Session) async -> [SessionTranscriptMessage] { [] }
     func displayName(forModel id: String) -> String { id }
     func cacheHitRate(for usage: TokenUsage) -> Double? { usage.cacheHitRate }
 }

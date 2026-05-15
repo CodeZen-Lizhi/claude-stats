@@ -169,7 +169,7 @@ struct MainWindowView: View {
             case .activity:
                 CenteredPaneContainer(topPadding: 38) { AIActivityView(mode: .interactive) }
             case .git:
-                CenteredPaneContainer(topPadding: 38) { GitActivityView() }
+                MainGitActivityView()
             }
         }
     }
