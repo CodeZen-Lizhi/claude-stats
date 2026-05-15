@@ -5,6 +5,8 @@ import SwiftUI
 /// padded and vertically scrollable. Avoids redesigning each pane in Phase A.
 struct CenteredPaneContainer<Content: View>: View {
     var maxWidth: CGFloat = 680
+    var topPadding: CGFloat = 52
+    var bottomPadding: CGFloat = 20
     @ViewBuilder var content: () -> Content
 
     var body: some View {
@@ -13,7 +15,8 @@ struct CenteredPaneContainer<Content: View>: View {
                 .frame(maxWidth: maxWidth)
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 24)
-                .padding(.vertical, 20)
+                .padding(.top, topPadding)
+                .padding(.bottom, bottomPadding)
         }
     }
 }
