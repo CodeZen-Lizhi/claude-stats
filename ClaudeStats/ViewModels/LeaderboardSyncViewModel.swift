@@ -33,6 +33,19 @@ final class LeaderboardSyncViewModel {
     private(set) var scoreError: String?
     private(set) var scoreEmptyMessage: String?
     private(set) var lastLoadedPeriodKey: String?
+    private(set) var currentUserHash: String?
+    private(set) var isSavingProfile = false
+
+    var avatarSeed: String {
+        preferences.leaderboardAvatarSeed.isEmpty
+            ? LeaderboardAvatarSeed.fallback
+            : preferences.leaderboardAvatarSeed
+    }
+
+    var currentUserScore: LeaderboardScore? {
+        guard let currentUserHash else { return nil }
+        return scores.first { $0.userHash == currentUserHash }
+    }
 
     private let preferences: Preferences
     private let store: SessionStore
@@ -79,8 +92,19 @@ final class LeaderboardSyncViewModel {
             accountState = .unknown
             return
         }
+        ensureLocalAvatarSeed()
         syncStatus = .checkingAccount
         accountState = await client.accountState()
+        if accountState == .available {
+            do {
+                try await reconcileCurrentUserProfile()
+            } catch {
+                let reason = userFacingMessage(error)
+                preferences.leaderboardLastSyncError = reason
+                syncStatus = .failed(reason)
+                return
+            }
+        }
         syncStatus = statusAfterAccountCheck()
     }
 
@@ -93,6 +117,7 @@ final class LeaderboardSyncViewModel {
             syncStatus = .disabled
             return
         }
+        ensureLocalAvatarSeed()
         let nickname = preferences.leaderboardNickname.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !nickname.isEmpty else {
             syncStatus = .needsNickname
@@ -100,6 +125,7 @@ final class LeaderboardSyncViewModel {
         }
         if !force, let last = preferences.leaderboardLastSyncedAt,
            Date().timeIntervalSince(last) < Self.syncInterval {
+            await reconcileCurrentUserProfileIfPossible()
             syncStatus = .synced(last)
             return
         }
@@ -108,6 +134,14 @@ final class LeaderboardSyncViewModel {
         accountState = await client.accountState()
         guard accountState == .available else {
             let reason = accountState.displayText
+            preferences.leaderboardLastSyncError = reason
+            syncStatus = .failed(reason)
+            return
+        }
+        do {
+            try await reconcileCurrentUserProfile()
+        } catch {
+            let reason = userFacingMessage(error)
             preferences.leaderboardLastSyncError = reason
             syncStatus = .failed(reason)
             return
@@ -132,7 +166,11 @@ final class LeaderboardSyncViewModel {
         }
 
         do {
-            try await client.submit(submissions)
+            let profile = try await client.submit(
+                submissions,
+                profile: LeaderboardProfileDraft(nickname: nickname, avatarSeed: ensureLocalAvatarSeed())
+            )
+            remember(profile: profile)
             let syncedAt = Date()
             preferences.leaderboardLastSyncedAt = syncedAt
             preferences.leaderboardLastSyncError = ""
@@ -154,6 +192,8 @@ final class LeaderboardSyncViewModel {
     }
 
     func loadScores(metric: LeaderboardMetric, period: LeaderboardPeriod, now: Date = .now) async {
+        ensureLocalAvatarSeed()
+        await reconcileCurrentUserProfileIfPossible()
         let requestedWindow = LeaderboardPeriodCalculator.window(for: period, now: now)
         lastLoadedPeriodKey = requestedWindow.periodKey
         scoreError = nil
@@ -189,6 +229,21 @@ final class LeaderboardSyncViewModel {
         }
     }
 
+    func randomizeAvatar() async {
+        let previous = ensureLocalAvatarSeed()
+        var next = LeaderboardAvatarSeed.random()
+        while next == previous {
+            next = LeaderboardAvatarSeed.random()
+        }
+        preferences.leaderboardAvatarSeed = next
+
+        guard preferences.leaderboardsEnabled else {
+            syncStatus = .disabled
+            return
+        }
+        await saveCurrentProfileIfPossible()
+    }
+
     private func scoreLookupWindows(for period: LeaderboardPeriod, now: Date) -> [LeaderboardPeriodWindow] {
         guard period == .day else {
             return [LeaderboardPeriodCalculator.window(for: period, now: now)]
@@ -210,6 +265,92 @@ final class LeaderboardSyncViewModel {
         }
     }
 
+    @discardableResult
+    private func ensureLocalAvatarSeed() -> String {
+        let trimmed = preferences.leaderboardAvatarSeed.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            let seed = LeaderboardAvatarSeed.random()
+            preferences.leaderboardAvatarSeed = seed
+            return seed
+        }
+        return trimmed
+    }
+
+    private func reconcileCurrentUserProfileIfPossible() async {
+        guard preferences.leaderboardsEnabled else { return }
+        do {
+            try await reconcileCurrentUserProfile()
+        } catch {
+            Log.network.debug("Leaderboard profile reconcile skipped: \(self.userFacingMessage(error), privacy: .public)")
+        }
+    }
+
+    private func reconcileCurrentUserProfile() async throws {
+        let userHash = try await client.currentUserHash()
+        currentUserHash = userHash
+
+        let storedUserHash = preferences.leaderboardProfileUserHash
+        let needsRemoteProfile = storedUserHash != userHash
+            || preferences.leaderboardAvatarSeed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard needsRemoteProfile else { return }
+
+        preferences.leaderboardProfileUserHash = userHash
+        if let profile = try await client.fetchProfile(userHash: userHash),
+           let avatarSeed = profile.avatarSeed,
+           !avatarSeed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            preferences.leaderboardAvatarSeed = avatarSeed
+            return
+        }
+        preferences.leaderboardAvatarSeed = LeaderboardAvatarSeed.random()
+    }
+
+    private func saveCurrentProfileIfPossible() async {
+        guard !isSavingProfile else { return }
+
+        let nickname = preferences.leaderboardNickname.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !nickname.isEmpty else {
+            syncStatus = .needsNickname
+            return
+        }
+
+        isSavingProfile = true
+        defer { isSavingProfile = false }
+
+        syncStatus = .checkingAccount
+        accountState = await client.accountState()
+        guard accountState == .available else {
+            let reason = accountState.displayText
+            preferences.leaderboardLastSyncError = reason
+            syncStatus = .failed(reason)
+            return
+        }
+
+        syncStatus = .syncing
+        do {
+            let profile = try await client.saveProfile(LeaderboardProfileDraft(
+                nickname: nickname,
+                avatarSeed: ensureLocalAvatarSeed()
+            ))
+            remember(profile: profile)
+            preferences.leaderboardLastSyncError = ""
+            syncStatus = statusAfterAccountCheck()
+        } catch {
+            let reason = userFacingMessage(error)
+            preferences.leaderboardLastSyncError = reason
+            syncStatus = .failed(reason)
+            Log.network.error("Leaderboard profile save failed: \(reason, privacy: .public)")
+        }
+    }
+
+    private func remember(profile: LeaderboardProfile) {
+        currentUserHash = profile.userHash
+        preferences.leaderboardProfileUserHash = profile.userHash
+        if let avatarSeed = profile.avatarSeed,
+           !avatarSeed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            preferences.leaderboardAvatarSeed = avatarSeed
+        }
+    }
+
     private func statusAfterAccountCheck() -> SyncStatus {
         if preferences.leaderboardNickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return .needsNickname
@@ -218,6 +359,13 @@ final class LeaderboardSyncViewModel {
             return .synced(last)
         }
         return accountState == .available ? .idle : .failed(accountState.displayText)
+    }
+
+    private func userFacingMessage(_ error: Error) -> String {
+        if let error = error as? LeaderboardCloudError {
+            return error.description
+        }
+        return error.localizedDescription
     }
 }
 

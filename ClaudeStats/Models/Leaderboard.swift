@@ -44,12 +44,14 @@ enum LeaderboardPeriod: String, CaseIterable, Sendable, Identifiable {
 
 struct LeaderboardScore: Sendable, Hashable, Identifiable {
     let id: String
+    let userHash: String?
     let metric: LeaderboardMetric
     let period: LeaderboardPeriod
     let periodKey: String
     let score: Int64
     let rank: Int?
     let nickname: String
+    let avatarSeed: String?
     let updatedAt: Date
 }
 
@@ -65,6 +67,44 @@ struct LeaderboardSubmission: Sendable, Hashable {
     let updatedAt: Date
 
     var id: String { "\(metric.rawValue)-\(period.rawValue)-\(periodKey)" }
+}
+
+struct LeaderboardProfile: Sendable, Hashable, Identifiable {
+    let userHash: String
+    let nickname: String
+    let avatarSeed: String?
+    let updatedAt: Date
+
+    var id: String { userHash }
+}
+
+struct LeaderboardProfileDraft: Sendable, Hashable {
+    let nickname: String
+    let avatarSeed: String
+    let appVersion: String
+    let updatedAt: Date
+
+    init(nickname: String,
+         avatarSeed: String,
+         appVersion: String = Self.appVersion,
+         updatedAt: Date = .now) {
+        self.nickname = nickname
+        self.avatarSeed = avatarSeed
+        self.appVersion = appVersion
+        self.updatedAt = updatedAt
+    }
+
+    private static var appVersion: String {
+        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "dev"
+    }
+}
+
+enum LeaderboardAvatarSeed {
+    static let fallback = "leaderboard-avatar-preview"
+
+    static func random() -> String {
+        "avatar-\(UUID().uuidString.lowercased())"
+    }
 }
 
 struct LeaderboardPeriodWindow: Sendable, Hashable {

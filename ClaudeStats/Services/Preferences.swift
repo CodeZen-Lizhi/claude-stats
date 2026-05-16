@@ -112,6 +112,16 @@ final class Preferences {
     var leaderboardNickname: String {
         didSet { defaults.set(leaderboardNickname, forKey: Keys.leaderboardNickname) }
     }
+    /// Random seed used to render the user's public Beam avatar. It is scoped
+    /// to the current iCloud user hash by ``leaderboardProfileUserHash``.
+    var leaderboardAvatarSeed: String {
+        didSet { defaults.set(leaderboardAvatarSeed, forKey: Keys.leaderboardAvatarSeed) }
+    }
+    /// Last iCloud user hash this local leaderboard profile was reconciled
+    /// against. If it changes, the app reloads or regenerates the avatar seed.
+    var leaderboardProfileUserHash: String {
+        didSet { defaults.set(leaderboardProfileUserHash, forKey: Keys.leaderboardProfileUserHash) }
+    }
     var leaderboardLastSyncedAt: Date? {
         didSet { defaults.set(leaderboardLastSyncedAt, forKey: Keys.leaderboardLastSyncedAt) }
     }
@@ -152,6 +162,8 @@ final class Preferences {
         overlapPalette = OverlapPalette(rawValue: defaults.string(forKey: Keys.overlapPalette) ?? "") ?? .appCohesive
         leaderboardsEnabled = defaults.bool(forKey: Keys.leaderboardsEnabled)
         leaderboardNickname = defaults.string(forKey: Keys.leaderboardNickname) ?? ""
+        leaderboardAvatarSeed = defaults.string(forKey: Keys.leaderboardAvatarSeed) ?? ""
+        leaderboardProfileUserHash = defaults.string(forKey: Keys.leaderboardProfileUserHash) ?? ""
         leaderboardLastSyncedAt = defaults.object(forKey: Keys.leaderboardLastSyncedAt) as? Date
         leaderboardLastSyncError = defaults.string(forKey: Keys.leaderboardLastSyncError) ?? ""
         leaderboardLastSubmittedPeriodKeys = defaults.stringArray(forKey: Keys.leaderboardLastSubmittedPeriodKeys) ?? []
@@ -194,6 +206,8 @@ final class Preferences {
         static let overlapPalette = "overlapPalette"
         static let leaderboardsEnabled = "leaderboardsEnabled"
         static let leaderboardNickname = "leaderboardNickname"
+        static let leaderboardAvatarSeed = "leaderboardAvatarSeed"
+        static let leaderboardProfileUserHash = "leaderboardProfileUserHash"
         static let leaderboardLastSyncedAt = "leaderboardLastSyncedAt"
         static let leaderboardLastSyncError = "leaderboardLastSyncError"
         static let leaderboardLastSubmittedPeriodKeys = "leaderboardLastSubmittedPeriodKeys"

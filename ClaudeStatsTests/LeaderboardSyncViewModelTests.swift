@@ -56,12 +56,14 @@ struct LeaderboardSyncViewModelTests {
             previousDayKey: [
                 LeaderboardScore(
                     id: "score",
+                    userHash: "userhash",
                     metric: .tokensWithCache,
                     period: .day,
                     periodKey: previousDayKey,
                     score: 42,
                     rank: 1,
                     nickname: "Ada",
+                    avatarSeed: "avatar-ada",
                     updatedAt: now
                 ),
             ],
@@ -85,6 +87,74 @@ struct LeaderboardSyncViewModelTests {
         #expect(fixture.viewModel.scores.isEmpty)
         #expect(fixture.viewModel.scoreEmptyMessage == "No daily scores in the last 7 UTC days yet.")
         #expect(await fixture.client.fetchedPeriodKeys().count == 7)
+    }
+
+    @Test("Enabled leaderboards generate a local avatar seed and bind the iCloud user hash")
+    func enabledGeneratesAvatarSeedAndBindsUserHash() async {
+        let fixture = makeFixture(enabled: true)
+
+        await fixture.viewModel.checkAccountStatus()
+
+        #expect(fixture.preferences.leaderboardAvatarSeed.isEmpty == false)
+        #expect(fixture.preferences.leaderboardProfileUserHash == "userhash")
+        #expect(fixture.viewModel.currentUserHash == "userhash")
+    }
+
+    @Test("Randomizing avatar updates local seed and immediately saves the profile when available")
+    func randomizeAvatarSavesProfile() async {
+        let fixture = makeFixture(enabled: true)
+        fixture.preferences.leaderboardAvatarSeed = "avatar-old"
+
+        await fixture.viewModel.randomizeAvatar()
+
+        #expect(fixture.preferences.leaderboardAvatarSeed != "avatar-old")
+        #expect(await fixture.client.savedProfileCount() == 1)
+        #expect(await fixture.client.lastSavedProfile()?.avatarSeed == fixture.preferences.leaderboardAvatarSeed)
+        #expect(fixture.preferences.leaderboardProfileUserHash == "userhash")
+    }
+
+    @Test("Randomizing avatar with unavailable iCloud keeps the local seed for a later sync")
+    func randomizeAvatarUnavailableICloudStaysLocal() async {
+        let fixture = makeFixture(enabled: true)
+        fixture.preferences.leaderboardAvatarSeed = "avatar-old"
+        await fixture.client.setAccountState(.noAccount)
+
+        await fixture.viewModel.randomizeAvatar()
+
+        #expect(fixture.preferences.leaderboardAvatarSeed != "avatar-old")
+        #expect(await fixture.client.savedProfileCount() == 0)
+        #expect(fixture.preferences.leaderboardLastSyncError == "Sign in to iCloud")
+    }
+
+    @Test("Randomizing avatar without a nickname stays local and asks for a nickname")
+    func randomizeAvatarWithoutNicknameStaysLocal() async {
+        let fixture = makeFixture(enabled: true)
+        fixture.preferences.leaderboardNickname = ""
+        fixture.preferences.leaderboardAvatarSeed = "avatar-old"
+
+        await fixture.viewModel.randomizeAvatar()
+
+        #expect(fixture.preferences.leaderboardAvatarSeed != "avatar-old")
+        #expect(await fixture.client.savedProfileCount() == 0)
+        #expect(fixture.viewModel.syncStatus == .needsNickname)
+    }
+
+    @Test("Current user score is matched by iCloud user hash instead of nickname")
+    func currentUserScoreUsesUserHash() async {
+        let fixture = makeFixture(enabled: true)
+        let now = dateUTC(2026, 5, 16, 8)
+        await fixture.viewModel.checkAccountStatus()
+        await fixture.client.setScores([
+            "all": [
+                score(id: "score-a", userHash: "otherhash", rank: 1, nickname: "Ada", value: 200, now: now),
+                score(id: "score-b", userHash: "userhash", rank: 2, nickname: "Not Ada", value: 150, now: now),
+            ],
+        ])
+
+        await fixture.viewModel.loadScores(metric: .tokensWithCache, period: .allTime, now: now)
+
+        #expect(fixture.viewModel.currentUserScore?.rank == 2)
+        #expect(fixture.viewModel.currentUserScore?.nickname == "Not Ada")
     }
 
     private func makeFixture(enabled: Bool) -> Fixture {
@@ -139,6 +209,26 @@ struct LeaderboardSyncViewModelTests {
         ))!
     }
 
+    private func score(id: String,
+                       userHash: String,
+                       rank: Int,
+                       nickname: String,
+                       value: Int64,
+                       now: Date) -> LeaderboardScore {
+        LeaderboardScore(
+            id: id,
+            userHash: userHash,
+            metric: .tokensWithCache,
+            period: .allTime,
+            periodKey: "all",
+            score: value,
+            rank: rank,
+            nickname: nickname,
+            avatarSeed: "avatar-\(id)",
+            updatedAt: now
+        )
+    }
+
     private struct Fixture {
         let preferences: Preferences
         let viewModel: LeaderboardSyncViewModel
@@ -148,7 +238,10 @@ struct LeaderboardSyncViewModelTests {
 
 private actor FakeLeaderboardClient: LeaderboardCloudServicing {
     private var state: LeaderboardCloudAccountState = .available
+    private var userHash = "userhash"
     private var submitted: [LeaderboardSubmission] = []
+    private var savedProfiles: [LeaderboardProfile] = []
+    private var profilesByHash: [String: LeaderboardProfile] = [:]
     private var scoresByPeriodKey: [String: [LeaderboardScore]] = [:]
     private var fetchedKeys: [String] = []
 
@@ -158,6 +251,14 @@ private actor FakeLeaderboardClient: LeaderboardCloudServicing {
 
     func submittedCount() -> Int {
         submitted.count
+    }
+
+    func savedProfileCount() -> Int {
+        savedProfiles.count
+    }
+
+    func lastSavedProfile() -> LeaderboardProfile? {
+        savedProfiles.last
     }
 
     func setScores(_ scoresByPeriodKey: [String: [LeaderboardScore]]) {
@@ -172,8 +273,38 @@ private actor FakeLeaderboardClient: LeaderboardCloudServicing {
         state
     }
 
-    func submit(_ submissions: [LeaderboardSubmission]) async throws {
+    func currentUserHash() async throws -> String {
+        switch state {
+        case .available:
+            return userHash
+        case .noAccount:
+            throw LeaderboardCloudError.noAccount
+        case .restricted:
+            throw LeaderboardCloudError.restricted
+        case .unknown, .unavailable:
+            throw LeaderboardCloudError.cloudKit(state.displayText)
+        }
+    }
+
+    func saveProfile(_ profile: LeaderboardProfileDraft) async throws -> LeaderboardProfile {
+        let saved = LeaderboardProfile(
+            userHash: try await currentUserHash(),
+            nickname: profile.nickname,
+            avatarSeed: profile.avatarSeed,
+            updatedAt: profile.updatedAt
+        )
+        savedProfiles.append(saved)
+        profilesByHash[saved.userHash] = saved
+        return saved
+    }
+
+    func fetchProfile(userHash: String) async throws -> LeaderboardProfile? {
+        profilesByHash[userHash]
+    }
+
+    func submit(_ submissions: [LeaderboardSubmission], profile: LeaderboardProfileDraft) async throws -> LeaderboardProfile {
         submitted.append(contentsOf: submissions)
+        return try await saveProfile(profile)
     }
 
     func fetchScores(metric: LeaderboardMetric,

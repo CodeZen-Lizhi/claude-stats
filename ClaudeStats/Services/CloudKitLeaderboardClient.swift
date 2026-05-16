@@ -50,7 +50,10 @@ enum LeaderboardCloudError: Error, Sendable, CustomStringConvertible {
 
 protocol LeaderboardCloudServicing: Sendable {
     func accountState() async -> LeaderboardCloudAccountState
-    func submit(_ submissions: [LeaderboardSubmission]) async throws
+    func currentUserHash() async throws -> String
+    func saveProfile(_ profile: LeaderboardProfileDraft) async throws -> LeaderboardProfile
+    func fetchProfile(userHash: String) async throws -> LeaderboardProfile?
+    func submit(_ submissions: [LeaderboardSubmission], profile: LeaderboardProfileDraft) async throws -> LeaderboardProfile
     func fetchScores(metric: LeaderboardMetric,
                      period: LeaderboardPeriod,
                      periodKey: String,
@@ -104,7 +107,11 @@ enum CloudKitLeaderboardRecordMapper {
         static let periodEndUTC = "periodEndUTC"
         static let appVersion = "appVersion"
         static let updatedAt = "updatedAt"
+        static let avatarSeed = "avatarSeed"
+        static let avatarVariant = "avatarVariant"
     }
+
+    static let avatarVariant = "beam"
 
     static let desiredKeys = [
         Field.userHash,
@@ -119,6 +126,8 @@ enum CloudKitLeaderboardRecordMapper {
     static let profileDesiredKeys = [
         Field.userHash,
         Field.nickname,
+        Field.avatarSeed,
+        Field.avatarVariant,
         Field.updatedAt,
     ]
 
@@ -162,22 +171,21 @@ enum CloudKitLeaderboardRecordMapper {
         "profile_v1_\(userHash)"
     }
 
-    static func profileRecord(userHash: String,
-                              nickname: String,
-                              appVersion: String,
-                              updatedAt: Date) -> CKRecord {
+    static func profileRecord(userHash: String, profile: LeaderboardProfileDraft) -> CKRecord {
         let recordID = CKRecord.ID(recordName: profileRecordName(userHash: userHash))
         let record = CKRecord(recordType: CloudKitLeaderboardConfig.recordType, recordID: recordID)
         record[Field.userHash] = userHash
-        record[Field.nickname] = nickname
+        record[Field.nickname] = profile.nickname
+        record[Field.avatarSeed] = profile.avatarSeed
+        record[Field.avatarVariant] = avatarVariant
         record[Field.metric] = profileMetric
         record[Field.period] = profilePeriod
         record[Field.periodKey] = profilePeriodKey
         record[Field.score] = NSNumber(value: 0)
         record[Field.providerScope] = CloudKitLeaderboardConfig.providerScope
         record[Field.periodStartUTC] = Date(timeIntervalSince1970: 0) as NSDate
-        record[Field.appVersion] = appVersion
-        record[Field.updatedAt] = updatedAt as NSDate
+        record[Field.appVersion] = profile.appVersion
+        record[Field.updatedAt] = profile.updatedAt as NSDate
         return record
     }
 
@@ -185,20 +193,34 @@ enum CloudKitLeaderboardRecordMapper {
         record[Field.userHash] as? String
     }
 
-    static func profileNickname(from record: CKRecord) -> (userHash: String, nickname: String)? {
+    static func profile(from record: CKRecord) -> LeaderboardProfile? {
         guard let userHash = record[Field.userHash] as? String,
               let nickname = record[Field.nickname] as? String,
               !nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return nil
         }
-        return (userHash, nickname)
+        let avatarSeed = record[Field.avatarSeed] as? String
+        let updatedAt = (record[Field.updatedAt] as? Date)
+            ?? (record[Field.updatedAt] as? NSDate).map { $0 as Date }
+            ?? record.modificationDate
+            ?? Date(timeIntervalSince1970: 0)
+        return LeaderboardProfile(
+            userHash: userHash,
+            nickname: nickname,
+            avatarSeed: avatarSeed?.isEmpty == false ? avatarSeed : nil,
+            updatedAt: updatedAt
+        )
+    }
+
+    static func profileNickname(from record: CKRecord) -> (userHash: String, nickname: String)? {
+        profile(from: record).map { ($0.userHash, $0.nickname) }
     }
 
     static func score(from record: CKRecord, rank: Int) -> LeaderboardScore? {
-        score(from: record, rank: rank, profileNickname: nil)
+        score(from: record, rank: rank, profile: nil)
     }
 
-    static func score(from record: CKRecord, rank: Int, profileNickname: String?) -> LeaderboardScore? {
+    static func score(from record: CKRecord, rank: Int, profile: LeaderboardProfile?) -> LeaderboardScore? {
         guard let metricRaw = record[Field.metric] as? String,
               let metric = LeaderboardMetric(rawValue: metricRaw),
               let periodRaw = record[Field.period] as? String,
@@ -212,14 +234,17 @@ enum CloudKitLeaderboardRecordMapper {
             ?? (record[Field.updatedAt] as? NSDate).map { $0 as Date }
             ?? record.modificationDate
             ?? Date(timeIntervalSince1970: 0)
+        let userHash = userHash(from: record)
         return LeaderboardScore(
             id: record.recordID.recordName,
+            userHash: userHash,
             metric: metric,
             period: period,
             periodKey: periodKey,
             score: scoreNumber.int64Value,
             rank: rank,
-            nickname: profileNickname ?? nickname,
+            nickname: profile?.nickname ?? nickname,
+            avatarSeed: profile?.avatarSeed,
             updatedAt: updatedAt
         )
     }
@@ -247,29 +272,56 @@ struct CloudKitLeaderboardClient: LeaderboardCloudServicing {
         }
     }
 
-    func submit(_ submissions: [LeaderboardSubmission]) async throws {
-        guard !submissions.isEmpty else { return }
-        try ensureCloudKitEntitlement()
-        let status = try await container.accountStatus()
-        switch Self.state(from: status) {
-        case .available:
-            break
-        case .noAccount:
-            throw LeaderboardCloudError.noAccount
-        case .restricted:
-            throw LeaderboardCloudError.restricted
-        case .unknown, .unavailable:
-            throw LeaderboardCloudError.cloudKit("iCloud is not available right now.")
-        }
+    func currentUserHash() async throws -> String {
+        try await availableUserHash()
+    }
 
-        let userRecordName = try await container.userRecordID().recordName
-        let userHash = CloudKitLeaderboardRecordMapper.userHash(forUserRecordName: userRecordName)
-        let profileRecord = CloudKitLeaderboardRecordMapper.profileRecord(
-            userHash: userHash,
-            nickname: submissions[0].nickname,
-            appVersion: submissions[0].appVersion,
-            updatedAt: Date()
+    func saveProfile(_ profile: LeaderboardProfileDraft) async throws -> LeaderboardProfile {
+        let userHash = try await availableUserHash()
+        let record = CloudKitLeaderboardRecordMapper.profileRecord(userHash: userHash, profile: profile)
+        let result = try await publicDatabase.modifyRecords(
+            saving: [record],
+            deleting: [],
+            savePolicy: .allKeys,
+            atomically: true
         )
+        let failures = result.saveResults.compactMap { _, value -> String? in
+            if case .failure(let error) = value {
+                return Self.shortCloudKitMessage(error)
+            }
+            return nil
+        }
+        if let first = failures.first {
+            throw LeaderboardCloudError.partialFailure(first)
+        }
+        return LeaderboardProfile(
+            userHash: userHash,
+            nickname: profile.nickname,
+            avatarSeed: profile.avatarSeed,
+            updatedAt: profile.updatedAt
+        )
+    }
+
+    func fetchProfile(userHash: String) async throws -> LeaderboardProfile? {
+        try ensureCloudKitEntitlement()
+        let recordID = CKRecord.ID(recordName: CloudKitLeaderboardRecordMapper.profileRecordName(userHash: userHash))
+        do {
+            let results = try await publicDatabase.records(
+                for: [recordID],
+                desiredKeys: CloudKitLeaderboardRecordMapper.profileDesiredKeys
+            )
+            guard let result = results[recordID],
+                  case .success(let record) = result else { return nil }
+            return CloudKitLeaderboardRecordMapper.profile(from: record)
+        } catch {
+            throw LeaderboardCloudError.cloudKit(Self.shortCloudKitMessage(error))
+        }
+    }
+
+    func submit(_ submissions: [LeaderboardSubmission], profile: LeaderboardProfileDraft) async throws -> LeaderboardProfile {
+        guard !submissions.isEmpty else { return try await saveProfile(profile) }
+        let userHash = try await availableUserHash()
+        let profileRecord = CloudKitLeaderboardRecordMapper.profileRecord(userHash: userHash, profile: profile)
         let records = [profileRecord] + submissions.map {
             CloudKitLeaderboardRecordMapper.record(from: $0, userHash: userHash)
         }
@@ -288,6 +340,12 @@ struct CloudKitLeaderboardClient: LeaderboardCloudServicing {
         if let first = failures.first {
             throw LeaderboardCloudError.partialFailure(first)
         }
+        return LeaderboardProfile(
+            userHash: userHash,
+            nickname: profile.nickname,
+            avatarSeed: profile.avatarSeed,
+            updatedAt: profile.updatedAt
+        )
     }
 
     func fetchScores(metric: LeaderboardMetric,
@@ -315,7 +373,7 @@ struct CloudKitLeaderboardClient: LeaderboardCloudServicing {
             )
             let records = result.matchResults
                 .compactMap { try? $0.1.get() }
-            let profileNicknames = await profileNicknames(for: records)
+            let profiles = await profiles(for: records)
             return records
                 .enumerated()
                 .compactMap { index, record in
@@ -323,7 +381,7 @@ struct CloudKitLeaderboardClient: LeaderboardCloudServicing {
                     return CloudKitLeaderboardRecordMapper.score(
                         from: record,
                         rank: index + 1,
-                        profileNickname: userHash.flatMap { profileNicknames[$0] }
+                        profile: userHash.flatMap { profiles[$0] }
                     )
                 }
         } catch {
@@ -339,7 +397,7 @@ struct CloudKitLeaderboardClient: LeaderboardCloudServicing {
         container.publicCloudDatabase
     }
 
-    private func profileNicknames(for records: [CKRecord]) async -> [String: String] {
+    private func profiles(for records: [CKRecord]) async -> [String: LeaderboardProfile] {
         let userHashes = records
             .compactMap(CloudKitLeaderboardRecordMapper.userHash(from:))
             .uniqued()
@@ -355,10 +413,10 @@ struct CloudKitLeaderboardClient: LeaderboardCloudServicing {
             )
             return results.values.reduce(into: [:]) { partial, result in
                 guard case .success(let record) = result,
-                      let profile = CloudKitLeaderboardRecordMapper.profileNickname(from: record) else {
+                      let profile = CloudKitLeaderboardRecordMapper.profile(from: record) else {
                     return
                 }
-                partial[profile.userHash] = profile.nickname
+                partial[profile.userHash] = profile
             }
         } catch {
             Log.network.error("Leaderboard profile lookup failed: \(Self.shortCloudKitMessage(error), privacy: .public)")
@@ -369,6 +427,28 @@ struct CloudKitLeaderboardClient: LeaderboardCloudServicing {
     private func ensureCloudKitEntitlement() throws {
         guard entitlementChecker(containerIdentifier) else {
             throw LeaderboardCloudError.missingEntitlement(Self.missingEntitlementMessage)
+        }
+    }
+
+    private func availableUserHash() async throws -> String {
+        try ensureCloudKitEntitlement()
+        let status = try await container.accountStatus()
+        switch Self.state(from: status) {
+        case .available:
+            break
+        case .noAccount:
+            throw LeaderboardCloudError.noAccount
+        case .restricted:
+            throw LeaderboardCloudError.restricted
+        case .unknown, .unavailable:
+            throw LeaderboardCloudError.cloudKit("iCloud is not available right now.")
+        }
+
+        do {
+            let userRecordName = try await container.userRecordID().recordName
+            return CloudKitLeaderboardRecordMapper.userHash(forUserRecordName: userRecordName)
+        } catch {
+            throw LeaderboardCloudError.userRecordUnavailable
         }
     }
 

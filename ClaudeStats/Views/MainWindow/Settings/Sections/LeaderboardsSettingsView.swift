@@ -8,6 +8,14 @@ struct LeaderboardsSettingsView: View {
             && !env.preferences.leaderboardNickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && env.leaderboards.syncStatus != .syncing
             && env.leaderboards.syncStatus != .checkingAccount
+            && !env.leaderboards.isSavingProfile
+    }
+
+    private var canRandomizeAvatar: Bool {
+        env.preferences.leaderboardsEnabled
+            && env.leaderboards.syncStatus != .syncing
+            && env.leaderboards.syncStatus != .checkingAccount
+            && !env.leaderboards.isSavingProfile
     }
 
     var body: some View {
@@ -29,6 +37,8 @@ struct LeaderboardsSettingsView: View {
                     if prefs.leaderboardsEnabled {
                         SettingRowDivider()
                         nicknameRow(prefs: prefs)
+                        SettingRowDivider()
+                        avatarRow
                         SettingRowDivider()
                         statusRow
                         SettingRowDivider()
@@ -59,6 +69,32 @@ struct LeaderboardsSettingsView: View {
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 220)
                 .onSubmit { Task { await env.leaderboards.syncNow() } }
+        }
+    }
+
+    private var avatarRow: some View {
+        SettingRow(title: "Public avatar",
+                   description: "A generated Beam avatar linked to your iCloud leaderboard profile.") {
+            HStack(spacing: 10) {
+                BeamAvatarView(seed: env.leaderboards.avatarSeed, size: 46, isDecorative: false)
+                Button {
+                    Task { await env.leaderboards.randomizeAvatar() }
+                } label: {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.stxAccent)
+                .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.stxStroke, lineWidth: 1))
+                .help("Randomize avatar")
+                .disabled(!canRandomizeAvatar)
+                if env.leaderboards.isSavingProfile {
+                    ProgressView()
+                        .controlSize(.mini)
+                }
+            }
         }
     }
 
@@ -117,6 +153,7 @@ struct LeaderboardsSettingsView: View {
         SettingGroup(title: "Privacy") {
             VStack(alignment: .leading, spacing: 8) {
                 privacyLine("Uploaded: nickname, metric, UTC period, aggregate score, app version, update time.")
+                privacyLine("Uploaded avatar data is only a random seed and the Beam variant name, never a photo or iCloud identity.")
                 privacyLine("Never uploaded: prompts, transcript text, project paths, filenames, model names, costs, or session titles.")
                 privacyLine("Leaderboard periods use UTC so everyone competes in the same day/week/month window.")
             }
