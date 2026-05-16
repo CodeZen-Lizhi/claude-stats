@@ -42,6 +42,13 @@ struct LeaderboardsView: View {
     }
 
     private var header: some View {
+        ViewThatFits(in: .horizontal) {
+            headerRow(compactControls: false)
+            headerRow(compactControls: true)
+        }
+    }
+
+    private func headerRow(compactControls: Bool) -> some View {
         HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("LEADERBOARDS")
@@ -58,17 +65,18 @@ struct LeaderboardsView: View {
             }
             Spacer(minLength: 12)
             if env.preferences.leaderboardsEnabled {
-                headerControls
+                headerControls(compact: compactControls)
             }
         }
     }
 
-    private var headerControls: some View {
+    private func headerControls(compact: Bool) -> some View {
         VStack(alignment: .trailing, spacing: 8) {
             HStack(spacing: 8) {
-                LeaderboardMetricChips(metric: $metric)
-                LeaderboardPeriodChips(period: $period)
+                LeaderboardMetricChips(metric: $metric, compact: compact)
+                LeaderboardPeriodChips(period: $period, compact: compact)
             }
+            .fixedSize(horizontal: true, vertical: false)
             HStack(spacing: 8) {
                 if env.leaderboards.isLoadingScores {
                     ProgressView()
@@ -255,67 +263,126 @@ struct LeaderboardsView: View {
 
 private struct LeaderboardMetricChips: View {
     @Binding var metric: LeaderboardMetric
+    let compact: Bool
 
     var body: some View {
-        HStack(spacing: 2) {
-            ForEach(LeaderboardMetric.allCases) { value in
-                chip(value)
-            }
-        }
-        .segmentedBackground()
-    }
-
-    private func chip(_ value: LeaderboardMetric) -> some View {
-        let isSelected = metric == value
-        return Button {
-            withAnimation(.easeOut(duration: 0.18)) { metric = value }
-        } label: {
-            Text(value.shortLabel)
-                .font(.sora(11, weight: .medium))
-                .foregroundStyle(isSelected ? .primary : Color.stxMuted)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .selectedSegment(isSelected)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
+        LeaderboardSegmentedChips(
+            values: LeaderboardMetric.allCases,
+            selection: $metric,
+            label: \.shortLabel,
+            icon: \.symbolName,
+            accessibilityLabel: \.displayName,
+            compact: compact
+        )
     }
 }
 
 private struct LeaderboardPeriodChips: View {
     @Binding var period: LeaderboardPeriod
+    let compact: Bool
 
     var body: some View {
+        LeaderboardSegmentedChips(
+            values: LeaderboardPeriod.allCases,
+            selection: $period,
+            label: \.chipLabel,
+            icon: \.symbolName,
+            accessibilityLabel: \.displayName,
+            compact: compact
+        )
+    }
+}
+
+private struct LeaderboardSegmentedChips<Value: Identifiable & Hashable>: View {
+    let values: [Value]
+    @Binding var selection: Value
+    let label: KeyPath<Value, String>
+    let icon: KeyPath<Value, String>
+    let accessibilityLabel: KeyPath<Value, String>
+    let compact: Bool
+
+    var body: some View {
+        chips
+            .segmentedBackground()
+    }
+
+    private var chips: some View {
         HStack(spacing: 2) {
-            ForEach(LeaderboardPeriod.allCases) { value in
+            ForEach(values) { value in
                 chip(value)
             }
         }
-        .segmentedBackground()
     }
 
-    private func chip(_ value: LeaderboardPeriod) -> some View {
-        let isSelected = period == value
+    private func chip(_ value: Value) -> some View {
+        let isSelected = selection == value
         return Button {
-            withAnimation(.easeOut(duration: 0.18)) { period = value }
+            withAnimation(.easeOut(duration: 0.18)) { selection = value }
         } label: {
-            Text(label(for: value))
-                .font(.sora(11, weight: .medium))
-                .foregroundStyle(isSelected ? .primary : Color.stxMuted)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .selectedSegment(isSelected)
-                .contentShape(Rectangle())
+            LeaderboardChipLabel(
+                title: value[keyPath: label],
+                symbolName: value[keyPath: icon],
+                compact: compact,
+                isSelected: isSelected
+            )
+            .selectedSegment(isSelected)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(Text(value[keyPath: accessibilityLabel]))
     }
+}
 
-    private func label(for period: LeaderboardPeriod) -> String {
-        switch period {
+private struct LeaderboardChipLabel: View {
+    let title: String
+    let symbolName: String
+    let compact: Bool
+    let isSelected: Bool
+
+    var body: some View {
+        ZStack {
+            Text(title)
+                .font(.sora(11, weight: .medium))
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .opacity(compact ? 0 : 1)
+            Image(systemName: symbolName)
+                .font(.system(size: 12, weight: .semibold))
+                .opacity(compact ? 1 : 0)
+        }
+        .foregroundStyle(isSelected ? .primary : Color.stxMuted)
+        .frame(width: compact ? 26 : nil, height: 20)
+        .padding(.horizontal, compact ? 5 : 10)
+        .padding(.vertical, 5)
+    }
+}
+
+private extension LeaderboardMetric {
+    var symbolName: String {
+        switch self {
+        case .tokensWithCache: "bolt.circle"
+        case .tokensWithoutCacheRead: "bolt.slash.circle"
+        case .activityMinutes: "figure.walk.circle"
+        }
+    }
+}
+
+private extension LeaderboardPeriod {
+    var chipLabel: String {
+        switch self {
         case .day: "Daily"
         case .week: "Weekly"
         case .month: "Monthly"
         case .allTime: "All"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .day: "sun.max"
+        case .week: "calendar"
+        case .month: "calendar.badge.clock"
+        case .allTime: "infinity"
         }
     }
 }

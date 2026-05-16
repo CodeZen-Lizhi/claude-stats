@@ -73,18 +73,21 @@ struct GitRepoWorkspaceView: View {
     private var graphHeader: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(repo.displayName)
-                    .font(.sora(18, weight: .semibold))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Text(repo.rootPath)
-                    .font(.sora(10))
-                    .foregroundStyle(Color.stxMuted)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                FadingLineText(
+                    repo.displayName,
+                    font: .sora(18, weight: .semibold),
+                    foregroundStyle: .primary,
+                    fadeWidth: 42
+                )
+                FadingLineText(
+                    repo.rootPath,
+                    font: .sora(10),
+                    foregroundStyle: Color.stxMuted,
+                    fadeWidth: 42
+                )
                     .help(repo.rootPath)
             }
-            Spacer(minLength: 10)
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             if vm.isGraphLoading {
                 ProgressView()
                     .controlSize(.small)
@@ -177,11 +180,13 @@ private struct GitCommitInspector: View {
 
     private var inspectorHeader: some View {
         HStack(spacing: 8) {
-            Text(inspectorTitle)
-                .font(.sora(11, weight: .semibold))
-                .tracking(1.0)
-                .foregroundStyle(Color.stxMuted)
-            Spacer()
+            FadingLineText(
+                inspectorTitle,
+                font: .sora(11, weight: .semibold),
+                foregroundStyle: Color.stxMuted,
+                tracking: 1.0,
+                fadeWidth: 36
+            )
             if vm.diffPath == nil {
                 Picker("", selection: $mode) {
                     ForEach(GitInspectorMode.allCases) { mode in
@@ -434,6 +439,62 @@ private struct GitCommitInspector: View {
             }
         }
         .gitWorkspaceCard()
+    }
+}
+
+private struct FadingLineText: View {
+    let text: String
+    let font: Font
+    let foregroundStyle: Color
+    let tracking: CGFloat
+    let fadeWidth: CGFloat
+
+    init(
+        _ text: String,
+        font: Font,
+        foregroundStyle: Color,
+        tracking: CGFloat = 0,
+        fadeWidth: CGFloat = 34
+    ) {
+        self.text = text
+        self.font = font
+        self.foregroundStyle = foregroundStyle
+        self.tracking = tracking
+        self.fadeWidth = fadeWidth
+    }
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            Text(text)
+                .font(font)
+                .tracking(tracking)
+                .foregroundStyle(foregroundStyle)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+        }
+        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+        .clipped()
+        .mask(TrailingFadeMask(width: fadeWidth))
+        .accessibilityLabel(Text(text))
+    }
+}
+
+private struct TrailingFadeMask: View {
+    let width: CGFloat
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Rectangle()
+            LinearGradient(
+                stops: [
+                    .init(color: .black, location: 0),
+                    .init(color: .clear, location: 1)
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(width: width)
+        }
     }
 }
 

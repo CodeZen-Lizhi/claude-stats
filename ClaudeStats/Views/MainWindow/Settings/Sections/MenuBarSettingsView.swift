@@ -46,6 +46,16 @@ struct MenuBarSettingsView: View {
                 }
                 .settingCard()
             }
+
+            SettingGroup(title: "Backup entry", caption: "Keep Claude Stats reachable when the macOS menu bar is crowded.") {
+                SettingRow(title: "Floating edge tab",
+                           description: "Shows a small screen-edge tab that expands into a mini summary on hover. Drag it to snap to any edge.") {
+                    Toggle("", isOn: $prefs.floatingTabEnabled)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                }
+                .settingCard()
+            }
         }
     }
 }

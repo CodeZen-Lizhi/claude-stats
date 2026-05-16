@@ -29,18 +29,10 @@ struct GitGraphRowView: View {
                 GitAvatar(name: row.commit.author, email: row.commit.authorEmail)
                     .frame(width: 20, height: 20)
 
-                ForEach(Array(row.commit.refs.enumerated()), id: \.offset) { _, ref in
-                    GitRefPill(ref: ref)
-                }
-                .layoutPriority(2)
-
-                Text(TitleSanitizer.sanitize(row.commit.subject) ?? row.commit.subject)
-                    .font(.sora(11))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .layoutPriority(1)
-
-                Spacer(minLength: 8)
+                commitContent
+                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                    .clipped()
+                    .mask(TrailingFadeMask(width: 34))
 
                 Text(Format.relativeDate(row.commit.date))
                     .font(.sora(9).monospacedDigit())
@@ -61,6 +53,39 @@ struct GitGraphRowView: View {
 
     private var accessibilityTitle: String {
         "\(row.commit.shortHash), \(row.commit.author), \(row.commit.subject)"
+    }
+
+    private var commitContent: some View {
+        HStack(spacing: 8) {
+            ForEach(Array(row.commit.refs.enumerated()), id: \.offset) { _, ref in
+                GitRefPill(ref: ref)
+            }
+
+            Text(TitleSanitizer.sanitize(row.commit.subject) ?? row.commit.subject)
+                .font(.sora(11))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+    }
+}
+
+private struct TrailingFadeMask: View {
+    let width: CGFloat
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Rectangle()
+            LinearGradient(
+                stops: [
+                    .init(color: .black, location: 0),
+                    .init(color: .clear, location: 1)
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(width: width)
+        }
     }
 }
 

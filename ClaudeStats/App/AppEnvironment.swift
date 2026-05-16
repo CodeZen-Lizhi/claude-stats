@@ -12,6 +12,7 @@ final class AppEnvironment {
     let preferences: Preferences
     let store: SessionStore
     let updater = UpdaterController()
+    let floatingStatsPanel = FloatingStatsPanelController()
     /// View models live in the environment so the Settings window and the
     /// individual pages can share state — and so the VMs persist across
     /// main-window open/close cycles (reopening doesn't refire a fetch).
@@ -44,6 +45,7 @@ final class AppEnvironment {
         }
         applyAutoRefreshSetting()
         updater.start()
+        floatingStatsPanel.start(environment: self)
     }
 
     func applyAutoRefreshSetting() {

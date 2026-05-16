@@ -43,6 +43,21 @@ final class Preferences {
     var menuBarIncludesCache: Bool {
         didSet { defaults.set(menuBarIncludesCache, forKey: Keys.menuBarIncludesCache) }
     }
+    /// Optional floating edge tab used as a backup entry point when the macOS
+    /// menu bar is crowded.
+    var floatingTabEnabled: Bool {
+        didSet { defaults.set(floatingTabEnabled, forKey: Keys.floatingTabEnabled) }
+    }
+    /// Last snapped edge for the floating tab. Kept out of Settings to keep the
+    /// UI simple; dragging the tab updates it silently.
+    var floatingTabEdge: FloatingPanelEdge {
+        didSet { defaults.set(floatingTabEdge.rawValue, forKey: Keys.floatingTabEdge) }
+    }
+    /// Normalized position along ``floatingTabEdge``. 0 is minX/minY, 1 is
+    /// maxX/maxY; geometry helpers clamp it so the tab remains visible.
+    var floatingTabAnchor: Double {
+        didSet { defaults.set(floatingTabAnchor, forKey: Keys.floatingTabAnchor) }
+    }
 
     /// Which platforms the user has turned on. The switcher bar only appears
     /// when this has more than one entry; otherwise the panel shows the single
@@ -154,6 +169,9 @@ final class Preferences {
         menuBarPeriod = StatsPeriod(rawValue: defaults.string(forKey: Keys.menuBarPeriod) ?? "") ?? .allTime
         includeCacheInTokens = (defaults.object(forKey: Keys.includeCacheInTokens) as? Bool) ?? true
         menuBarIncludesCache = (defaults.object(forKey: Keys.menuBarIncludesCache) as? Bool) ?? true
+        floatingTabEnabled = defaults.bool(forKey: Keys.floatingTabEnabled)
+        floatingTabEdge = FloatingPanelEdge(rawValue: defaults.string(forKey: Keys.floatingTabEdge) ?? "") ?? .right
+        floatingTabAnchor = (defaults.object(forKey: Keys.floatingTabAnchor) as? Double) ?? 0.5
         aiActivityAnalysisEnabled = defaults.bool(forKey: Keys.aiActivityAnalysisEnabled)
         gitTrackingEnabled = defaults.bool(forKey: Keys.gitTrackingEnabled)
         gitOpensInWindow = defaults.bool(forKey: Keys.gitOpensInWindow)
@@ -193,6 +211,9 @@ final class Preferences {
         static let menuBarPeriod = "menuBarPeriod"
         static let includeCacheInTokens = "includeCacheInTokens"
         static let menuBarIncludesCache = "menuBarIncludesCache"
+        static let floatingTabEnabled = "floatingTabEnabled"
+        static let floatingTabEdge = "floatingTabEdge"
+        static let floatingTabAnchor = "floatingTabAnchor"
         static let aiActivityAnalysisEnabled = "aiActivityAnalysisEnabled"
         static let gitTrackingEnabled = "gitTrackingEnabled"
         static let gitOpensInWindow = "gitOpensInWindow"
