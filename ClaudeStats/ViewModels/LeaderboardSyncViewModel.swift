@@ -31,6 +31,7 @@ final class LeaderboardSyncViewModel {
     private(set) var scores: [LeaderboardScore] = []
     private(set) var isLoadingScores = false
     private(set) var scoreError: String?
+    private(set) var scoreEmptyMessage: String?
     private(set) var lastLoadedPeriodKey: String?
 
     private let preferences: Preferences
@@ -153,20 +154,59 @@ final class LeaderboardSyncViewModel {
     }
 
     func loadScores(metric: LeaderboardMetric, period: LeaderboardPeriod, now: Date = .now) async {
-        let periodKey = LeaderboardPeriodCalculator.window(for: period, now: now).periodKey
-        lastLoadedPeriodKey = periodKey
+        let requestedWindow = LeaderboardPeriodCalculator.window(for: period, now: now)
+        lastLoadedPeriodKey = requestedWindow.periodKey
         scoreError = nil
+        scoreEmptyMessage = nil
         isLoadingScores = true
         defer { isLoadingScores = false }
 
         do {
-            scores = try await client.fetchScores(metric: metric, period: period, periodKey: periodKey, limit: 100)
+            for window in scoreLookupWindows(for: period, now: now) {
+                let fetched = try await client.fetchScores(
+                    metric: metric,
+                    period: period,
+                    periodKey: window.periodKey,
+                    limit: 100
+                )
+                if !fetched.isEmpty {
+                    scores = fetched
+                    lastLoadedPeriodKey = window.periodKey
+                    return
+                }
+            }
+            scores = []
+            lastLoadedPeriodKey = requestedWindow.periodKey
+            scoreEmptyMessage = emptyScoresMessage(for: period)
         } catch let error as LeaderboardCloudError {
             scores = []
+            scoreEmptyMessage = nil
             scoreError = error.description
         } catch {
             scores = []
+            scoreEmptyMessage = nil
             scoreError = error.localizedDescription
+        }
+    }
+
+    private func scoreLookupWindows(for period: LeaderboardPeriod, now: Date) -> [LeaderboardPeriodWindow] {
+        guard period == .day else {
+            return [LeaderboardPeriodCalculator.window(for: period, now: now)]
+        }
+        return (0..<7).map { dayOffset in
+            LeaderboardPeriodCalculator.window(
+                for: .day,
+                now: now.addingTimeInterval(TimeInterval(-dayOffset * 86_400))
+            )
+        }
+    }
+
+    private func emptyScoresMessage(for period: LeaderboardPeriod) -> String {
+        switch period {
+        case .day:
+            return "No daily scores in the last 7 UTC days yet."
+        case .week, .month, .allTime:
+            return "No scores for this UTC period yet."
         }
     }
 

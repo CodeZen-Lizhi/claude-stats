@@ -33,6 +33,7 @@ PRODUCTS="$DERIVED/Build/Products/Release"
 APP="$PRODUCTS/Claude Stats.app"
 DIST="$PWD/dist"
 CLOUDKIT_ENTITLEMENTS="ClaudeStats/App/ClaudeStatsCloudKit.entitlements"
+SIGNED_ENTITLEMENTS="$DIST/signed-entitlements.plist"
 
 VERSION="${1:-$(grep -E '^[[:space:]]*MARKETING_VERSION:' project.yml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')}"
 [[ -n "$VERSION" ]] || { echo "error: could not determine version" >&2; exit 1; }
@@ -84,6 +85,15 @@ xcodebuild \
 [[ -d "$APP" ]] || { echo "error: build did not produce $APP" >&2; exit 1; }
 
 if [[ $SIGNED -eq 1 ]]; then
+    # Xcode combines our requested CloudKit entitlements with restricted values
+    # from the provisioning profile, including `com.apple.application-identifier`.
+    # Preserve that resolved set for the final manual re-sign below; using only
+    # our source entitlements plist strips the application identifier and makes
+    # CloudKit fail at runtime with "without an application ID".
+    echo "==> Capturing resolved app entitlements"
+    codesign -d --entitlements :- "$APP" > "$SIGNED_ENTITLEMENTS"
+    /usr/libexec/PlistBuddy -c 'Delete :com.apple.security.get-task-allow' "$SIGNED_ENTITLEMENTS" 2>/dev/null || true
+
     # xcodebuild signs the main app and the immediate framework bundle, but does
     # NOT recurse into Sparkle.framework to re-sign its XPC services, helper app,
     # or helper executable — they keep Sparkle's own distribution signature,
@@ -109,7 +119,7 @@ if [[ $SIGNED -eq 1 ]]; then
     fi
     codesign --force --options runtime --timestamp \
         --sign "$SIGN_IDENTITY" \
-        --entitlements "$CLOUDKIT_ENTITLEMENTS" \
+        --entitlements "$SIGNED_ENTITLEMENTS" \
         "$APP"
 fi
 
@@ -191,6 +201,10 @@ ENTITLEMENTS_OUT="$DIST/entitlements.plist"
 codesign -dvvv --entitlements :- "$APP" > "$ENTITLEMENTS_OUT"
 grep -q "com.apple.developer.icloud-services" "$ENTITLEMENTS_OUT" || {
     echo "error: signed app is missing the CloudKit entitlement" >&2
+    exit 1
+}
+grep -q "com.apple.application-identifier" "$ENTITLEMENTS_OUT" || {
+    echo "error: signed app is missing the application identifier entitlement required by CloudKit" >&2
     exit 1
 }
 

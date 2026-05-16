@@ -171,10 +171,19 @@ jobs:
           security cms -D -i "$PROFILE_PATH" > "$PROFILE_PLIST"
           PROFILE_UUID="$(/usr/libexec/PlistBuddy -c 'Print UUID' "$PROFILE_PLIST")"
           PROFILE_NAME="$(/usr/libexec/PlistBuddy -c 'Print Name' "$PROFILE_PLIST")"
+          PROFILE_APP_ID="$(/usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.application-identifier' "$PROFILE_PLIST")"
+          /usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.developer.icloud-services' "$PROFILE_PLIST" | grep -q 'CloudKit' || {
+            echo "::error::provisioning profile is missing the CloudKit service entitlement"
+            exit 1
+          }
+          /usr/libexec/PlistBuddy -c 'Print :Entitlements:com.apple.developer.icloud-container-identifiers' "$PROFILE_PLIST" | grep -q 'iCloud.com.claudestats.ClaudeStats' || {
+            echo "::error::provisioning profile is missing iCloud.com.claudestats.ClaudeStats"
+            exit 1
+          }
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
           cp "$PROFILE_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.provisionprofile"
           echo "PROVISIONING_PROFILE_SPECIFIER=$PROFILE_NAME" >> "$GITHUB_ENV"
-          echo "Installed provisioning profile: $PROFILE_NAME ($PROFILE_UUID)"
+          echo "Installed provisioning profile: $PROFILE_NAME ($PROFILE_UUID, app id: $PROFILE_APP_ID)"
 
       - name: Bump version in project.yml
         run: bash scripts/bump-version.sh "${{ steps.version.outputs.version }}" "${{ steps.version.outputs.build }}"

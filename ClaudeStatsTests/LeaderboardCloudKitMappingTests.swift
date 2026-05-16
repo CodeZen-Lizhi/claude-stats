@@ -64,12 +64,43 @@ struct LeaderboardCloudKitMappingTests {
         #expect(score?.nickname == "Grace")
     }
 
+    @Test("Profile nickname overrides the nickname stored on older score records")
+    func profileNicknameOverridesScoreNickname() {
+        let submission = LeaderboardSubmission(
+            metric: .tokensWithCache,
+            period: .day,
+            periodKey: "2026-05-15",
+            score: 100,
+            nickname: "Old Name",
+            periodStartUTC: Date(timeIntervalSince1970: 1_768_176_000),
+            periodEndUTC: Date(timeIntervalSince1970: 1_768_262_400),
+            appVersion: "1.2.3",
+            updatedAt: Date(timeIntervalSince1970: 1_768_200_000)
+        )
+        let scoreRecord = CloudKitLeaderboardRecordMapper.record(from: submission, userHash: "userhash")
+        let profile = CloudKitLeaderboardRecordMapper.profileRecord(
+            userHash: "userhash",
+            nickname: "New Name",
+            appVersion: "1.2.3",
+            updatedAt: Date(timeIntervalSince1970: 1_768_210_000)
+        )
+
+        #expect(CloudKitLeaderboardRecordMapper.profileRecordName(userHash: "userhash") == "profile_v1_userhash")
+        #expect(CloudKitLeaderboardRecordMapper.profileNickname(from: profile)?.nickname == "New Name")
+        #expect(CloudKitLeaderboardRecordMapper.userHash(from: scoreRecord) == "userhash")
+        #expect(CloudKitLeaderboardRecordMapper.score(
+            from: scoreRecord,
+            rank: 1,
+            profileNickname: "New Name"
+        )?.nickname == "New Name")
+    }
+
     @Test("Missing CloudKit entitlement is reported before touching CKContainer")
     func missingEntitlementShortCircuitsCloudKit() async {
         let client = CloudKitLeaderboardClient(entitlementChecker: { _ in false })
         let accountState = await client.accountState()
 
-        #expect(accountState == .unavailable("CloudKit entitlement is missing in this build."))
+        #expect(accountState == .unavailable("CloudKit entitlement is missing or incomplete in this build."))
 
         do {
             _ = try await client.fetchScores(
@@ -80,7 +111,7 @@ struct LeaderboardCloudKitMappingTests {
             )
             Issue.record("Expected missing entitlement error")
         } catch let error as LeaderboardCloudError {
-            #expect(error.description == "CloudKit entitlement is missing in this build.")
+            #expect(error.description == "CloudKit entitlement is missing or incomplete in this build.")
         } catch {
             Issue.record("Expected LeaderboardCloudError, got \(error)")
         }

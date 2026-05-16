@@ -100,7 +100,7 @@ struct LeaderboardsView: View {
             if let error = env.leaderboards.scoreError {
                 emptyState(error)
             } else if env.leaderboards.scores.isEmpty && !env.leaderboards.isLoadingScores {
-                emptyState("No scores for this UTC period yet.")
+                emptyState(env.leaderboards.scoreEmptyMessage ?? "No scores for this UTC period yet.")
             } else {
                 LazyVStack(spacing: 0) {
                     ForEach(env.leaderboards.scores) { score in

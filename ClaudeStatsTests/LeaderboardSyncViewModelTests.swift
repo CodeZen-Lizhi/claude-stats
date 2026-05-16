@@ -44,6 +44,49 @@ struct LeaderboardSyncViewModelTests {
         #expect(fixture.preferences.leaderboardLastSubmittedPeriodKeys.contains("allTime:all"))
     }
 
+    @Test("Daily scores fall back to the most recent UTC day with results")
+    func dailyScoresFallbackToRecentDay() async {
+        let fixture = makeFixture(enabled: true)
+        let now = dateUTC(2026, 5, 16, 8)
+        let previousDayKey = LeaderboardPeriodCalculator.window(
+            for: .day,
+            now: now.addingTimeInterval(-86_400)
+        ).periodKey
+        await fixture.client.setScores([
+            previousDayKey: [
+                LeaderboardScore(
+                    id: "score",
+                    metric: .tokensWithCache,
+                    period: .day,
+                    periodKey: previousDayKey,
+                    score: 42,
+                    rank: 1,
+                    nickname: "Ada",
+                    updatedAt: now
+                ),
+            ],
+        ])
+
+        await fixture.viewModel.loadScores(metric: .tokensWithCache, period: .day, now: now)
+
+        #expect(fixture.viewModel.lastLoadedPeriodKey == previousDayKey)
+        #expect(fixture.viewModel.scores.count == 1)
+        #expect(fixture.viewModel.scoreEmptyMessage == nil)
+        #expect(await fixture.client.fetchedPeriodKeys() == ["2026-05-16", "2026-05-15"])
+    }
+
+    @Test("Daily scores show a recent-days empty message when no fallback exists")
+    func dailyScoresEmptyMessage() async {
+        let fixture = makeFixture(enabled: true)
+
+        await fixture.viewModel.loadScores(metric: .tokensWithCache, period: .day, now: dateUTC(2026, 5, 16, 8))
+
+        #expect(fixture.viewModel.lastLoadedPeriodKey == "2026-05-16")
+        #expect(fixture.viewModel.scores.isEmpty)
+        #expect(fixture.viewModel.scoreEmptyMessage == "No daily scores in the last 7 UTC days yet.")
+        #expect(await fixture.client.fetchedPeriodKeys().count == 7)
+    }
+
     private func makeFixture(enabled: Bool) -> Fixture {
         let suiteName = "com.claudestats.tests.leaderboards.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName) ?? .standard
@@ -83,6 +126,19 @@ struct LeaderboardSyncViewModelTests {
                        filePath: "/\(id).jsonl", cwd: nil, lastModified: date, fileSize: 1, stats: stats)
     }
 
+    private func dateUTC(_ year: Int, _ month: Int, _ day: Int, _ hour: Int = 0, minute: Int = 0) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
+        return calendar.date(from: DateComponents(
+            timeZone: calendar.timeZone,
+            year: year,
+            month: month,
+            day: day,
+            hour: hour,
+            minute: minute
+        ))!
+    }
+
     private struct Fixture {
         let preferences: Preferences
         let viewModel: LeaderboardSyncViewModel
@@ -93,6 +149,8 @@ struct LeaderboardSyncViewModelTests {
 private actor FakeLeaderboardClient: LeaderboardCloudServicing {
     private var state: LeaderboardCloudAccountState = .available
     private var submitted: [LeaderboardSubmission] = []
+    private var scoresByPeriodKey: [String: [LeaderboardScore]] = [:]
+    private var fetchedKeys: [String] = []
 
     func setAccountState(_ state: LeaderboardCloudAccountState) {
         self.state = state
@@ -100,6 +158,14 @@ private actor FakeLeaderboardClient: LeaderboardCloudServicing {
 
     func submittedCount() -> Int {
         submitted.count
+    }
+
+    func setScores(_ scoresByPeriodKey: [String: [LeaderboardScore]]) {
+        self.scoresByPeriodKey = scoresByPeriodKey
+    }
+
+    func fetchedPeriodKeys() -> [String] {
+        fetchedKeys
     }
 
     func accountState() async -> LeaderboardCloudAccountState {
@@ -114,6 +180,7 @@ private actor FakeLeaderboardClient: LeaderboardCloudServicing {
                      period: LeaderboardPeriod,
                      periodKey: String,
                      limit: Int) async throws -> [LeaderboardScore] {
-        []
+        fetchedKeys.append(periodKey)
+        return scoresByPeriodKey[periodKey] ?? []
     }
 }

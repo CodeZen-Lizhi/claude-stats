@@ -49,9 +49,10 @@ on `Codex-stats-releases`) to push across repos.
 
 Packaging has two modes, picked automatically:
 
-- **Signed + notarized DMG** — when all six signing secrets are set on the repo
+- **Signed + notarized DMG** — when all signing and notarization secrets are set on the repo
   (`BUILD_CERTIFICATE_BASE64`, `P12_PASSWORD`, `KEYCHAIN_PASSWORD`, `APPLE_TEAM_ID`,
-  `NOTARY_APPLE_ID`, `NOTARY_PASSWORD`; see the comment block at the top of the workflow).
+  `BUILD_PROVISION_PROFILE_BASE64`, `NOTARY_APPLE_ID`, `NOTARY_PASSWORD`; see the
+  comment block at the top of the workflow).
 - **Un-notarized DMG + .zip** — when those secrets are absent (the default). Gatekeeper warns
   on first launch; users open it via right-click ▸ Open.
 
