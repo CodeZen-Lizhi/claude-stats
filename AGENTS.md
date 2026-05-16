@@ -126,3 +126,11 @@ shared code.
   `@MainActor @Observable`. File I/O (scanning, parsing) runs off the main actor
   as plain `async` functions on non-isolated types.
 - Logging goes through `Log` (`os.Logger`), not `print`.
+- SwiftUI resize performance: preserve adaptive layouts unless the product
+  behaviour is explicitly changing. If a pane is wide = two columns / narrow =
+  one column, keep that breakpoint and keep `.infinity` where it prevents the
+  sidebar or detail content from being clipped. To reduce resize jank, prefer
+  `minWidth` + `idealWidth` + `maxWidth: .infinity`, stable `ForEach(rows)` over
+  `Array(rows.enumerated())`, `LazyVStack` for long stacked tables, `Equatable`
+  row data/views when equality is cheap, and fixed widths for trailing numeric
+  columns so text measurement does not churn on every drag tick.

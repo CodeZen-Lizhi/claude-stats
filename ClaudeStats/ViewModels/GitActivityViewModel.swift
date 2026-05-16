@@ -163,7 +163,7 @@ final class GitActivityViewModel {
         let value: String
     }
 
-    struct OverviewRepoRow: Identifiable, Sendable {
+    struct OverviewRepoRow: Identifiable, Sendable, Equatable {
         let id: String
         let name: String
         let insertionsLabel: String
@@ -171,7 +171,7 @@ final class GitActivityViewModel {
         let filesLabel: String
     }
 
-    struct OverviewCommitRow: Identifiable, Sendable {
+    struct OverviewCommitRow: Identifiable, Sendable, Equatable {
         let id: String
         let subject: String
         let repoName: String

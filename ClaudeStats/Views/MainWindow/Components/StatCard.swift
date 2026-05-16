@@ -7,6 +7,8 @@ struct StatCard: View {
     let label: String
     let value: String
 
+    private static let valueLineHeight: CGFloat = 25
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label.uppercased())
@@ -19,6 +21,7 @@ struct StatCard: View {
                 .contentTransition(.numericText())
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
+                .frame(height: Self.valueLineHeight, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 14)

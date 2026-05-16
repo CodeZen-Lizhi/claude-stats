@@ -279,10 +279,26 @@ private enum GitOverviewTableLayout: Equatable {
     }
 }
 
+private enum GitOverviewTableMetrics {
+    static let gap: CGFloat = 16
+    static let churnMinWidth: CGFloat = 260
+    static let churnIdealWidth: CGFloat = 300
+    static let recentMinWidth: CGFloat = 320
+    static let recentIdealWidth: CGFloat = 420
+}
+
+private enum GitOverviewMetricsGridMetrics {
+    static let horizontalSpacing: CGFloat = 12
+    static let verticalSpacing: CGFloat = 12
+    static let statCardHorizontalPadding: CGFloat = 28
+}
+
 private struct GitOverviewContent: View {
     let snapshot: GitActivityViewModel.OverviewSnapshot
 
     @State private var tableLayout: GitOverviewTableLayout = .wide
+    @State private var metricsWidth: CGFloat = 0
+    @State private var linesValueWidth: CGFloat = 0
 
     var body: some View {
         FadingScrollView(chrome: .plain) {
@@ -303,27 +319,80 @@ private struct GitOverviewContent: View {
     }
 
     private var metricsGrid: some View {
-        LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: 140), spacing: 12)],
-            alignment: .leading,
-            spacing: 12
+        Grid(
+            horizontalSpacing: GitOverviewMetricsGridMetrics.horizontalSpacing,
+            verticalSpacing: GitOverviewMetricsGridMetrics.verticalSpacing
         ) {
-            ForEach(snapshot.stats) { stat in
-                StatCard(label: stat.label, value: stat.value)
+            if usesTwoRowMetrics {
+                GridRow {
+                    ForEach(snapshot.stats.prefix(2)) { stat in
+                        StatCard(label: stat.label, value: stat.value)
+                    }
+                }
+                GridRow {
+                    ForEach(snapshot.stats.dropFirst(2)) { stat in
+                        StatCard(label: stat.label, value: stat.value)
+                    }
+                }
+            } else {
+                GridRow {
+                    ForEach(snapshot.stats) { stat in
+                        StatCard(label: stat.label, value: stat.value)
+                    }
+                }
             }
         }
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { newWidth in
+            metricsWidth = newWidth
+        }
+        .overlay(alignment: .topLeading) {
+            Text(linesStatValue)
+                .font(.sora(20, weight: .semibold).monospacedDigit())
+                .fixedSize(horizontal: true, vertical: false)
+                .hidden()
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.size.width
+                } action: { newWidth in
+                    linesValueWidth = newWidth
+                }
+        }
+        .animation(.easeOut(duration: 0.18), value: usesTwoRowMetrics)
+    }
+
+    private var usesTwoRowMetrics: Bool {
+        guard metricsWidth > 0, linesValueWidth > 0 else { return false }
+        let cardWidth = (
+            metricsWidth - (3 * GitOverviewMetricsGridMetrics.horizontalSpacing)
+        ) / 4
+        let requiredWidth = linesValueWidth + GitOverviewMetricsGridMetrics.statCardHorizontalPadding
+        return requiredWidth > cardWidth
+    }
+
+    private var linesStatValue: String {
+        snapshot.stats.first { $0.id == "lines" }?.value ?? ""
     }
 
     @ViewBuilder
     private var tables: some View {
         switch tableLayout {
         case .wide:
-            HStack(alignment: .top, spacing: 16) {
+            HStack(alignment: .top, spacing: GitOverviewTableMetrics.gap) {
                 GitChurnTable(rows: snapshot.churnRows, detail: snapshot.churnRowsDetail)
-                    .frame(minWidth: 260, maxWidth: .infinity)
+                    .frame(
+                        minWidth: GitOverviewTableMetrics.churnMinWidth,
+                        idealWidth: GitOverviewTableMetrics.churnIdealWidth,
+                        maxWidth: .infinity
+                    )
                 GitRecentCommitsTable(rows: snapshot.recentRows)
-                    .frame(minWidth: 320, maxWidth: .infinity)
+                    .frame(
+                        minWidth: GitOverviewTableMetrics.recentMinWidth,
+                        idealWidth: GitOverviewTableMetrics.recentIdealWidth,
+                        maxWidth: .infinity
+                    )
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         case .narrow:
             VStack(alignment: .leading, spacing: 16) {
                 GitChurnTable(rows: snapshot.churnRows, detail: snapshot.churnRowsDetail)
@@ -491,21 +560,86 @@ private enum GitOverviewChartDrawing {
         guard let first = points.first, let last = points.last else { return }
 
         var line = Path()
-        line.move(to: first)
-        for point in points.dropFirst() {
-            line.addLine(to: point)
-        }
+        appendMonotoneCurve(points, to: &line)
 
         var area = Path()
         area.move(to: CGPoint(x: first.x, y: size.height))
-        for point in points {
-            area.addLine(to: point)
-        }
+        appendMonotoneCurve(points, to: &area, moveToFirst: false)
         area.addLine(to: CGPoint(x: last.x, y: size.height))
         area.closeSubpath()
 
         context.fill(area, with: .color(color.opacity(0.16)))
         context.stroke(line, with: .color(color), style: StrokeStyle(lineWidth: 2, lineJoin: .round))
+    }
+
+    private static func appendMonotoneCurve(_ points: [CGPoint], to path: inout Path, moveToFirst: Bool = true) {
+        guard let first = points.first else { return }
+        if moveToFirst {
+            path.move(to: first)
+        } else {
+            path.addLine(to: first)
+        }
+        guard points.count > 2 else {
+            for point in points.dropFirst() {
+                path.addLine(to: point)
+            }
+            return
+        }
+
+        let tangents = monotoneTangents(for: points)
+        for index in 0..<(points.count - 1) {
+            let current = points[index]
+            let next = points[index + 1]
+            let dx = next.x - current.x
+            path.addCurve(
+                to: next,
+                control1: CGPoint(x: current.x + dx / 3, y: current.y + tangents[index] * dx / 3),
+                control2: CGPoint(x: next.x - dx / 3, y: next.y - tangents[index + 1] * dx / 3)
+            )
+        }
+    }
+
+    private static func monotoneTangents(for points: [CGPoint]) -> [CGFloat] {
+        let count = points.count
+        guard count > 1 else { return Array(repeating: 0, count: count) }
+
+        let slopes = (0..<(count - 1)).map { index -> CGFloat in
+            let dx = points[index + 1].x - points[index].x
+            guard abs(dx) > CGFloat.ulpOfOne else { return 0 }
+            return (points[index + 1].y - points[index].y) / dx
+        }
+
+        var tangents = Array(repeating: CGFloat(0), count: count)
+        tangents[0] = slopes[0]
+        tangents[count - 1] = slopes[count - 2]
+
+        if count > 2 {
+            for index in 1..<(count - 1) {
+                let previous = slopes[index - 1]
+                let next = slopes[index]
+                tangents[index] = previous * next <= 0 ? 0 : (previous + next) / 2
+            }
+        }
+
+        for index in 0..<(count - 1) {
+            let slope = slopes[index]
+            if abs(slope) <= CGFloat.ulpOfOne {
+                tangents[index] = 0
+                tangents[index + 1] = 0
+                continue
+            }
+
+            let a = tangents[index] / slope
+            let b = tangents[index + 1] / slope
+            let magnitude = sqrt(a * a + b * b)
+            if magnitude > 3 {
+                let scale = 3 / magnitude
+                tangents[index] = scale * a * slope
+                tangents[index + 1] = scale * b * slope
+            }
+        }
+
+        return tangents
     }
 
     static func drawBars(
@@ -543,19 +677,21 @@ private struct GitChurnTable: View {
     let detail: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let lastID = rows.last?.id
+        LazyVStack(alignment: .leading, spacing: 0) {
             GitTableTitle(title: "CODE CHURN BY REPO", detail: detail)
             StxRule()
-            ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+            ForEach(rows) { row in
                 GitChurnTableRow(row: row)
-                if index < rows.count - 1 { StxRule() }
+                    .equatable()
+                if row.id != lastID { StxRule() }
             }
         }
         .gitMainCard()
     }
 }
 
-private struct GitChurnTableRow: View {
+private struct GitChurnTableRow: View, Equatable {
     let row: GitActivityViewModel.OverviewRepoRow
 
     var body: some View {
@@ -568,12 +704,15 @@ private struct GitChurnTableRow: View {
             Text(row.insertionsLabel)
                 .font(.sora(10).monospacedDigit())
                 .foregroundStyle(GitPalette.add)
+                .frame(width: 48, alignment: .trailing)
             Text(row.deletionsLabel)
                 .font(.sora(10).monospacedDigit())
                 .foregroundStyle(GitPalette.del)
+                .frame(width: 48, alignment: .trailing)
             Text(row.filesLabel)
                 .font(.sora(10).monospacedDigit())
                 .foregroundStyle(Color.stxMuted)
+                .frame(width: 52, alignment: .trailing)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -581,27 +720,90 @@ private struct GitChurnTableRow: View {
 }
 
 private struct GitRecentCommitsTable: View {
+    private static let collapsedRowCount = 7
+
     let rows: [GitActivityViewModel.OverviewCommitRow]
 
+    @State private var isExpanded = false
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            GitTableTitle(title: "RECENT COMMITS", detail: "\(rows.count) shown")
+        let displayedRows = rows.prefix(displayedRowCount)
+        let lastID = displayedRows.last?.id
+        LazyVStack(alignment: .leading, spacing: 0) {
+            titleRow
             StxRule()
             if rows.isEmpty {
                 GitInlineEmptyState("No commits in this range.")
                     .padding(14)
             } else {
-                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                ForEach(displayedRows) { row in
                     GitRecentCommitTableRow(row: row)
-                    if index < rows.count - 1 { StxRule() }
+                        .equatable()
+                    if row.id != lastID { StxRule() }
                 }
             }
         }
         .gitMainCard()
+        .animation(.easeOut(duration: 0.18), value: displayedRowCount)
+        .onChange(of: rows.first?.id) { _, _ in collapse() }
+        .onChange(of: rows.count) { _, _ in collapse() }
+    }
+
+    private var titleRow: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Text("RECENT COMMITS")
+                .font(.sora(12, weight: .semibold))
+                .tracking(0.8)
+            Spacer()
+            Text(detailLabel)
+                .font(.sora(9).monospacedDigit())
+                .foregroundStyle(Color.stxMuted)
+            if showsDisclosure {
+                disclosureButton
+            }
+        }
+        .padding(12)
+    }
+
+    private var disclosureButton: some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.18)) {
+                isExpanded.toggle()
+            }
+        } label: {
+            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(Color.stxMuted)
+                .frame(width: 18, height: 18)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(isExpanded ? "Show the latest \(Self.collapsedRowCount) commits" : "Show more recent commits")
+        .accessibilityLabel(isExpanded ? "Collapse recent commits" : "Expand recent commits")
+        .accessibilityValue("Showing \(displayedRowCount) of \(rows.count) commits")
+    }
+
+    private var detailLabel: String {
+        guard showsDisclosure else { return "\(rows.count) shown" }
+        return "\(displayedRowCount) of \(rows.count) shown"
+    }
+
+    private var displayedRowCount: Int {
+        isExpanded ? rows.count : min(Self.collapsedRowCount, rows.count)
+    }
+
+    private var showsDisclosure: Bool {
+        rows.count > Self.collapsedRowCount
+    }
+
+    private func collapse() {
+        if isExpanded {
+            isExpanded = false
+        }
     }
 }
 
-private struct GitRecentCommitTableRow: View {
+private struct GitRecentCommitTableRow: View, Equatable {
     let row: GitActivityViewModel.OverviewCommitRow
 
     var body: some View {
@@ -615,9 +817,12 @@ private struct GitRecentCommitTableRow: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Text(row.shortHash)
+                    .frame(width: 42, alignment: .leading)
                 Text(row.churnLabel)
+                    .frame(width: 76, alignment: .leading)
                 Spacer(minLength: 6)
                 Text(row.dateLabel)
+                    .frame(width: 54, alignment: .trailing)
             }
             .font(.sora(9).monospacedDigit())
             .foregroundStyle(Color.stxMuted)
