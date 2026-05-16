@@ -6,6 +6,7 @@ cd "$(dirname "$0")/.."
 GHOSTTY_DIR="$PWD/ThirdParty/ghostty"
 XCFW="$GHOSTTY_DIR/macos/GhosttyKit.xcframework"
 EMBED_RESOURCES="$PWD/GhosttyEmbed/Resources"
+XCFRAMEWORK_TARGET="${GHOSTTY_XCFRAMEWORK_TARGET:-native}"
 
 if [[ ! -d "$GHOSTTY_DIR" ]]; then
     echo "error: Ghostty submodule is missing at $GHOSTTY_DIR" >&2
@@ -48,7 +49,7 @@ echo "==> Building GhosttyKit.xcframework"
     "$ZIG_BIN" build \
         -Demit-xcframework=true \
         -Demit-macos-app=false \
-        -Dxcframework-target=native
+        -Dxcframework-target="$XCFRAMEWORK_TARGET"
 )
 
 [[ -d "$XCFW" ]] || {

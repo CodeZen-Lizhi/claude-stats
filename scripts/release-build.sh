@@ -29,8 +29,6 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 DERIVED=/tmp/claude-stats-release
-PRODUCTS="$DERIVED/Build/Products/Release"
-APP="$PRODUCTS/Claude Stats.app"
 DIST="$PWD/dist"
 CLOUDKIT_ENTITLEMENTS="ClaudeStats/App/ClaudeStatsCloudKit.entitlements"
 SIGNED_ENTITLEMENTS="$DIST/signed-entitlements.plist"
@@ -44,13 +42,15 @@ SIGNED=0
 [[ -n "${SIGN_IDENTITY:-}" ]] && SIGNED=1
 
 echo "==> Building Claude Stats $VERSION (Release, $([[ $SIGNED -eq 1 ]] && echo "signed + notarized" || echo "unsigned"))"
-bash scripts/build-ghosttykit.sh
+GHOSTTY_XCFRAMEWORK_TARGET="${GHOSTTY_XCFRAMEWORK_TARGET:-native}" bash scripts/build-ghosttykit.sh
 bash scripts/generate.sh
 
 rm -rf "$DERIVED" "$DIST"
 mkdir -p "$DIST"
 
-XCODE_SIGN_ARGS=()
+CONFIGURATION=Release
+RELEASE_ARCHS="${RELEASE_ARCHS:-$(uname -m)}"
+XCODE_BUILD_ARGS=(ARCHS="$RELEASE_ARCHS")
 if [[ $SIGNED -eq 1 ]]; then
     [[ -n "${APPLE_TEAM_ID:-}" ]] || {
         echo "error: signed CloudKit builds require APPLE_TEAM_ID" >&2
@@ -61,26 +61,22 @@ if [[ $SIGNED -eq 1 ]]; then
         exit 1
     }
     echo "==> Signing with: $SIGN_IDENTITY (hardened runtime)"
-    XCODE_SIGN_ARGS=(
-        CODE_SIGN_STYLE=Manual
-        CODE_SIGN_IDENTITY="$SIGN_IDENTITY"
-        DEVELOPMENT_TEAM="$APPLE_TEAM_ID"
-        CODE_SIGN_ENTITLEMENTS="$CLOUDKIT_ENTITLEMENTS"
-        ENABLE_HARDENED_RUNTIME=YES
-        OTHER_CODE_SIGN_FLAGS="--timestamp"
-    )
-    [[ -n "${PROVISIONING_PROFILE_SPECIFIER:-}" ]] && XCODE_SIGN_ARGS+=(PROVISIONING_PROFILE_SPECIFIER="$PROVISIONING_PROFILE_SPECIFIER")
-    [[ -n "${PROVISIONING_PROFILE:-}" ]] && XCODE_SIGN_ARGS+=(PROVISIONING_PROFILE="$PROVISIONING_PROFILE")
+    export CLAUDE_STATS_PROVISIONING_PROFILE_SPECIFIER="${PROVISIONING_PROFILE_SPECIFIER:-}"
+    export CLAUDE_STATS_PROVISIONING_PROFILE="${PROVISIONING_PROFILE:-}"
+    CONFIGURATION=ReleaseSigned
 else
-    XCODE_SIGN_ARGS=(CODE_SIGN_IDENTITY="-" CODE_SIGN_STYLE=Automatic ENABLE_HARDENED_RUNTIME=NO)
+    XCODE_BUILD_ARGS+=(CODE_SIGN_IDENTITY="-" CODE_SIGN_STYLE=Automatic ENABLE_HARDENED_RUNTIME=NO)
 fi
+
+PRODUCTS="$DERIVED/Build/Products/$CONFIGURATION"
+APP="$PRODUCTS/Claude Stats.app"
 
 xcodebuild \
     -project ClaudeStats.xcodeproj \
     -scheme ClaudeStats \
-    -configuration Release \
+    -configuration "$CONFIGURATION" \
     -derivedDataPath "$DERIVED" \
-    "${XCODE_SIGN_ARGS[@]}" \
+    "${XCODE_BUILD_ARGS[@]}" \
     build
 
 [[ -d "$APP" ]] || { echo "error: build did not produce $APP" >&2; exit 1; }

@@ -10,6 +10,7 @@ configs:
   Debug: debug
   DebugCloudKit: debug
   Release: release
+  ReleaseSigned: release
 
 packages:
   Sparkle:
@@ -63,6 +64,13 @@ targets:
         SWIFT_OBJC_BRIDGING_HEADER: ThirdParty/ghostty/macos/Sources/App/macOS/ghostty-bridging-header.h
         OTHER_LDFLAGS: "$(inherited) -lstdc++"
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+      configs:
+        ReleaseSigned:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "$(SIGN_IDENTITY)"
+          DEVELOPMENT_TEAM: "$(APPLE_TEAM_ID)"
+          ENABLE_HARDENED_RUNTIME: YES
+          OTHER_CODE_SIGN_FLAGS: "--timestamp"
 
   ClaudeStats:
     type: application
@@ -99,6 +107,15 @@ targets:
           ENABLE_HARDENED_RUNTIME: NO
           CODE_SIGN_IDENTITY: "-"
           CODE_SIGN_STYLE: Automatic
+        ReleaseSigned:
+          CODE_SIGN_ENTITLEMENTS: ClaudeStats/App/ClaudeStatsCloudKit.entitlements
+          ENABLE_HARDENED_RUNTIME: YES
+          CODE_SIGN_IDENTITY: "$(SIGN_IDENTITY)"
+          CODE_SIGN_STYLE: Manual
+          DEVELOPMENT_TEAM: "$(APPLE_TEAM_ID)"
+          OTHER_CODE_SIGN_FLAGS: "--timestamp"
+          PROVISIONING_PROFILE: "$(CLAUDE_STATS_PROVISIONING_PROFILE)"
+          PROVISIONING_PROFILE_SPECIFIER: "$(CLAUDE_STATS_PROVISIONING_PROFILE_SPECIFIER)"
   ClaudeStatsTests:
     type: bundle.unit-test
     platform: macOS
