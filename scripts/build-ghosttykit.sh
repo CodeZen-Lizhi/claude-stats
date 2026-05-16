@@ -17,8 +17,8 @@ ZIG_BIN="${ZIG_BIN:-}"
 if [[ -z "$ZIG_BIN" ]]; then
     HOMEBREW_ZIG_PREFIX="$(brew --prefix zig@0.15 2>/dev/null || true)"
     for candidate in \
-        "$PWD/.tools/zig-0.15.2/zig" \
         "$HOMEBREW_ZIG_PREFIX/bin/zig" \
+        "$PWD/.tools/zig-0.15.2/zig" \
         "/opt/homebrew/opt/zig@0.15/bin/zig" \
         "/usr/local/opt/zig@0.15/bin/zig" \
         "$(command -v zig || true)"; do
