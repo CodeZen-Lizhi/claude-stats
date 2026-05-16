@@ -9,8 +9,10 @@ final class GitRepoGraphViewModel {
     private(set) var isGraphLoading = false
     private(set) var isDetailLoading = false
     private(set) var isDiffLoading = false
+    private(set) var isStatsLoading = false
     private(set) var commitDetail: CommitDetail?
     private(set) var fileDiff: FileDiff?
+    private(set) var repoStats: GitRepoInspectorStats?
     private(set) var currentRepoID: String?
     private(set) var loadedLimit = 0
 
@@ -22,6 +24,7 @@ final class GitRepoGraphViewModel {
     @ObservationIgnored private var graphRequestID: UInt64 = 0
     @ObservationIgnored private var detailRequestID: UInt64 = 0
     @ObservationIgnored private var diffRequestID: UInt64 = 0
+    @ObservationIgnored private var statsRequestID: UInt64 = 0
 
     init() {
         isPreview = false
@@ -40,6 +43,7 @@ final class GitRepoGraphViewModel {
                 files: GitGraph.previewFileChanges()[commit.hash] ?? []
             )
         }
+        repoStats = .preview
         isPreview = true
     }
     #endif
@@ -145,6 +149,27 @@ final class GitRepoGraphViewModel {
         fileDiff = diff
     }
 
+    func loadRepoStats(repo: GitRepo) async {
+        if currentRepoID != repo.id {
+            reset(for: repo)
+        }
+        if isPreview || repoStats != nil { return }
+
+        statsRequestID &+= 1
+        let requestID = statsRequestID
+        isStatsLoading = true
+        defer { finishStatsRequest(requestID) }
+
+        let requestedRepoID = repo.id
+        let stats = await Task.detached(priority: .userInitiated) {
+            GitAnalyzer().repoInspectorStats(for: repo)
+        }.value
+
+        guard statsRequestID == requestID,
+              currentRepoID == requestedRepoID else { return }
+        repoStats = stats
+    }
+
     func selectCommit(_ hash: String) {
         guard selectedHash != hash else { return }
         invalidateDetailRequest()
@@ -176,11 +201,13 @@ final class GitRepoGraphViewModel {
         invalidateGraphRequest()
         invalidateDetailRequest()
         invalidateDiffRequest()
+        invalidateStatsRequest()
         currentRepoID = repo.id
         graph = nil
         layout = nil
         commitDetail = nil
         fileDiff = nil
+        repoStats = nil
         selectedHash = nil
         diffPath = nil
         loadedLimit = 0
@@ -202,7 +229,7 @@ final class GitRepoGraphViewModel {
         }
         invalidateDetailRequest()
         invalidateDiffRequest()
-        selectedHash = commits.first?.hash
+        selectedHash = nil
         commitDetail = nil
         diffPath = nil
         fileDiff = nil
@@ -223,6 +250,11 @@ final class GitRepoGraphViewModel {
         isDiffLoading = false
     }
 
+    private func invalidateStatsRequest() {
+        statsRequestID &+= 1
+        isStatsLoading = false
+    }
+
     private func finishGraphRequest(_ requestID: UInt64) {
         if graphRequestID == requestID {
             isGraphLoading = false
@@ -240,4 +272,43 @@ final class GitRepoGraphViewModel {
             isDiffLoading = false
         }
     }
+
+    private func finishStatsRequest(_ requestID: UInt64) {
+        if statsRequestID == requestID {
+            isStatsLoading = false
+        }
+    }
 }
+
+#if DEBUG
+private extension GitRepoInspectorStats {
+    static let preview = GitRepoInspectorStats(
+        code: GitRepoCodeStats(
+            totalFiles: 24,
+            textFileCount: 19,
+            skippedBinaryFileCount: 5,
+            totalLines: 18_712,
+            codeLines: 15_920,
+            commentLines: 1_421,
+            blankLines: 1_371,
+            languageRows: [
+                .init(language: "Swift", fileCount: 14, totalLines: 17_313, codeLines: 14_880, commentLines: 1_140, blankLines: 1_293),
+                .init(language: "YAML", fileCount: 2, totalLines: 372, codeLines: 320, commentLines: 18, blankLines: 34),
+                .init(language: "Shell Script", fileCount: 2, totalLines: 360, codeLines: 300, commentLines: 22, blankLines: 38),
+                .init(language: "JSON", fileCount: 1, totalLines: 281, codeLines: 260, commentLines: 0, blankLines: 21),
+                .init(language: "Markdown", fileCount: 1, totalLines: 236, codeLines: 160, commentLines: 0, blankLines: 76),
+            ]
+        ),
+        codeContributors: [
+            GitCodeContributionStat(name: "1pitaph", email: "xzltxy@163.com", lineCount: 15_840, share: 15_840.0 / 18_712.0),
+            GitCodeContributionStat(name: "Codex", email: "codex@example.com", lineCount: 2_104, share: 2_104.0 / 18_712.0),
+            GitCodeContributionStat(name: "Ada", email: "ada@example.com", lineCount: 768, share: 768.0 / 18_712.0),
+        ],
+        contributors: [
+            GitContributorStat(name: "1pitaph", email: "xzltxy@163.com", commitCount: 46, share: 46.0 / 56.0),
+            GitContributorStat(name: "Codex", email: "codex@example.com", commitCount: 7, share: 7.0 / 56.0),
+            GitContributorStat(name: "Ada", email: "ada@example.com", commitCount: 3, share: 3.0 / 56.0),
+        ]
+    )
+}
+#endif

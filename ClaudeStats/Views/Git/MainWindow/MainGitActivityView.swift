@@ -8,6 +8,7 @@ struct MainGitActivityView: View {
     @SceneStorage("mainWindow.gitSelection") private var selectionRaw: String = Self.allSelection
     @State private var vm: GitActivityViewModel
     @State private var previewSelectionRaw: String?
+    @State private var repoSelectionToken: UInt64 = 0
 
     private let isPreview: Bool
     #if DEBUG
@@ -129,9 +130,9 @@ struct MainGitActivityView: View {
             )
         } else if let activity = selectedActivity {
             #if DEBUG
-            GitRepoWorkspaceView(repo: activity.repo, previewGraph: previewGraph)
+            GitRepoWorkspaceView(repo: activity.repo, previewGraph: previewGraph, repoSelectionToken: repoSelectionToken)
             #else
-            GitRepoWorkspaceView(repo: activity.repo)
+            GitRepoWorkspaceView(repo: activity.repo, repoSelectionToken: repoSelectionToken)
             #endif
         } else {
             GitOverviewContent(snapshot: vm.overviewSnapshot)
@@ -139,6 +140,9 @@ struct MainGitActivityView: View {
     }
 
     private func setSelection(_ value: String) {
+        if value != Self.allSelection {
+            repoSelectionToken &+= 1
+        }
         if isPreview {
             previewSelectionRaw = value
         } else {

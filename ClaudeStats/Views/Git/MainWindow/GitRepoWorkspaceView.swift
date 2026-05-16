@@ -2,21 +2,25 @@ import SwiftUI
 
 struct GitRepoWorkspaceView: View {
     let repo: GitRepo
+    let repoSelectionToken: UInt64
     @State private var vm: GitRepoGraphViewModel
+    @State private var inspectorMode: GitInspectorMode = .repo
 
     private static let rowHeight: CGFloat = 36
     private static let laneSpacing: CGFloat = 14
     private static let railPad: CGFloat = 15
     private static let nodeRadius: CGFloat = 3
 
-    init(repo: GitRepo) {
+    init(repo: GitRepo, repoSelectionToken: UInt64 = 0) {
         self.repo = repo
+        self.repoSelectionToken = repoSelectionToken
         _vm = State(wrappedValue: GitRepoGraphViewModel())
     }
 
     #if DEBUG
-    init(repo: GitRepo, previewGraph: GitGraph?) {
+    init(repo: GitRepo, previewGraph: GitGraph?, repoSelectionToken: UInt64 = 0) {
         self.repo = repo
+        self.repoSelectionToken = repoSelectionToken
         if let previewGraph {
             _vm = State(wrappedValue: GitRepoGraphViewModel(previewGraph: previewGraph))
         } else {
@@ -38,7 +42,7 @@ struct GitRepoWorkspaceView: View {
                 .fill(Color.stxStroke)
                 .frame(width: 1)
 
-            GitCommitInspector(repo: repo, vm: vm)
+            GitCommitInspector(repo: repo, vm: vm, mode: $inspectorMode)
                 .frame(minWidth: 220, idealWidth: 300, maxWidth: 318)
         }
         .task(id: "\(repo.id)|\(vm.limit)") {
@@ -49,6 +53,12 @@ struct GitRepoWorkspaceView: View {
         }
         .task(id: "\(repo.id)|\(vm.selectedHash ?? "")|\(vm.diffPath ?? "")") {
             await vm.loadDiff(repo: repo)
+        }
+        .onChange(of: repo.id) { _, _ in
+            showRepoInspector()
+        }
+        .onChange(of: repoSelectionToken) { _, _ in
+            showRepoInspector()
         }
     }
 
@@ -115,6 +125,7 @@ struct GitRepoWorkspaceView: View {
                             railWidth: railWidth,
                             isSelected: vm.selectedHash == row.commit.hash
                         ) {
+                            inspectorMode = .commit
                             vm.selectCommit(row.commit.hash)
                         }
                     }
@@ -129,11 +140,18 @@ struct GitRepoWorkspaceView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
+
+    private func showRepoInspector() {
+        inspectorMode = .repo
+        vm.closeDiff()
+    }
 }
 
 private struct GitCommitInspector: View {
     let repo: GitRepo
     let vm: GitRepoGraphViewModel
+
+    @Binding var mode: GitInspectorMode
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -142,26 +160,55 @@ private struct GitCommitInspector: View {
             if vm.diffPath != nil {
                 diffBody
             } else {
-                commitBody
+                switch mode {
+                case .commit:
+                    commitBody
+                case .repo:
+                    repoBody
+                }
             }
         }
         .background(Color.primary.opacity(0.025))
+        .task(id: "\(repo.id)|\(mode.rawValue)") {
+            guard mode == .repo else { return }
+            await vm.loadRepoStats(repo: repo)
+        }
     }
 
     private var inspectorHeader: some View {
         HStack(spacing: 8) {
-            Text(vm.diffPath == nil ? "COMMIT INSPECTOR" : "FILE DIFF")
+            Text(inspectorTitle)
                 .font(.sora(11, weight: .semibold))
                 .tracking(1.0)
                 .foregroundStyle(Color.stxMuted)
             Spacer()
-            if vm.isDetailLoading || vm.isDiffLoading {
+            if vm.diffPath == nil {
+                Picker("", selection: $mode) {
+                    ForEach(GitInspectorMode.allCases) { mode in
+                        Text(mode.label).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .controlSize(.mini)
+                .frame(width: 112)
+                .help("Switch inspector mode")
+            }
+            if vm.isDetailLoading || vm.isDiffLoading || vm.isStatsLoading {
                 ProgressView()
                     .controlSize(.mini)
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
+    }
+
+    private var inspectorTitle: String {
+        if vm.diffPath != nil { return "FILE DIFF" }
+        switch mode {
+        case .commit: return "COMMIT INSPECTOR"
+        case .repo: return "REPO INSPECTOR"
+        }
     }
 
     @ViewBuilder
@@ -317,6 +364,31 @@ private struct GitCommitInspector: View {
     }
 
     @ViewBuilder
+    private var repoBody: some View {
+        if let stats = vm.repoStats {
+            FadingScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    GitRepoLineCountPanel(stats: stats.code)
+                    GitRepoCodeContributorsPanel(rows: stats.codeContributors)
+                    GitRepoContributorsPanel(
+                        title: "TOP COMMITTERS",
+                        rows: stats.contributors,
+                        value: { "\($0.commitCount)" }
+                    )
+                }
+                .padding(14)
+            }
+        } else if vm.isStatsLoading {
+            ProgressView()
+                .controlSize(.small)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            GitWorkspaceInlineEmptyState("Couldn't load repo statistics.")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    @ViewBuilder
     private var diffBody: some View {
         FadingScrollView {
             VStack(alignment: .leading, spacing: 12) {
@@ -362,6 +434,230 @@ private struct GitCommitInspector: View {
             }
         }
         .gitWorkspaceCard()
+    }
+}
+
+private enum GitInspectorMode: String, CaseIterable, Identifiable {
+    case commit
+    case repo
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .commit: return "Commit"
+        case .repo: return "Repo"
+        }
+    }
+}
+
+private struct GitRepoLineCountPanel: View {
+    let stats: GitRepoCodeStats
+
+    private var total: Int { max(stats.codeAndCommentLines, 0) }
+    private var rows: [GitStatBarRow.Model] {
+        let languageRows = stats.languageRows.prefix(7).enumerated().map { index, row in
+            GitStatBarRow.Model(
+                id: row.language,
+                rank: index + 1,
+                label: row.language,
+                value: Format.tokens(row.codeAndCommentLines),
+                ratio: total > 0 ? Double(row.codeAndCommentLines) / Double(total) : 0,
+                color: Color.stxRamp[index % Color.stxRamp.count]
+            )
+        }
+        return [
+            GitStatBarRow.Model(
+                id: "total",
+                rank: nil,
+                label: "Total Lines",
+                value: Format.tokens(total),
+                ratio: total > 0 ? 1 : 0,
+                color: GitPalette.head
+            )
+        ] + languageRows
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            panelHeader(title: "LINE COUNT", detail: "Code and Comments")
+            GitStatBarList(rows: rows)
+            HStack(spacing: 6) {
+                Text("\(stats.textFileCount) text files")
+                Text("-")
+                Text("\(stats.skippedBinaryFileCount) skipped")
+            }
+            .font(.sora(9))
+            .foregroundStyle(Color.stxMuted)
+        }
+    }
+}
+
+private struct GitRepoContributorsPanel: View {
+    let title: String
+    let rows: [GitContributorStat]
+    let value: (GitContributorStat) -> String
+
+    private var totalCommits: Int {
+        rows.reduce(0) { $0 + $1.commitCount }
+    }
+
+    private var models: [GitStatBarRow.Model] {
+        guard totalCommits > 0 else { return [] }
+        let total = GitStatBarRow.Model(
+            id: "total",
+            rank: nil,
+            label: "Total Commits",
+            value: "\(totalCommits)",
+            ratio: 1,
+            color: GitPalette.head
+        )
+        return [total] + rows.prefix(7).enumerated().map { index, row in
+            GitStatBarRow.Model(
+                id: row.id,
+                rank: index + 1,
+                label: row.displayName,
+                value: value(row),
+                ratio: row.share,
+                color: Color.stxRamp[index % Color.stxRamp.count]
+            )
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            panelHeader(title: title, detail: nil)
+            if models.isEmpty {
+                GitWorkspaceInlineEmptyState("No commits to count.")
+                    .gitWorkspaceCard()
+            } else {
+                GitStatBarList(rows: models)
+            }
+        }
+    }
+}
+
+private struct GitRepoCodeContributorsPanel: View {
+    let rows: [GitCodeContributionStat]
+
+    private var totalLines: Int {
+        rows.reduce(0) { $0 + $1.lineCount }
+    }
+
+    private var models: [GitStatBarRow.Model] {
+        guard totalLines > 0 else { return [] }
+        let total = GitStatBarRow.Model(
+            id: "total",
+            rank: nil,
+            label: "Total Lines",
+            value: Format.tokens(totalLines),
+            ratio: 1,
+            color: GitPalette.head
+        )
+        return [total] + rows.prefix(7).enumerated().map { index, row in
+            GitStatBarRow.Model(
+                id: row.id,
+                rank: index + 1,
+                label: row.displayName,
+                value: "\(Format.tokens(row.lineCount)) \(Format.percent(row.share))",
+                ratio: row.share,
+                color: Color.stxRamp[index % Color.stxRamp.count]
+            )
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            panelHeader(title: "CODE SHARE", detail: "Blamed Lines")
+            if models.isEmpty {
+                GitWorkspaceInlineEmptyState("No code lines to attribute.")
+                    .gitWorkspaceCard()
+            } else {
+                GitStatBarList(rows: models)
+            }
+        }
+    }
+}
+
+private struct GitStatBarList: View {
+    let rows: [GitStatBarRow.Model]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(rows) { row in
+                GitStatBarRow(row: row)
+                if row.id != rows.last?.id { StxRule() }
+            }
+        }
+        .gitWorkspaceCard()
+    }
+}
+
+private struct GitStatBarRow: View {
+    struct Model: Identifiable {
+        let id: String
+        let rank: Int?
+        let label: String
+        let value: String
+        let ratio: Double
+        let color: Color
+    }
+
+    let row: Model
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color.primary.opacity(0.035))
+                    .frame(height: 28)
+                Capsule()
+                    .fill(row.color.opacity(0.88))
+                    .frame(width: max(6, proxy.size.width * min(max(row.ratio, 0), 1)), height: 28)
+                HStack(spacing: 7) {
+                    Text(rankLabel)
+                        .font(.sora(9, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(Color.primary.opacity(0.72))
+                        .frame(width: 18)
+                    Text(row.label)
+                        .font(.sora(11, weight: .semibold))
+                        .foregroundStyle(Color.primary.opacity(0.82))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 8)
+                    Text(row.value)
+                        .font(.sora(11, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(Color.primary.opacity(0.78))
+                        .lineLimit(1)
+                        .fixedSize()
+                }
+                .padding(.horizontal, 10)
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .leading)
+        }
+        .frame(height: 42)
+        .padding(.horizontal, 10)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text("\(row.label), \(row.value)"))
+    }
+
+    private var rankLabel: String {
+        row.rank.map { "\($0)" } ?? "#"
+    }
+}
+
+private func panelHeader(title: String, detail: String?) -> some View {
+    HStack(alignment: .firstTextBaseline) {
+        Text(title)
+            .font(.sora(13, weight: .semibold))
+            .tracking(0.8)
+        Spacer()
+        if let detail {
+            Text(detail)
+                .font(.sora(10))
+                .foregroundStyle(Color.stxMuted)
+                .lineLimit(1)
+        }
     }
 }
 

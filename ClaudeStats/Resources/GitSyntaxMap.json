@@ -1,0 +1,2809 @@
+{
+  "AWK": {
+    "comment": {
+      "blocks": [],
+      "inlines": [
+        {
+          "begin": "#",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "awk"
+      ],
+      "filenames": [],
+      "interpreters": [
+        "awk"
+      ]
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "/",
+        "end": "/",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      }
+    ]
+  },
+  "Ada": {
+    "comment": {
+      "blocks": [],
+      "inlines": [
+        {
+          "begin": "--",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "ada",
+        "adb",
+        "ads"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\"",
+        "isMultiline": false
+      }
+    ]
+  },
+  "Apache": {
+    "comment": {
+      "blocks": [],
+      "inlines": [
+        {
+          "begin": "#",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "conf"
+      ],
+      "filenames": [
+        ".htaccess"
+      ],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      }
+    ]
+  },
+  "AppleScript": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "(*",
+          "end": "*)",
+          "isNestable": false
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "--",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "applescript"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      }
+    ]
+  },
+  "Assembly": {
+    "comment": {
+      "blocks": [],
+      "inlines": [
+        {
+          "begin": ";",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "s",
+        "asm"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "`",
+        "end": "`",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      }
+    ]
+  },
+  "BBCode": {
+    "comment": null,
+    "fileMap": {
+      "extensions": [],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "general",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": null,
+        "isMultiline": false
+      }
+    ]
+  },
+  "BibTeX": {
+    "comment": {
+      "blocks": [],
+      "inlines": [
+        {
+          "begin": "%",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "bib",
+        "bibtex"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "general",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      }
+    ]
+  },
+  "C": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "/*",
+          "end": "*/",
+          "isNestable": false
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "//",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "c",
+        "h"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      }
+    ]
+  },
+  "C#": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "/*",
+          "end": "*/",
+          "isNestable": false
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "//",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "cs"
+      ],
+      "filenames": [],
+      "interpreters": [
+        "csharp"
+      ]
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "\"\"\"",
+        "end": "\"\"\"",
+        "escapeCharacter": null,
+        "isMultiline": true
+      },
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\"",
+        "isMultiline": true
+      }
+    ]
+  },
+  "C++": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "/*",
+          "end": "*/",
+          "isNestable": false
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "//",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "c++",
+        "cpp",
+        "cxx",
+        "cc",
+        "cp",
+        "hh",
+        "hp",
+        "hpp",
+        "hxx",
+        "h++",
+        "ipp",
+        "cu",
+        "cuh"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": null,
+        "isMultiline": true
+      }
+    ]
+  },
+  "CSS": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "/*",
+          "end": "*/",
+          "isNestable": false
+        }
+      ],
+      "inlines": []
+    },
+    "fileMap": {
+      "extensions": [
+        "css"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      }
+    ]
+  },
+  "CoffeeScript": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "###",
+          "end": "###",
+          "isNestable": false
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "#",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "coffee"
+      ],
+      "filenames": [],
+      "interpreters": [
+        "coffee"
+      ]
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "'''",
+        "end": "'''",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      },
+      {
+        "begin": "///",
+        "end": "///",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      }
+    ]
+  },
+  "D": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "/*",
+          "end": "*/",
+          "isNestable": false
+        },
+        {
+          "begin": "/+",
+          "end": "+/",
+          "isNestable": true
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "//",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "d"
+      ],
+      "filenames": [],
+      "interpreters": [
+        "rdmd"
+      ]
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      },
+      {
+        "begin": "`",
+        "end": "`",
+        "escapeCharacter": null,
+        "isMultiline": true
+      },
+      {
+        "begin": "q{",
+        "end": "}",
+        "escapeCharacter": null,
+        "isMultiline": true
+      },
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": null,
+        "isMultiline": true
+      }
+    ]
+  },
+  "DOT": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "/*",
+          "end": "*/",
+          "isNestable": false
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "//",
+          "leadingOnly": false
+        },
+        {
+          "begin": "#",
+          "leadingOnly": true
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "dot",
+        "gv"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      }
+    ]
+  },
+  "DTD": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "<!--",
+          "end": "-->",
+          "isNestable": false
+        }
+      ],
+      "inlines": []
+    },
+    "fileMap": {
+      "extensions": [
+        "dtd"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": null,
+        "isMultiline": false
+      }
+    ]
+  },
+  "Dart": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "/*",
+          "end": "*/",
+          "isNestable": false
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "//",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "dart"
+      ],
+      "filenames": [],
+      "interpreters": [
+        "dart"
+      ]
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "\"\"\"",
+        "end": "\"\"\"",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "'''",
+        "end": "'''",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      },
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": null,
+        "isMultiline": false
+      },
+      {
+        "begin": "\"\"\"",
+        "end": "\"\"\"",
+        "escapeCharacter": null,
+        "isMultiline": true
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": null,
+        "isMultiline": false
+      },
+      {
+        "begin": "'''",
+        "end": "'''",
+        "escapeCharacter": null,
+        "isMultiline": true
+      }
+    ]
+  },
+  "Diff": {
+    "comment": null,
+    "fileMap": {
+      "extensions": [
+        "diff",
+        "patch",
+        "dif"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": []
+  },
+  "Dockerfile": {
+    "comment": {
+      "blocks": [],
+      "inlines": [
+        {
+          "begin": "#",
+          "leadingOnly": true
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [],
+      "filenames": [
+        "Dockerfile"
+      ],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      }
+    ]
+  },
+  "Erlang": {
+    "comment": {
+      "blocks": [],
+      "inlines": [
+        {
+          "begin": "%",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "erl"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      }
+    ]
+  },
+  "Fortran": {
+    "comment": {
+      "blocks": [],
+      "inlines": [
+        {
+          "begin": "!",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "f",
+        "f08",
+        "f03",
+        "f95",
+        "f90",
+        "for",
+        "cuf"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\"",
+        "isMultiline": false
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "'",
+        "isMultiline": false
+      }
+    ]
+  },
+  "Git": {
+    "comment": {
+      "blocks": [],
+      "inlines": [
+        {
+          "begin": "#",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [],
+      "filenames": [
+        "git-rebase-todo",
+        "COMMIT_EDITMSG"
+      ],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": []
+  },
+  "Git Config": {
+    "comment": {
+      "blocks": [],
+      "inlines": [
+        {
+          "begin": "#",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [],
+      "filenames": [
+        ".gitconfig",
+        ".gitmodules",
+        "gitconfig"
+      ],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      }
+    ]
+  },
+  "Git Ignore": {
+    "comment": {
+      "blocks": [],
+      "inlines": [
+        {
+          "begin": "#",
+          "leadingOnly": true
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [],
+      "filenames": [
+        ".gitignore"
+      ],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": []
+  },
+  "Go": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "/*",
+          "end": "*/",
+          "isNestable": false
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "//",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "go"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "`",
+        "end": "`",
+        "escapeCharacter": null,
+        "isMultiline": true
+      }
+    ]
+  },
+  "HTML": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "<!--",
+          "end": "-->",
+          "isNestable": false
+        }
+      ],
+      "inlines": []
+    },
+    "fileMap": {
+      "extensions": [
+        "html",
+        "htm",
+        "shtml"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": null,
+        "isMultiline": false
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": null,
+        "isMultiline": false
+      }
+    ]
+  },
+  "Haskell": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "{-",
+          "end": "-}",
+          "isNestable": true
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "--",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "hs",
+        "lhs"
+      ],
+      "filenames": [],
+      "interpreters": [
+        "runhaskell"
+      ]
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      }
+    ]
+  },
+  "INI": {
+    "comment": {
+      "blocks": [],
+      "inlines": [
+        {
+          "begin": "#",
+          "leadingOnly": false
+        },
+        {
+          "begin": ";",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "ini",
+        "url"
+      ],
+      "filenames": [
+        ".editorconfig"
+      ],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      }
+    ]
+  },
+  "JSON": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "/*",
+          "end": "*/",
+          "isNestable": false
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "//",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "json",
+        "jsonl",
+        "geojson",
+        "resolved",
+        "cottheme",
+        "cotrpl",
+        "xcstrings"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      }
+    ]
+  },
+  "Java": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "/*",
+          "end": "*/",
+          "isNestable": false
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "//",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "java",
+        "jav"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "\"\"\"",
+        "end": "\"\"\"",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      }
+    ]
+  },
+  "JavaScript": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "/*",
+          "end": "*/",
+          "isNestable": false
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "//",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "js",
+        "mjs",
+        "pac"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "`",
+        "end": "`",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      }
+    ]
+  },
+  "Julia": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "#=",
+          "end": "=#",
+          "isNestable": true
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "#",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "jl"
+      ],
+      "filenames": [],
+      "interpreters": [
+        "julia"
+      ]
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      },
+      {
+        "begin": "\"\"\"",
+        "end": "\"\"\"",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      },
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      }
+    ]
+  },
+  "Kotlin": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "/*",
+          "end": "*/",
+          "isNestable": true
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "//",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "kt",
+        "kts"
+      ],
+      "filenames": [],
+      "interpreters": [
+        "kotlin",
+        "kotlinc"
+      ]
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "\"\"\"",
+        "end": "\"\"\"",
+        "escapeCharacter": null,
+        "isMultiline": true
+      }
+    ]
+  },
+  "LaTeX": {
+    "comment": {
+      "blocks": [],
+      "inlines": [
+        {
+          "begin": "%",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "tex",
+        "TEX",
+        "sty",
+        "cls"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "general",
+    "stringDelimiters": []
+  },
+  "Lisp": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "#|",
+          "end": "|#",
+          "isNestable": true
+        }
+      ],
+      "inlines": [
+        {
+          "begin": ";",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "lisp",
+        "lsp",
+        "el",
+        "clj",
+        "edn"
+      ],
+      "filenames": [],
+      "interpreters": [
+        "sbcl"
+      ]
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      }
+    ]
+  },
+  "Lua": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "--[[",
+          "end": "]]",
+          "isNestable": false
+        },
+        {
+          "begin": "--[===[",
+          "end": "]===]",
+          "isNestable": false
+        },
+        {
+          "begin": "--[==[",
+          "end": "]==]",
+          "isNestable": false
+        },
+        {
+          "begin": "--[=[",
+          "end": "]=]",
+          "isNestable": false
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "--",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "lua"
+      ],
+      "filenames": [],
+      "interpreters": [
+        "lua",
+        "luajit"
+      ]
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "[[",
+        "end": "]]",
+        "escapeCharacter": null,
+        "isMultiline": true
+      },
+      {
+        "begin": "[=[",
+        "end": "]=]",
+        "escapeCharacter": null,
+        "isMultiline": true
+      },
+      {
+        "begin": "[==[",
+        "end": "]==]",
+        "escapeCharacter": null,
+        "isMultiline": true
+      },
+      {
+        "begin": "[===[",
+        "end": "]===]",
+        "escapeCharacter": null,
+        "isMultiline": true
+      }
+    ]
+  },
+  "MATLAB": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "%{",
+          "end": "%}",
+          "isNestable": false
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "%",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "m"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\"",
+        "isMultiline": false
+      }
+    ]
+  },
+  "METAFONT": {
+    "comment": {
+      "blocks": [],
+      "inlines": [
+        {
+          "begin": "%",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "mf"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      }
+    ]
+  },
+  "Makefile": {
+    "comment": {
+      "blocks": [],
+      "inlines": [
+        {
+          "begin": "#",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [],
+      "filenames": [
+        "Makefile",
+        "makefile",
+        "GNUmakefile"
+      ],
+      "interpreters": [
+        "make"
+      ]
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      }
+    ]
+  },
+  "Markdown": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "<!--",
+          "end": "-->",
+          "isNestable": false
+        }
+      ],
+      "inlines": []
+    },
+    "fileMap": {
+      "extensions": [
+        "md",
+        "markdown",
+        "mkd",
+        "mdown",
+        "mkdn"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "general",
+    "stringDelimiters": [
+      {
+        "begin": "`",
+        "end": "`",
+        "escapeCharacter": null,
+        "isMultiline": false
+      },
+      {
+        "begin": "``",
+        "end": "``",
+        "escapeCharacter": null,
+        "isMultiline": false
+      },
+      {
+        "begin": "```",
+        "end": "```",
+        "escapeCharacter": null,
+        "isMultiline": true
+      }
+    ]
+  },
+  "Metal": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "/*",
+          "end": "*/",
+          "isNestable": false
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "//",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "metal",
+        "msl"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      }
+    ]
+  },
+  "Mojo": {
+    "comment": {
+      "blocks": [],
+      "inlines": [
+        {
+          "begin": "#",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "mojo",
+        "🔥"
+      ],
+      "filenames": [],
+      "interpreters": [
+        "mojo"
+      ]
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": null,
+        "isMultiline": false
+      },
+      {
+        "begin": "\"\"\"",
+        "end": "\"\"\"",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      },
+      {
+        "begin": "\"\"\"",
+        "end": "\"\"\"",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      },
+      {
+        "begin": "\"\"\"",
+        "end": "\"\"\"",
+        "escapeCharacter": null,
+        "isMultiline": true
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": null,
+        "isMultiline": false
+      },
+      {
+        "begin": "'''",
+        "end": "'''",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      },
+      {
+        "begin": "'''",
+        "end": "'''",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      },
+      {
+        "begin": "'''",
+        "end": "'''",
+        "escapeCharacter": null,
+        "isMultiline": true
+      },
+      {
+        "begin": "`",
+        "end": "`",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      }
+    ]
+  },
+  "PHP": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "/*",
+          "end": "*/",
+          "isNestable": false
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "//",
+          "leadingOnly": false
+        },
+        {
+          "begin": "#",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "php",
+        "php3",
+        "php4",
+        "php5",
+        "phps",
+        "phtml"
+      ],
+      "filenames": [],
+      "interpreters": [
+        "php"
+      ]
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      }
+    ]
+  },
+  "Pascal": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "{",
+          "end": "}",
+          "isNestable": false
+        },
+        {
+          "begin": "(*",
+          "end": "*)",
+          "isNestable": false
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "//",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "pas",
+        "pp"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "'",
+        "isMultiline": false
+      }
+    ]
+  },
+  "Perl": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "=pod",
+          "end": "=cut",
+          "isNestable": false
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "#",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "pl",
+        "cgi",
+        "pm"
+      ],
+      "filenames": [],
+      "interpreters": [
+        "perl"
+      ]
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      },
+      {
+        "begin": "qq/",
+        "end": "/",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      }
+    ]
+  },
+  "Plain Text": {
+    "comment": null,
+    "fileMap": {
+      "extensions": [
+        "txt"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "general",
+    "stringDelimiters": []
+  },
+  "PowerShell": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "<#",
+          "end": "#>",
+          "isNestable": false
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "#",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "ps1",
+        "psm1"
+      ],
+      "filenames": [],
+      "interpreters": [
+        "pwsh"
+      ]
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "`",
+        "isMultiline": true
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "'",
+        "isMultiline": true
+      }
+    ]
+  },
+  "Properties": {
+    "comment": {
+      "blocks": [],
+      "inlines": [
+        {
+          "begin": "#",
+          "leadingOnly": true
+        },
+        {
+          "begin": "!",
+          "leadingOnly": true
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "properties"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": []
+  },
+  "Protocol Buffers": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "/*",
+          "end": "*/",
+          "isNestable": false
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "//",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "proto"
+      ],
+      "filenames": [],
+      "interpreters": [
+        "protoc"
+      ]
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      }
+    ]
+  },
+  "Python": {
+    "comment": {
+      "blocks": [],
+      "inlines": [
+        {
+          "begin": "#",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "py",
+        "pyw",
+        "pyi"
+      ],
+      "filenames": [],
+      "interpreters": [
+        "python",
+        "python2",
+        "python3"
+      ]
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "\"\"\"",
+        "end": "\"\"\"",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "'''",
+        "end": "'''",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      },
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "\"\"\"",
+        "end": "\"\"\"",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "'''",
+        "end": "'''",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      },
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": null,
+        "isMultiline": false
+      },
+      {
+        "begin": "\"\"\"",
+        "end": "\"\"\"",
+        "escapeCharacter": null,
+        "isMultiline": true
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": null,
+        "isMultiline": false
+      },
+      {
+        "begin": "'''",
+        "end": "'''",
+        "escapeCharacter": null,
+        "isMultiline": true
+      }
+    ]
+  },
+  "R": {
+    "comment": {
+      "blocks": [],
+      "inlines": [
+        {
+          "begin": "#",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "R"
+      ],
+      "filenames": [
+        ".Rprofile"
+      ],
+      "interpreters": [
+        "Rscript"
+      ]
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      }
+    ]
+  },
+  "Rich Text Format": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "{\\comment",
+          "end": "}",
+          "isNestable": false
+        }
+      ],
+      "inlines": []
+    },
+    "fileMap": {
+      "extensions": [
+        "rtf"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "general",
+    "stringDelimiters": []
+  },
+  "Ruby": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "=begin",
+          "end": "=end",
+          "isNestable": false
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "#",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "rb",
+        "erb"
+      ],
+      "filenames": [
+        "Gemfile"
+      ],
+      "interpreters": [
+        "ruby"
+      ]
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "`",
+        "end": "`",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      }
+    ]
+  },
+  "Rust": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "/*",
+          "end": "*/",
+          "isNestable": true
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "//",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "rs",
+        "rc"
+      ],
+      "filenames": [],
+      "interpreters": [
+        "rustx"
+      ]
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": null,
+        "isMultiline": true
+      },
+      {
+        "begin": "#\"",
+        "end": "\"#",
+        "escapeCharacter": null,
+        "isMultiline": true
+      },
+      {
+        "begin": "##\"",
+        "end": "\"##",
+        "escapeCharacter": null,
+        "isMultiline": true
+      }
+    ]
+  },
+  "SQL": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "/*",
+          "end": "*/",
+          "isNestable": false
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "--",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "sql",
+        "mysql",
+        "pgsql"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "'",
+        "isMultiline": false
+      }
+    ]
+  },
+  "SVG": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "<!--",
+          "end": "-->",
+          "isNestable": false
+        }
+      ],
+      "inlines": []
+    },
+    "fileMap": {
+      "extensions": [
+        "svg"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": null,
+        "isMultiline": false
+      }
+    ]
+  },
+  "Scala": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "/*",
+          "end": "*/",
+          "isNestable": true
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "//",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "scala"
+      ],
+      "filenames": [],
+      "interpreters": [
+        "scala"
+      ]
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": null,
+        "isMultiline": false
+      },
+      {
+        "begin": "\"\"\"",
+        "end": "\"\"\"",
+        "escapeCharacter": null,
+        "isMultiline": true
+      },
+      {
+        "begin": "\"\"\"",
+        "end": "\"\"\"",
+        "escapeCharacter": null,
+        "isMultiline": true
+      }
+    ]
+  },
+  "Scheme": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "#|",
+          "end": "|#",
+          "isNestable": true
+        },
+        {
+          "begin": "#;(",
+          "end": ")",
+          "isNestable": false
+        },
+        {
+          "begin": "#;[",
+          "end": "]",
+          "isNestable": false
+        }
+      ],
+      "inlines": [
+        {
+          "begin": ";",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "scm",
+        "ss"
+      ],
+      "filenames": [],
+      "interpreters": [
+        "chicken-scheme",
+        "csi",
+        "gosh",
+        "guile",
+        "gsi"
+      ]
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      }
+    ]
+  },
+  "Shell Script": {
+    "comment": {
+      "blocks": [],
+      "inlines": [
+        {
+          "begin": "#",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "sh",
+        "command"
+      ],
+      "filenames": [
+        ".profile",
+        ".bash_login",
+        ".bash_logout",
+        ".bash_profile",
+        ".bashrc",
+        ".zlogin",
+        ".zprofile",
+        ".zshrc",
+        ".zshenv"
+      ],
+      "interpreters": [
+        "sh",
+        "bash",
+        "csh",
+        "ksh",
+        "tcsh",
+        "zsh"
+      ]
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": null,
+        "isMultiline": false
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      }
+    ]
+  },
+  "Swift": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "/*",
+          "end": "*/",
+          "isNestable": true
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "//",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "swift",
+        "swiftinterface"
+      ],
+      "filenames": [],
+      "interpreters": [
+        "swift"
+      ]
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "\"\"\"",
+        "end": "\"\"\"",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      },
+      {
+        "begin": "#\"",
+        "end": "\"#",
+        "escapeCharacter": null,
+        "isMultiline": false
+      },
+      {
+        "begin": "##\"",
+        "end": "\"##",
+        "escapeCharacter": null,
+        "isMultiline": false
+      },
+      {
+        "begin": "#\"\"\"",
+        "end": "\"\"\"#",
+        "escapeCharacter": null,
+        "isMultiline": true
+      },
+      {
+        "begin": "##\"\"\"",
+        "end": "\"\"\"##",
+        "escapeCharacter": null,
+        "isMultiline": true
+      }
+    ]
+  },
+  "TOML": {
+    "comment": {
+      "blocks": [],
+      "inlines": [
+        {
+          "begin": "#",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "toml"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "\"\"\"",
+        "end": "\"\"\"",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": null,
+        "isMultiline": false
+      },
+      {
+        "begin": "'''",
+        "end": "'''",
+        "escapeCharacter": null,
+        "isMultiline": true
+      }
+    ]
+  },
+  "Tcl": {
+    "comment": {
+      "blocks": [],
+      "inlines": [
+        {
+          "begin": "#",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "tcl"
+      ],
+      "filenames": [],
+      "interpreters": [
+        "jimsh",
+        "tclsh",
+        "wish"
+      ]
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      }
+    ]
+  },
+  "Textile": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "<!--",
+          "end": "-->",
+          "isNestable": false
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "###.",
+          "leadingOnly": true
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "textile"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "general",
+    "stringDelimiters": []
+  },
+  "TypeScript": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "/*",
+          "end": "*/",
+          "isNestable": false
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "//",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "ts",
+        "tsx",
+        "mts",
+        "cts"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      },
+      {
+        "begin": "`",
+        "end": "`",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      }
+    ]
+  },
+  "VHDL": {
+    "comment": {
+      "blocks": [],
+      "inlines": [
+        {
+          "begin": "--",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "vhd"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      }
+    ]
+  },
+  "Verilog": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "/*",
+          "end": "*/",
+          "isNestable": false
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "//",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "v",
+        "sv"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": []
+  },
+  "XML": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "<!--",
+          "end": "-->",
+          "isNestable": false
+        }
+      ],
+      "inlines": []
+    },
+    "fileMap": {
+      "extensions": [
+        "xml",
+        "xsl",
+        "xslt",
+        "xsd",
+        "rlx",
+        "rdf"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": null,
+        "isMultiline": true
+      }
+    ]
+  },
+  "Xcode Project": {
+    "comment": {
+      "blocks": [
+        {
+          "begin": "/*",
+          "end": "*/",
+          "isNestable": false
+        }
+      ],
+      "inlines": [
+        {
+          "begin": "//",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "pbxproj"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      }
+    ]
+  },
+  "YAML": {
+    "comment": {
+      "blocks": [],
+      "inlines": [
+        {
+          "begin": "#",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "yml",
+        "yaml"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": true
+      },
+      {
+        "begin": "'",
+        "end": "'",
+        "escapeCharacter": "'",
+        "isMultiline": true
+      }
+    ]
+  },
+  "iCalendar": {
+    "comment": null,
+    "fileMap": {
+      "extensions": [
+        "ics",
+        "ifb"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": []
+  },
+  "jq": {
+    "comment": {
+      "blocks": [],
+      "inlines": [
+        {
+          "begin": "#",
+          "leadingOnly": false
+        }
+      ]
+    },
+    "fileMap": {
+      "extensions": [
+        "jq"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "code",
+    "stringDelimiters": [
+      {
+        "begin": "\"",
+        "end": "\"",
+        "escapeCharacter": "\\",
+        "isMultiline": false
+      }
+    ]
+  },
+  "reStructuredText": {
+    "comment": null,
+    "fileMap": {
+      "extensions": [
+        "rest",
+        "rst"
+      ],
+      "filenames": [],
+      "interpreters": []
+    },
+    "kind": "general",
+    "stringDelimiters": []
+  }
+}
