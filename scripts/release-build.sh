@@ -140,7 +140,10 @@ make_dmg() {
 
     osascript <<APPLESCRIPT
 tell application "Finder"
-    tell disk "Claude Stats"
+    set dmgFolder to folder (POSIX file "$mount_dir" as alias)
+    set backgroundImage to POSIX file "$mount_dir/.background/dmg-background.png" as alias
+
+    tell dmgFolder
         open
         set current view of container window to icon view
         set toolbar visible of container window to false
@@ -151,7 +154,7 @@ tell application "Finder"
         set arrangement of viewOptions to not arranged
         set icon size of viewOptions to 128
         set text size of viewOptions to 16
-        set background picture of viewOptions to file ".background:dmg-background.png"
+        set background picture of viewOptions to backgroundImage
 
         set position of item "Claude Stats.app" to {235, 255}
         set position of item "Applications" to {665, 255}
