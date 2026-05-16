@@ -485,11 +485,33 @@ struct CloudKitLeaderboardClient: LeaderboardCloudServicing {
             case .partialFailure:
                 return "Some leaderboard records failed to save."
             case .serverRejectedRequest, .invalidArguments:
-                return "CloudKit rejected the leaderboard request. Check schema and indexes."
+                let base = "CloudKit rejected the leaderboard request. Check schema, indexes, and write permissions."
+                guard let detail = cloudKitDetail(ck) else { return base }
+                return "\(base) \(detail)"
             default:
                 return ck.localizedDescription
             }
         }
         return error.localizedDescription
+    }
+
+    private static func cloudKitDetail(_ error: CKError) -> String? {
+        let nsError = error as NSError
+        let details = [
+            nsError.localizedFailureReason,
+            nsError.localizedRecoverySuggestion,
+            nsError.userInfo[NSLocalizedDescriptionKey] as? String,
+            nsError.userInfo[NSLocalizedFailureReasonErrorKey] as? String,
+            nsError.userInfo[NSLocalizedRecoverySuggestionErrorKey] as? String,
+            nsError.userInfo["CKErrorDescription"] as? String,
+            nsError.userInfo["ServerErrorDescription"] as? String,
+            (nsError.userInfo[NSUnderlyingErrorKey] as? NSError)?.localizedDescription,
+        ]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && $0 != error.localizedDescription }
+            .uniqued()
+
+        guard !details.isEmpty else { return nil }
+        return details.joined(separator: " ")
     }
 }
