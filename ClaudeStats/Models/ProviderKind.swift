@@ -7,7 +7,7 @@ import SwiftUI
 ///
 /// `allCases` order is the canonical display order (used by the platform
 /// switcher bar and the settings list).
-enum ProviderKind: String, CaseIterable, Sendable, Identifiable, Hashable {
+enum ProviderKind: String, CaseIterable, Codable, Sendable, Identifiable, Hashable {
     case claude
     case codex
     case gemini

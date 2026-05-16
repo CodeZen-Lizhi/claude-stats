@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 /// The main window's left column. Two regions stacked vertically:
-///   - Top nav (Dashboard, then a STATS section for Usage/Activity/Git).
+///   - Top nav (Dashboard, configuration tools, then STATS for Usage/Activity/Git).
 ///   - SESSIONS section: a Codex-style collapsible tree of projects, each
 ///     expanding to its own sessions. The header carries a "collapse all"
 ///     button (active only when any project is expanded) and a sort menu.
@@ -30,6 +30,9 @@ struct SidebarColumn: View {
             Color.clear.frame(height: 44)
 
             navRow(.dashboard)
+
+            sectionHeader("CONFIG")
+            navRow(.configurations)
 
             sectionHeader("STATS")
             navRow(.usage)
@@ -404,7 +407,7 @@ private struct HeaderIconButton: View {
     return SidebarColumn(
         page: $page,
         selectedSessionID: $sessionID,
-        availablePages: [.dashboard, .usage, .activity, .git],
+        availablePages: [.dashboard, .configurations, .usage, .activity, .git],
         onOpenSettings: {}
     )
     .environment(AppEnvironment.preview())

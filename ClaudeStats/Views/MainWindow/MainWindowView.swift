@@ -6,12 +6,13 @@ import SwiftUI
 /// whose project/session rows drive a separate ``Session`` selection that
 /// overrides the page detail.
 enum MainPage: String, CaseIterable, Identifiable, Sendable {
-    case dashboard, usage, leaderboards, activity, git, terminal
+    case dashboard, configurations, usage, leaderboards, activity, git, terminal
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .dashboard: "Dashboard"
+        case .configurations: "Configurations"
         case .usage: "Usage"
         case .leaderboards: "Leaderboards"
         case .activity: "Activity"
@@ -23,6 +24,7 @@ enum MainPage: String, CaseIterable, Identifiable, Sendable {
     var symbol: String {
         switch self {
         case .dashboard: "square.grid.2x2"
+        case .configurations: "slider.horizontal.3"
         case .usage: "chart.bar.xaxis"
         case .leaderboards: "trophy"
         case .activity: "waveform"
@@ -57,7 +59,7 @@ struct MainWindowView: View {
     @State private var trafficLights = TrafficLightPositioner()
 
     private var availablePages: [MainPage] {
-        var pages: [MainPage] = [.dashboard, .usage, .leaderboards]
+        var pages: [MainPage] = [.dashboard, .configurations, .usage, .leaderboards]
         if env.preferences.aiActivityAnalysisEnabled { pages.append(.activity) }
         if env.preferences.gitTrackingEnabled { pages.append(.git) }
         pages.append(.terminal)
@@ -165,6 +167,8 @@ struct MainWindowView: View {
             switch page {
             case .dashboard:
                 DashboardView()
+            case .configurations:
+                ConfigurationsView()
             case .usage:
                 MainUsageView()
             case .leaderboards:

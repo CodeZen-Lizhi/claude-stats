@@ -9,13 +9,14 @@ extension AppEnvironment {
     /// stored in a throwaway suite so previews don't touch real defaults.
     static func preview(populated: Bool = true) -> AppEnvironment {
         let pricing = ModelPricing.fallback
-        let store = SessionStore(registry: ProviderRegistry(pricing: pricing), pricing: pricing)
+        let registry = ProviderRegistry(pricing: pricing)
+        let store = SessionStore(registry: registry, pricing: pricing)
         store.loadPreviewSessions(populated ? Session.previewSamples(pricing: pricing) : [])
         // Fresh, throwaway defaults so previews always reflect the code defaults.
         let suiteName = "com.claudestats.preview"
         let defaults = UserDefaults(suiteName: suiteName) ?? .standard
         defaults.removePersistentDomain(forName: suiteName)
-        return AppEnvironment(pricing: pricing, preferences: Preferences(defaults: defaults), store: store)
+        return AppEnvironment(pricing: pricing, preferences: Preferences(defaults: defaults), providerRegistry: registry, store: store)
     }
 }
 

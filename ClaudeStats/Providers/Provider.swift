@@ -39,6 +39,14 @@ protocol Provider: Sendable {
     /// Cache percentage shown in the Usage panel. Providers can override when
     /// their transcript format reports cache fields with different semantics.
     func cacheHitRate(for usage: TokenUsage) -> Double?
+
+    /// Global configuration files owned by this CLI. Providers decide their own
+    /// path conventions so shared UI never switches on provider names.
+    func globalConfigurationLocations() -> [ProviderConfigLocation]
+
+    /// Project-local configuration files owned by this CLI for a given working
+    /// directory.
+    func projectConfigurationLocations(for projectURL: URL) -> [ProviderConfigLocation]
 }
 
 extension Provider {
@@ -46,4 +54,6 @@ extension Provider {
     func transcriptMessages(for session: Session) async -> [SessionTranscriptMessage] { [] }
     func displayName(forModel id: String) -> String { id }
     func cacheHitRate(for usage: TokenUsage) -> Double? { usage.cacheHitRate }
+    func globalConfigurationLocations() -> [ProviderConfigLocation] { [] }
+    func projectConfigurationLocations(for projectURL: URL) -> [ProviderConfigLocation] { [] }
 }

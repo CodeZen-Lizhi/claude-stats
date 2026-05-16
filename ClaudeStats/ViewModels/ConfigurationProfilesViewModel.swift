@@ -1,0 +1,216 @@
+import Foundation
+import Observation
+
+@MainActor
+@Observable
+final class ConfigurationProfilesViewModel {
+    private(set) var library = ConfigurationProfileLibrary()
+    private(set) var statuses: [UUID: ConfigProfileStatus] = [:]
+    private(set) var isLoading = false
+    private(set) var isWorking = false
+    private(set) var lastError: String?
+
+    @ObservationIgnored private let store: ConfigurationProfileStore
+    @ObservationIgnored private let registry: ProviderRegistry
+    @ObservationIgnored private var hasLoaded = false
+
+    init(store: ConfigurationProfileStore = ConfigurationProfileStore(), registry: ProviderRegistry) {
+        self.store = store
+        self.registry = registry
+    }
+
+    func loadIfNeeded() async {
+        guard !hasLoaded else { return }
+        await reload()
+    }
+
+    func reload() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            library = try await store.loadLibrary()
+            sanitizeActiveProfiles()
+            hasLoaded = true
+            await refreshStatuses()
+        } catch {
+            lastError = error.localizedDescription
+            Log.app.error("Failed to load configuration profiles: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    func profiles(for provider: ProviderKind) -> [ConfigProfile] {
+        library.profiles
+            .filter { $0.provider == provider }
+            .sorted {
+                if $0.updatedAt == $1.updatedAt { return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+                return $0.updatedAt > $1.updatedAt
+            }
+    }
+
+    func activeProfile(for provider: ProviderKind) -> ConfigProfile? {
+        guard let id = library.activeProfileIDsByProvider[provider] else { return nil }
+        return library.profiles.first { $0.id == id && $0.provider == provider }
+    }
+
+    func status(for profile: ConfigProfile) -> ConfigProfileStatus {
+        statuses[profile.id] ?? .unknown
+    }
+
+    func latestBackupURL(for profile: ConfigProfile) -> URL? {
+        guard let path = library.latestBackupDirectoryByProfileID[profile.id] else { return nil }
+        return URL(fileURLWithPath: path, isDirectory: true)
+    }
+
+    func scopeOptions(for provider: ProviderKind, sessions: [Session]) -> [ConfigProfileScope] {
+        var seen: Set<String> = []
+        let projectScopes = sessions
+            .filter { $0.provider == provider }
+            .compactMap(\.cwd)
+            .filter { !$0.isEmpty }
+            .filter { path in
+                if seen.contains(path) { return false }
+                seen.insert(path)
+                return true
+            }
+            .map { ConfigProfileScope.project(path: $0) }
+        return [.global] + projectScopes
+    }
+
+    func locations(for provider: ProviderKind, scope: ConfigProfileScope) -> [ProviderConfigLocation] {
+        guard let provider = registry.provider(for: provider) else { return [] }
+        switch scope {
+        case .global:
+            return provider.globalConfigurationLocations()
+        case .project(let path):
+            let projectURL = URL(fileURLWithPath: path, isDirectory: true)
+            return provider.globalConfigurationLocations() + provider.projectConfigurationLocations(for: projectURL)
+        }
+    }
+
+    func defaultProfileName(provider: ProviderKind, scope: ConfigProfileScope) -> String {
+        switch scope {
+        case .global:
+            "\(provider.shortName) Global"
+        case .project:
+            "\(provider.shortName) \(scope.displayName)"
+        }
+    }
+
+    func captureCurrent(name: String, provider: ProviderKind, scope: ConfigProfileScope) async -> ConfigProfile? {
+        let locations = locations(for: provider, scope: scope)
+        guard !locations.isEmpty else {
+            lastError = "No configuration locations are available for \(provider.displayName)."
+            return nil
+        }
+
+        isWorking = true
+        defer { isWorking = false }
+
+        do {
+            let profile = try await store.captureProfile(name: name, provider: provider, scope: scope, locations: locations)
+            library.profiles.append(profile)
+            library.activeProfileIDsByProvider[provider] = profile.id
+            try await persist()
+            await refreshStatuses()
+            return profile
+        } catch {
+            lastError = error.localizedDescription
+            Log.app.error("Failed to capture configuration profile: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
+    func apply(_ profile: ConfigProfile) async -> Bool {
+        isWorking = true
+        defer { isWorking = false }
+
+        do {
+            let result = try await store.apply(profile)
+            updateProfile(profile.id) { updated in
+                updated.lastAppliedAt = result.appliedAt
+                updated.updatedAt = result.appliedAt
+            }
+            library.activeProfileIDsByProvider[profile.provider] = profile.id
+            library.latestBackupDirectoryByProfileID[profile.id] = result.backupDirectory.path
+            try await persist()
+            await refreshStatuses()
+            return true
+        } catch {
+            lastError = error.localizedDescription
+            Log.app.error("Failed to apply configuration profile: \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+    }
+
+    func duplicate(_ profile: ConfigProfile) async -> ConfigProfile? {
+        isWorking = true
+        defer { isWorking = false }
+
+        var copy = profile
+        copy = ConfigProfile(
+            provider: profile.provider,
+            scope: profile.scope,
+            name: "\(profile.name) Copy",
+            files: profile.files,
+            createdAt: .now,
+            updatedAt: .now
+        )
+        library.profiles.append(copy)
+
+        do {
+            try await persist()
+            await refreshStatuses()
+            return copy
+        } catch {
+            lastError = error.localizedDescription
+            return nil
+        }
+    }
+
+    func delete(_ profile: ConfigProfile) async {
+        isWorking = true
+        defer { isWorking = false }
+
+        library.profiles.removeAll { $0.id == profile.id }
+        library.latestBackupDirectoryByProfileID.removeValue(forKey: profile.id)
+        if library.activeProfileIDsByProvider[profile.provider] == profile.id {
+            library.activeProfileIDsByProvider.removeValue(forKey: profile.provider)
+        }
+        statuses.removeValue(forKey: profile.id)
+
+        do {
+            try await persist()
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func refreshStatuses() async {
+        var refreshed: [UUID: ConfigProfileStatus] = [:]
+        for profile in library.profiles {
+            refreshed[profile.id] = await store.status(for: profile)
+        }
+        statuses = refreshed
+    }
+
+    func clearError() {
+        lastError = nil
+    }
+
+    private func persist() async throws {
+        sanitizeActiveProfiles()
+        try await store.saveLibrary(library)
+    }
+
+    private func sanitizeActiveProfiles() {
+        let validIDs = Set(library.profiles.map(\.id))
+        library.activeProfileIDsByProvider = library.activeProfileIDsByProvider.filter { _, id in
+            validIDs.contains(id)
+        }
+    }
+
+    private func updateProfile(_ id: UUID, mutate: (inout ConfigProfile) -> Void) {
+        guard let index = library.profiles.firstIndex(where: { $0.id == id }) else { return }
+        mutate(&library.profiles[index])
+    }
+}

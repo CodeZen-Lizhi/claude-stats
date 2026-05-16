@@ -37,6 +37,34 @@ struct ClaudeProvider: Provider {
         Self.prettyName(for: id)
     }
 
+    func globalConfigurationLocations() -> [ProviderConfigLocation] {
+        [
+            ProviderConfigLocation(
+                provider: kind,
+                title: "settings.json",
+                url: paths.configDirectory.appendingPathComponent("settings.json", isDirectory: false),
+                fileKind: .json
+            ),
+            ProviderConfigLocation(
+                provider: kind,
+                title: "CLAUDE.md",
+                url: paths.configDirectory.appendingPathComponent("CLAUDE.md", isDirectory: false),
+                fileKind: .markdown
+            ),
+        ]
+    }
+
+    func projectConfigurationLocations(for projectURL: URL) -> [ProviderConfigLocation] {
+        [
+            ProviderConfigLocation(
+                provider: kind,
+                title: "Project CLAUDE.md",
+                url: projectURL.appendingPathComponent("CLAUDE.md", isDirectory: false),
+                fileKind: .markdown
+            ),
+        ]
+    }
+
     static func prettyName(for id: String) -> String {
         var stripped = id
         if stripped.hasPrefix("claude-") { stripped.removeFirst("claude-".count) }

@@ -32,4 +32,32 @@ struct CodexProvider: Provider {
     func cacheHitRate(for usage: TokenUsage) -> Double? {
         usage.cachedInputRate
     }
+
+    func globalConfigurationLocations() -> [ProviderConfigLocation] {
+        [
+            ProviderConfigLocation(
+                provider: kind,
+                title: "config.toml",
+                url: paths.homeDirectory.appendingPathComponent("config.toml", isDirectory: false),
+                fileKind: .toml
+            ),
+            ProviderConfigLocation(
+                provider: kind,
+                title: "AGENTS.md",
+                url: paths.homeDirectory.appendingPathComponent("AGENTS.md", isDirectory: false),
+                fileKind: .markdown
+            ),
+        ]
+    }
+
+    func projectConfigurationLocations(for projectURL: URL) -> [ProviderConfigLocation] {
+        [
+            ProviderConfigLocation(
+                provider: kind,
+                title: "Project AGENTS.md",
+                url: projectURL.appendingPathComponent("AGENTS.md", isDirectory: false),
+                fileKind: .markdown
+            ),
+        ]
+    }
 }

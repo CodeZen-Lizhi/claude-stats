@@ -11,6 +11,7 @@ import Observation
 final class AppEnvironment {
     let pricing: ModelPricing
     let preferences: Preferences
+    let providerRegistry: ProviderRegistry
     let store: SessionStore
     let updater = UpdaterController()
     let floatingStatsPanel = FloatingStatsPanelController()
@@ -21,19 +22,23 @@ final class AppEnvironment {
     let dashboard: DashboardViewModel
     let github = GitHubViewModel()
     let leaderboards: LeaderboardSyncViewModel
+    let configurationProfiles: ConfigurationProfilesViewModel
 
     init(
         pricing: ModelPricing,
         preferences: Preferences,
+        providerRegistry: ProviderRegistry,
         store: SessionStore,
         terminalStore: EmbeddedTerminalStore = EmbeddedTerminalStore()
     ) {
         self.pricing = pricing
         self.preferences = preferences
+        self.providerRegistry = providerRegistry
         self.store = store
         self.terminalStore = terminalStore
         self.dashboard = DashboardViewModel(pricing: pricing)
         self.leaderboards = LeaderboardSyncViewModel(preferences: preferences, store: store)
+        self.configurationProfiles = ConfigurationProfilesViewModel(registry: providerRegistry)
     }
 
     convenience init() {
@@ -42,10 +47,12 @@ final class AppEnvironment {
 
     convenience init(terminalStore: EmbeddedTerminalStore) {
         let pricing = ModelPricing.loadDefault()
+        let registry = ProviderRegistry(pricing: pricing)
         self.init(
             pricing: pricing,
             preferences: Preferences(),
-            store: SessionStore(registry: ProviderRegistry(pricing: pricing), pricing: pricing),
+            providerRegistry: registry,
+            store: SessionStore(registry: registry, pricing: pricing),
             terminalStore: terminalStore
         )
     }
@@ -53,6 +60,7 @@ final class AppEnvironment {
     /// Kick off the first scan and the periodic refresh. Call once at launch.
     func start() {
         Task {
+            await configurationProfiles.loadIfNeeded()
             await store.refresh()
             leaderboards.start()
         }
