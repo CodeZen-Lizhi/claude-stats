@@ -5,14 +5,9 @@ struct FloatingStatsPanelView: View {
 
     let state: FloatingStatsPanelState
     var onHoverChanged: (Bool) -> Void
-    var onDragChanged: (CGSize) -> Void
-    var onDragEnded: (CGSize) -> Void
-
-    private var dragGesture: some Gesture {
-        DragGesture(minimumDistance: 2)
-            .onChanged { onDragChanged($0.translation) }
-            .onEnded { onDragEnded($0.translation) }
-    }
+    var onDragBegan: (CGPoint) -> Void
+    var onDragMoved: (CGPoint) -> Void
+    var onDragEnded: (CGPoint) -> Void
 
     var body: some View {
         let edge = state.edge
@@ -53,7 +48,7 @@ struct FloatingStatsPanelView: View {
             .rotationEffect(rotation(for: edge))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(8)
-            .gesture(dragGesture)
+            .overlay(dragHandle)
             .accessibilityHint("Hover to expand. Drag to snap to another screen edge.")
     }
 
@@ -64,7 +59,7 @@ struct FloatingStatsPanelView: View {
 
         return VStack(alignment: .leading, spacing: 10) {
             header(provider: provider, period: prefs.menuBarPeriod)
-                .gesture(dragGesture)
+                .overlay(dragHandle)
 
             StxRule()
 
@@ -169,6 +164,16 @@ struct FloatingStatsPanelView: View {
         case .top, .bottom: .zero
         }
     }
+
+    private var dragHandle: some View {
+        FloatingDragHandle(
+            onHoverChanged: onHoverChanged,
+            onDragBegan: onDragBegan,
+            onDragMoved: onDragMoved,
+            onDragEnded: onDragEnded
+        )
+        .accessibilityHidden(true)
+    }
 }
 
 private struct FloatingTabShape: Shape {
@@ -225,7 +230,8 @@ private struct FloatingTabShape: Shape {
                 return state
             }(),
             onHoverChanged: { _ in },
-            onDragChanged: { _ in },
+            onDragBegan: { _ in },
+            onDragMoved: { _ in },
             onDragEnded: { _ in }
         )
         .environment(AppEnvironment.preview())
@@ -238,7 +244,8 @@ private struct FloatingTabShape: Shape {
                 return state
             }(),
             onHoverChanged: { _ in },
-            onDragChanged: { _ in },
+            onDragBegan: { _ in },
+            onDragMoved: { _ in },
             onDragEnded: { _ in }
         )
         .environment(AppEnvironment.preview())

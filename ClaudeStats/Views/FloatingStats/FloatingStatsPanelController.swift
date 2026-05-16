@@ -4,19 +4,29 @@ import SwiftUI
 
 @MainActor
 final class FloatingStatsPanelController {
-    private static let dragActivationDistance: CGFloat = 22
+    private enum DragState {
+        case idle
+        case pending(startMouse: CGPoint, startFrame: CGRect)
+        case active(startMouse: CGPoint, startFrame: CGRect)
+
+        var isDragging: Bool {
+            switch self {
+            case .idle: false
+            case .pending, .active: true
+            }
+        }
+    }
 
     private weak var environment: AppEnvironment?
     private weak var preferences: Preferences?
     private let state = FloatingStatsPanelState()
 
     private var panel: NSPanel?
-    private var dragStartFrame: CGRect?
-    private var dragHasActivated = false
+    private var dragState: DragState = .idle
     private var collapseTask: Task<Void, Never>?
     private var screenObserver: NSObjectProtocol?
+    private var suppressPreferenceSync = false
     private var isStarted = false
-    private var isDragging = false
     private var isHovering = false
 
     func start(environment: AppEnvironment) {
@@ -38,6 +48,10 @@ final class FloatingStatsPanelController {
             _ = preferences.floatingTabAnchor
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
+                if self?.suppressPreferenceSync == true {
+                    self?.observePreferences()
+                    return
+                }
                 self?.syncWithPreferences()
                 self?.observePreferences()
             }
@@ -49,7 +63,7 @@ final class FloatingStatsPanelController {
         if preferences.floatingTabEnabled {
             state.edge = preferences.floatingTabEdge
             ensurePanel()
-            guard !isDragging else { return }
+            guard !dragState.isDragging else { return }
             applyStoredFrame(animated: false)
         } else {
             closePanel()
@@ -87,11 +101,14 @@ final class FloatingStatsPanelController {
             onHoverChanged: { [weak self] hovering in
                 self?.setHovering(hovering)
             },
-            onDragChanged: { [weak self] translation in
-                self?.dragChanged(translation: translation)
+            onDragBegan: { [weak self] mouseLocation in
+                self?.dragBegan(at: mouseLocation)
             },
-            onDragEnded: { [weak self] translation in
-                self?.dragEnded(translation: translation)
+            onDragMoved: { [weak self] mouseLocation in
+                self?.dragMoved(to: mouseLocation)
+            },
+            onDragEnded: { [weak self] mouseLocation in
+                self?.dragEnded(at: mouseLocation)
             }
         )
         .environment(environment)
@@ -106,14 +123,13 @@ final class FloatingStatsPanelController {
         collapseTask = nil
         panel?.orderOut(nil)
         panel = nil
-        dragStartFrame = nil
-        dragHasActivated = false
-        isDragging = false
+        dragState = .idle
         isHovering = false
         state.isExpanded = false
     }
 
     private func setHovering(_ hovering: Bool) {
+        guard !dragState.isDragging else { return }
         isHovering = hovering
         if hovering {
             collapseTask?.cancel()
@@ -129,7 +145,7 @@ final class FloatingStatsPanelController {
         collapseTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(450))
             await MainActor.run {
-                guard let self, !self.isHovering, !self.isDragging else { return }
+                guard let self, !self.isHovering, !self.dragState.isDragging else { return }
                 self.setExpanded(false, animated: true)
             }
         }
@@ -141,36 +157,59 @@ final class FloatingStatsPanelController {
         applyStoredFrame(animated: animated)
     }
 
-    private func dragChanged(translation: CGSize) {
+    private func dragBegan(at mouseLocation: CGPoint) {
         guard let panel else { return }
         collapseTask?.cancel()
         collapseTask = nil
-        if dragStartFrame == nil {
-            dragStartFrame = panel.frame
-            isDragging = true
-            dragHasActivated = false
-        }
-        guard let dragStartFrame else { return }
-        if !dragHasActivated {
-            guard translation.distance >= Self.dragActivationDistance else { return }
-            dragHasActivated = true
-        }
-        let nextFrame = dragStartFrame.offsetBy(dx: translation.width, dy: -translation.height)
-        panel.setFrame(nextFrame, display: true)
+        dragState = .pending(startMouse: mouseLocation, startFrame: panel.frame)
     }
 
-    private func dragEnded(translation: CGSize) {
-        guard let panel, let preferences else { return }
-        let didActivate = dragHasActivated
-        if didActivate, let dragStartFrame {
-            let nextFrame = dragStartFrame.offsetBy(dx: translation.width, dy: -translation.height)
+    private func dragMoved(to mouseLocation: CGPoint) {
+        guard let panel else { return }
+        switch dragState {
+        case .idle:
+            return
+        case let .pending(startMouse, startFrame):
+            guard let nextFrame = FloatingPanelDragMotion.activatedFrame(
+                startFrame: startFrame,
+                startMouse: startMouse,
+                currentMouse: mouseLocation
+            ) else {
+                return
+            }
+            dragState = .active(startMouse: startMouse, startFrame: startFrame)
+            panel.setFrame(nextFrame, display: true)
+        case let .active(startMouse, startFrame):
+            let nextFrame = FloatingPanelDragMotion.frame(
+                startFrame: startFrame,
+                startMouse: startMouse,
+                currentMouse: mouseLocation
+            )
             panel.setFrame(nextFrame, display: true)
         }
-        dragStartFrame = nil
-        dragHasActivated = false
-        isDragging = false
+    }
 
-        guard didActivate else {
+    private func dragEnded(at mouseLocation: CGPoint) {
+        guard let panel, let preferences else { return }
+        let wasActive: Bool
+        switch dragState {
+        case .idle:
+            return
+        case .pending:
+            wasActive = false
+        case let .active(startMouse, startFrame):
+            wasActive = true
+            let nextFrame = FloatingPanelDragMotion.frame(
+                startFrame: startFrame,
+                startMouse: startMouse,
+                currentMouse: mouseLocation
+            )
+            panel.setFrame(nextFrame, display: true)
+        }
+        dragState = .idle
+
+        guard wasActive else {
+            updateHoverAfterDrag(mouseLocation: mouseLocation)
             if !isHovering {
                 scheduleCollapse()
             }
@@ -183,19 +222,32 @@ final class FloatingStatsPanelController {
         let size = FloatingPanelGeometry.size(edge: edge, expanded: state.isExpanded)
         let anchor = FloatingPanelGeometry.anchor(for: center, edge: edge, in: screen.visibleFrame, size: size)
 
-        state.edge = edge
-        preferences.floatingTabEdge = edge
-        preferences.floatingTabAnchor = anchor
+        persistPlacement(edge: edge, anchor: anchor, preferences: preferences)
         applyStoredFrame(animated: true)
 
+        updateHoverAfterDrag(mouseLocation: mouseLocation)
         if !isHovering {
             scheduleCollapse()
         }
     }
 
+    private func persistPlacement(edge: FloatingPanelEdge, anchor: Double, preferences: Preferences) {
+        state.edge = edge
+        suppressPreferenceSync = true
+        preferences.floatingTabEdge = edge
+        preferences.floatingTabAnchor = anchor
+        DispatchQueue.main.async { [weak self] in
+            self?.suppressPreferenceSync = false
+        }
+    }
+
+    private func updateHoverAfterDrag(mouseLocation: CGPoint) {
+        isHovering = panel?.frame.contains(mouseLocation) ?? false
+    }
+
     private func applyStoredFrame(animated: Bool) {
         guard let panel, let preferences else { return }
-        guard !isDragging else { return }
+        guard !dragState.isDragging else { return }
         let screen = bestScreen(for: panel.frame.center)
         let anchor = FloatingPanelGeometry.clampedAnchor(
             preferences.floatingTabAnchor,
@@ -262,11 +314,5 @@ final class FloatingStatsPanelController {
 private extension CGRect {
     var center: CGPoint {
         CGPoint(x: midX, y: midY)
-    }
-}
-
-private extension CGSize {
-    var distance: CGFloat {
-        hypot(width, height)
     }
 }
