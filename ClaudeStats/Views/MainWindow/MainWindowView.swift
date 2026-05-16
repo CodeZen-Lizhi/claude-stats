@@ -6,7 +6,7 @@ import SwiftUI
 /// whose project/session rows drive a separate ``Session`` selection that
 /// overrides the page detail.
 enum MainPage: String, CaseIterable, Identifiable, Sendable {
-    case dashboard, usage, leaderboards, activity, git
+    case dashboard, usage, leaderboards, activity, git, terminal
     var id: String { rawValue }
 
     var title: String {
@@ -16,6 +16,7 @@ enum MainPage: String, CaseIterable, Identifiable, Sendable {
         case .leaderboards: "Leaderboards"
         case .activity: "Activity"
         case .git: "Git"
+        case .terminal: "Terminal"
         }
     }
 
@@ -26,6 +27,7 @@ enum MainPage: String, CaseIterable, Identifiable, Sendable {
         case .leaderboards: "trophy"
         case .activity: "waveform"
         case .git: "arrow.triangle.branch"
+        case .terminal: "terminal"
         }
     }
 }
@@ -58,6 +60,7 @@ struct MainWindowView: View {
         var pages: [MainPage] = [.dashboard, .usage, .leaderboards]
         if env.preferences.aiActivityAnalysisEnabled { pages.append(.activity) }
         if env.preferences.gitTrackingEnabled { pages.append(.git) }
+        pages.append(.terminal)
         return pages
     }
 
@@ -170,6 +173,8 @@ struct MainWindowView: View {
                 CenteredPaneContainer(topPadding: 38) { AIActivityView(mode: .interactive) }
             case .git:
                 MainGitActivityView()
+            case .terminal:
+                TerminalWorkspaceView(store: env.terminalStore)
             }
         }
     }

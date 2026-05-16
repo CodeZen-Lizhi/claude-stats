@@ -37,6 +37,9 @@ struct SidebarColumn: View {
             if env.preferences.aiActivityAnalysisEnabled { navRow(.activity) }
             if env.preferences.gitTrackingEnabled { navRow(.git) }
 
+            sectionHeader("TOOLS")
+            navRow(.terminal)
+
             sessionsSection
 
             SidebarRow(title: "Settings", symbol: "gearshape", isSelected: false, action: onOpenSettings)

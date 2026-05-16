@@ -26,6 +26,30 @@
 	<string>NSApplication</string>
 	<key>NSHumanReadableCopyright</key>
 	<string></string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>A program running in the embedded terminal may request AppleScript access.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>A program running in the embedded terminal may request Bluetooth access.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>A program running in the embedded terminal may request calendar access.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>A program running in the embedded terminal may request camera access.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>A program running in the embedded terminal may request contacts access.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>A program running in the embedded terminal may request local network access.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>A program running in the embedded terminal may request location access.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>A program running in the embedded terminal may request microphone access.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>A program running in the embedded terminal may request photo library access.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>A program running in the embedded terminal may request reminders access.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>A program running in the embedded terminal may request speech recognition access.</string>
+	<key>NSSystemAdministrationUsageDescription</key>
+	<string>A program running in the embedded terminal may request elevated privileges.</string>
 	<!--
 	  Sparkle auto-update. SUPublicEDKey is the EdDSA *public* key produced by
 	  Sparkle's `generate_keys` (the matching private key lives only in the

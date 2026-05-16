@@ -44,6 +44,10 @@ Package.resolved
 # === Release artifacts === #
 dist/
 
+# === Generated Ghostty embedding resources === #
+GhosttyEmbed/Resources/*
+!GhosttyEmbed/Resources/.gitkeep
+
 # === Misc === #
 *.log
 *.orig

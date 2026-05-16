@@ -74,6 +74,7 @@ jobs:
         with:
           ref: master
           fetch-depth: 0
+          submodules: recursive
 
       - name: Select Xcode
         # Pinned, NOT `latest-stable`: the macos-26 image also preinstalls 26.5
@@ -128,8 +129,8 @@ jobs:
             echo "::warning::SPARKLE_PRIVATE_ED_KEY not set — skipping appcast publish; installed apps won't auto-update to this release."
           fi
 
-      - name: Install XcodeGen
-        run: brew install xcodegen
+      - name: Install build tools
+        run: brew install xcodegen zig@0.15
 
       - name: Import Developer ID signing certificate
         if: steps.signing.outputs.enabled == 'true'

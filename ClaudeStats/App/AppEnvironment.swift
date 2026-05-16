@@ -1,4 +1,5 @@
 import Foundation
+import GhosttyEmbed
 import Observation
 
 /// Composition root. Constructs the pricing table, preferences, provider
@@ -13,6 +14,7 @@ final class AppEnvironment {
     let store: SessionStore
     let updater = UpdaterController()
     let floatingStatsPanel = FloatingStatsPanelController()
+    let terminalStore: EmbeddedTerminalStore
     /// View models live in the environment so the Settings window and the
     /// individual pages can share state — and so the VMs persist across
     /// main-window open/close cycles (reopening doesn't refire a fetch).
@@ -20,20 +22,31 @@ final class AppEnvironment {
     let github = GitHubViewModel()
     let leaderboards: LeaderboardSyncViewModel
 
-    init(pricing: ModelPricing, preferences: Preferences, store: SessionStore) {
+    init(
+        pricing: ModelPricing,
+        preferences: Preferences,
+        store: SessionStore,
+        terminalStore: EmbeddedTerminalStore = EmbeddedTerminalStore()
+    ) {
         self.pricing = pricing
         self.preferences = preferences
         self.store = store
+        self.terminalStore = terminalStore
         self.dashboard = DashboardViewModel(pricing: pricing)
         self.leaderboards = LeaderboardSyncViewModel(preferences: preferences, store: store)
     }
 
     convenience init() {
+        self.init(terminalStore: EmbeddedTerminalStore())
+    }
+
+    convenience init(terminalStore: EmbeddedTerminalStore) {
         let pricing = ModelPricing.loadDefault()
         self.init(
             pricing: pricing,
             preferences: Preferences(),
-            store: SessionStore(registry: ProviderRegistry(pricing: pricing), pricing: pricing)
+            store: SessionStore(registry: ProviderRegistry(pricing: pricing), pricing: pricing),
+            terminalStore: terminalStore
         )
     }
 

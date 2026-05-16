@@ -26,6 +26,44 @@ settings:
     CURRENT_PROJECT_VERSION: "23"
 
 targets:
+  GhosttyEmbed:
+    type: framework
+    platform: macOS
+    sources:
+      - path: GhosttyEmbed
+        excludes:
+          - Resources
+      - path: ThirdParty/ghostty/macos/Sources/Ghostty
+        excludes:
+          - "**/*_UIKit.swift"
+      - path: ThirdParty/ghostty/macos/Sources/Features/Terminal
+      - path: ThirdParty/ghostty/macos/Sources/Features/Splits
+      - path: ThirdParty/ghostty/macos/Sources/Features/Command Palette
+      - path: ThirdParty/ghostty/macos/Sources/Features/ClipboardConfirmation
+      - path: ThirdParty/ghostty/macos/Sources/Features/Secure Input
+      - path: ThirdParty/ghostty/macos/Sources/Features/QuickTerminal
+      - path: ThirdParty/ghostty/macos/Sources/Features/Update
+      - path: ThirdParty/ghostty/macos/Sources/Helpers
+      - path: ThirdParty/ghostty/macos/Assets.xcassets
+      - path: GhosttyEmbed/Resources
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: Sparkle
+      - framework: ThirdParty/ghostty/macos/GhosttyKit.xcframework
+      - sdk: Carbon.framework
+      - sdk: libc++.tbd
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.claudestats.GhosttyEmbed
+        PRODUCT_NAME: GhosttyEmbed
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.0"
+        SWIFT_STRICT_CONCURRENCY: minimal
+        SWIFT_OBJC_BRIDGING_HEADER: ThirdParty/ghostty/macos/Sources/App/macOS/ghostty-bridging-header.h
+        OTHER_LDFLAGS: "$(inherited) -lstdc++"
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+
   ClaudeStats:
     type: application
     platform: macOS
@@ -33,6 +71,7 @@ targets:
       - path: ClaudeStats
     dependencies:
       - package: Sparkle
+      - target: GhosttyEmbed
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.claudestats.ClaudeStats

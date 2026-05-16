@@ -12,6 +12,7 @@ cd "$(dirname "$0")/.."
 DERIVED=/tmp/claude-stats-build
 APP="$DERIVED/Build/Products/Debug/Claude Stats.app"
 
+bash scripts/build-ghosttykit.sh
 bash scripts/generate.sh
 
 # Kill any running instance so the rebuild can replace it.

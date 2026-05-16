@@ -3,6 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+bash scripts/build-ghosttykit.sh
 bash scripts/generate.sh
 
 xcodebuild \

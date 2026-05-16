@@ -44,6 +44,7 @@ SIGNED=0
 [[ -n "${SIGN_IDENTITY:-}" ]] && SIGNED=1
 
 echo "==> Building Claude Stats $VERSION (Release, $([[ $SIGNED -eq 1 ]] && echo "signed + notarized" || echo "unsigned"))"
+bash scripts/build-ghosttykit.sh
 bash scripts/generate.sh
 
 rm -rf "$DERIVED" "$DIST"
