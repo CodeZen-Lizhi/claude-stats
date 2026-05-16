@@ -11,7 +11,11 @@ struct FloatingStatsPanelView: View {
 
     var body: some View {
         let edge = state.edge
-        let shape = FloatingTabShape(edge: edge, cornerRadius: state.isExpanded ? 18 : 24)
+        let shape = FloatingTabShape(
+            edge: edge,
+            cornerRadius: state.isExpanded ? 18 : 24,
+            edgeReleaseProgress: state.edgeReleaseProgress
+        )
         let size = FloatingPanelGeometry.size(edge: edge, expanded: state.isExpanded)
 
         ZStack {
@@ -28,11 +32,12 @@ struct FloatingStatsPanelView: View {
         .overlay(shape.stroke(Color.stxStroke, lineWidth: 1))
         .shadow(color: .black.opacity(0.20), radius: 14, x: 0, y: 6)
         .contentShape(Rectangle())
-        .onHover(perform: onHoverChanged)
+        .overlay(FloatingHoverTracker(onHoverChanged: onHoverChanged).accessibilityHidden(true))
         .font(.sora(13))
         .tint(.stxAccent)
         .animation(.easeOut(duration: 0.16), value: state.isExpanded)
         .animation(.easeOut(duration: 0.16), value: state.edge)
+        .animation(.easeOut(duration: 0.14), value: state.edgeReleaseProgress)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Claude Stats floating tab")
     }
@@ -167,7 +172,6 @@ struct FloatingStatsPanelView: View {
 
     private var dragHandle: some View {
         FloatingDragHandle(
-            onHoverChanged: onHoverChanged,
             onDragBegan: onDragBegan,
             onDragMoved: onDragMoved,
             onDragEnded: onDragEnded
@@ -179,44 +183,80 @@ struct FloatingStatsPanelView: View {
 private struct FloatingTabShape: Shape {
     let edge: FloatingPanelEdge
     let cornerRadius: CGFloat
+    var edgeReleaseProgress: CGFloat
+
+    var animatableData: CGFloat {
+        get { edgeReleaseProgress }
+        set { edgeReleaseProgress = newValue }
+    }
 
     func path(in rect: CGRect) -> Path {
         let r = min(cornerRadius, min(rect.width, rect.height) / 2)
-        var path = Path()
+        let dockedRadius = r * min(max(edgeReleaseProgress, 0), 1)
+        let radii = cornerRadii(exposedRadius: r, dockedRadius: dockedRadius)
+        return roundedRectPath(in: rect, radii: radii)
+    }
 
+    private func cornerRadii(exposedRadius: CGFloat, dockedRadius: CGFloat) -> CornerRadii {
         switch edge {
         case .right:
-            path.move(to: CGPoint(x: rect.minX + r, y: rect.minY))
-            path.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.minY + r), control: CGPoint(x: rect.minX, y: rect.minY))
-            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - r))
-            path.addQuadCurve(to: CGPoint(x: rect.minX + r, y: rect.maxY), control: CGPoint(x: rect.minX, y: rect.maxY))
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+            CornerRadii(
+                topLeft: exposedRadius,
+                topRight: dockedRadius,
+                bottomRight: dockedRadius,
+                bottomLeft: exposedRadius
+            )
         case .left:
-            path.move(to: CGPoint(x: rect.minX, y: rect.minY))
-            path.addLine(to: CGPoint(x: rect.maxX - r, y: rect.minY))
-            path.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.minY + r), control: CGPoint(x: rect.maxX, y: rect.minY))
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - r))
-            path.addQuadCurve(to: CGPoint(x: rect.maxX - r, y: rect.maxY), control: CGPoint(x: rect.maxX, y: rect.maxY))
-            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+            CornerRadii(
+                topLeft: dockedRadius,
+                topRight: exposedRadius,
+                bottomRight: exposedRadius,
+                bottomLeft: dockedRadius
+            )
         case .top:
-            path.move(to: CGPoint(x: rect.minX, y: rect.minY))
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - r))
-            path.addQuadCurve(to: CGPoint(x: rect.maxX - r, y: rect.maxY), control: CGPoint(x: rect.maxX, y: rect.maxY))
-            path.addLine(to: CGPoint(x: rect.minX + r, y: rect.maxY))
-            path.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.maxY - r), control: CGPoint(x: rect.minX, y: rect.maxY))
+            CornerRadii(
+                topLeft: dockedRadius,
+                topRight: dockedRadius,
+                bottomRight: exposedRadius,
+                bottomLeft: exposedRadius
+            )
         case .bottom:
-            path.move(to: CGPoint(x: rect.minX + r, y: rect.minY))
-            path.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.minY + r), control: CGPoint(x: rect.minX, y: rect.minY))
-            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + r))
-            path.addQuadCurve(to: CGPoint(x: rect.maxX - r, y: rect.minY), control: CGPoint(x: rect.maxX, y: rect.minY))
+            CornerRadii(
+                topLeft: exposedRadius,
+                topRight: exposedRadius,
+                bottomRight: dockedRadius,
+                bottomLeft: dockedRadius
+            )
         }
+    }
+
+    private func roundedRectPath(in rect: CGRect, radii: CornerRadii) -> Path {
+        let maximumRadius = min(rect.width, rect.height) / 2
+        let topLeft = min(radii.topLeft, maximumRadius)
+        let topRight = min(radii.topRight, maximumRadius)
+        let bottomRight = min(radii.bottomRight, maximumRadius)
+        let bottomLeft = min(radii.bottomLeft, maximumRadius)
+
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX + topLeft, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX - topRight, y: rect.minY))
+        path.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.minY + topRight), control: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - bottomRight))
+        path.addQuadCurve(to: CGPoint(x: rect.maxX - bottomRight, y: rect.maxY), control: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX + bottomLeft, y: rect.maxY))
+        path.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.maxY - bottomLeft), control: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + topLeft))
+        path.addQuadCurve(to: CGPoint(x: rect.minX + topLeft, y: rect.minY), control: CGPoint(x: rect.minX, y: rect.minY))
 
         path.closeSubpath()
         return path
+    }
+
+    private struct CornerRadii {
+        var topLeft: CGFloat
+        var topRight: CGFloat
+        var bottomRight: CGFloat
+        var bottomLeft: CGFloat
     }
 }
 

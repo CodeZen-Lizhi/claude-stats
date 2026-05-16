@@ -163,7 +163,7 @@ struct MainWindowView: View {
             case .dashboard:
                 DashboardView()
             case .usage:
-                CenteredPaneContainer(topPadding: 38) { UsageView(mode: .interactive) }
+                MainUsageView()
             case .leaderboards:
                 CenteredPaneContainer(topPadding: 46) { LeaderboardsView() }
             case .activity:

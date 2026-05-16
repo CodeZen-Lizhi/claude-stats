@@ -17,15 +17,30 @@ final class FloatingStatsPanelController {
         }
     }
 
+    private enum Placement {
+        case docked
+        case detached(frame: CGRect)
+
+        var isDocked: Bool {
+            switch self {
+            case .docked: true
+            case .detached: false
+            }
+        }
+    }
+
     private weak var environment: AppEnvironment?
     private weak var preferences: Preferences?
     private let state = FloatingStatsPanelState()
 
     private var panel: NSPanel?
+    private var placement: Placement = .docked
     private var dragState: DragState = .idle
     private var collapseTask: Task<Void, Never>?
     private var screenObserver: NSObjectProtocol?
     private var suppressPreferenceSync = false
+    private var frameTransitionID = 0
+    private var isApplyingFrame = false
     private var isStarted = false
     private var isHovering = false
 
@@ -61,6 +76,9 @@ final class FloatingStatsPanelController {
     private func syncWithPreferences() {
         guard let preferences else { return }
         if preferences.floatingTabEnabled {
+            placement = .docked
+            state.isDocked = true
+            setEdgeReleaseProgress(FloatingPanelDragMotion.dockedEdgeReleaseProgress, animated: false)
             state.edge = preferences.floatingTabEdge
             ensurePanel()
             guard !dragState.isDragging else { return }
@@ -123,13 +141,23 @@ final class FloatingStatsPanelController {
         collapseTask = nil
         panel?.orderOut(nil)
         panel = nil
+        placement = .docked
         dragState = .idle
+        frameTransitionID += 1
+        isApplyingFrame = false
         isHovering = false
         state.isExpanded = false
+        state.isDocked = true
+        setEdgeReleaseProgress(FloatingPanelDragMotion.dockedEdgeReleaseProgress, animated: false)
     }
 
     private func setHovering(_ hovering: Bool) {
         guard !dragState.isDragging else { return }
+        guard !isApplyingFrame else { return }
+        if !hovering, isMouseInsidePanel() {
+            isHovering = true
+            return
+        }
         isHovering = hovering
         if hovering {
             collapseTask?.cancel()
@@ -146,13 +174,21 @@ final class FloatingStatsPanelController {
             try? await Task.sleep(for: .milliseconds(450))
             await MainActor.run {
                 guard let self, !self.isHovering, !self.dragState.isDragging else { return }
-                self.setExpanded(false, animated: true)
+                guard !self.isMouseInsidePanel() else {
+                    self.isHovering = true
+                    return
+                }
+                self.collapseCurrentPlacement(animated: true)
             }
         }
     }
 
     private func setExpanded(_ expanded: Bool, animated: Bool) {
         guard state.isExpanded != expanded else { return }
+        if !expanded, !placement.isDocked {
+            dockDetachedPanel(animated: animated)
+            return
+        }
         state.isExpanded = expanded
         applyStoredFrame(animated: animated)
     }
@@ -161,7 +197,17 @@ final class FloatingStatsPanelController {
         guard let panel else { return }
         collapseTask?.cancel()
         collapseTask = nil
-        dragState = .pending(startMouse: mouseLocation, startFrame: panel.frame)
+        frameTransitionID += 1
+        isApplyingFrame = false
+        switch placement {
+        case .docked:
+            setEdgeReleaseProgress(FloatingPanelDragMotion.dockedEdgeReleaseProgress, animated: false)
+            dragState = .pending(startMouse: mouseLocation, startFrame: panel.frame)
+        case .detached:
+            state.isDocked = false
+            setEdgeReleaseProgress(FloatingPanelDragMotion.detachedEdgeReleaseProgress, animated: false)
+            dragState = .active(startMouse: mouseLocation, startFrame: panel.frame)
+        }
     }
 
     private func dragMoved(to mouseLocation: CGPoint) {
@@ -170,41 +216,47 @@ final class FloatingStatsPanelController {
         case .idle:
             return
         case let .pending(startMouse, startFrame):
-            guard let nextFrame = FloatingPanelDragMotion.activatedFrame(
+            let step = FloatingPanelDragMotion.dragStep(
                 startFrame: startFrame,
                 startMouse: startMouse,
-                currentMouse: mouseLocation
-            ) else {
+                currentMouse: mouseLocation,
+                isDocked: true
+            )
+            guard case let .active(nextFrame, edgeReleaseProgress) = step else {
                 return
             }
+            placement = .detached(frame: nextFrame)
+            state.isDocked = false
+            setEdgeReleaseProgress(edgeReleaseProgress, animated: true)
+            let frame = magneticFrame(for: nextFrame)
+            placement = .detached(frame: frame)
             dragState = .active(startMouse: startMouse, startFrame: startFrame)
-            panel.setFrame(nextFrame, display: true)
+            panel.setFrame(frame, display: true)
         case let .active(startMouse, startFrame):
             let nextFrame = FloatingPanelDragMotion.frame(
                 startFrame: startFrame,
                 startMouse: startMouse,
                 currentMouse: mouseLocation
             )
-            panel.setFrame(nextFrame, display: true)
+            let frame = magneticFrame(for: nextFrame)
+            placement = .detached(frame: frame)
+            panel.setFrame(frame, display: true)
         }
     }
 
     private func dragEnded(at mouseLocation: CGPoint) {
         guard let panel, let preferences else { return }
         let wasActive: Bool
+        let releaseFrame: CGRect
         switch dragState {
         case .idle:
             return
         case .pending:
             wasActive = false
-        case let .active(startMouse, startFrame):
+            releaseFrame = panel.frame
+        case .active:
             wasActive = true
-            let nextFrame = FloatingPanelDragMotion.frame(
-                startFrame: startFrame,
-                startMouse: startMouse,
-                currentMouse: mouseLocation
-            )
-            panel.setFrame(nextFrame, display: true)
+            releaseFrame = panel.frame
         }
         dragState = .idle
 
@@ -216,18 +268,28 @@ final class FloatingStatsPanelController {
             return
         }
 
-        let center = panel.frame.center
-        let screen = bestScreen(for: center)
-        let edge = FloatingPanelGeometry.nearestEdge(to: center, in: screen.visibleFrame)
-        let size = FloatingPanelGeometry.size(edge: edge, expanded: state.isExpanded)
-        let anchor = FloatingPanelGeometry.anchor(for: center, edge: edge, in: screen.visibleFrame, size: size)
+        let screen = bestScreen(for: releaseFrame.center)
+        switch FloatingPanelDragMotion.releasePlacement(for: releaseFrame, in: screen.visibleFrame) {
+        case let .docked(edge, anchor):
+            placement = .docked
+            state.isDocked = true
+            setEdgeReleaseProgress(FloatingPanelDragMotion.dockedEdgeReleaseProgress, animated: true)
+            persistPlacement(edge: edge, anchor: anchor, preferences: preferences)
+            applyStoredFrame(animated: true)
+        case let .detached(frame):
+            let detachedFrame = expandedDetachedFrame(from: frame, in: screen.visibleFrame)
+            placement = .detached(frame: detachedFrame)
+            state.isDocked = false
+            setEdgeReleaseProgress(FloatingPanelDragMotion.detachedEdgeReleaseProgress, animated: false)
+            state.isExpanded = true
+            if !panel.frame.isApproximatelyEqual(to: detachedFrame) {
+                panel.setFrame(detachedFrame, display: true)
+            }
 
-        persistPlacement(edge: edge, anchor: anchor, preferences: preferences)
-        applyStoredFrame(animated: true)
-
-        updateHoverAfterDrag(mouseLocation: mouseLocation)
-        if !isHovering {
-            scheduleCollapse()
+            updateHoverAfterDrag(mouseLocation: mouseLocation)
+            if !isHovering {
+                scheduleCollapse()
+            }
         }
     }
 
@@ -248,6 +310,7 @@ final class FloatingStatsPanelController {
     private func applyStoredFrame(animated: Bool) {
         guard let panel, let preferences else { return }
         guard !dragState.isDragging else { return }
+        guard placement.isDocked else { return }
         let screen = bestScreen(for: panel.frame.center)
         let anchor = FloatingPanelGeometry.clampedAnchor(
             preferences.floatingTabAnchor,
@@ -265,12 +328,11 @@ final class FloatingStatsPanelController {
             expanded: state.isExpanded
         )
 
+        state.edge = preferences.floatingTabEdge
+        state.isDocked = true
+        setEdgeReleaseProgress(FloatingPanelDragMotion.dockedEdgeReleaseProgress, animated: animated)
         if animated {
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.18
-                context.allowsImplicitAnimation = true
-                panel.animator().setFrame(frame, display: true)
-            }
+            setPanelFrame(frame, animated: true)
         } else {
             panel.setFrame(frame, display: true)
         }
@@ -283,9 +345,124 @@ final class FloatingStatsPanelController {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.applyStoredFrame(animated: true)
+                self?.applyCurrentPlacementAfterScreenChange(animated: true)
             }
         }
+    }
+
+    private func collapseCurrentPlacement(animated: Bool) {
+        switch placement {
+        case .docked:
+            setExpanded(false, animated: animated)
+        case .detached:
+            dockDetachedPanel(animated: animated)
+        }
+    }
+
+    private func dockDetachedPanel(animated: Bool) {
+        guard let panel, let preferences else { return }
+        let screen = bestScreen(for: panel.frame.center)
+        let edge = FloatingPanelGeometry.nearestEdge(to: panel.frame.center, in: screen.visibleFrame)
+        let size = FloatingPanelGeometry.size(edge: edge, expanded: false)
+        let anchor = FloatingPanelGeometry.anchor(for: panel.frame.center, edge: edge, in: screen.visibleFrame, size: size)
+
+        placement = .docked
+        state.isDocked = true
+        state.isExpanded = false
+        setEdgeReleaseProgress(FloatingPanelDragMotion.dockedEdgeReleaseProgress, animated: animated)
+        persistPlacement(edge: edge, anchor: anchor, preferences: preferences)
+        applyStoredFrame(animated: animated)
+    }
+
+    private func applyCurrentPlacementAfterScreenChange(animated: Bool) {
+        guard let panel else { return }
+        guard !dragState.isDragging else { return }
+        switch placement {
+        case .docked:
+            applyStoredFrame(animated: animated)
+        case .detached:
+            let screen = bestScreen(for: panel.frame.center)
+            let frame = FloatingPanelDragMotion.clampedFrame(panel.frame, in: screen.visibleFrame)
+            placement = .detached(frame: frame)
+            setPanelFrame(frame, animated: animated)
+        }
+    }
+
+    private func magneticFrame(for frame: CGRect) -> CGRect {
+        let screen = bestScreen(for: frame.center)
+        return FloatingPanelDragMotion.magneticFrame(frame, in: screen.visibleFrame)
+    }
+
+    private func expandedDetachedFrame(from frame: CGRect, in visibleFrame: CGRect) -> CGRect {
+        guard !state.isExpanded else {
+            return FloatingPanelDragMotion.clampedFrame(frame, in: visibleFrame)
+        }
+
+        let expandedSize = FloatingPanelGeometry.expandedSize
+        let expandedFrame = CGRect(
+            x: frame.midX - expandedSize.width / 2,
+            y: frame.midY - expandedSize.height / 2,
+            width: expandedSize.width,
+            height: expandedSize.height
+        )
+        return FloatingPanelDragMotion.clampedFrame(expandedFrame, in: visibleFrame)
+    }
+
+    private func setEdgeReleaseProgress(_ progress: CGFloat, animated: Bool) {
+        let clamped = min(max(progress, 0), 1)
+        guard state.edgeReleaseProgress != clamped else { return }
+        if animated {
+            withAnimation(.easeOut(duration: 0.14)) {
+                state.edgeReleaseProgress = clamped
+            }
+        } else {
+            state.edgeReleaseProgress = clamped
+        }
+    }
+
+    private func setPanelFrame(_ frame: CGRect, animated: Bool) {
+        guard let panel else { return }
+        guard animated else {
+            panel.setFrame(frame, display: true)
+            return
+        }
+
+        frameTransitionID += 1
+        let transitionID = frameTransitionID
+        isApplyingFrame = true
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.18
+            context.allowsImplicitAnimation = true
+            panel.animator().setFrame(frame, display: true)
+        } completionHandler: { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.finishFrameTransition(id: transitionID)
+            }
+        }
+    }
+
+    private func finishFrameTransition(id: Int) {
+        guard id == frameTransitionID else { return }
+        isApplyingFrame = false
+        refreshHoverStateAfterFrameChange()
+    }
+
+    private func refreshHoverStateAfterFrameChange() {
+        guard !dragState.isDragging else { return }
+        if isMouseInsidePanel() {
+            isHovering = true
+            collapseTask?.cancel()
+            collapseTask = nil
+        } else {
+            isHovering = false
+            if state.isExpanded {
+                scheduleCollapse()
+            }
+        }
+    }
+
+    private func isMouseInsidePanel() -> Bool {
+        panel?.frame.contains(NSEvent.mouseLocation) ?? false
     }
 
     private func bestScreen(for point: CGPoint?) -> NSScreen {
@@ -314,5 +491,12 @@ final class FloatingStatsPanelController {
 private extension CGRect {
     var center: CGPoint {
         CGPoint(x: midX, y: midY)
+    }
+
+    func isApproximatelyEqual(to other: CGRect, tolerance: CGFloat = 0.5) -> Bool {
+        abs(origin.x - other.origin.x) <= tolerance
+            && abs(origin.y - other.origin.y) <= tolerance
+            && abs(size.width - other.size.width) <= tolerance
+            && abs(size.height - other.size.height) <= tolerance
     }
 }

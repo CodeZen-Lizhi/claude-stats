@@ -1,3 +1,4 @@
+import CoreGraphics
 import Observation
 
 @MainActor
@@ -5,4 +6,6 @@ import Observation
 final class FloatingStatsPanelState {
     var edge: FloatingPanelEdge = .right
     var isExpanded = false
+    var isDocked = true
+    var edgeReleaseProgress: CGFloat = FloatingPanelDragMotion.dockedEdgeReleaseProgress
 }
