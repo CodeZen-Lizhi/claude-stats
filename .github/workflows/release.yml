@@ -130,7 +130,16 @@ jobs:
           fi
 
       - name: Install build tools
-        run: brew install xcodegen zig@0.15
+        run: brew install xcodegen
+
+      - name: Cache Zig
+        uses: actions/cache@v4
+        with:
+          path: .tools/zig-0.15.2
+          key: ${{ runner.os }}-${{ runner.arch }}-zig-0.15.2
+
+      - name: Install Zig
+        run: bash scripts/install-zig.sh
 
       - name: Import Developer ID signing certificate
         if: steps.signing.outputs.enabled == 'true'

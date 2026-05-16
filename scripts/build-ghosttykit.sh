@@ -15,8 +15,10 @@ fi
 
 ZIG_BIN="${ZIG_BIN:-}"
 if [[ -z "$ZIG_BIN" ]]; then
+    HOMEBREW_ZIG_PREFIX="$(brew --prefix zig@0.15 2>/dev/null || true)"
     for candidate in \
         "$PWD/.tools/zig-0.15.2/zig" \
+        "$HOMEBREW_ZIG_PREFIX/bin/zig" \
         "/opt/homebrew/opt/zig@0.15/bin/zig" \
         "/usr/local/opt/zig@0.15/bin/zig" \
         "$(command -v zig || true)"; do
@@ -29,7 +31,14 @@ fi
 
 if [[ -z "$ZIG_BIN" ]]; then
     echo "error: zig is required to build GhosttyKit.xcframework" >&2
-    echo "hint: install Zig 0.15.2, then rerun this script" >&2
+    echo "hint: run scripts/install-zig.sh to install Zig 0.15.2 locally, then rerun this script" >&2
+    exit 1
+fi
+
+ZIG_VERSION="$("$ZIG_BIN" version)"
+if [[ "$ZIG_VERSION" != "0.15.2" ]]; then
+    echo "error: Zig 0.15.2 is required to build GhosttyKit.xcframework (found $ZIG_VERSION at $ZIG_BIN)" >&2
+    echo "hint: run scripts/install-zig.sh or set ZIG_BIN to a Zig 0.15.2 executable" >&2
     exit 1
 fi
 
