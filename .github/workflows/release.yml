@@ -137,7 +137,7 @@ jobs:
 
       - name: Install build tools
         run: |
-          brew install xcodegen zig@0.15 ruby-build go cmake pkg-config icu4c libgit2 openssl@3 readline libyaml gmp
+          brew install xcodegen zig@0.15 ruby-build go cmake pkg-config icu4c openssl@3 readline libyaml gmp
           ZIG_PREFIX="$(brew --prefix zig@0.15)"
           ZIG_CACHE="$RUNNER_TEMP/zig-cache"
           mkdir -p "$ZIG_CACHE"

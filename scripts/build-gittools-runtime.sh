@@ -52,7 +52,6 @@ READLINE_PREFIX="$(brew_prefix readline)"
 LIBYAML_PREFIX="$(brew_prefix libyaml)"
 GMP_PREFIX="$(brew_prefix gmp)"
 ICU_PREFIX="$(brew_prefix icu4c)"
-LIBGIT2_PREFIX="$(brew_prefix libgit2)"
 
 RUBY_CONFIGURE_FLAGS=(--disable-install-doc --enable-load-relative)
 [[ -n "$OPENSSL_PREFIX" ]] && RUBY_CONFIGURE_FLAGS+=(--with-openssl-dir="$OPENSSL_PREFIX")
@@ -61,8 +60,8 @@ RUBY_CONFIGURE_FLAGS=(--disable-install-doc --enable-load-relative)
 [[ -n "$GMP_PREFIX" ]] && RUBY_CONFIGURE_FLAGS+=(--with-gmp-dir="$GMP_PREFIX")
 
 export RUBY_CONFIGURE_OPTS="${RUBY_CONFIGURE_OPTS:-} ${RUBY_CONFIGURE_FLAGS[*]}"
-if [[ -n "$ICU_PREFIX" || -n "$LIBGIT2_PREFIX" ]]; then
-    export PKG_CONFIG_PATH="${ICU_PREFIX:+$ICU_PREFIX/lib/pkgconfig}${ICU_PREFIX:+:}${LIBGIT2_PREFIX:+$LIBGIT2_PREFIX/lib/pkgconfig}${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+if [[ -n "$ICU_PREFIX" ]]; then
+    export PKG_CONFIG_PATH="$ICU_PREFIX/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 fi
 
 RUBY_PREFIX="$OUT/runtime/ruby"
@@ -92,7 +91,6 @@ echo "==> Installing github-linguist $LINGUIST_VERSION"
     "$BUNDLE" config set --local frozen true
     "$BUNDLE" config set --local without "development test"
     [[ -n "$ICU_PREFIX" ]] && "$BUNDLE" config set --local build.charlock_holmes "--with-icu-dir=$ICU_PREFIX"
-    [[ -n "$LIBGIT2_PREFIX" ]] && "$BUNDLE" config set --local build.rugged "--use-system-libraries"
     "$BUNDLE" install --jobs "${BUNDLE_JOBS:-4}" --retry 3
 )
 rm -rf "$BUNDLE_WORK/.bundle"
