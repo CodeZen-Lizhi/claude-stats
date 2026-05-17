@@ -1,17 +1,66 @@
 import SwiftUI
 
 enum LeaderboardLayout {
-    static let workspaceMaxWidth: CGFloat = 1120
+    static let workspaceMaxWidth: CGFloat = 980
     static let horizontalPadding: CGFloat = 20
     static let topPadding: CGFloat = 52
     static let bottomPadding: CGFloat = 22
     static let columnSpacing: CGFloat = 14
+    static let headerContentSpacing: CGFloat = 20
     static let leftColumnWidth: CGFloat = 390
     static let detailMinWidth: CGFloat = 500
     static let wideMinimumWidth: CGFloat = leftColumnWidth + columnSpacing + detailMinWidth
 
     static func contentWidth(for availableWidth: CGFloat) -> CGFloat {
         min(workspaceMaxWidth, max(0, availableWidth - horizontalPadding * 2))
+    }
+}
+
+struct LeaderboardWideWorkspaceLayout: Layout {
+    let leftWidth: CGFloat
+    let detailMinWidth: CGFloat
+    let columnSpacing: CGFloat
+    let headerSpacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard subviews.count == 3 else { return .zero }
+        let availableWidth = proposal.width ?? leftWidth + columnSpacing + detailMinWidth
+        let detailWidth = max(detailMinWidth, availableWidth - leftWidth - columnSpacing)
+        let sizes = measuredSizes(subviews: subviews, detailWidth: detailWidth)
+        return CGSize(
+            width: leftWidth + columnSpacing + detailWidth,
+            height: sizes.headerHeight + headerSpacing + sizes.lowerHeight
+        )
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard subviews.count == 3 else { return }
+        let detailWidth = max(detailMinWidth, bounds.width - leftWidth - columnSpacing)
+        let sizes = measuredSizes(subviews: subviews, detailWidth: detailWidth)
+        let lowerY = bounds.minY + sizes.headerHeight + headerSpacing
+
+        subviews[0].place(
+            at: bounds.origin,
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: leftWidth, height: sizes.headerHeight)
+        )
+        subviews[1].place(
+            at: CGPoint(x: bounds.minX, y: lowerY),
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: leftWidth, height: sizes.lowerHeight)
+        )
+        subviews[2].place(
+            at: CGPoint(x: bounds.minX + leftWidth + columnSpacing, y: lowerY),
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: detailWidth, height: sizes.lowerHeight)
+        )
+    }
+
+    private func measuredSizes(subviews: Subviews, detailWidth: CGFloat) -> (headerHeight: CGFloat, lowerHeight: CGFloat) {
+        let headerHeight = subviews[0].sizeThatFits(ProposedViewSize(width: leftWidth, height: nil)).height
+        let leftHeight = subviews[1].sizeThatFits(ProposedViewSize(width: leftWidth, height: nil)).height
+        let rightHeight = subviews[2].sizeThatFits(ProposedViewSize(width: detailWidth, height: nil)).height
+        return (headerHeight, max(leftHeight, rightHeight))
     }
 }
 

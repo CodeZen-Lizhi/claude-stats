@@ -19,10 +19,13 @@ struct LeaderboardDetailPanel: View {
                 profilePanel(score)
                 statsPanel(score)
                 historyPanel(score)
+                    .frame(maxHeight: .infinity, alignment: .top)
             } else {
                 emptyPanel
+                    .frame(maxHeight: .infinity, alignment: .center)
             }
         }
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     private func profilePanel(_ score: LeaderboardScore) -> some View {
@@ -112,6 +115,7 @@ struct LeaderboardDetailPanel: View {
                 LeaderboardHistoryChart(points: history, metric: metric, period: period)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .mainWindowPanel(padding: 16)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Leaderboard history")
@@ -125,7 +129,7 @@ struct LeaderboardDetailPanel: View {
                 .font(.sora(12))
                 .foregroundStyle(Color.stxMuted)
         }
-        .frame(maxWidth: .infinity, minHeight: 160, alignment: .center)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .mainWindowPanel(padding: 16)
     }
 

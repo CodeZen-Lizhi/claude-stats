@@ -105,49 +105,49 @@ struct LeaderboardsView: View {
     @ViewBuilder
     private func layout(contentWidth: CGFloat, isWide: Bool) -> some View {
         if isWide {
-            HStack(alignment: .top, spacing: LeaderboardLayout.columnSpacing) {
+            LeaderboardWideWorkspaceLayout(
+                leftWidth: LeaderboardLayout.leftColumnWidth,
+                detailMinWidth: LeaderboardLayout.detailMinWidth,
+                columnSpacing: LeaderboardLayout.columnSpacing,
+                headerSpacing: LeaderboardLayout.headerContentSpacing
+            ) {
+                titleHeader
+                    .frame(width: LeaderboardLayout.leftColumnWidth, alignment: .topLeading)
+
                 listColumn
                     .frame(width: LeaderboardLayout.leftColumnWidth, alignment: .top)
+                    .frame(maxHeight: .infinity, alignment: .top)
 
-                LeaderboardDetailPanel(
-                    score: selectedScore,
-                    scores: scores,
-                    metric: metric,
-                    period: period,
-                    topScore: topScore,
-                    currentUserScore: env.leaderboards.currentUserScore,
-                    currentUserHash: env.leaderboards.currentUserHash,
-                    history: env.leaderboards.selectedUserHistory,
-                    isLoadingHistory: env.leaderboards.isLoadingSelectedUserHistory,
-                    historyError: env.leaderboards.selectedUserHistoryError
-                )
-                .frame(minWidth: LeaderboardLayout.detailMinWidth, maxWidth: .infinity, alignment: .top)
-                .task(id: historyReloadID) {
-                    await loadSelectedUserHistoryIfNeeded()
-                }
+                detailColumn
+                    .frame(minWidth: LeaderboardLayout.detailMinWidth, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
             .frame(width: contentWidth, alignment: .topLeading)
         } else {
-            listColumn
+            VStack(alignment: .leading, spacing: LeaderboardLayout.headerContentSpacing) {
+                titleHeader
+                if env.preferences.leaderboardsEnabled {
+                    overviewPanel
+                }
+                listColumn
+            }
                 .frame(width: contentWidth, alignment: .top)
         }
     }
 
-    private var listColumn: some View {
-        LeaderboardListColumn(
+    private var titleHeader: some View {
+        LeaderboardTitleHeader()
+    }
+
+    private var overviewPanel: some View {
+        LeaderboardOverviewPanel(
             metric: $metric,
             period: $period,
             scores: scores,
             topScore: topScore,
-            selectedScoreID: selectedScore?.id,
             currentUserHash: env.leaderboards.currentUserHash,
             syncStatusText: env.leaderboards.syncStatus.displayText,
             isLoadingScores: env.leaderboards.isLoadingScores,
-            scoreError: env.leaderboards.scoreError,
-            scoreEmptyMessage: env.leaderboards.scoreEmptyMessage,
-            lastLoadedPeriodKey: env.leaderboards.lastLoadedPeriodKey,
             isSyncBusy: isSyncBusy,
-            leaderboardsEnabled: env.preferences.leaderboardsEnabled,
             onRefresh: {
                 Task { await env.leaderboards.loadScores(metric: metric, period: period) }
             },
@@ -156,7 +156,47 @@ struct LeaderboardsView: View {
                     await env.leaderboards.syncNow()
                     await env.leaderboards.loadScores(metric: metric, period: period)
                 }
-            },
+            }
+        )
+    }
+
+    private var detailColumn: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if env.preferences.leaderboardsEnabled {
+                overviewPanel
+            }
+            LeaderboardDetailPanel(
+                score: selectedScore,
+                scores: scores,
+                metric: metric,
+                period: period,
+                topScore: topScore,
+                currentUserScore: env.leaderboards.currentUserScore,
+                currentUserHash: env.leaderboards.currentUserHash,
+                history: env.leaderboards.selectedUserHistory,
+                isLoadingHistory: env.leaderboards.isLoadingSelectedUserHistory,
+                historyError: env.leaderboards.selectedUserHistoryError
+            )
+            .frame(maxHeight: .infinity, alignment: .top)
+        }
+        .frame(maxHeight: .infinity, alignment: .top)
+        .task(id: historyReloadID) {
+            await loadSelectedUserHistoryIfNeeded()
+        }
+    }
+
+    private var listColumn: some View {
+        LeaderboardListColumn(
+            metric: metric,
+            scores: scores,
+            topScore: topScore,
+            selectedScoreID: selectedScore?.id,
+            currentUserHash: env.leaderboards.currentUserHash,
+            isLoadingScores: env.leaderboards.isLoadingScores,
+            scoreError: env.leaderboards.scoreError,
+            scoreEmptyMessage: env.leaderboards.scoreEmptyMessage,
+            lastLoadedPeriodKey: env.leaderboards.lastLoadedPeriodKey,
+            leaderboardsEnabled: env.preferences.leaderboardsEnabled,
             onSelectScore: selectScore,
             onOpenSettings: {
                 NotificationCenter.default.post(name: .openSettingsInMainWindow, object: nil)
