@@ -6,6 +6,9 @@ import Observation
 final class ConfigurationProfilesViewModel {
     private(set) var library = ConfigurationProfileLibrary()
     private(set) var statuses: [UUID: ConfigProfileStatus] = [:]
+    private(set) var profilesByProvider: [ProviderKind: [ConfigProfile]] = [:]
+    private(set) var activeProfileByProvider: [ProviderKind: ConfigProfile] = [:]
+    private(set) var scopeOptionsByProvider: [ProviderKind: [ConfigProfileScope]] = [:]
     private(set) var isLoading = false
     private(set) var isWorking = false
     private(set) var lastError: String?
@@ -36,6 +39,7 @@ final class ConfigurationProfilesViewModel {
         do {
             library = try await store.loadLibrary()
             sanitizeActiveProfiles()
+            rebuildProfileCaches()
             hasLoaded = true
             await refreshStatuses()
         } catch {
@@ -45,17 +49,11 @@ final class ConfigurationProfilesViewModel {
     }
 
     func profiles(for provider: ProviderKind) -> [ConfigProfile] {
-        library.profiles
-            .filter { $0.provider == provider }
-            .sorted {
-                if $0.updatedAt == $1.updatedAt { return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-                return $0.updatedAt > $1.updatedAt
-            }
+        profilesByProvider[provider] ?? []
     }
 
     func activeProfile(for provider: ProviderKind) -> ConfigProfile? {
-        guard let id = library.activeProfileIDsByProvider[provider] else { return nil }
-        return library.profiles.first { $0.id == id && $0.provider == provider }
+        activeProfileByProvider[provider]
     }
 
     func status(for profile: ConfigProfile) -> ConfigProfileStatus {
@@ -78,19 +76,17 @@ final class ConfigurationProfilesViewModel {
             .first { $0.id == snapshotID }
     }
 
-    func scopeOptions(for provider: ProviderKind, sessions: [Session]) -> [ConfigProfileScope] {
-        var seen: Set<String> = []
-        let projectScopes = sessions
-            .filter { $0.provider == provider }
-            .compactMap(\.cwd)
-            .filter { !$0.isEmpty }
-            .filter { path in
-                if seen.contains(path) { return false }
-                seen.insert(path)
-                return true
-            }
-            .map { ConfigProfileScope.project(path: $0) }
-        return [.global] + projectScopes
+    func scopeOptions(for provider: ProviderKind) -> [ConfigProfileScope] {
+        scopeOptionsByProvider[provider] ?? [.global]
+    }
+
+    func refreshScopeOptions(from sessions: [Session]) async {
+        let next = await Task.detached(priority: .utility) {
+            Self.makeScopeOptions(from: sessions)
+        }.value
+        if next != scopeOptionsByProvider {
+            scopeOptionsByProvider = next
+        }
     }
 
     func locations(for provider: ProviderKind, scope: ConfigProfileScope) -> [ProviderConfigLocation] {
@@ -269,6 +265,7 @@ final class ConfigurationProfilesViewModel {
 
     private func persist() async throws {
         sanitizeActiveProfiles()
+        rebuildProfileCaches()
         try await store.saveLibrary(library)
     }
 
@@ -287,5 +284,45 @@ final class ConfigurationProfilesViewModel {
     private func replaceProfile(_ profile: ConfigProfile) {
         guard let index = library.profiles.firstIndex(where: { $0.id == profile.id }) else { return }
         library.profiles[index] = profile
+    }
+
+    private func rebuildProfileCaches() {
+        profilesByProvider = Dictionary(
+            uniqueKeysWithValues: ProviderKind.allCases.map { provider in
+                let profiles = library.profiles
+                    .filter { $0.provider == provider }
+                    .sorted {
+                        if $0.updatedAt == $1.updatedAt {
+                            return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+                        }
+                        return $0.updatedAt > $1.updatedAt
+                    }
+                return (provider, profiles)
+            }
+        )
+
+        activeProfileByProvider = Dictionary(
+            uniqueKeysWithValues: ProviderKind.allCases.compactMap { provider in
+                guard let id = library.activeProfileIDsByProvider[provider],
+                      let profile = profilesByProvider[provider]?.first(where: { $0.id == id }) else {
+                    return nil
+                }
+                return (provider, profile)
+            }
+        )
+    }
+
+    private nonisolated static func makeScopeOptions(from sessions: [Session]) -> [ProviderKind: [ConfigProfileScope]] {
+        var next = Dictionary(uniqueKeysWithValues: ProviderKind.allCases.map { ($0, [ConfigProfileScope.global]) })
+        var seenByProvider = Dictionary(uniqueKeysWithValues: ProviderKind.allCases.map { ($0, Set<String>()) })
+
+        for session in sessions {
+            guard let cwd = session.cwd, !cwd.isEmpty else { continue }
+            if seenByProvider[session.provider, default: []].insert(cwd).inserted {
+                next[session.provider, default: [.global]].append(.project(path: cwd))
+            }
+        }
+
+        return next
     }
 }

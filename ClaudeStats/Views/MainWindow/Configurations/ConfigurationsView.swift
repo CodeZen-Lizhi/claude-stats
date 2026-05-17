@@ -16,12 +16,27 @@ struct ConfigurationsView: View {
     @State private var editor = ConfigurationEditorViewModel()
 
     private var vm: ConfigurationProfilesViewModel { env.configurationProfiles }
-    private var profiles: [ConfigProfile] { vm.profiles(for: selectedProvider) }
-    private var selectedProfile: ConfigProfile? {
+    private var screenSnapshot: ConfigurationScreenSnapshot {
+        let profiles = vm.profiles(for: selectedProvider)
+        let selectedProfile = selectedProfile(from: profiles)
+        let selectedSnapshot = selectedSnapshot(in: selectedProfile)
+        return ConfigurationScreenSnapshot(
+            profiles: profiles,
+            selectedProfile: selectedProfile,
+            selectedSnapshot: selectedSnapshot,
+            activeProfileID: vm.activeProfile(for: selectedProvider)?.id,
+            scopeOptions: vm.scopeOptions(for: selectedProvider),
+            statuses: vm.statuses,
+            latestBackupURL: selectedProfile.flatMap { vm.latestBackupURL(for: $0) }
+        )
+    }
+
+    private func selectedProfile(from profiles: [ConfigProfile]) -> ConfigProfile? {
         guard let selectedProfileID else { return profiles.first }
         return profiles.first { $0.id == selectedProfileID } ?? profiles.first
     }
-    private var selectedSnapshot: ConfigFileSnapshot? {
+
+    private func selectedSnapshot(in selectedProfile: ConfigProfile?) -> ConfigFileSnapshot? {
         guard let selectedProfile else { return nil }
         if let selectedSnapshotID,
            let snapshot = selectedProfile.files.first(where: { $0.id == selectedSnapshotID }) {
@@ -29,25 +44,29 @@ struct ConfigurationsView: View {
         }
         return selectedProfile.files.first
     }
-    private var scopeOptions: [ConfigProfileScope] {
-        vm.scopeOptions(for: selectedProvider, sessions: env.store.sessions)
-    }
 
     var body: some View {
+        let snapshot = screenSnapshot
+
         CenteredPaneContainer {
             VStack(alignment: .leading, spacing: 24) {
                 header
-                capturePanel
-                content
+                capturePanel(snapshot: snapshot)
+                content(snapshot: snapshot)
             }
         }
         .task {
             selectedProvider = env.preferences.selectedProvider
             await vm.loadIfNeeded()
+            await vm.refreshScopeOptions(from: env.store.sessions)
             normalizeSelection()
             normalizeSnapshotSelection()
             openSelectedSnapshot(force: true)
             resetCaptureName()
+        }
+        .onChange(of: env.store.lastRefreshedAt) { _, _ in
+            let sessions = env.store.sessions
+            Task { await vm.refreshScopeOptions(from: sessions) }
         }
         .onChange(of: selectedProvider) { oldValue, newValue in
             if suppressProviderDirtyCheck {
@@ -110,7 +129,7 @@ struct ConfigurationsView: View {
         }
     }
 
-    private var capturePanel: some View {
+    private func capturePanel(snapshot: ConfigurationScreenSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -134,7 +153,7 @@ struct ConfigurationsView: View {
                     .textFieldStyle(.roundedBorder)
                     .font(.sora(12))
                 Picker("", selection: $selectedScope) {
-                    ForEach(scopeOptions) { scope in
+                    ForEach(snapshot.scopeOptions) { scope in
                         Text(scope.displayName).tag(scope)
                     }
                 }
@@ -147,41 +166,31 @@ struct ConfigurationsView: View {
         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.stxStroke, lineWidth: 1))
     }
 
-    private var content: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .top, spacing: 18) {
-                profileList
-                    .frame(width: 270)
-                fileList
-                    .frame(width: 300)
-                editorDetail
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-            }
-            VStack(alignment: .leading, spacing: 18) {
-                profileList
-                fileList
-                editorDetail
-            }
+    private func content(snapshot: ConfigurationScreenSnapshot) -> some View {
+        ConfigurationResponsiveLayout {
+            profileList(snapshot: snapshot)
+            fileList(snapshot: snapshot)
+            editorDetail(snapshot: snapshot)
         }
     }
 
-    private var profileList: some View {
+    private func profileList(snapshot: ConfigurationScreenSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             sectionTitle("Profiles")
             VStack(spacing: 0) {
-                if profiles.isEmpty {
+                if snapshot.profiles.isEmpty {
                     emptyProfiles
                 } else {
-                    ForEach(profiles) { profile in
+                    ForEach(snapshot.profiles) { profile in
                         ProfileListRow(
                             profile: profile,
-                            status: vm.status(for: profile),
-                            isSelected: selectedProfile?.id == profile.id,
-                            isActive: vm.activeProfile(for: selectedProvider)?.id == profile.id
+                            status: snapshot.status(for: profile),
+                            isSelected: snapshot.selectedProfile?.id == profile.id,
+                            isActive: snapshot.activeProfileID == profile.id
                         ) {
                             requestSelectProfile(profile.id)
                         }
-                        if profile.id != profiles.last?.id {
+                        if profile.id != snapshot.profiles.last?.id {
                             StxRule().padding(.leading, 12)
                         }
                     }
@@ -193,10 +202,10 @@ struct ConfigurationsView: View {
     }
 
     @ViewBuilder
-    private var fileList: some View {
+    private func fileList(snapshot: ConfigurationScreenSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             sectionTitle("Files")
-            if let selectedProfile {
+            if let selectedProfile = snapshot.selectedProfile {
                 VStack(alignment: .leading, spacing: 0) {
                     if selectedProfile.files.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {
@@ -208,14 +217,14 @@ struct ConfigurationsView: View {
                         }
                         .padding(14)
                     } else {
-                        ForEach(selectedProfile.files) { snapshot in
+                        ForEach(selectedProfile.files) { file in
                             ConfigFileSnapshotRow(
-                                snapshot: snapshot,
-                                isSelected: selectedSnapshot?.id == snapshot.id
+                                snapshot: file,
+                                isSelected: snapshot.selectedSnapshot?.id == file.id
                             ) {
-                                requestSelectSnapshot(snapshot.id)
+                                requestSelectSnapshot(file.id)
                             }
-                            if snapshot.id != selectedProfile.files.last?.id {
+                            if file.id != selectedProfile.files.last?.id {
                                 StxRule().padding(.leading, 12)
                             }
                         }
@@ -239,11 +248,11 @@ struct ConfigurationsView: View {
         }
     }
 
-    private var editorDetail: some View {
+    private func editorDetail(snapshot: ConfigurationScreenSnapshot) -> some View {
         ConfigurationEditorPane(
-            profile: selectedProfile,
-            status: selectedProfile.map { vm.status(for: $0) } ?? .unknown,
-            latestBackupURL: selectedProfile.flatMap { vm.latestBackupURL(for: $0) },
+            profile: snapshot.selectedProfile,
+            status: snapshot.selectedProfile.map { snapshot.status(for: $0) } ?? .unknown,
+            latestBackupURL: snapshot.latestBackupURL,
             isWorking: vm.isWorking,
             editor: editor,
             saveToProfile: saveEditorToProfile,
@@ -302,7 +311,7 @@ struct ConfigurationsView: View {
     }
 
     private func normalizeSelection() {
-        let available = profiles
+        let available = vm.profiles(for: selectedProvider)
         if let selectedProfileID, available.contains(where: { $0.id == selectedProfileID }) {
             return
         }
@@ -310,6 +319,10 @@ struct ConfigurationsView: View {
     }
 
     private func normalizeSnapshotSelection() {
+        normalizeSnapshotSelection(in: selectedProfile(from: vm.profiles(for: selectedProvider)))
+    }
+
+    private func normalizeSnapshotSelection(in selectedProfile: ConfigProfile?) {
         guard let selectedProfile else {
             selectedSnapshotID = nil
             return
@@ -369,6 +382,8 @@ struct ConfigurationsView: View {
 
     private func openSelectedSnapshot(force: Bool = false) {
         normalizeSnapshotSelection()
+        let selectedProfile = selectedProfile(from: vm.profiles(for: selectedProvider))
+        let selectedSnapshot = selectedSnapshot(in: selectedProfile)
         guard let selectedProfile else {
             editor.clear()
             return
@@ -421,17 +436,18 @@ struct ConfigurationsView: View {
     }
 
     private func revertEditorDraft() {
-        guard let selectedProfile else { return }
-        editor.revert(profile: selectedProfile, snapshot: selectedSnapshot)
+        let snapshot = screenSnapshot
+        guard let selectedProfile = snapshot.selectedProfile else { return }
+        editor.revert(profile: selectedProfile, snapshot: snapshot.selectedSnapshot)
     }
 
     private func applySelectedProfile() {
-        guard let selectedProfile else { return }
+        guard let selectedProfile = screenSnapshot.selectedProfile else { return }
         profilePendingApply = selectedProfile
     }
 
     private func duplicateSelectedProfile() {
-        guard let selectedProfile else { return }
+        guard let selectedProfile = screenSnapshot.selectedProfile else { return }
         Task {
             if let copy = await vm.duplicate(selectedProfile) {
                 selectedProfileID = copy.id
@@ -442,7 +458,7 @@ struct ConfigurationsView: View {
     }
 
     private func deleteSelectedProfile() {
-        guard let selectedProfile else { return }
+        guard let selectedProfile = screenSnapshot.selectedProfile else { return }
         Task {
             await vm.delete(selectedProfile)
             normalizeSelection()
@@ -453,6 +469,101 @@ struct ConfigurationsView: View {
 
     private func resetCaptureName() {
         captureName = vm.defaultProfileName(provider: selectedProvider, scope: selectedScope)
+    }
+}
+
+private struct ConfigurationScreenSnapshot {
+    let profiles: [ConfigProfile]
+    let selectedProfile: ConfigProfile?
+    let selectedSnapshot: ConfigFileSnapshot?
+    let activeProfileID: UUID?
+    let scopeOptions: [ConfigProfileScope]
+    let statuses: [UUID: ConfigProfileStatus]
+    let latestBackupURL: URL?
+
+    func status(for profile: ConfigProfile) -> ConfigProfileStatus {
+        statuses[profile.id] ?? .unknown
+    }
+}
+
+private struct ConfigurationResponsiveLayout: Layout {
+    private let profileWidth: CGFloat = 270
+    private let filesWidth: CGFloat = 300
+    private let editorMinWidth: CGFloat = 360
+    private let spacing: CGFloat = 18
+
+    private var horizontalBreakpoint: CGFloat {
+        profileWidth + filesWidth + editorMinWidth + spacing * 2
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let proposedWidth = proposal.width ?? horizontalBreakpoint
+        guard subviews.count == 3, proposedWidth >= horizontalBreakpoint else {
+            return verticalSizeThatFits(proposal: proposal, subviews: subviews)
+        }
+
+        let sizes = horizontalSizes(width: proposedWidth, subviews: subviews)
+        return CGSize(width: proposedWidth, height: sizes.map(\.height).max() ?? 0)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard subviews.count == 3, bounds.width >= horizontalBreakpoint else {
+            placeVertically(in: bounds, subviews: subviews)
+            return
+        }
+
+        let editorWidth = bounds.width - profileWidth - filesWidth - spacing * 2
+        var x = bounds.minX
+        subviews[0].place(
+            at: CGPoint(x: x, y: bounds.minY),
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: profileWidth, height: nil)
+        )
+        x += profileWidth + spacing
+        subviews[1].place(
+            at: CGPoint(x: x, y: bounds.minY),
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: filesWidth, height: nil)
+        )
+        x += filesWidth + spacing
+        subviews[2].place(
+            at: CGPoint(x: x, y: bounds.minY),
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: editorWidth, height: nil)
+        )
+    }
+
+    private func horizontalSizes(width: CGFloat, subviews: Subviews) -> [CGSize] {
+        let editorWidth = width - profileWidth - filesWidth - spacing * 2
+        return [
+            subviews[0].sizeThatFits(ProposedViewSize(width: profileWidth, height: nil)),
+            subviews[1].sizeThatFits(ProposedViewSize(width: filesWidth, height: nil)),
+            subviews[2].sizeThatFits(ProposedViewSize(width: editorWidth, height: nil)),
+        ]
+    }
+
+    private func verticalSizeThatFits(proposal: ProposedViewSize, subviews: Subviews) -> CGSize {
+        let sizes = subviews.map { subview in
+            subview.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
+        }
+        let totalHeight = sizes.map(\.height).reduce(0, +) + spacing * CGFloat(max(0, subviews.count - 1))
+        return CGSize(
+            width: proposal.width ?? (sizes.map(\.width).max() ?? 0),
+            height: totalHeight
+        )
+    }
+
+    private func placeVertically(in bounds: CGRect, subviews: Subviews) {
+        var y = bounds.minY
+        for subview in subviews {
+            let size = subview.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
+            subview.place(
+                at: CGPoint(x: bounds.minX, y: y),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: bounds.width, height: nil)
+            )
+            y += size.height + spacing
+        }
     }
 }
 

@@ -204,7 +204,7 @@ private struct ConfigurationEditorStatusBar: View {
     var body: some View {
         HStack(spacing: 12) {
             Label("Line \(editor.cursorLine), column \(editor.cursorColumn)", systemImage: "text.cursor")
-            Text("\(editor.draftContent.count) chars")
+            Text("\(editor.draftCharacterCount) chars")
             if let diagnostic = editor.primaryDiagnostic {
                 Text(diagnostic.severity == .error ? "Error" : "Warning")
                     .foregroundStyle(diagnostic.severity == .error ? Color(red: 0.85, green: 0.22, blue: 0.18) : Color(red: 0.92, green: 0.58, blue: 0.16))
