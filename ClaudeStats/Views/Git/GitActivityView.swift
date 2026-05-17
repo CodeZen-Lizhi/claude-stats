@@ -13,13 +13,13 @@ struct GitActivityView: View {
     static let windowID = "git-activity"
 
     @Environment(AppEnvironment.self) private var env
-    @State private var vm: GitActivityViewModel
     @State private var graphRepo: GitRepo?
     @State private var recentCommitsExpanded = false
+    private let previewModel: GitActivityViewModel?
     private let isPreview: Bool
 
     init() {
-        _vm = State(wrappedValue: GitActivityViewModel())
+        previewModel = nil
         isPreview = false
     }
 
@@ -27,7 +27,7 @@ struct GitActivityView: View {
     /// Preview-only: injects a view model already populated with canned data so
     /// the Xcode canvas shows the real layout (the live view shells out to `git`).
     init(previewModel: GitActivityViewModel) {
-        _vm = State(wrappedValue: previewModel)
+        self.previewModel = previewModel
         isPreview = true
     }
     #endif
@@ -43,6 +43,10 @@ struct GitActivityView: View {
         let provider: ProviderKind
     }
 
+    private var activityModel: GitActivityViewModel {
+        previewModel ?? env.gitActivity
+    }
+
     var body: some View {
         if let graphRepo {
             GitGraphView(repo: graphRepo, onBack: { self.graphRepo = nil })
@@ -52,7 +56,8 @@ struct GitActivityView: View {
     }
 
     private var overviewBody: some View {
-        @Bindable var vm = vm
+        let model = activityModel
+        @Bindable var vm = model
         let provider = env.preferences.selectedProvider
         let key = ReloadKey(token: vm.reloadToken, lastRefreshed: env.store.lastRefreshedAt, provider: provider)
         return FadingScrollView {
@@ -77,14 +82,19 @@ struct GitActivityView: View {
         }
         .task(id: key) {
             if isPreview { return }
-            await vm.reload(sessions: env.store.sessions(for: provider))
+            await vm.reloadIfNeeded(
+                sessions: env.store.sessions(for: provider),
+                provider: provider,
+                lastRefreshedAt: env.store.lastRefreshedAt
+            )
         }
     }
 
     // MARK: Header
 
     private var headerRow: some View {
-        @Bindable var vm = vm
+        let model = activityModel
+        @Bindable var vm = model
         return HStack(spacing: 10) {
             mineToggle
             Spacer()
@@ -98,7 +108,8 @@ struct GitActivityView: View {
     }
 
     private var mineToggle: some View {
-        Button { vm.onlyMyCommits.toggle() } label: {
+        let vm = activityModel
+        return Button { vm.onlyMyCommits.toggle() } label: {
             BracketBox(spacing: 6) {
                 Image(systemName: vm.onlyMyCommits ? "checkmark.square.fill" : "square")
                     .font(.system(size: 10, weight: .bold))
@@ -116,7 +127,8 @@ struct GitActivityView: View {
     // MARK: Summary
 
     private var summaryGrid: some View {
-        Grid(horizontalSpacing: 10, verticalSpacing: 8) {
+        let vm = activityModel
+        return Grid(horizontalSpacing: 10, verticalSpacing: 8) {
             GridRow {
                 statCell("Repos", "\(vm.repos.count)")
                 statCell("Commits", "\(vm.totalCommits)")
@@ -150,6 +162,7 @@ struct GitActivityView: View {
     // MARK: Correlation
 
     private var correlationPanel: some View {
+        let vm = activityModel
         let points = vm.correlationPoints
         let hasTokens = points.contains { $0.claudeTokens > 0 }
         return VStack(alignment: .leading, spacing: 10) {
@@ -233,7 +246,8 @@ struct GitActivityView: View {
     // MARK: Per-repo timelines
 
     private var repoTimelinesPanel: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let vm = activityModel
+        return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Text("PER-REPO COMMIT TIMELINE")
                     .font(.sora(13, weight: .semibold))
@@ -261,7 +275,8 @@ struct GitActivityView: View {
     // MARK: Churn table
 
     private var churnPanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let vm = activityModel
+        return VStack(alignment: .leading, spacing: 8) {
             Text("CODE CHURN BY REPO")
                 .font(.sora(13, weight: .semibold))
                 .tracking(1.5)
@@ -294,6 +309,7 @@ struct GitActivityView: View {
     // MARK: Recent commits
 
     private var recentCommitsPanel: some View {
+        let vm = activityModel
         let commits = vm.recentCommits(limit: Self.expandedRecentCommitCount)
         let repoNamesByID = Dictionary(vm.repos.map { ($0.repo.id, $0.repo.displayName) }, uniquingKeysWith: { a, _ in a })
         return RecentCommitsPanel(

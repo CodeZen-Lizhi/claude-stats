@@ -49,6 +49,16 @@ final class GitActivityViewModel {
     private(set) var reloadToken: UInt64 = 0
 
     private let calendar = Calendar.current
+    private var activeReloadIdentity: ReloadIdentity?
+    private var lastLoadedIdentity: ReloadIdentity?
+
+    private struct ReloadIdentity: Equatable, Sendable {
+        let provider: ProviderKind
+        let lastRefreshedAt: Date?
+        let range: GitRange
+        let onlyMyCommits: Bool
+        let reloadToken: UInt64
+    }
 
     func bumpReload() { reloadToken &+= 1 }
 
@@ -58,9 +68,33 @@ final class GitActivityViewModel {
         return calendar.date(byAdding: .day, value: -(range.dayCount - 1), to: today) ?? today
     }
 
+    func reloadIfNeeded(sessions: [Session], provider: ProviderKind, lastRefreshedAt: Date?) async {
+        let identity = ReloadIdentity(
+            provider: provider,
+            lastRefreshedAt: lastRefreshedAt,
+            range: range,
+            onlyMyCommits: onlyMyCommits,
+            reloadToken: reloadToken
+        )
+        if lastLoadedIdentity == identity {
+            Log.git.debug("Git activity reload skipped: cached view model snapshot")
+            return
+        }
+        if activeReloadIdentity == identity {
+            Log.git.debug("Git activity reload skipped: matching request already loading")
+            return
+        }
+        await reload(sessions: sessions, identity: identity)
+    }
+
     func reload(sessions: [Session]) async {
+        await reload(sessions: sessions, identity: nil)
+    }
+
+    private func reload(sessions: [Session], identity: ReloadIdentity?) async {
+        activeReloadIdentity = identity
         isLoading = true
-        defer { isLoading = false }
+        let startedAt = Date()
 
         let cwds = Array(Set(sessions.compactMap(\.cwd)))
         let since = windowStart
@@ -91,11 +125,17 @@ final class GitActivityViewModel {
             return (sorted, email, true, correlation, overview)
         }.value
 
+        guard activeReloadIdentity == identity else { return }
         gitAvailable = result.available
         userEmail = result.email
         repos = result.repos
         correlationPoints = result.correlation
         overviewSnapshot = result.overview
+        lastLoadedIdentity = identity
+        activeReloadIdentity = nil
+        isLoading = false
+        let duration = Date().timeIntervalSince(startedAt)
+        Log.git.info("Git activity loaded \(result.repos.count, privacy: .public) repos from \(cwds.count, privacy: .public) cwds in \(String(format: "%.2f", duration), privacy: .public)s")
     }
 
     // MARK: - Derived data

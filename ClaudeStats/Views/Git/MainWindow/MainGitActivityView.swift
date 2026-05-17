@@ -6,9 +6,9 @@ import SwiftUI
 struct MainGitActivityView: View {
     @Environment(AppEnvironment.self) private var env
     @SceneStorage("mainWindow.gitSelection") private var selectionRaw: String = Self.allSelection
-    @State private var vm: GitActivityViewModel
     @State private var previewSelectionRaw: String?
     @State private var repoSelectionToken: UInt64 = 0
+    private let previewModel: GitActivityViewModel?
 
     private let isPreview: Bool
     #if DEBUG
@@ -18,7 +18,7 @@ struct MainGitActivityView: View {
     private static let allSelection = "all"
 
     init() {
-        _vm = State(wrappedValue: GitActivityViewModel())
+        previewModel = nil
         _previewSelectionRaw = State(wrappedValue: nil)
         isPreview = false
         #if DEBUG
@@ -28,7 +28,7 @@ struct MainGitActivityView: View {
 
     #if DEBUG
     init(previewModel: GitActivityViewModel, selection: String = Self.allSelection, graph: GitGraph? = nil) {
-        _vm = State(wrappedValue: previewModel)
+        self.previewModel = previewModel
         _previewSelectionRaw = State(wrappedValue: selection)
         isPreview = true
         previewGraph = graph
@@ -45,13 +45,18 @@ struct MainGitActivityView: View {
         previewSelectionRaw ?? selectionRaw
     }
 
+    private var activityModel: GitActivityViewModel {
+        previewModel ?? env.gitActivity
+    }
+
     private var selectedActivity: RepoActivity? {
         guard currentSelection != Self.allSelection else { return nil }
-        return vm.repos.first { $0.repo.id == currentSelection }
+        return activityModel.repos.first { $0.repo.id == currentSelection }
     }
 
     var body: some View {
-        @Bindable var vm = vm
+        let model = activityModel
+        @Bindable var vm = model
         let provider = env.preferences.selectedProvider
         let key = ReloadKey(token: vm.reloadToken, lastRefreshed: env.store.lastRefreshedAt, provider: provider)
 
@@ -79,7 +84,11 @@ struct MainGitActivityView: View {
         }
         .task(id: key) {
             if isPreview { return }
-            await vm.reload(sessions: env.store.sessions(for: provider))
+            await vm.reloadIfNeeded(
+                sessions: env.store.sessions(for: provider),
+                provider: provider,
+                lastRefreshedAt: env.store.lastRefreshedAt
+            )
             reconcileSelection()
         }
         .onAppear { reconcileSelection() }
@@ -118,6 +127,7 @@ struct MainGitActivityView: View {
 
     @ViewBuilder
     private var detailContent: some View {
+        let vm = activityModel
         if !vm.gitAvailable {
             GitWorkspaceNotice(
                 title: "Git not available",
@@ -152,7 +162,7 @@ struct MainGitActivityView: View {
 
     private func reconcileSelection() {
         guard currentSelection != Self.allSelection else { return }
-        if !vm.repos.contains(where: { $0.repo.id == currentSelection }) {
+        if !activityModel.repos.contains(where: { $0.repo.id == currentSelection }) {
             setSelection(Self.allSelection)
         }
     }
