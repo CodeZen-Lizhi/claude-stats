@@ -1,17 +1,16 @@
 import Foundation
 
-/// Known code-editor / IDE bundle identifiers. The AI activity analysis treats
-/// focus time in any of these as "editor time". Screen Time isn't
-/// provider-specific, so this lives in the shared layer.
-enum IDEAppCatalog {
+/// Known app bundle identifiers used by the Activity analysis. Screen Time
+/// isn't provider-specific, so this lives in the shared layer.
+enum ActivitySurfaceCatalog {
     struct App: Sendable, Hashable, Identifiable {
         let bundleID: String
         let name: String
         var id: String { bundleID }
     }
 
-    /// Editors we recognise out of the box.
-    static let defaults: [App] = [
+    /// GUI apps that count as "coding surface" focus time.
+    static let codingSurfaceDefaults: [App] = [
         App(bundleID: "com.apple.dt.Xcode", name: "Xcode"),
         App(bundleID: "com.microsoft.VSCode", name: "Visual Studio Code"),
         App(bundleID: "com.microsoft.VSCodeInsiders", name: "VS Code Insiders"),
@@ -43,18 +42,33 @@ enum IDEAppCatalog {
         App(bundleID: "com.panic.Nova", name: "Nova"),
         App(bundleID: "org.vim.MacVim", name: "MacVim"),
         App(bundleID: "io.neovim.neovide", name: "Neovide"),
+        App(bundleID: "com.openai.codex", name: "OpenAI Codex"),
+        App(bundleID: "com.anthropic.claudefordesktop", name: "Claude"),
     ]
 
-    private static let defaultIDs = Set(defaults.map(\.bundleID))
+    /// Terminal-style hosts shown separately from coding-surface time.
+    static let cliHostDefaults: [App] = [
+        App(bundleID: "com.apple.Terminal", name: "Terminal"),
+        App(bundleID: "com.mitchellh.ghostty", name: "Ghostty"),
+    ]
 
-    /// The bundle ids actually in effect: defaults plus user additions, minus
-    /// user removals.
-    static func effectiveBundleIDs(added: [String], removed: [String]) -> Set<String> {
-        defaultIDs.union(added).subtracting(removed)
+    private static let codingSurfaceDefaultIDs = Set(codingSurfaceDefaults.map(\.bundleID))
+    private static let cliHostDefaultIDs = Set(cliHostDefaults.map(\.bundleID))
+
+    /// The GUI coding-surface bundle ids actually in effect: defaults plus
+    /// user additions, minus user removals.
+    static func effectiveCodingSurfaceBundleIDs(added: [String], removed: [String]) -> Set<String> {
+        codingSurfaceDefaultIDs.union(added).subtracting(removed)
+    }
+
+    /// The CLI-host bundle ids actually in effect: defaults plus user
+    /// additions, minus user removals.
+    static func effectiveCLIHostBundleIDs(added: [String], removed: [String]) -> Set<String> {
+        cliHostDefaultIDs.union(added).subtracting(removed)
     }
 
     /// Best-effort display name for a bundle id (falls back to the id itself).
     static func displayName(for bundleID: String) -> String {
-        defaults.first { $0.bundleID == bundleID }?.name ?? bundleID
+        (codingSurfaceDefaults + cliHostDefaults).first { $0.bundleID == bundleID }?.name ?? bundleID
     }
 }

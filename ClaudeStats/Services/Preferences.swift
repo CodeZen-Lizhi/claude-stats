@@ -205,18 +205,44 @@ final class Preferences {
     var leaderboardLastSubmittedPeriodKeys: [String] {
         didSet { defaults.set(leaderboardLastSubmittedPeriodKeys, forKey: Keys.leaderboardLastSubmittedPeriodKeys) }
     }
-    /// Extra editor bundle ids the user added on top of ``IDEAppCatalog/defaults``.
-    var ideBundleIDsAdded: [String] {
-        didSet { defaults.set(ideBundleIDsAdded, forKey: Keys.ideBundleIDsAdded) }
+    /// Extra GUI coding-surface bundle ids the user added on top of
+    /// ``ActivitySurfaceCatalog/codingSurfaceDefaults``.
+    var codingSurfaceBundleIDsAdded: [String] {
+        didSet { defaults.set(codingSurfaceBundleIDsAdded, forKey: Keys.codingSurfaceBundleIDsAdded) }
     }
-    /// Default editor bundle ids the user turned off.
-    var ideBundleIDsRemoved: [String] {
-        didSet { defaults.set(ideBundleIDsRemoved, forKey: Keys.ideBundleIDsRemoved) }
+    /// Default GUI coding-surface bundle ids the user turned off.
+    var codingSurfaceBundleIDsRemoved: [String] {
+        didSet { defaults.set(codingSurfaceBundleIDsRemoved, forKey: Keys.codingSurfaceBundleIDsRemoved) }
+    }
+    /// Extra terminal/CLI-host bundle ids the user added on top of
+    /// ``ActivitySurfaceCatalog/cliHostDefaults``.
+    var cliHostBundleIDsAdded: [String] {
+        didSet { defaults.set(cliHostBundleIDsAdded, forKey: Keys.cliHostBundleIDsAdded) }
+    }
+    /// Default terminal/CLI-host bundle ids the user turned off.
+    var cliHostBundleIDsRemoved: [String] {
+        didSet { defaults.set(cliHostBundleIDsRemoved, forKey: Keys.cliHostBundleIDsRemoved) }
     }
 
-    /// The editor bundle ids actually in effect for the analysis.
-    var effectiveIDEBundleIDs: Set<String> {
-        IDEAppCatalog.effectiveBundleIDs(added: ideBundleIDsAdded, removed: ideBundleIDsRemoved)
+    /// The GUI coding-surface bundle ids actually in effect for the analysis.
+    var effectiveCodingSurfaceBundleIDs: Set<String> {
+        ActivitySurfaceCatalog.effectiveCodingSurfaceBundleIDs(
+            added: codingSurfaceBundleIDsAdded,
+            removed: codingSurfaceBundleIDsRemoved
+        )
+    }
+
+    /// The CLI-host bundle ids actually in effect for the analysis.
+    var effectiveCLIHostBundleIDs: Set<String> {
+        ActivitySurfaceCatalog.effectiveCLIHostBundleIDs(
+            added: cliHostBundleIDsAdded,
+            removed: cliHostBundleIDsRemoved
+        )
+    }
+
+    /// All app-focus bundle ids needed for one Screen Time query.
+    var effectiveActivityBundleIDs: Set<String> {
+        effectiveCodingSurfaceBundleIDs.union(effectiveCLIHostBundleIDs)
     }
 
     private let defaults: UserDefaults
@@ -259,8 +285,25 @@ final class Preferences {
         leaderboardLastSyncedAt = defaults.object(forKey: Keys.leaderboardLastSyncedAt) as? Date
         leaderboardLastSyncError = defaults.string(forKey: Keys.leaderboardLastSyncError) ?? ""
         leaderboardLastSubmittedPeriodKeys = defaults.stringArray(forKey: Keys.leaderboardLastSubmittedPeriodKeys) ?? []
-        ideBundleIDsAdded = defaults.stringArray(forKey: Keys.ideBundleIDsAdded) ?? []
-        ideBundleIDsRemoved = defaults.stringArray(forKey: Keys.ideBundleIDsRemoved) ?? []
+        let hasNewCodingSurfaceAdditions = defaults.object(forKey: Keys.codingSurfaceBundleIDsAdded) != nil
+        let hasNewCodingSurfaceRemovals = defaults.object(forKey: Keys.codingSurfaceBundleIDsRemoved) != nil
+        let storedCodingSurfaceBundleIDsAdded = defaults.stringArray(forKey: Keys.codingSurfaceBundleIDsAdded)
+            ?? defaults.stringArray(forKey: Keys.ideBundleIDsAdded)
+            ?? []
+        let storedCodingSurfaceBundleIDsRemoved = defaults.stringArray(forKey: Keys.codingSurfaceBundleIDsRemoved)
+            ?? defaults.stringArray(forKey: Keys.ideBundleIDsRemoved)
+            ?? []
+        codingSurfaceBundleIDsAdded = storedCodingSurfaceBundleIDsAdded
+        codingSurfaceBundleIDsRemoved = storedCodingSurfaceBundleIDsRemoved
+        cliHostBundleIDsAdded = defaults.stringArray(forKey: Keys.cliHostBundleIDsAdded) ?? []
+        cliHostBundleIDsRemoved = defaults.stringArray(forKey: Keys.cliHostBundleIDsRemoved) ?? []
+
+        if !hasNewCodingSurfaceAdditions, defaults.object(forKey: Keys.ideBundleIDsAdded) != nil {
+            defaults.set(storedCodingSurfaceBundleIDsAdded, forKey: Keys.codingSurfaceBundleIDsAdded)
+        }
+        if !hasNewCodingSurfaceRemovals, defaults.object(forKey: Keys.ideBundleIDsRemoved) != nil {
+            defaults.set(storedCodingSurfaceBundleIDsRemoved, forKey: Keys.codingSurfaceBundleIDsRemoved)
+        }
 
         let storedEnabled = (defaults.string(forKey: Keys.enabledProviders) ?? "")
             .split(separator: ",")
@@ -298,6 +341,10 @@ final class Preferences {
         static let gitTrackingEnabled = "gitTrackingEnabled"
         static let gitOpensInWindow = "gitOpensInWindow"
         static let gitStatsScope = "gitStatsScope"
+        static let codingSurfaceBundleIDsAdded = "codingSurfaceBundleIDsAdded"
+        static let codingSurfaceBundleIDsRemoved = "codingSurfaceBundleIDsRemoved"
+        static let cliHostBundleIDsAdded = "cliHostBundleIDsAdded"
+        static let cliHostBundleIDsRemoved = "cliHostBundleIDsRemoved"
         static let ideBundleIDsAdded = "ideBundleIDsAdded"
         static let ideBundleIDsRemoved = "ideBundleIDsRemoved"
         static let enabledProviders = "enabledProviders"

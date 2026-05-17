@@ -79,7 +79,7 @@ struct ClaudeStatusClient: ClaudeStatusFetching {
         throw ClientError.decoding("invalid date: \(raw)")
     }
 
-    private static let userAgent: String = {
+    static let userAgent: String = {
         let version = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "dev"
         return "ClaudeStats/\(version)"
     }()

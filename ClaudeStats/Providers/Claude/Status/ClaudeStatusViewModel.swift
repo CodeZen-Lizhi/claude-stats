@@ -10,6 +10,9 @@ final class ClaudeStatusViewModel {
     private(set) var isLoading = false
     private(set) var isStale = false
     private(set) var lastError: String?
+    private(set) var uptimeSnapshot: ClaudeStatusUptimeSnapshot?
+    private(set) var isUptimeStale = false
+    private(set) var uptimeLastError: String?
     private(set) var notificationAuthorization: ClaudeStatusNotificationAuthorizationStatus = .notDetermined
     private(set) var isRequestingNotificationAuthorization = false
 
@@ -23,6 +26,15 @@ final class ClaudeStatusViewModel {
         return visibleComponents(from: snapshot.components)
     }
 
+    var visibleUptimeRows: [ClaudeStatusUptimeRow] {
+        visibleComponents.map { component in
+            ClaudeStatusUptimeRow(
+                component: component,
+                history: uptimeSnapshot?.history(for: component)
+            )
+        }
+    }
+
     var notificationPermissionDenied: Bool {
         notificationAuthorization == .denied
     }
@@ -34,6 +46,8 @@ final class ClaudeStatusViewModel {
     @ObservationIgnored private let preferences: Preferences
     @ObservationIgnored private let client: any ClaudeStatusFetching
     @ObservationIgnored private let cache: any ClaudeStatusCaching
+    @ObservationIgnored private let uptimeClient: any ClaudeStatusUptimeFetching
+    @ObservationIgnored private let uptimeCache: any ClaudeStatusUptimeCaching
     @ObservationIgnored private let notifications: any ClaudeStatusNotificationServicing
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
 
@@ -41,11 +55,15 @@ final class ClaudeStatusViewModel {
         preferences: Preferences,
         client: any ClaudeStatusFetching = ClaudeStatusClient(),
         cache: any ClaudeStatusCaching = ClaudeStatusCache(),
+        uptimeClient: any ClaudeStatusUptimeFetching = ClaudeStatusUptimeClient(),
+        uptimeCache: any ClaudeStatusUptimeCaching = ClaudeStatusUptimeCache(),
         notifications: any ClaudeStatusNotificationServicing = ClaudeStatusNotificationService()
     ) {
         self.preferences = preferences
         self.client = client
         self.cache = cache
+        self.uptimeClient = uptimeClient
+        self.uptimeCache = uptimeCache
         self.notifications = notifications
     }
 
@@ -59,6 +77,7 @@ final class ClaudeStatusViewModel {
             guard let self else { return }
             await refreshNotificationAuthorizationStatus()
             loadCachedSnapshot()
+            loadCachedUptimeSnapshot()
             while !Task.isCancelled {
                 if shouldRefresh {
                     await refreshIfNeeded()
@@ -95,16 +114,36 @@ final class ClaudeStatusViewModel {
     }
 
     func refreshIfNeeded(now: Date = .now) async {
+        var summaryNeedsRefresh = true
         if let cached = cache.read(ttl: ClaudeStatusCache.defaultTTL, now: now), !cached.isStale {
             snapshot = cached.snapshot
             isStale = false
             lastError = nil
-            return
+            summaryNeedsRefresh = false
         }
-        await refresh(force: false, now: now)
+
+        var uptimeNeedsRefresh = true
+        if let cached = uptimeCache.read(ttl: ClaudeStatusUptimeCache.defaultTTL, now: now), !cached.isStale {
+            uptimeSnapshot = cached.snapshot
+            isUptimeStale = false
+            uptimeLastError = nil
+            uptimeNeedsRefresh = false
+        }
+
+        if summaryNeedsRefresh {
+            await refreshSummary(force: false, now: now)
+        }
+        if uptimeNeedsRefresh {
+            await refreshUptime(force: false, now: now)
+        }
     }
 
     func refresh(force: Bool = true, now: Date = .now) async {
+        await refreshSummary(force: force, now: now)
+        await refreshUptime(force: force, now: now)
+    }
+
+    private func refreshSummary(force: Bool = true, now: Date = .now) async {
         if !force,
            let cached = cache.read(ttl: ClaudeStatusCache.defaultTTL, now: now),
            !cached.isStale {
@@ -137,6 +176,35 @@ final class ClaudeStatusViewModel {
         }
     }
 
+    private func refreshUptime(force: Bool = true, now: Date = .now) async {
+        if !force,
+           let cached = uptimeCache.read(ttl: ClaudeStatusUptimeCache.defaultTTL, now: now),
+           !cached.isStale {
+            uptimeSnapshot = cached.snapshot
+            isUptimeStale = false
+            uptimeLastError = nil
+            return
+        }
+
+        do {
+            let fresh = try await uptimeClient.fetchUptimeHistories(now: now)
+            uptimeSnapshot = fresh
+            isUptimeStale = false
+            uptimeLastError = nil
+            do {
+                try uptimeCache.write(fresh)
+            } catch {
+                Log.app.error("Claude Status uptime cache write failed: \(error.localizedDescription, privacy: .public)")
+            }
+        } catch {
+            uptimeLastError = userFacingMessage(error)
+            if let cached = uptimeCache.read(ttl: ClaudeStatusUptimeCache.defaultTTL, now: now) {
+                uptimeSnapshot = cached.snapshot
+                isUptimeStale = true
+            }
+        }
+    }
+
     func isComponentVisible(_ component: ClaudeStatusComponent) -> Bool {
         visibleComponentIDs(for: availableComponents).contains(component.id)
     }
@@ -159,7 +227,10 @@ final class ClaudeStatusViewModel {
         preferences.claudeStatusVisibleComponentIDs = ids
 
         if snapshot?.components.first(where: { $0.id == component.id }) != nil {
-            Task { await handleNotificationsForCurrentSnapshot() }
+            Task {
+                await handleNotificationsForCurrentSnapshot()
+                await refreshUptimeIfNeeded()
+            }
         }
     }
 
@@ -178,6 +249,18 @@ final class ClaudeStatusViewModel {
         guard let cached = cache.read(ttl: ClaudeStatusCache.defaultTTL, now: now) else { return }
         snapshot = cached.snapshot
         isStale = cached.isStale
+    }
+
+    private func loadCachedUptimeSnapshot(now: Date = .now) {
+        guard let cached = uptimeCache.read(ttl: ClaudeStatusUptimeCache.defaultTTL, now: now) else { return }
+        uptimeSnapshot = cached.snapshot
+        isUptimeStale = cached.isStale
+    }
+
+    private func refreshUptimeIfNeeded(now: Date = .now) async {
+        guard shouldRefresh else { return }
+        guard uptimeSnapshot == nil || visibleUptimeRows.contains(where: { $0.history == nil }) else { return }
+        await refreshUptime(force: false, now: now)
     }
 
     private func visibleComponentIDs(for components: [ClaudeStatusComponent]) -> Set<String> {

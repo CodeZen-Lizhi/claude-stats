@@ -7,7 +7,7 @@ struct ActivityCompositionPanel: View {
 
     init(activity: DayActivity?) {
         self.title = "TIME SPLIT"
-        self.caption = "Overlap, solo editor time, and AI activity outside the editor."
+        self.caption = "Surface overlap, CLI host time, and AI activity outside focused coding apps."
         self.split = ActivityTimeSplit(activity: activity)
     }
 
@@ -106,30 +106,39 @@ struct ActivityTimeSplit: Equatable {
     }
 
     var overlapSeconds: TimeInterval
-    var soloEditorSeconds: TimeInterval
+    var soloCodingSurfaceSeconds: TimeInterval
+    var cliAIOverlapSeconds: TimeInterval
+    var cliHostOnlySeconds: TimeInterval
     var aiOnlySeconds: TimeInterval
 
     var totalSeconds: TimeInterval {
-        overlapSeconds + soloEditorSeconds + aiOnlySeconds
+        overlapSeconds + soloCodingSurfaceSeconds + cliAIOverlapSeconds + cliHostOnlySeconds + aiOnlySeconds
     }
 
     var parts: [Part] {
         [
             Part(id: "overlap", label: "AI-assisted coding", seconds: overlapSeconds, color: Color.stxAccent),
-            Part(id: "solo-editor", label: "Solo editor time", seconds: soloEditorSeconds, color: Color.primary.opacity(0.26)),
-            Part(id: "ai-only", label: "AI outside editor", seconds: aiOnlySeconds, color: Color.stxAccent.opacity(0.40)),
+            Part(id: "solo-surface", label: "Solo coding surface", seconds: soloCodingSurfaceSeconds, color: Color.primary.opacity(0.26)),
+            Part(id: "cli-ai", label: "CLI + AI", seconds: cliAIOverlapSeconds, color: Color.blue.opacity(0.72)),
+            Part(id: "cli-only", label: "CLI host only", seconds: cliHostOnlySeconds, color: Color.blue.opacity(0.30)),
+            Part(id: "ai-only", label: "AI outside surface/CLI", seconds: aiOnlySeconds, color: Color.stxAccent.opacity(0.40)),
         ]
     }
 
     init(activity: DayActivity?) {
+        let cliAI = activity?.cliAIOverlapSeconds ?? 0
         overlapSeconds = activity?.overlapSeconds ?? 0
-        soloEditorSeconds = activity?.soloIDESeconds ?? 0
+        soloCodingSurfaceSeconds = activity?.soloCodingSurfaceSeconds ?? 0
+        cliAIOverlapSeconds = cliAI
+        cliHostOnlySeconds = max(0, (activity?.cliHostSeconds ?? 0) - cliAI)
         aiOnlySeconds = activity?.aiOnlySeconds ?? 0
     }
 
     init(days: [DayActivity]) {
         overlapSeconds = days.reduce(0) { $0 + $1.overlapSeconds }
-        soloEditorSeconds = days.reduce(0) { $0 + $1.soloIDESeconds }
+        soloCodingSurfaceSeconds = days.reduce(0) { $0 + $1.soloCodingSurfaceSeconds }
+        cliAIOverlapSeconds = days.reduce(0) { $0 + $1.cliAIOverlapSeconds }
+        cliHostOnlySeconds = days.reduce(0) { $0 + max(0, $1.cliHostSeconds - $1.cliAIOverlapSeconds) }
         aiOnlySeconds = days.reduce(0) { $0 + $1.aiOnlySeconds }
     }
 }

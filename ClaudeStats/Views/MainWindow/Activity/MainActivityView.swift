@@ -16,14 +16,16 @@ struct MainActivityView: View {
         let selectedDay: Date
         let token: UInt64
         let lastRefreshed: Date?
-        let bundleIDs: Set<String>
+        let codingSurfaceBundleIDs: Set<String>
+        let cliHostBundleIDs: Set<String>
         let provider: ProviderKind
     }
 
     var body: some View {
         @Bindable var bvm = vm
         let provider = env.preferences.selectedProvider
-        let bundleIDs = env.preferences.effectiveIDEBundleIDs
+        let codingSurfaceBundleIDs = env.preferences.effectiveCodingSurfaceBundleIDs
+        let cliHostBundleIDs = env.preferences.effectiveCLIHostBundleIDs
 
         FadingScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -60,8 +62,12 @@ struct MainActivityView: View {
         .onChange(of: vm.selectedDay) { _, new in
             selectedDayReference = normalizedDay(new).timeIntervalSinceReferenceDate
         }
-        .task(id: reloadKey(provider: provider, bundleIDs: bundleIDs)) {
-            await vm.reload(sessions: env.store.sessions(for: provider), bundleIDs: bundleIDs)
+        .task(id: reloadKey(provider: provider, codingSurfaceBundleIDs: codingSurfaceBundleIDs, cliHostBundleIDs: cliHostBundleIDs)) {
+            await vm.reload(
+                sessions: env.store.sessions(for: provider),
+                codingSurfaceBundleIDs: codingSurfaceBundleIDs,
+                cliHostBundleIDs: cliHostBundleIDs
+            )
         }
     }
 
@@ -112,7 +118,7 @@ struct MainActivityView: View {
             Text("AI-assisted focus")
                 .font(.sora(24, weight: .semibold))
                 .lineLimit(1)
-            Text("Editor focus and AI bursts for \(provider.displayName).")
+            Text("Coding-surface focus, CLI host time, and AI bursts for \(provider.displayName).")
                 .font(.sora(12))
                 .foregroundStyle(Color.stxMuted)
                 .lineLimit(1)
@@ -132,7 +138,7 @@ struct MainActivityView: View {
                     .accessibilityHidden(true)
             }
 
-            Text("Claude Stats reads macOS Screen Time to see when your editor was focused. macOS protects that database behind Full Disk Access.")
+            Text("Claude Stats reads macOS Screen Time to see when your coding surfaces and CLI hosts were focused. macOS protects that database behind Full Disk Access.")
                 .font(.sora(12))
                 .foregroundStyle(Color.stxMuted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -156,13 +162,18 @@ struct MainActivityView: View {
         .mainWindowPanel(padding: 16)
     }
 
-    private func reloadKey(provider: ProviderKind, bundleIDs: Set<String>) -> ReloadKey {
+    private func reloadKey(
+        provider: ProviderKind,
+        codingSurfaceBundleIDs: Set<String>,
+        cliHostBundleIDs: Set<String>
+    ) -> ReloadKey {
         ReloadKey(
             range: vm.range,
             selectedDay: vm.selectedDay,
             token: vm.reloadToken,
             lastRefreshed: env.store.lastRefreshedAt,
-            bundleIDs: bundleIDs,
+            codingSurfaceBundleIDs: codingSurfaceBundleIDs,
+            cliHostBundleIDs: cliHostBundleIDs,
             provider: provider
         )
     }

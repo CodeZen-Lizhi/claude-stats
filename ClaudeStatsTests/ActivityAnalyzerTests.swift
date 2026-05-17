@@ -44,19 +44,25 @@ struct ActivityAnalyzerTests {
 
     @Test("dayActivity clips to the day and computes overlap + ratio")
     func dayActivityOverlap() {
-        // Editor focused 9–12 and 14–15; Claude active 10–11 and 14:30–16 (last spills past midnight not relevant).
+        // Coding surface focused 9–12 and 14–15; AI active 10–11 and 14:30–16.
         let focus = [
             AppFocusInterval(bundleID: "com.apple.dt.Xcode", interval: iv(9, 12)),
             AppFocusInterval(bundleID: "com.microsoft.VSCode", interval: iv(14, 15)),
         ]
         let s = session(ai: [iv(10, 11), iv(14.5, 16)])
-        let result = ActivityAnalyzer.dayActivity(day: day, focus: focus, sessions: [s], calendar: cal)
+        let result = ActivityAnalyzer.dayActivity(
+            day: day,
+            codingSurfaceFocus: focus,
+            cliHostFocus: [],
+            sessions: [s],
+            calendar: cal
+        )
 
         let hour: TimeInterval = 3600
-        let expectedIDE: TimeInterval = 4 * hour          // 3h + 1h
+        let expectedSurface: TimeInterval = 4 * hour      // 3h + 1h
         let expectedAI: TimeInterval = 2.5 * hour         // 1h + 1.5h
         let expectedOverlap: TimeInterval = 1.5 * hour    // 10–11 plus 14:30–15
-        #expect(result.ideSeconds == expectedIDE)
+        #expect(result.codingSurfaceSeconds == expectedSurface)
         #expect(result.aiSeconds == expectedAI)
         #expect(result.overlapSeconds == expectedOverlap)
         let ratioDelta = abs(result.assistedRatio - 0.375)
@@ -68,15 +74,49 @@ struct ActivityAnalyzerTests {
     func dayActivityClips() {
         let focus = [AppFocusInterval(bundleID: "com.apple.dt.Xcode", interval: iv(-2, 1))]   // mostly yesterday
         let s = session(ai: [iv(0.5, 2)])
-        let result = ActivityAnalyzer.dayActivity(day: day, focus: focus, sessions: [s], calendar: cal)
+        let result = ActivityAnalyzer.dayActivity(
+            day: day,
+            codingSurfaceFocus: focus,
+            cliHostFocus: [],
+            sessions: [s],
+            calendar: cal
+        )
         let hour: TimeInterval = 3600
-        #expect(result.ideSeconds == hour)             // only 00:00–01:00 counts
+        #expect(result.codingSurfaceSeconds == hour)   // only 00:00–01:00 counts
         #expect(result.overlapSeconds == 0.5 * hour)   // 00:30–01:00
+    }
+
+    @Test("CLI host time is tracked separately and does not affect assisted ratio")
+    func cliHostIsSeparate() {
+        let surface = [AppFocusInterval(bundleID: "com.openai.codex", interval: iv(9, 10))]
+        let cli = [AppFocusInterval(bundleID: "com.apple.Terminal", interval: iv(10, 12))]
+        let s = session(ai: [iv(9.5, 11.5)])
+        let result = ActivityAnalyzer.dayActivity(
+            day: day,
+            codingSurfaceFocus: surface,
+            cliHostFocus: cli,
+            sessions: [s],
+            calendar: cal
+        )
+
+        let hour: TimeInterval = 3600
+        #expect(result.codingSurfaceSeconds == hour)
+        #expect(result.cliHostSeconds == 2 * hour)
+        #expect(result.overlapSeconds == 0.5 * hour)
+        #expect(result.cliAIOverlapSeconds == 1.5 * hour)
+        #expect(result.assistedRatio == 0.5)
+        #expect(result.aiOnlySeconds == 0)
     }
 
     @Test("empty day has zero everything and no division by zero")
     func emptyDay() {
-        let result = ActivityAnalyzer.dayActivity(day: day, focus: [], sessions: [], calendar: cal)
+        let result = ActivityAnalyzer.dayActivity(
+            day: day,
+            codingSurfaceFocus: [],
+            cliHostFocus: [],
+            sessions: [],
+            calendar: cal
+        )
         #expect(result.isEmpty)
         #expect(result.assistedRatio == 0)
     }

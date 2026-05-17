@@ -57,8 +57,8 @@ struct ScreenTimeService: Sendable {
 
     // MARK: Query
 
-    /// App-focus intervals for `range`, restricted to `bundleIDs`, with adjacent
-    /// same-app runs coalesced. Sorted by start.
+    /// App-focus intervals for `range`, restricted to `bundleIDs`, with
+    /// adjacent same-app runs coalesced. Sorted by start.
     func focusIntervals(in range: DateInterval,
                         bundleIDs: Set<String>) -> Result<[AppFocusInterval], Failure> {
         guard !bundleIDs.isEmpty else { return .success([]) }
@@ -117,7 +117,7 @@ struct ScreenTimeService: Sendable {
 
         if raw.isEmpty {
             // Nothing matched — log which bundle ids *do* appear in the window so
-            // a mis-guessed id (e.g. an editor's real bundle id) is easy to spot.
+            // a mis-guessed app bundle id is easy to spot.
             let seen = Self.distinctUsageBundleIDs(db: db, range: range)
             Self.log.notice("No app-usage rows for \(ids, privacy: .public) in \(range.start, privacy: .public)…\(range.end, privacy: .public). Bundle ids present in that window: \(seen, privacy: .public)")
         }

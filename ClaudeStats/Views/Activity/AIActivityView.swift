@@ -2,9 +2,9 @@ import SwiftUI
 import Charts
 import AppKit
 
-/// The "Activity" pane: lines up macOS Screen Time editor-focus time against
-/// Claude Code activity, on a day timeline (Tyme-style) plus a multi-day trend
-/// of the AI-assisted share. Reads `knowledgeC.db` — needs Full Disk Access.
+/// The "Activity" pane: lines up macOS Screen Time coding-surface time against
+/// AI activity, on a day timeline (Tyme-style) plus a multi-day trend of the
+/// AI-assisted share. Reads `knowledgeC.db` — needs Full Disk Access.
 struct AIActivityView: View {
     /// A resolved snapshot for the export render — the share window loads the
     /// data (via its own ``AIActivityViewModel``) and hands it in, since
@@ -29,7 +29,8 @@ struct AIActivityView: View {
     private struct ReloadKey: Equatable {
         let token: UInt64
         let lastRefreshed: Date?
-        let bundleIDs: Set<String>
+        let codingSurfaceBundleIDs: Set<String>
+        let cliHostBundleIDs: Set<String>
         let provider: ProviderKind
     }
 
@@ -43,11 +44,13 @@ struct AIActivityView: View {
 
     private var interactiveBody: some View {
         @Bindable var vm = vm
-        let bundleIDs = env.preferences.effectiveIDEBundleIDs
+        let codingSurfaceBundleIDs = env.preferences.effectiveCodingSurfaceBundleIDs
+        let cliHostBundleIDs = env.preferences.effectiveCLIHostBundleIDs
         let provider = env.preferences.selectedProvider
         let key = ReloadKey(token: vm.reloadToken,
                             lastRefreshed: env.store.lastRefreshedAt,
-                            bundleIDs: bundleIDs,
+                            codingSurfaceBundleIDs: codingSurfaceBundleIDs,
+                            cliHostBundleIDs: cliHostBundleIDs,
                             provider: provider)
 
         return FadingScrollView {
@@ -65,7 +68,11 @@ struct AIActivityView: View {
             .padding(14)
         }
         .task(id: key) {
-            await vm.reload(sessions: env.store.sessions(for: provider), bundleIDs: bundleIDs)
+            await vm.reload(
+                sessions: env.store.sessions(for: provider),
+                codingSurfaceBundleIDs: codingSurfaceBundleIDs,
+                cliHostBundleIDs: cliHostBundleIDs
+            )
         }
         .onAppear { vm.refreshPermissionState() }
     }
@@ -110,7 +117,7 @@ struct AIActivityView: View {
                 .font(.sora(13, weight: .semibold))
                 .tracking(1.2)
                 .foregroundStyle(.primary)
-            Text("No editor-activity data to show — Claude Stats needs Full Disk Access to read macOS Screen Time.")
+            Text("No coding-surface activity data to show — Claude Stats needs Full Disk Access to read macOS Screen Time.")
                 .font(.sora(10))
                 .foregroundStyle(Color.stxMuted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -199,7 +206,7 @@ struct AIActivityView: View {
                 .font(.sora(13, weight: .semibold))
                 .tracking(1.2)
                 .foregroundStyle(.primary)
-            Text("Claude Stats reads macOS Screen Time (the Knowledge database) to see when your editor was focused. macOS keeps that file behind Full Disk Access — grant it, then come back to this tab.")
+            Text("Claude Stats reads macOS Screen Time (the Knowledge database) to see when your coding surfaces and CLI hosts were focused. macOS keeps that file behind Full Disk Access — grant it, then come back to this tab.")
                 .font(.sora(10))
                 .foregroundStyle(Color.stxMuted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -232,8 +239,12 @@ struct AIActivityView: View {
     private func summaryGrid(_ a: DayActivity?) -> some View {
         Grid(horizontalSpacing: 10, verticalSpacing: 8) {
             GridRow {
-                statCell("Editor time", Format.duration(a?.ideSeconds ?? 0))
+                statCell("Coding surface", Format.duration(a?.codingSurfaceSeconds ?? 0))
                 statCell("AI active", Format.duration(a?.aiSeconds ?? 0))
+            }
+            GridRow {
+                statCell("CLI host", Format.duration(a?.cliHostSeconds ?? 0))
+                statCell("CLI + AI", Format.duration(a?.cliAIOverlapSeconds ?? 0))
             }
             GridRow {
                 statCell("Overlap", Format.duration(a?.overlapSeconds ?? 0))
@@ -264,21 +275,23 @@ struct AIActivityView: View {
     // MARK: Day timeline
 
     private struct TimelineSegment: Identifiable {
-        enum Kind { case ide, ai, overlap }
+        enum Kind { case codingSurface, cliHost, ai, overlap, cliAIOverlap }
         let id = UUID()
         let kind: Kind
         let interval: DateInterval
     }
 
     private func timelineSegments(_ a: DayActivity) -> [TimelineSegment] {
-        a.ideIntervals.map { TimelineSegment(kind: .ide, interval: $0) }
+        a.codingSurfaceIntervals.map { TimelineSegment(kind: .codingSurface, interval: $0) }
+        + a.cliHostIntervals.map { TimelineSegment(kind: .cliHost, interval: $0) }
         + a.aiIntervals.map { TimelineSegment(kind: .ai, interval: $0) }
         + a.overlapIntervals.map { TimelineSegment(kind: .overlap, interval: $0) }
+        + a.cliAIOverlapIntervals.map { TimelineSegment(kind: .cliAIOverlap, interval: $0) }
     }
 
     /// `[floor(earliest, hour), ceil(latest, hour)]`, or `nil` if the day is empty.
     private func timelineDomain(_ a: DayActivity) -> ClosedRange<Date>? {
-        let all = a.ideIntervals + a.aiIntervals
+        let all = a.codingSurfaceIntervals + a.cliHostIntervals + a.aiIntervals
         guard let lo = all.map(\.start).min(), let hi = all.map(\.end).max() else { return nil }
         let cal = Calendar.current
         let start = cal.dateInterval(of: .hour, for: lo)?.start ?? lo
@@ -293,9 +306,11 @@ struct AIActivityView: View {
         return 3
     }
 
-    private static let ideBaseColor = Color.primary.opacity(0.26)
+    private static let codingSurfaceBaseColor = Color.primary.opacity(0.26)
+    private static let cliHostBaseColor = Color.blue.opacity(0.30)
     private static let aiBaseColor = Color.stxAccent.opacity(0.40)
     private static let overlapColor = Color.stxAccent
+    private static let cliOverlapColor = Color.blue.opacity(0.72)
 
     @ViewBuilder
     private func timelinePanel(_ a: DayActivity?) -> some View {
@@ -307,7 +322,7 @@ struct AIActivityView: View {
                     .foregroundStyle(.primary)
                 Spacer()
             }
-            Text("EDITOR FOCUS vs AI ACTIVE · BY CLOCK HOUR")
+            Text("CODING SURFACE · CLI HOST · AI ACTIVE")
                 .font(.sora(9))
                 .tracking(0.8)
                 .foregroundStyle(Color.stxMuted)
@@ -317,7 +332,7 @@ struct AIActivityView: View {
                 StxRule()
                 timelineChart(a, domain: domain)
             } else {
-                Text("No editor or AI activity recorded for this day.")
+                Text("No coding-surface, CLI host, or AI activity recorded for this day.")
                     .font(.sora(10))
                     .foregroundStyle(Color.stxMuted.opacity(0.7))
                     .frame(maxWidth: .infinity, minHeight: 80)
@@ -327,11 +342,18 @@ struct AIActivityView: View {
     }
 
     private var timelineLegend: some View {
-        HStack(spacing: 14) {
-            legendChip("IDE FOCUS", Self.ideBaseColor)
-            legendChip("AI ACTIVE", Self.aiBaseColor)
-            legendChip("BOTH", Self.overlapColor)
-            Spacer(minLength: 0)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 12) {
+                legendChip("SURFACE", Self.codingSurfaceBaseColor)
+                legendChip("CLI HOST", Self.cliHostBaseColor)
+                legendChip("AI ACTIVE", Self.aiBaseColor)
+                Spacer(minLength: 0)
+            }
+            HStack(spacing: 12) {
+                legendChip("SURFACE + AI", Self.overlapColor)
+                legendChip("CLI + AI", Self.cliOverlapColor)
+                Spacer(minLength: 0)
+            }
         }
     }
 
@@ -378,17 +400,21 @@ struct AIActivityView: View {
 
     private func laneRange(_ kind: TimelineSegment.Kind) -> ClosedRange<Double> {
         switch kind {
-        case .ai: return 0.06...0.44      // bottom lane
-        case .ide: return 0.56...0.94     // top lane
-        case .overlap: return 0.06...0.94 // spans both — stitches them together
+        case .cliHost: return 0.06...0.28
+        case .ai: return 0.36...0.58
+        case .codingSurface: return 0.66...0.94
+        case .overlap: return 0.36...0.94
+        case .cliAIOverlap: return 0.06...0.58
         }
     }
 
     private func color(for kind: TimelineSegment.Kind) -> Color {
         switch kind {
-        case .ide: return Self.ideBaseColor
+        case .codingSurface: return Self.codingSurfaceBaseColor
+        case .cliHost: return Self.cliHostBaseColor
         case .ai: return Self.aiBaseColor
         case .overlap: return Self.overlapColor
+        case .cliAIOverlap: return Self.cliOverlapColor
         }
     }
 
@@ -396,20 +422,24 @@ struct AIActivityView: View {
 
     private func compositionPanel(_ a: DayActivity?) -> some View {
         let overlap = a?.overlapSeconds ?? 0
-        let solo = a?.soloIDESeconds ?? 0
+        let solo = a?.soloCodingSurfaceSeconds ?? 0
+        let cliAI = a?.cliAIOverlapSeconds ?? 0
+        let cliOnly = max(0, (a?.cliHostSeconds ?? 0) - cliAI)
         let aiOnly = a?.aiOnlySeconds ?? 0
-        let total = max(1, overlap + solo + aiOnly)
+        let total = max(1, overlap + solo + cliAI + cliOnly + aiOnly)
         let parts: [(String, Color, TimeInterval)] = [
             ("AI-assisted coding", Self.overlapColor, overlap),
-            ("Solo coding", Self.ideBaseColor, solo),
-            ("AI without editor", Self.aiBaseColor, aiOnly),
+            ("Solo coding surface", Self.codingSurfaceBaseColor, solo),
+            ("CLI + AI", Self.cliOverlapColor, cliAI),
+            ("CLI host only", Self.cliHostBaseColor, cliOnly),
+            ("AI outside surface/CLI", Self.aiBaseColor, aiOnly),
         ]
         return VStack(alignment: .leading, spacing: 8) {
             Text("HOW THE TIME SPLIT")
                 .font(.sora(11, weight: .semibold))
                 .tracking(1)
                 .foregroundStyle(Color.stxMuted)
-            if overlap + solo + aiOnly <= 0 {
+            if overlap + solo + cliAI + cliOnly + aiOnly <= 0 {
                 Text("Nothing to break down for this day.")
                     .font(.sora(10))
                     .foregroundStyle(Color.stxMuted.opacity(0.7))
@@ -452,13 +482,17 @@ struct AIActivityView: View {
     @ViewBuilder
     private func trendSection(_ trend: [DayActivity]) -> some View {
         let points = trend.map { TrendPoint(day: $0.day.start, ratio: $0.assistedRatio) }
-        let hasData = trend.contains { !$0.isEmpty }
+        let hasData = trend.contains { $0.codingSurfaceSeconds > 0 }
         let avgRatio = trendAverage(trend)
 
         Grid(horizontalSpacing: 10, verticalSpacing: 8) {
             GridRow {
-                statCell("Editor time", Format.duration(trend.reduce(0) { $0 + $1.ideSeconds }))
+                statCell("Coding surface", Format.duration(trend.reduce(0) { $0 + $1.codingSurfaceSeconds }))
                 statCell("AI active", Format.duration(trend.reduce(0) { $0 + $1.aiSeconds }))
+            }
+            GridRow {
+                statCell("CLI host", Format.duration(trend.reduce(0) { $0 + $1.cliHostSeconds }))
+                statCell("CLI + AI", Format.duration(trend.reduce(0) { $0 + $1.cliAIOverlapSeconds }))
             }
             GridRow {
                 statCell("Overlap", Format.duration(trend.reduce(0) { $0 + $1.overlapSeconds }))
@@ -471,7 +505,7 @@ struct AIActivityView: View {
                 .font(.sora(13, weight: .semibold))
                 .tracking(1.5)
                 .foregroundStyle(.primary)
-            Text("OVERLAP ÷ EDITOR TIME, EACH DAY")
+            Text("SURFACE + AI OVERLAP ÷ CODING SURFACE")
                 .font(.sora(9))
                 .tracking(0.8)
                 .foregroundStyle(Color.stxMuted)
@@ -479,7 +513,7 @@ struct AIActivityView: View {
                 StxRule()
                 trendChart(points)
             } else {
-                Text("No editor activity recorded in this range.")
+                Text("No coding-surface activity recorded in this range.")
                     .font(.sora(10))
                     .foregroundStyle(Color.stxMuted.opacity(0.7))
                     .frame(maxWidth: .infinity, minHeight: 80)
@@ -489,11 +523,11 @@ struct AIActivityView: View {
     }
 
     private func trendAverage(_ trend: [DayActivity]) -> Double? {
-        let withEditor = trend.filter { $0.ideSeconds > 0 }
-        guard !withEditor.isEmpty else { return nil }
-        let ide = withEditor.reduce(0) { $0 + $1.ideSeconds }
-        let overlap = withEditor.reduce(0) { $0 + $1.overlapSeconds }
-        return ide > 0 ? overlap / ide : nil
+        let withSurface = trend.filter { $0.codingSurfaceSeconds > 0 }
+        guard !withSurface.isEmpty else { return nil }
+        let surface = withSurface.reduce(0) { $0 + $1.codingSurfaceSeconds }
+        let overlap = withSurface.reduce(0) { $0 + $1.overlapSeconds }
+        return surface > 0 ? overlap / surface : nil
     }
 
     private func trendChart(_ points: [TrendPoint]) -> some View {

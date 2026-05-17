@@ -8,8 +8,8 @@ struct ActivityTrendPanel: View {
         days.map { ActivityTrendPoint(day: $0.day.start, ratio: $0.assistedRatio) }
     }
 
-    private var hasData: Bool {
-        days.contains { !$0.isEmpty }
+    private var hasCodingSurfaceData: Bool {
+        days.contains { $0.codingSurfaceSeconds > 0 }
     }
 
     var body: some View {
@@ -19,21 +19,21 @@ struct ActivityTrendPanel: View {
                     .font(.sora(13, weight: .semibold))
                     .tracking(1.0)
                 Spacer()
-                Text("Overlap / editor time")
+                Text("Surface + AI / coding surface")
                     .font(.sora(10))
                     .foregroundStyle(Color.stxMuted)
                     .lineLimit(1)
             }
 
-            Text("Daily share of editor focus that overlapped with AI activity.")
+            Text("Daily share of GUI coding-surface focus that overlapped with AI activity.")
                 .font(.sora(10))
                 .foregroundStyle(Color.stxMuted)
 
-            if hasData {
+            if hasCodingSurfaceData {
                 StxRule()
                 chart
             } else {
-                Text("No editor activity recorded in this range.")
+                Text("No coding-surface activity recorded in this range.")
                     .font(.sora(12))
                     .foregroundStyle(Color.stxMuted)
                     .frame(maxWidth: .infinity, minHeight: 220, alignment: .center)
@@ -95,8 +95,12 @@ struct ActivityTrendPanel: View {
 struct ActivityDailyBreakdownPanel: View {
     let days: [DayActivity]
 
-    private var maxEditorSeconds: TimeInterval {
-        max(1, days.map(\.ideSeconds).max() ?? 1)
+    private var maxCodingSurfaceSeconds: TimeInterval {
+        max(1, days.map(\.codingSurfaceSeconds).max() ?? 1)
+    }
+
+    private var maxCLIHostSeconds: TimeInterval {
+        max(1, days.map(\.cliHostSeconds).max() ?? 1)
     }
 
     var body: some View {
@@ -121,7 +125,11 @@ struct ActivityDailyBreakdownPanel: View {
                 columnHeader
                 LazyVStack(spacing: 0) {
                     ForEach(days, id: \.day.start) { day in
-                        ActivityDailyBreakdownRow(day: day, maxEditorSeconds: maxEditorSeconds)
+                        ActivityDailyBreakdownRow(
+                            day: day,
+                            maxCodingSurfaceSeconds: maxCodingSurfaceSeconds,
+                            maxCLIHostSeconds: maxCLIHostSeconds
+                        )
                         if day.day.start != days.last?.day.start {
                             StxRule()
                         }
@@ -145,10 +153,14 @@ struct ActivityDailyBreakdownPanel: View {
             Text("Assist")
                 .frame(width: 44, alignment: .trailing)
             Spacer(minLength: 8)
-            Text("Editor")
-                .frame(minWidth: 56, alignment: .trailing)
+            Text("Surface")
+                .frame(minWidth: 62, alignment: .trailing)
             Text("Overlap")
-                .frame(minWidth: 56, alignment: .trailing)
+                .frame(minWidth: 62, alignment: .trailing)
+            Text("CLI")
+                .frame(minWidth: 62, alignment: .trailing)
+            Text("CLI + AI")
+                .frame(minWidth: 62, alignment: .trailing)
         }
         .font(.sora(9, weight: .medium))
         .foregroundStyle(Color.stxMuted)
@@ -158,10 +170,15 @@ struct ActivityDailyBreakdownPanel: View {
 
 private struct ActivityDailyBreakdownRow: View {
     let day: DayActivity
-    let maxEditorSeconds: TimeInterval
+    let maxCodingSurfaceSeconds: TimeInterval
+    let maxCLIHostSeconds: TimeInterval
 
-    private var editorWidthRatio: Double {
-        day.ideSeconds / max(1, maxEditorSeconds)
+    private var codingSurfaceWidthRatio: Double {
+        day.codingSurfaceSeconds / max(1, maxCodingSurfaceSeconds)
+    }
+
+    private var cliHostWidthRatio: Double {
+        day.cliHostSeconds / max(1, maxCLIHostSeconds)
     }
 
     var body: some View {
@@ -180,36 +197,64 @@ private struct ActivityDailyBreakdownRow: View {
 
                 Spacer(minLength: 8)
 
-                Text(Format.duration(day.ideSeconds))
+                Text(Format.duration(day.codingSurfaceSeconds))
                     .font(.sora(11).monospacedDigit())
                     .foregroundStyle(Color.stxMuted)
-                    .frame(minWidth: 56, alignment: .trailing)
+                    .frame(minWidth: 62, alignment: .trailing)
 
                 Text(Format.duration(day.overlapSeconds))
                     .font(.sora(11).monospacedDigit())
                     .foregroundStyle(Color.stxMuted)
-                    .frame(minWidth: 56, alignment: .trailing)
+                    .frame(minWidth: 62, alignment: .trailing)
+
+                Text(Format.duration(day.cliHostSeconds))
+                    .font(.sora(11).monospacedDigit())
+                    .foregroundStyle(Color.stxMuted)
+                    .frame(minWidth: 62, alignment: .trailing)
+
+                Text(Format.duration(day.cliAIOverlapSeconds))
+                    .font(.sora(11).monospacedDigit())
+                    .foregroundStyle(Color.stxMuted)
+                    .frame(minWidth: 62, alignment: .trailing)
             }
 
-            GeometryReader { proxy in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(Color.primary.opacity(0.08))
+            VStack(spacing: 3) {
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                            .fill(Color.primary.opacity(0.08))
 
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(Color.primary.opacity(0.18))
-                        .frame(width: proxy.size.width * CGFloat(editorWidthRatio))
+                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                            .fill(Color.primary.opacity(0.18))
+                            .frame(width: proxy.size.width * CGFloat(codingSurfaceWidthRatio))
 
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(Color.stxAccent)
-                        .frame(width: proxy.size.width * CGFloat(day.assistedRatio) * CGFloat(editorWidthRatio))
+                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                            .fill(Color.stxAccent)
+                            .frame(width: proxy.size.width * CGFloat(day.assistedRatio) * CGFloat(codingSurfaceWidthRatio))
+                    }
                 }
+                .frame(height: 6)
+
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                            .fill(Color.blue.opacity(0.08))
+
+                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                            .fill(Color.blue.opacity(0.24))
+                            .frame(width: proxy.size.width * CGFloat(cliHostWidthRatio))
+
+                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                            .fill(Color.blue.opacity(0.72))
+                            .frame(width: proxy.size.width * CGFloat(day.cliHostSeconds > 0 ? day.cliAIOverlapSeconds / day.cliHostSeconds : 0) * CGFloat(cliHostWidthRatio))
+                    }
+                }
+                .frame(height: 5)
             }
-            .frame(height: 7)
         }
         .padding(.vertical, 10)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(Format.day(day.day.start)), \(Format.percent(day.assistedRatio)) AI-assisted, \(Format.duration(day.ideSeconds)) editor time")
+        .accessibilityLabel("\(Format.day(day.day.start)), \(Format.percent(day.assistedRatio)) AI-assisted, \(Format.duration(day.codingSurfaceSeconds)) coding-surface time, \(Format.duration(day.cliHostSeconds)) CLI host time")
     }
 }
 

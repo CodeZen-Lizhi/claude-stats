@@ -4,9 +4,11 @@ import Charts
 struct ActivityTimelinePanel: View {
     let activity: DayActivity?
 
-    private static let editorColor = Color.primary.opacity(0.26)
+    private static let codingSurfaceColor = Color.primary.opacity(0.26)
+    private static let cliHostColor = Color.blue.opacity(0.30)
     private static let aiColor = Color.stxAccent.opacity(0.40)
     private static let overlapColor = Color.stxAccent
+    private static let cliOverlapColor = Color.blue.opacity(0.72)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -20,7 +22,7 @@ struct ActivityTimelinePanel: View {
                     .foregroundStyle(Color.stxMuted)
             }
 
-            Text("Editor focus vs AI active windows.")
+            Text("Coding surface, CLI host, and AI active windows.")
                 .font(.sora(10))
                 .foregroundStyle(Color.stxMuted)
 
@@ -29,7 +31,7 @@ struct ActivityTimelinePanel: View {
                 StxRule()
                 chart(activity, domain: domain)
             } else {
-                Text("No editor or AI activity recorded for this day.")
+                Text("No coding-surface, CLI host, or AI activity recorded for this day.")
                     .font(.sora(12))
                     .foregroundStyle(Color.stxMuted)
                     .frame(maxWidth: .infinity, minHeight: 180, alignment: .center)
@@ -42,9 +44,11 @@ struct ActivityTimelinePanel: View {
 
     private var legend: some View {
         HStack(spacing: 14) {
-            legendChip("Editor focus", Self.editorColor)
+            legendChip("Coding surface", Self.codingSurfaceColor)
+            legendChip("CLI host", Self.cliHostColor)
             legendChip("AI active", Self.aiColor)
-            legendChip("Both", Self.overlapColor)
+            legendChip("Surface + AI", Self.overlapColor)
+            legendChip("CLI + AI", Self.cliOverlapColor)
             Spacer(minLength: 0)
         }
     }
@@ -91,17 +95,19 @@ struct ActivityTimelinePanel: View {
         }
         .chartLegend(.hidden)
         .frame(height: 180)
-        .accessibilityLabel("Editor and AI activity timeline")
+        .accessibilityLabel("Coding surface, CLI host, and AI activity timeline")
     }
 
     private func timelineSegments(_ activity: DayActivity) -> [ActivityTimelineSegment] {
-        activity.ideIntervals.map { ActivityTimelineSegment(kind: .editor, interval: $0) }
+        activity.codingSurfaceIntervals.map { ActivityTimelineSegment(kind: .codingSurface, interval: $0) }
+        + activity.cliHostIntervals.map { ActivityTimelineSegment(kind: .cliHost, interval: $0) }
         + activity.aiIntervals.map { ActivityTimelineSegment(kind: .ai, interval: $0) }
         + activity.overlapIntervals.map { ActivityTimelineSegment(kind: .overlap, interval: $0) }
+        + activity.cliAIOverlapIntervals.map { ActivityTimelineSegment(kind: .cliAIOverlap, interval: $0) }
     }
 
     private func timelineDomain(_ activity: DayActivity) -> ClosedRange<Date>? {
-        let intervals = activity.ideIntervals + activity.aiIntervals
+        let intervals = activity.codingSurfaceIntervals + activity.cliHostIntervals + activity.aiIntervals
         guard let first = intervals.map(\.start).min(),
               let last = intervals.map(\.end).max() else {
             return nil
@@ -122,24 +128,28 @@ struct ActivityTimelinePanel: View {
 
     private func laneRange(_ kind: ActivityTimelineSegment.Kind) -> ClosedRange<Double> {
         switch kind {
-        case .ai: 0.06...0.44
-        case .editor: 0.56...0.94
-        case .overlap: 0.06...0.94
+        case .cliHost: 0.06...0.28
+        case .ai: 0.36...0.58
+        case .codingSurface: 0.66...0.94
+        case .overlap: 0.36...0.94
+        case .cliAIOverlap: 0.06...0.58
         }
     }
 
     private func color(for kind: ActivityTimelineSegment.Kind) -> Color {
         switch kind {
-        case .editor: Self.editorColor
+        case .codingSurface: Self.codingSurfaceColor
+        case .cliHost: Self.cliHostColor
         case .ai: Self.aiColor
         case .overlap: Self.overlapColor
+        case .cliAIOverlap: Self.cliOverlapColor
         }
     }
 }
 
 private struct ActivityTimelineSegment: Identifiable {
     enum Kind: String {
-        case editor, ai, overlap
+        case codingSurface, cliHost, ai, overlap, cliAIOverlap
     }
 
     let kind: Kind

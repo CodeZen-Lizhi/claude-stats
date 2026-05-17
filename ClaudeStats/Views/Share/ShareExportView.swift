@@ -55,7 +55,8 @@ struct ShareExportView: View {
 
     private var activityReloadKey: AnyHashable {
         [AnyHashable(pane == .activity), AnyHashable(activityVM.reloadToken),
-         AnyHashable(env.store.lastRefreshedAt), AnyHashable(env.preferences.effectiveIDEBundleIDs),
+         AnyHashable(env.store.lastRefreshedAt), AnyHashable(env.preferences.effectiveCodingSurfaceBundleIDs),
+         AnyHashable(env.preferences.effectiveCLIHostBundleIDs),
          AnyHashable(env.preferences.selectedProvider)]
     }
 
@@ -99,7 +100,11 @@ struct ShareExportView: View {
         .frame(minHeight: 540)
         .task(id: activityReloadKey) {
             guard pane == .activity else { return }
-            await activityVM.reload(sessions: env.store.sessions(for: env.preferences.selectedProvider), bundleIDs: env.preferences.effectiveIDEBundleIDs)
+            await activityVM.reload(
+                sessions: env.store.sessions(for: env.preferences.selectedProvider),
+                codingSurfaceBundleIDs: env.preferences.effectiveCodingSurfaceBundleIDs,
+                cliHostBundleIDs: env.preferences.effectiveCLIHostBundleIDs
+            )
         }
         .onAppear { activityVM.refreshPermissionState() }
     }

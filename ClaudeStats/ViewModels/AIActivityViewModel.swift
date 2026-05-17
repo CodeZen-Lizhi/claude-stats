@@ -90,7 +90,11 @@ final class AIActivityViewModel {
         case trend([DayActivity])
     }
 
-    func reload(sessions: [Session], bundleIDs: Set<String>) async {
+    func reload(
+        sessions: [Session],
+        codingSurfaceBundleIDs: Set<String>,
+        cliHostBundleIDs: Set<String>
+    ) async {
         isLoading = true
         defer { isLoading = false }
 
@@ -99,6 +103,7 @@ final class AIActivityViewModel {
         let day = selectedDay
         let cal = calendar
         let days = trendDays()
+        let bundleIDs = codingSurfaceBundleIDs.union(cliHostBundleIDs)
 
         let outcome = await Task.detached(priority: .userInitiated) { () -> Outcome in
             let service = ScreenTimeService()
@@ -106,11 +111,29 @@ final class AIActivityViewModel {
             case .failure(let f):
                 return .failure(f)
             case .success(let focus):
+                let codingSurfaceFocus = focus.filter { codingSurfaceBundleIDs.contains($0.bundleID) }
+                let cliHostFocus = focus.filter { cliHostBundleIDs.contains($0.bundleID) }
                 switch mode {
                 case .day:
-                    return .day(ActivityAnalyzer.dayActivity(day: day, focus: focus, sessions: sessions, calendar: cal))
+                    return .day(
+                        ActivityAnalyzer.dayActivity(
+                            day: day,
+                            codingSurfaceFocus: codingSurfaceFocus,
+                            cliHostFocus: cliHostFocus,
+                            sessions: sessions,
+                            calendar: cal
+                        )
+                    )
                 case .last7Days, .last30Days:
-                    return .trend(ActivityAnalyzer.trend(days: days, focus: focus, sessions: sessions, calendar: cal))
+                    return .trend(
+                        ActivityAnalyzer.trend(
+                            days: days,
+                            codingSurfaceFocus: codingSurfaceFocus,
+                            cliHostFocus: cliHostFocus,
+                            sessions: sessions,
+                            calendar: cal
+                        )
+                    )
                 }
             }
         }.value

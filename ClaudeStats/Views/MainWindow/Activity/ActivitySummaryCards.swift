@@ -1,30 +1,38 @@
 import SwiftUI
 
 struct ActivitySummaryMetrics: Equatable {
-    var editorSeconds: TimeInterval
+    var codingSurfaceSeconds: TimeInterval
     var aiSeconds: TimeInterval
     var overlapSeconds: TimeInterval
+    var cliHostSeconds: TimeInterval
+    var cliAIOverlapSeconds: TimeInterval
     var assistedRatio: Double?
 
     static func day(_ activity: DayActivity?) -> ActivitySummaryMetrics {
         ActivitySummaryMetrics(
-            editorSeconds: activity?.ideSeconds ?? 0,
+            codingSurfaceSeconds: activity?.codingSurfaceSeconds ?? 0,
             aiSeconds: activity?.aiSeconds ?? 0,
             overlapSeconds: activity?.overlapSeconds ?? 0,
+            cliHostSeconds: activity?.cliHostSeconds ?? 0,
+            cliAIOverlapSeconds: activity?.cliAIOverlapSeconds ?? 0,
             assistedRatio: activity.map(\.assistedRatio)
         )
     }
 
     static func trend(_ days: [DayActivity]) -> ActivitySummaryMetrics {
-        let editor = days.reduce(0) { $0 + $1.ideSeconds }
+        let codingSurface = days.reduce(0) { $0 + $1.codingSurfaceSeconds }
         let ai = days.reduce(0) { $0 + $1.aiSeconds }
         let overlap = days.reduce(0) { $0 + $1.overlapSeconds }
-        let ratio = editor > 0 ? overlap / editor : nil
+        let cliHost = days.reduce(0) { $0 + $1.cliHostSeconds }
+        let cliAIOverlap = days.reduce(0) { $0 + $1.cliAIOverlapSeconds }
+        let ratio = codingSurface > 0 ? overlap / codingSurface : nil
 
         return ActivitySummaryMetrics(
-            editorSeconds: editor,
+            codingSurfaceSeconds: codingSurface,
             aiSeconds: ai,
             overlapSeconds: overlap,
+            cliHostSeconds: cliHost,
+            cliAIOverlapSeconds: cliAIOverlap,
             assistedRatio: ratio
         )
     }
@@ -38,20 +46,28 @@ struct ActivitySummaryCards: View {
         ViewThatFits(in: .horizontal) {
             Grid(horizontalSpacing: 12, verticalSpacing: 12) {
                 GridRow {
-                    card("Editor time", Format.duration(metrics.editorSeconds))
+                    card("Coding surface", Format.duration(metrics.codingSurfaceSeconds))
                     card("AI active", Format.duration(metrics.aiSeconds))
+                    card("CLI host", Format.duration(metrics.cliHostSeconds))
+                }
+                GridRow {
                     card("Overlap", Format.duration(metrics.overlapSeconds))
+                    card("CLI + AI", Format.duration(metrics.cliAIOverlapSeconds))
                     card(assistedLabel, metrics.assistedRatio.map(Format.percent) ?? "--")
                 }
             }
 
             Grid(horizontalSpacing: 12, verticalSpacing: 12) {
                 GridRow {
-                    card("Editor time", Format.duration(metrics.editorSeconds))
+                    card("Coding surface", Format.duration(metrics.codingSurfaceSeconds))
                     card("AI active", Format.duration(metrics.aiSeconds))
                 }
                 GridRow {
+                    card("CLI host", Format.duration(metrics.cliHostSeconds))
                     card("Overlap", Format.duration(metrics.overlapSeconds))
+                }
+                GridRow {
+                    card("CLI + AI", Format.duration(metrics.cliAIOverlapSeconds))
                     card(assistedLabel, metrics.assistedRatio.map(Format.percent) ?? "--")
                 }
             }
@@ -69,9 +85,11 @@ struct ActivitySummaryCards: View {
 #Preview {
     ActivitySummaryCards(
         metrics: ActivitySummaryMetrics(
-            editorSeconds: 4_200,
+            codingSurfaceSeconds: 4_200,
             aiSeconds: 2_700,
             overlapSeconds: 1_860,
+            cliHostSeconds: 1_200,
+            cliAIOverlapSeconds: 540,
             assistedRatio: 0.44
         ),
         assistedLabel: "AI-assisted"

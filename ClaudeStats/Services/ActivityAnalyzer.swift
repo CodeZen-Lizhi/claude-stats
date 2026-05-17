@@ -1,39 +1,56 @@
 import Foundation
 
-/// Pure interval arithmetic that turns raw editor-focus runs and Claude
-/// activity bursts into a per-day ``DayActivity``. No I/O — easy to unit-test.
+/// Pure interval arithmetic that turns raw coding-surface focus runs, CLI-host
+/// focus runs, and AI activity bursts into a per-day ``DayActivity``. No I/O —
+/// easy to unit-test.
 enum ActivityAnalyzer {
 
     // MARK: Day analysis
 
     static func dayActivity(day: Date,
-                            focus: [AppFocusInterval],
+                            codingSurfaceFocus: [AppFocusInterval],
+                            cliHostFocus: [AppFocusInterval],
                             sessions: [Session],
                             calendar: Calendar = .current) -> DayActivity {
         let bounds = dayBounds(for: day, calendar: calendar)
 
-        let ide = union(focus.compactMap { clip($0.interval, to: bounds) })
+        let codingSurface = union(codingSurfaceFocus.compactMap { clip($0.interval, to: bounds) })
+        let cliHost = union(cliHostFocus.compactMap { clip($0.interval, to: bounds) })
         let aiRaw = sessions.flatMap { $0.stats?.activityIntervals ?? [] }
         let ai = union(aiRaw.compactMap { clip($0, to: bounds) })
-        let overlap = intersection(ide, ai)
+        let overlap = intersection(codingSurface, ai)
+        let cliAIOverlap = intersection(cliHost, ai)
 
         return DayActivity(
             day: bounds,
-            ideIntervals: ide,
+            codingSurfaceIntervals: codingSurface,
             aiIntervals: ai,
             overlapIntervals: overlap,
-            ideSeconds: totalDuration(ide),
+            cliHostIntervals: cliHost,
+            cliAIOverlapIntervals: cliAIOverlap,
+            codingSurfaceSeconds: totalDuration(codingSurface),
             aiSeconds: totalDuration(ai),
-            overlapSeconds: totalDuration(overlap))
+            overlapSeconds: totalDuration(overlap),
+            cliHostSeconds: totalDuration(cliHost),
+            cliAIOverlapSeconds: totalDuration(cliAIOverlap))
     }
 
     /// One ``DayActivity`` per day in `days` (each clips against the same
-    /// `focus`/`sessions` inputs).
+    /// focus/session inputs).
     static func trend(days: [Date],
-                      focus: [AppFocusInterval],
+                      codingSurfaceFocus: [AppFocusInterval],
+                      cliHostFocus: [AppFocusInterval],
                       sessions: [Session],
                       calendar: Calendar = .current) -> [DayActivity] {
-        days.map { dayActivity(day: $0, focus: focus, sessions: sessions, calendar: calendar) }
+        days.map {
+            dayActivity(
+                day: $0,
+                codingSurfaceFocus: codingSurfaceFocus,
+                cliHostFocus: cliHostFocus,
+                sessions: sessions,
+                calendar: calendar
+            )
+        }
     }
 
     static func dayBounds(for day: Date, calendar: Calendar = .current) -> DateInterval {

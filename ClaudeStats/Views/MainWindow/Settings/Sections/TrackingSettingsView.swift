@@ -4,7 +4,8 @@ import AppKit
 struct TrackingSettingsView: View {
     @Environment(AppEnvironment.self) private var env
     @State private var fullDiskAccessOK = ScreenTimeService.canRead()
-    @State private var newIDEBundleID = ""
+    @State private var newCodingSurfaceBundleID = ""
+    @State private var newCLIHostBundleID = ""
 
     var body: some View {
         @Bindable var prefs = env.preferences
@@ -22,7 +23,7 @@ struct TrackingSettingsView: View {
         @Bindable var prefs = prefs
         SettingGroup(
             title: "AI Activity Analysis",
-            caption: "Adds an Activity tab that compares your editor's focus time (from macOS Screen Time) with Claude Code activity. Reading Screen Time requires Full Disk Access."
+            caption: "Adds an Activity tab that compares coding surfaces, CLI hosts, and AI activity. Reading Screen Time requires Full Disk Access."
         ) {
             VStack(spacing: 0) {
                 SettingRow(title: "Enable AI activity analysis") {
@@ -39,7 +40,7 @@ struct TrackingSettingsView: View {
             .settingCard()
 
             if prefs.aiActivityAnalysisEnabled {
-                ideListCard(prefs: prefs)
+                activitySurfaceListCard(prefs: prefs)
             }
         }
     }
@@ -63,12 +64,11 @@ struct TrackingSettingsView: View {
         }
     }
 
-    @ViewBuilder
-    private func ideListCard(prefs: Preferences) -> some View {
+    private func activitySurfaceListCard(prefs: Preferences) -> some View {
         @Bindable var prefs = prefs
-        VStack(alignment: .leading, spacing: 0) {
+        return VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Editors counted as \u{201C}editor time\u{201D}")
+                Text("Coding surfaces")
                     .font(.sora(13, weight: .medium))
                 Spacer()
             }
@@ -78,55 +78,93 @@ struct TrackingSettingsView: View {
 
             SettingRowDivider()
 
-            ForEach(IDEAppCatalog.defaults) { app in
-                let binding = Binding(
-                    get: { !prefs.ideBundleIDsRemoved.contains(app.bundleID) },
-                    set: { included in
-                        if included {
-                            prefs.ideBundleIDsRemoved.removeAll { $0 == app.bundleID }
-                        } else if !prefs.ideBundleIDsRemoved.contains(app.bundleID) {
-                            prefs.ideBundleIDsRemoved.append(app.bundleID)
-                        }
-                    }
-                )
-                ideRow(name: app.name, subtitle: app.bundleID, isOn: binding)
-                SettingRowDivider()
-            }
+            surfaceSection(
+                title: "GUI coding surfaces",
+                caption: "GUI coding apps plus Codex and Claude.",
+                defaults: ActivitySurfaceCatalog.codingSurfaceDefaults,
+                removedIDs: $prefs.codingSurfaceBundleIDsRemoved,
+                addedIDs: $prefs.codingSurfaceBundleIDsAdded,
+                newBundleID: $newCodingSurfaceBundleID,
+                placeholder: "Add GUI bundle id"
+            )
 
-            ForEach(prefs.ideBundleIDsAdded, id: \.self) { id in
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(id).font(.sora(13, weight: .medium))
-                        Text("Custom").font(.sora(11)).foregroundStyle(Color.stxMuted)
-                    }
-                    Spacer()
-                    Button("Remove") { prefs.ideBundleIDsAdded.removeAll { $0 == id } }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                SettingRowDivider()
-            }
+            SettingRowDivider()
 
-            HStack(spacing: 8) {
-                TextField("Add bundle id (e.g. com.example.editor)", text: $newIDEBundleID)
-                    .textFieldStyle(.roundedBorder)
-                Button("Add") {
-                    let id = newIDEBundleID.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !id.isEmpty,
-                          !prefs.ideBundleIDsAdded.contains(id),
-                          !IDEAppCatalog.defaults.contains(where: { $0.bundleID == id }) else { return }
-                    prefs.ideBundleIDsAdded.append(id)
-                    newIDEBundleID = ""
-                }
-                .disabled(newIDEBundleID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            surfaceSection(
+                title: "CLI hosts",
+                caption: "Terminal apps shown separately from AI-assisted coding.",
+                defaults: ActivitySurfaceCatalog.cliHostDefaults,
+                removedIDs: $prefs.cliHostBundleIDsRemoved,
+                addedIDs: $prefs.cliHostBundleIDsAdded,
+                newBundleID: $newCLIHostBundleID,
+                placeholder: "Add terminal bundle id"
+            )
         }
         .settingCard()
     }
 
-    private func ideRow(name: String, subtitle: String, isOn: Binding<Bool>) -> some View {
+    private func surfaceSection(
+        title: String,
+        caption: String,
+        defaults: [ActivitySurfaceCatalog.App],
+        removedIDs: Binding<[String]>,
+        addedIDs: Binding<[String]>,
+        newBundleID: Binding<String>,
+        placeholder: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.sora(12, weight: .semibold))
+                    .foregroundStyle(.primary)
+                Text(caption)
+                    .font(.sora(10))
+                    .foregroundStyle(Color.stxMuted)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+
+            ForEach(defaults) { app in
+                let binding = Binding(
+                    get: { !removedIDs.wrappedValue.contains(app.bundleID) },
+                    set: { included in
+                        if included {
+                            removedIDs.wrappedValue.removeAll { $0 == app.bundleID }
+                        } else if !removedIDs.wrappedValue.contains(app.bundleID) {
+                            removedIDs.wrappedValue.append(app.bundleID)
+                        }
+                    }
+                )
+                surfaceRow(name: app.name, subtitle: app.bundleID, isOn: binding)
+                SettingRowDivider()
+            }
+
+            ForEach(addedIDs.wrappedValue, id: \.self) { id in
+                customSurfaceRow(bundleID: id) {
+                    addedIDs.wrappedValue.removeAll { $0 == id }
+                }
+                SettingRowDivider()
+            }
+
+            HStack(spacing: 8) {
+                TextField(placeholder, text: newBundleID)
+                    .textFieldStyle(.roundedBorder)
+                Button("Add") {
+                    let id = newBundleID.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !id.isEmpty,
+                          !addedIDs.wrappedValue.contains(id),
+                          !defaults.contains(where: { $0.bundleID == id }) else { return }
+                    addedIDs.wrappedValue.append(id)
+                    newBundleID.wrappedValue = ""
+                }
+                .disabled(newBundleID.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+    }
+
+    private func surfaceRow(name: String, subtitle: String, isOn: Binding<Bool>) -> some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(name).font(.sora(13, weight: .medium))
@@ -136,6 +174,19 @@ struct TrackingSettingsView: View {
             Toggle("", isOn: isOn)
                 .labelsHidden()
                 .toggleStyle(.switch)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private func customSurfaceRow(bundleID: String, remove: @escaping () -> Void) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(bundleID).font(.sora(13, weight: .medium))
+                Text("Custom").font(.sora(11)).foregroundStyle(Color.stxMuted)
+            }
+            Spacer()
+            Button("Remove", action: remove)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
