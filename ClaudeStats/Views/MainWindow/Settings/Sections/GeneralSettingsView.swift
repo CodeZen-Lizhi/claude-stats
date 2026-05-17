@@ -49,6 +49,13 @@ struct GeneralSettingsView: View {
                             .toggleStyle(.switch)
                     }
                     SettingRowDivider()
+                    SettingRow(title: "Expand Sessions on app open",
+                               description: "Show the Sessions section expanded when the main window opens. When off, Sessions starts collapsed.") {
+                        Toggle("", isOn: $prefs.sessionsExpandedOnAppOpen)
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                    }
+                    SettingRowDivider()
                     SettingRow(title: "Detail edge fade",
                                description: "Blend the main detail pane into the sidebar with a soft boundary fade.") {
                         Toggle("", isOn: $prefs.detailPanelBoundaryFalloffEnabled)

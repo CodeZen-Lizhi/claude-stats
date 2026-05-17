@@ -493,7 +493,7 @@ private struct GitCommitInspector: View {
 
     @ViewBuilder
     private var repoBody: some View {
-        if let stats = vm.repoStats {
+        if let stats = vm.repoBaseStats {
             FadingScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     if let warning = stats.code.warning {
@@ -502,7 +502,7 @@ private struct GitCommitInspector: View {
                             .gitWorkspaceCard()
                     }
                     GitRepoLanguagePanel(stats: stats.code)
-                    GitRepoCodeContributorsPanel(rows: stats.codeContributors)
+                    GitRepoCodeContributorsPanel(state: vm.codeOwnershipState)
                     GitRepoContributorsPanel(
                         title: "TOP COMMITTERS",
                         rows: stats.contributors,
@@ -511,7 +511,7 @@ private struct GitCommitInspector: View {
                 }
                 .padding(14)
             }
-        } else if vm.isStatsLoading {
+        } else if vm.isBaseStatsLoading {
             ProgressView()
                 .controlSize(.small)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -758,7 +758,14 @@ private struct GitRepoContributorsPanel: View {
 }
 
 private struct GitRepoCodeContributorsPanel: View {
-    let rows: [GitCodeContributionStat]
+    let state: GitCodeOwnershipLoadState
+
+    private var rows: [GitCodeContributionStat] {
+        if case .loaded(let rows) = state {
+            return rows
+        }
+        return []
+    }
 
     private var totalLines: Int {
         rows.reduce(0) { $0 + $1.lineCount }
@@ -789,10 +796,20 @@ private struct GitRepoCodeContributorsPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             panelHeader(title: "CODE SHARE", detail: "Blamed Lines")
-            if models.isEmpty {
+            switch state {
+            case .idle:
+                GitWorkspaceInlineEmptyState("Code attribution is waiting for language statistics.")
+                    .gitWorkspaceCard()
+            case .loading:
+                GitWorkspaceInlineEmptyState("Attributing code lines.")
+                    .gitWorkspaceCard()
+            case .failed(let message):
+                GitWorkspaceInlineEmptyState(message)
+                    .gitWorkspaceCard()
+            case .loaded where models.isEmpty:
                 GitWorkspaceInlineEmptyState("No code lines to attribute.")
                     .gitWorkspaceCard()
-            } else {
+            case .loaded:
                 GitStatBarList(rows: models)
             }
         }

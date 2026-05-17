@@ -1,6 +1,6 @@
 import Foundation
 
-enum GitStatsScope: String, CaseIterable, Identifiable, Sendable {
+enum GitStatsScope: String, CaseIterable, Identifiable, Codable, Sendable {
     case head
     case workingTree
 
@@ -14,7 +14,7 @@ enum GitStatsScope: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-enum GitLanguageStatsEngine: String, Sendable {
+enum GitLanguageStatsEngine: String, Codable, Sendable {
     case linguist
     case linguistLargeTree
     case sccFallback
@@ -30,8 +30,8 @@ enum GitLanguageStatsEngine: String, Sendable {
     }
 }
 
-struct GitRepoCodeStats: Sendable, Equatable {
-    struct LanguageRow: Identifiable, Sendable, Equatable {
+struct GitRepoCodeStats: Codable, Sendable, Equatable {
+    struct LanguageRow: Identifiable, Codable, Sendable, Equatable {
         let language: String
         let fileCount: Int
         let sizeBytes: Int
@@ -85,7 +85,7 @@ struct GitRepoCodeStats: Sendable, Equatable {
     }
 }
 
-struct GitContributorStat: Identifiable, Sendable, Equatable {
+struct GitContributorStat: Identifiable, Codable, Sendable, Equatable {
     let name: String
     let email: String
     let commitCount: Int
@@ -97,7 +97,7 @@ struct GitContributorStat: Identifiable, Sendable, Equatable {
     }
 }
 
-struct GitCodeContributionStat: Identifiable, Sendable, Equatable {
+struct GitCodeContributionStat: Identifiable, Codable, Sendable, Equatable {
     let name: String
     let email: String
     let lineCount: Int
@@ -109,10 +109,47 @@ struct GitCodeContributionStat: Identifiable, Sendable, Equatable {
     }
 }
 
-struct GitRepoInspectorStats: Sendable, Equatable {
+struct GitRepoInspectorBaseStats: Codable, Sendable, Equatable {
     let code: GitRepoCodeStats
-    let codeContributors: [GitCodeContributionStat]
     let contributors: [GitContributorStat]
+}
 
-    static let empty = GitRepoInspectorStats(code: .empty, codeContributors: [], contributors: [])
+struct GitRepoCodeOwnershipStats: Codable, Sendable, Equatable {
+    let codeContributors: [GitCodeContributionStat]
+}
+
+enum GitCodeOwnershipLoadState: Equatable, Sendable {
+    case idle
+    case loading
+    case loaded([GitCodeContributionStat])
+    case failed(String)
+}
+
+struct GitRepoInspectorStats: Codable, Sendable, Equatable {
+    let base: GitRepoInspectorBaseStats
+    let ownership: GitRepoCodeOwnershipStats
+
+    var code: GitRepoCodeStats { base.code }
+    var contributors: [GitContributorStat] { base.contributors }
+    var codeContributors: [GitCodeContributionStat] { ownership.codeContributors }
+
+    init(base: GitRepoInspectorBaseStats, ownership: GitRepoCodeOwnershipStats) {
+        self.base = base
+        self.ownership = ownership
+    }
+
+    init(code: GitRepoCodeStats, codeContributors: [GitCodeContributionStat], contributors: [GitContributorStat]) {
+        self.base = GitRepoInspectorBaseStats(code: code, contributors: contributors)
+        self.ownership = GitRepoCodeOwnershipStats(codeContributors: codeContributors)
+    }
+
+    static let empty = GitRepoInspectorStats(base: .empty, ownership: .empty)
+}
+
+extension GitRepoInspectorBaseStats {
+    static let empty = GitRepoInspectorBaseStats(code: .empty, contributors: [])
+}
+
+extension GitRepoCodeOwnershipStats {
+    static let empty = GitRepoCodeOwnershipStats(codeContributors: [])
 }

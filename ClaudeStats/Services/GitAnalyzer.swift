@@ -67,16 +67,6 @@ struct GitAnalyzer: Sendable {
         return GitLinguistAnalyzer().stats(repo: repo, scope: scope, trackedFiles: trackedFiles)
     }
 
-    func repoInspectorStats(for repo: GitRepo, scope: GitStatsScope = .head) -> GitRepoInspectorStats {
-        let trackedFiles = trackedFiles(in: repo)
-        let code = GitLinguistAnalyzer().stats(repo: repo, scope: scope, trackedFiles: trackedFiles)
-        return GitRepoInspectorStats(
-            code: code,
-            codeContributors: codeContributionStats(for: repo, codeFiles: code.codeFilePaths, scope: scope),
-            contributors: contributorStats(for: repo)
-        )
-    }
-
     private func commits(in repo: GitRepo, since date: Date, authorEmail: String?) -> [GitCommit] {
         let sinceArg = ISO8601DateFormatter().string(from: date)
         let format = "format:\(Self.recordSep)%H\(Self.fieldSep)%at\(Self.fieldSep)%an\(Self.fieldSep)%ae\(Self.fieldSep)%s"
@@ -127,49 +117,6 @@ struct GitAnalyzer: Sendable {
         return Self.parseContributorStats(output)
     }
 
-    func codeContributionStats(for repo: GitRepo) -> [GitCodeContributionStat] {
-        codeContributionStats(for: repo, scope: .head)
-    }
-
-    func codeContributionStats(for repo: GitRepo, scope: GitStatsScope) -> [GitCodeContributionStat] {
-        let trackedFiles = trackedFiles(in: repo)
-        let code = GitLinguistAnalyzer().stats(repo: repo, scope: scope, trackedFiles: trackedFiles)
-        return codeContributionStats(for: repo, codeFiles: code.codeFilePaths, scope: scope)
-    }
-
-    private func codeContributionStats(for repo: GitRepo, codeFiles: [String], scope: GitStatsScope) -> [GitCodeContributionStat] {
-        guard isAvailable else { return [] }
-        guard !codeFiles.isEmpty else { return [] }
-
-        var counters: [String: CodeContributionCounter] = [:]
-        for path in codeFiles {
-            var args = ["-C", repo.rootPath, "blame", "--line-porcelain"]
-            if scope == .head {
-                args.append("HEAD")
-            }
-            args.append(contentsOf: ["--", path])
-            guard let output = runGit(args) else {
-                continue
-            }
-            Self.accumulateCodeContribution(fromBlame: output, into: &counters)
-        }
-
-        let total = counters.values.reduce(0) { $0 + $1.lineCount }
-        guard total > 0 else { return [] }
-        return counters.values.map { counter in
-            GitCodeContributionStat(
-                name: counter.name,
-                email: counter.email,
-                lineCount: counter.lineCount,
-                share: Double(counter.lineCount) / Double(total)
-            )
-        }
-        .sorted {
-            if $0.lineCount != $1.lineCount { return $0.lineCount > $1.lineCount }
-            return $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
-        }
-    }
-
     static func parseContributorStats(_ output: String) -> [GitContributorStat] {
         struct Counter {
             var name: String
@@ -205,46 +152,6 @@ struct GitAnalyzer: Sendable {
             if $0.commitCount != $1.commitCount { return $0.commitCount > $1.commitCount }
             return $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
         }
-    }
-
-    private struct CodeContributionCounter {
-        var name: String
-        var email: String
-        var lineCount: Int
-    }
-
-    private static func accumulateCodeContribution(
-        fromBlame output: String,
-        into counters: inout [String: CodeContributionCounter]
-    ) {
-        var currentName = ""
-        var currentEmail = ""
-
-        for line in output.split(separator: "\n", omittingEmptySubsequences: false) {
-            if line.hasPrefix("author ") {
-                currentName = String(line.dropFirst("author ".count))
-                continue
-            }
-            if line.hasPrefix("author-mail ") {
-                currentEmail = normalizeBlameEmail(String(line.dropFirst("author-mail ".count)))
-                continue
-            }
-            guard line.hasPrefix("\t") else { continue }
-
-            let content = String(line.dropFirst())
-            guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
-            let name = currentName.trimmingCharacters(in: .whitespacesAndNewlines)
-            let email = currentEmail.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !name.isEmpty || !email.isEmpty else { continue }
-            let key = "\(name.lowercased())|\(email.lowercased())"
-            var counter = counters[key] ?? CodeContributionCounter(name: name, email: email, lineCount: 0)
-            counter.lineCount += 1
-            counters[key] = counter
-        }
-    }
-
-    private static func normalizeBlameEmail(_ raw: String) -> String {
-        raw.trimmingCharacters(in: CharacterSet(charactersIn: "<> \n\t"))
     }
 
     // MARK: - Commit graph

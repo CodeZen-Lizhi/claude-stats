@@ -61,6 +61,9 @@ final class Preferences {
     var detailPanelBoundaryFalloffEnabled: Bool {
         didSet { defaults.set(detailPanelBoundaryFalloffEnabled, forKey: Keys.detailPanelBoundaryFalloffEnabled) }
     }
+    var sessionsExpandedOnAppOpen: Bool {
+        didSet { defaults.set(sessionsExpandedOnAppOpen, forKey: Keys.sessionsExpandedOnAppOpen) }
+    }
     var terminalChromeMode: TerminalChromeMode {
         didSet { defaults.set(terminalChromeMode.rawValue, forKey: Keys.terminalChromeMode) }
     }
@@ -186,6 +189,7 @@ final class Preferences {
         floatingTabEdge = FloatingPanelEdge(rawValue: defaults.string(forKey: Keys.floatingTabEdge) ?? "") ?? .right
         floatingTabAnchor = (defaults.object(forKey: Keys.floatingTabAnchor) as? Double) ?? 0.5
         detailPanelBoundaryFalloffEnabled = (defaults.object(forKey: Keys.detailPanelBoundaryFalloffEnabled) as? Bool) ?? true
+        sessionsExpandedOnAppOpen = (defaults.object(forKey: Keys.sessionsExpandedOnAppOpen) as? Bool) ?? false
         terminalChromeMode = TerminalChromeMode(rawValue: defaults.string(forKey: Keys.terminalChromeMode) ?? "") ?? .tabsAndStatus
         terminalBackgroundStyle = TerminalBackgroundStyle(rawValue: defaults.string(forKey: Keys.terminalBackgroundStyle) ?? "") ?? .fluidGradient
         aiActivityAnalysisEnabled = defaults.bool(forKey: Keys.aiActivityAnalysisEnabled)
@@ -232,6 +236,7 @@ final class Preferences {
         static let floatingTabEdge = "floatingTabEdge"
         static let floatingTabAnchor = "floatingTabAnchor"
         static let detailPanelBoundaryFalloffEnabled = "detailPanelBoundaryFalloffEnabled"
+        static let sessionsExpandedOnAppOpen = "sessionsExpandedOnAppOpen"
         static let terminalChromeMode = "terminalChromeMode"
         static let terminalBackgroundStyle = "terminalBackgroundStyle"
         static let aiActivityAnalysisEnabled = "aiActivityAnalysisEnabled"

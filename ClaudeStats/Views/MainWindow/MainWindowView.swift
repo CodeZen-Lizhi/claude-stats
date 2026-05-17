@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Top-level page shown in the main window's detail column. Settings live in
@@ -55,6 +56,8 @@ struct MainWindowView: View {
     /// When non-nil, the detail pane shows session detail instead of the page.
     /// Held here (not in the sidebar) because the detail view needs it too.
     @State private var selectedSessionID: String?
+    @State private var sessionsExpanded: Bool = false
+    @State private var sessionsExpansionInitialized: Bool = false
     @State private var toggleHovering = false
     @State private var trafficLights = TrafficLightPositioner()
 
@@ -88,6 +91,7 @@ struct MainWindowView: View {
                         SidebarColumn(
                             page: $page,
                             selectedSessionID: $selectedSessionID,
+                            sessionsExpanded: $sessionsExpanded,
                             availablePages: availablePages,
                             onOpenSettings: {
                                 withAnimation(.easeInOut(duration: 0.2)) { inSettingsMode = true }
@@ -101,6 +105,11 @@ struct MainWindowView: View {
                         roundedLeading: sidebarVisible,
                         boundaryFalloffEnabled: env.preferences.detailPanelBoundaryFalloffEnabled
                     ) { detail }
+                    .background {
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture { clearTextFocus() }
+                    }
                 }
                 .transition(.opacity)
             }
@@ -118,6 +127,10 @@ struct MainWindowView: View {
         .onAppear {
             page = MainPage(rawValue: pageRaw) ?? .dashboard
             if !availablePages.contains(page) { page = .dashboard }
+            if !sessionsExpansionInitialized {
+                sessionsExpanded = env.preferences.sessionsExpandedOnAppOpen
+                sessionsExpansionInitialized = true
+            }
             DockVisibilityCoordinator.shared.acquire()
             Log.app.info("Main window opened on page \(page.rawValue, privacy: .public)")
         }
@@ -184,6 +197,10 @@ struct MainWindowView: View {
                 TerminalWorkspaceView(store: env.terminalStore)
             }
         }
+    }
+
+    private func clearTextFocus() {
+        NSApp.keyWindow?.makeFirstResponder(nil)
     }
 }
 

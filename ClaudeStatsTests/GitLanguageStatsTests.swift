@@ -94,4 +94,39 @@ struct GitLanguageStatsTests {
         #expect(stats.warning == "missing runtime")
         #expect(stats.languageRows.isEmpty)
     }
+
+    @Test("repo inspector stats are codable")
+    func repoInspectorStatsCodableRoundTrip() throws {
+        let stats = GitRepoInspectorStats(
+            code: GitRepoCodeStats(
+                engine: .linguist,
+                scope: .head,
+                warning: "large tree",
+                totalFiles: 12,
+                analyzedFiles: 10,
+                skippedFiles: 2,
+                totalBytes: 42_000,
+                totalLines: 1_200,
+                sourceLines: 980,
+                codeFilePaths: ["Sources/App.swift"],
+                languageRows: [
+                    .init(language: "Swift", fileCount: 1, sizeBytes: 42_000, byteShare: 1, totalLines: 1_200, sourceLines: 980),
+                ]
+            ),
+            codeContributors: [
+                GitCodeContributionStat(name: "Ada", email: "ada@example.com", lineCount: 980, share: 1),
+            ],
+            contributors: [
+                GitContributorStat(name: "Ada", email: "ada@example.com", commitCount: 7, share: 1),
+            ]
+        )
+
+        let data = try JSONEncoder().encode(stats)
+        let decoded = try JSONDecoder().decode(GitRepoInspectorStats.self, from: data)
+
+        #expect(decoded == stats)
+        #expect(decoded.code.engine == .linguist)
+        #expect(decoded.base.contributors.first?.email == "ada@example.com")
+        #expect(decoded.ownership.codeContributors.first?.lineCount == 980)
+    }
 }

@@ -20,6 +20,7 @@ final class AppEnvironment {
     /// individual pages can share state — and so the VMs persist across
     /// main-window open/close cycles (reopening doesn't refire a fetch).
     let dashboard: DashboardViewModel
+    let gitActivity: GitActivityViewModel
     let github = GitHubViewModel()
     let leaderboards: LeaderboardSyncViewModel
     let configurationProfiles: ConfigurationProfilesViewModel
@@ -37,6 +38,7 @@ final class AppEnvironment {
         self.store = store
         self.terminalStore = terminalStore
         self.dashboard = DashboardViewModel(pricing: pricing)
+        self.gitActivity = GitActivityViewModel()
         self.leaderboards = LeaderboardSyncViewModel(preferences: preferences, store: store)
         self.configurationProfiles = ConfigurationProfilesViewModel(registry: providerRegistry)
     }

@@ -2,7 +2,8 @@ import SwiftUI
 import AppKit
 
 /// The main window's left column. Two regions stacked vertically:
-///   - Top nav (Dashboard, configuration tools, then STATS for Usage/Activity/Git).
+///   - Top nav (Dashboard, STATS for usage/leaderboards/activity, then TOOLS
+///     for configuration, Git, and terminal tools).
 ///   - SESSIONS section: a Codex-style collapsible tree of projects, each
 ///     expanding to its own sessions. The header carries a "collapse all"
 ///     button (active only when any project is expanded) and a sort menu.
@@ -17,12 +18,13 @@ import AppKit
 struct SidebarColumn: View {
     @Binding var page: MainPage
     @Binding var selectedSessionID: String?
+    @Binding var sessionsExpanded: Bool
     var availablePages: [MainPage]
     var onOpenSettings: () -> Void
 
     @Environment(AppEnvironment.self) private var env
     @State private var sessionsVM = SessionListViewModel()
-    @SceneStorage("mainWindow.sessionsSectionExpanded") private var sessionsExpanded: Bool = true
+    @FocusState private var searchFieldFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -31,23 +33,29 @@ struct SidebarColumn: View {
 
             navRow(.dashboard)
 
-            sectionHeader("CONFIG")
-            navRow(.configurations)
-
             sectionHeader("STATS")
             navRow(.usage)
             navRow(.leaderboards)
             if env.preferences.aiActivityAnalysisEnabled { navRow(.activity) }
-            if env.preferences.gitTrackingEnabled { navRow(.git) }
 
             sectionHeader("TOOLS")
+            navRow(.configurations)
+            if env.preferences.gitTrackingEnabled { navRow(.git) }
             navRow(.terminal)
 
             sessionsSection
 
-            SidebarRow(title: "Settings", symbol: "gearshape", isSelected: false, action: onOpenSettings)
+            SidebarRow(title: "Settings", symbol: "gearshape", isSelected: false) {
+                clearSearchFocus()
+                onOpenSettings()
+            }
         }
         .padding(.bottom, 10)
+        .background {
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture { clearSearchFocus() }
+        }
         .onAppear { refreshSessionGroups() }
         .onChange(of: env.store.lastRefreshedAt) { _, _ in refreshSessionGroups() }
         .onChange(of: env.preferences.selectedProvider) { _, _ in refreshSessionGroups() }
@@ -63,6 +71,7 @@ struct SidebarColumn: View {
                 symbol: p.symbol,
                 isSelected: selectedSessionID == nil && page == p
             ) {
+                clearSearchFocus()
                 selectedSessionID = nil
                 page = p
             }
@@ -98,6 +107,7 @@ struct SidebarColumn: View {
     private var sessionsHeader: some View {
         HStack(spacing: 6) {
             Button {
+                clearSearchFocus()
                 withAnimation(.easeInOut(duration: 0.18)) { sessionsExpanded.toggle() }
             } label: {
                 HStack(spacing: 4) {
@@ -121,6 +131,7 @@ struct SidebarColumn: View {
                     help: "Collapse all projects",
                     enabled: !sessionsVM.expandedProjects.isEmpty
                 ) {
+                    clearSearchFocus()
                     withAnimation(.easeInOut(duration: 0.18)) {
                         sessionsVM.expandedProjects.removeAll()
                     }
@@ -160,6 +171,7 @@ struct SidebarColumn: View {
             TextField("Search", text: $vm.searchText)
                 .textFieldStyle(.plain)
                 .font(.sora(11))
+                .focused($searchFieldFocused)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
@@ -189,6 +201,7 @@ struct SidebarColumn: View {
                             count: group.count,
                             isExpanded: isExpanded
                         ) {
+                            clearSearchFocus()
                             withAnimation(.easeInOut(duration: 0.18)) { vm.toggle(group.id) }
                         }
                         if isExpanded {
@@ -197,6 +210,7 @@ struct SidebarColumn: View {
                                     session: session,
                                     isSelected: selectedSessionID == session.id
                                 ) {
+                                    clearSearchFocus()
                                     selectedSessionID = session.id
                                 }
                             }
@@ -224,6 +238,11 @@ struct SidebarColumn: View {
 
     private func refreshSessionGroups() {
         sessionsVM.refresh(from: env.store, provider: env.preferences.selectedProvider)
+    }
+
+    private func clearSearchFocus() {
+        searchFieldFocused = false
+        NSApp.keyWindow?.makeFirstResponder(nil)
     }
 }
 
@@ -407,6 +426,7 @@ private struct HeaderIconButton: View {
     return SidebarColumn(
         page: $page,
         selectedSessionID: $sessionID,
+        sessionsExpanded: .constant(false),
         availablePages: [.dashboard, .configurations, .usage, .activity, .git],
         onOpenSettings: {}
     )

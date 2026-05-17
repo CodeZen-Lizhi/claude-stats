@@ -9,18 +9,22 @@ final class GitRepoGraphViewModel {
     private(set) var isGraphLoading = false
     private(set) var isDetailLoading = false
     private(set) var isDiffLoading = false
-    private(set) var isStatsLoading = false
+    private(set) var isBaseStatsLoading = false
+    private(set) var isCodeOwnershipLoading = false
     private(set) var commitDetail: CommitDetail?
     private(set) var fileDiff: FileDiff?
-    private(set) var repoStats: GitRepoInspectorStats?
+    private(set) var repoBaseStats: GitRepoInspectorBaseStats?
+    private(set) var codeOwnershipState: GitCodeOwnershipLoadState = .idle
     private(set) var currentRepoID: String?
     private(set) var loadedLimit = 0
 
     var statsScope: GitStatsScope = .head {
         didSet {
             guard oldValue != statsScope else { return }
-            invalidateStatsRequest()
-            repoStats = nil
+            invalidateBaseStatsRequest()
+            invalidateCodeOwnershipRequest()
+            repoBaseStats = nil
+            codeOwnershipState = .idle
         }
     }
     var selectedHash: String?
@@ -31,7 +35,8 @@ final class GitRepoGraphViewModel {
     @ObservationIgnored private var graphRequestID: UInt64 = 0
     @ObservationIgnored private var detailRequestID: UInt64 = 0
     @ObservationIgnored private var diffRequestID: UInt64 = 0
-    @ObservationIgnored private var statsRequestID: UInt64 = 0
+    @ObservationIgnored private var baseStatsRequestID: UInt64 = 0
+    @ObservationIgnored private var codeOwnershipRequestID: UInt64 = 0
 
     init() {
         isPreview = false
@@ -50,10 +55,15 @@ final class GitRepoGraphViewModel {
                 files: GitGraph.previewFileChanges()[commit.hash] ?? []
             )
         }
-        repoStats = .preview
+        repoBaseStats = .preview
+        codeOwnershipState = .loaded(GitRepoCodeOwnershipStats.preview.codeContributors)
         isPreview = true
     }
     #endif
+
+    var isStatsLoading: Bool {
+        isBaseStatsLoading || isCodeOwnershipLoading
+    }
 
     var selectedCommit: GraphCommit? {
         guard let selectedHash else { return nil }
@@ -164,23 +174,63 @@ final class GitRepoGraphViewModel {
         if currentRepoID != repo.id {
             reset(for: repo)
         }
-        if isPreview || repoStats != nil { return }
+        if isPreview { return }
 
-        statsRequestID &+= 1
-        let requestID = statsRequestID
-        isStatsLoading = true
-        defer { finishStatsRequest(requestID) }
+        let requestedScope = statsScope
+        let baseStats: GitRepoInspectorBaseStats
+        if let existing = repoBaseStats {
+            baseStats = existing
+        } else {
+            baseStatsRequestID &+= 1
+            let requestID = baseStatsRequestID
+            isBaseStatsLoading = true
+            defer { finishBaseStatsRequest(requestID) }
+
+            let requestedRepoID = repo.id
+            let task = Task.detached(priority: .userInitiated) {
+                GitRepoStatsService().baseStats(for: repo, scope: requestedScope)
+            }
+            let loadedBaseStats = await withTaskCancellationHandler {
+                await task.value
+            } onCancel: {
+                task.cancel()
+            }
+
+            guard baseStatsRequestID == requestID,
+                  currentRepoID == requestedRepoID,
+                  statsScope == requestedScope,
+                  !Task.isCancelled else { return }
+            repoBaseStats = loadedBaseStats
+            baseStats = loadedBaseStats
+        }
+
+        guard !isCodeOwnershipLoading else { return }
+        if case .loaded = codeOwnershipState { return }
+        await loadCodeOwnership(repo: repo, scope: requestedScope, codeFilePaths: baseStats.code.codeFilePaths)
+    }
+
+    private func loadCodeOwnership(repo: GitRepo, scope: GitStatsScope, codeFilePaths: [String]) async {
+        codeOwnershipRequestID &+= 1
+        let requestID = codeOwnershipRequestID
+        isCodeOwnershipLoading = true
+        codeOwnershipState = .loading
+        defer { finishCodeOwnershipRequest(requestID) }
 
         let requestedRepoID = repo.id
-        let requestedScope = statsScope
-        let stats = await Task.detached(priority: .userInitiated) {
-            GitAnalyzer().repoInspectorStats(for: repo, scope: requestedScope)
-        }.value
+        let task = Task.detached(priority: .utility) {
+            await GitRepoStatsService().codeOwnershipStats(for: repo, scope: scope, codeFilePaths: codeFilePaths)
+        }
+        let ownership = await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
+        }
 
-        guard statsRequestID == requestID,
+        guard codeOwnershipRequestID == requestID,
               currentRepoID == requestedRepoID,
-              statsScope == requestedScope else { return }
-        repoStats = stats
+              statsScope == scope,
+              !Task.isCancelled else { return }
+        codeOwnershipState = .loaded(ownership.codeContributors)
     }
 
     func selectCommit(_ hash: String) {
@@ -223,13 +273,15 @@ final class GitRepoGraphViewModel {
         invalidateGraphRequest()
         invalidateDetailRequest()
         invalidateDiffRequest()
-        invalidateStatsRequest()
+        invalidateBaseStatsRequest()
+        invalidateCodeOwnershipRequest()
         currentRepoID = repo.id
         graph = nil
         layout = nil
         commitDetail = nil
         fileDiff = nil
-        repoStats = nil
+        repoBaseStats = nil
+        codeOwnershipState = .idle
         selectedHash = nil
         diffPath = nil
         loadedLimit = 0
@@ -272,9 +324,17 @@ final class GitRepoGraphViewModel {
         isDiffLoading = false
     }
 
-    private func invalidateStatsRequest() {
-        statsRequestID &+= 1
-        isStatsLoading = false
+    private func invalidateBaseStatsRequest() {
+        baseStatsRequestID &+= 1
+        isBaseStatsLoading = false
+    }
+
+    private func invalidateCodeOwnershipRequest() {
+        codeOwnershipRequestID &+= 1
+        isCodeOwnershipLoading = false
+        if case .loading = codeOwnershipState {
+            codeOwnershipState = .idle
+        }
     }
 
     private func finishGraphRequest(_ requestID: UInt64) {
@@ -295,16 +355,22 @@ final class GitRepoGraphViewModel {
         }
     }
 
-    private func finishStatsRequest(_ requestID: UInt64) {
-        if statsRequestID == requestID {
-            isStatsLoading = false
+    private func finishBaseStatsRequest(_ requestID: UInt64) {
+        if baseStatsRequestID == requestID {
+            isBaseStatsLoading = false
+        }
+    }
+
+    private func finishCodeOwnershipRequest(_ requestID: UInt64) {
+        if codeOwnershipRequestID == requestID {
+            isCodeOwnershipLoading = false
         }
     }
 }
 
 #if DEBUG
-private extension GitRepoInspectorStats {
-    static let preview = GitRepoInspectorStats(
+private extension GitRepoInspectorBaseStats {
+    static let preview = GitRepoInspectorBaseStats(
         code: GitRepoCodeStats(
             engine: .linguist,
             scope: .head,
@@ -330,15 +396,20 @@ private extension GitRepoInspectorStats {
                 .init(language: "Markdown", fileCount: 1, sizeBytes: 8_600, byteShare: 0.016, totalLines: 236, sourceLines: 160),
             ]
         ),
-        codeContributors: [
-            GitCodeContributionStat(name: "1pitaph", email: "xzltxy@163.com", lineCount: 15_840, share: 15_840.0 / 18_712.0),
-            GitCodeContributionStat(name: "Codex", email: "codex@example.com", lineCount: 2_104, share: 2_104.0 / 18_712.0),
-            GitCodeContributionStat(name: "Ada", email: "ada@example.com", lineCount: 768, share: 768.0 / 18_712.0),
-        ],
         contributors: [
             GitContributorStat(name: "1pitaph", email: "xzltxy@163.com", commitCount: 46, share: 46.0 / 56.0),
             GitContributorStat(name: "Codex", email: "codex@example.com", commitCount: 7, share: 7.0 / 56.0),
             GitContributorStat(name: "Ada", email: "ada@example.com", commitCount: 3, share: 3.0 / 56.0),
+        ]
+    )
+}
+
+private extension GitRepoCodeOwnershipStats {
+    static let preview = GitRepoCodeOwnershipStats(
+        codeContributors: [
+            GitCodeContributionStat(name: "1pitaph", email: "xzltxy@163.com", lineCount: 15_840, share: 15_840.0 / 18_712.0),
+            GitCodeContributionStat(name: "Codex", email: "codex@example.com", lineCount: 2_104, share: 2_104.0 / 18_712.0),
+            GitCodeContributionStat(name: "Ada", email: "ada@example.com", lineCount: 768, share: 768.0 / 18_712.0),
         ]
     )
 }
