@@ -25,19 +25,22 @@ final class AppEnvironment {
     let leaderboards: LeaderboardSyncViewModel
     let configurationProfiles: ConfigurationProfilesViewModel
     let apiProviders: APIProviderSwitcherViewModel
+    let cliEnvironment: CLIEnvironmentViewModel
 
     init(
         pricing: ModelPricing,
         preferences: Preferences,
         providerRegistry: ProviderRegistry,
         store: SessionStore,
-        terminalStore: EmbeddedTerminalStore = EmbeddedTerminalStore()
+        terminalStore: EmbeddedTerminalStore = EmbeddedTerminalStore(),
+        cliEnvironment: CLIEnvironmentViewModel = CLIEnvironmentViewModel()
     ) {
         self.pricing = pricing
         self.preferences = preferences
         self.providerRegistry = providerRegistry
         self.store = store
         self.terminalStore = terminalStore
+        self.cliEnvironment = cliEnvironment
         self.dashboard = DashboardViewModel(pricing: pricing)
         self.gitActivity = GitActivityViewModel()
         self.leaderboards = LeaderboardSyncViewModel(preferences: preferences, store: store)

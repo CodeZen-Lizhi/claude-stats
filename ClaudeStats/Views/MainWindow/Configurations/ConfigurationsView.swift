@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct ConfigurationsView: View {
@@ -13,9 +14,11 @@ struct ConfigurationsView: View {
     @State private var editorMode: APIProviderEditorMode = .fields
     @State private var cursorLine = 1
     @State private var cursorColumn = 1
+    @State private var showEnvironmentCleanupConfirmation = false
 
     var body: some View {
         @Bindable var vm = env.apiProviders
+        let environmentVM = env.cliEnvironment
 
         CenteredPaneContainer(maxWidth: workspaceMaxWidth, topPadding: 36) {
             VStack(alignment: .leading, spacing: 18) {
@@ -31,10 +34,18 @@ struct ConfigurationsView: View {
                     editorColumn(vm: vm)
                 }
                 .frame(maxWidth: .infinity, alignment: .top)
+
+                CLIEnvironmentSection(
+                    vm: environmentVM,
+                    requestDelete: { showEnvironmentCleanupConfirmation = true },
+                    copyText: copyToClipboard,
+                    openURL: openExternalURL
+                )
             }
         }
         .task {
             await vm.loadIfNeeded(keyStorageMode: env.preferences.apiProviderKeyStorageMode)
+            await environmentVM.loadIfNeeded()
         }
         .onChange(of: env.preferences.apiProviderKeyStorageMode) { _, newMode in
             Task { await vm.reload(keyStorageMode: newMode) }
@@ -43,6 +54,14 @@ struct ConfigurationsView: View {
             Button("OK") { vm.clearError() }
         } message: {
             Text(vm.lastError ?? "")
+        }
+        .alert("Delete Environment Variables?", isPresented: $showEnvironmentCleanupConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                Task { await env.cliEnvironment.deleteSelectedConflicts() }
+            }
+        } message: {
+            Text("Selected shell config lines will be backed up first, then removed. Process environment variables and read-only files are skipped.")
         }
     }
 
@@ -406,6 +425,16 @@ struct ConfigurationsView: View {
             }
         )
     }
+
+    private func copyToClipboard(_ text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+    }
+
+    private func openExternalURL(_ url: URL) {
+        NSWorkspace.shared.open(url)
+    }
 }
 
 private struct APIProviderWorkspaceLayout: Layout {
@@ -615,6 +644,388 @@ private struct APIProviderBadge: View {
             .padding(.vertical, 3)
             .background(tint.opacity(0.12), in: Capsule())
             .overlay(Capsule().strokeBorder(tint.opacity(0.2), lineWidth: 1))
+    }
+}
+
+private struct CLIEnvironmentSection: View {
+    @Bindable var vm: CLIEnvironmentViewModel
+    let requestDelete: () -> Void
+    let copyText: (String) -> Void
+    let openURL: (URL) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Text("Local environment check")
+                    .font(.sora(15, weight: .semibold))
+                if vm.isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+                Spacer(minLength: 12)
+                Button {
+                    Task { await vm.refresh() }
+                } label: {
+                    Label(vm.isLoading ? "Refreshing" : "Refresh", systemImage: "arrow.clockwise")
+                }
+                .controlSize(.small)
+                .disabled(vm.isLoading || vm.isCleaning)
+            }
+
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(APIProviderCLI.allCases) { cli in
+                        CLIEnvironmentStatusCard(
+                            cli: cli,
+                            status: vm.status(for: cli),
+                            isLoading: vm.isLoading,
+                            copyText: copyText,
+                            openURL: openURL
+                        )
+                    }
+                }
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(APIProviderCLI.allCases) { cli in
+                        CLIEnvironmentStatusCard(
+                            cli: cli,
+                            status: vm.status(for: cli),
+                            isLoading: vm.isLoading,
+                            copyText: copyText,
+                            openURL: openURL
+                        )
+                    }
+                }
+            }
+
+            CLIEnvironmentConflictPanel(
+                vm: vm,
+                requestDelete: requestDelete,
+                copyText: copyText
+            )
+
+            if let lastError = vm.lastError {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle")
+                    Text(lastError)
+                        .lineLimit(2)
+                    Spacer(minLength: 8)
+                    Button("Dismiss") {
+                        vm.clearError()
+                    }
+                    .controlSize(.small)
+                }
+                .font(.sora(11))
+                .foregroundStyle(.orange)
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.orange.opacity(0.25), lineWidth: 1))
+            }
+        }
+        .padding(.top, 2)
+    }
+}
+
+private struct CLIEnvironmentStatusCard: View {
+    let cli: APIProviderCLI
+    let status: CLIToolStatus?
+    let isLoading: Bool
+    let copyText: (String) -> Void
+    let openURL: (URL) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: "terminal")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(Color.stxMuted)
+                Text(cli.shortName)
+                    .font(.sora(18, weight: .semibold))
+                    .lineLimit(1)
+                APIProviderBadge(title: CLIEnvironmentType.macOS.displayName)
+                Spacer(minLength: 8)
+                statusAccessory
+            }
+
+            Text(detailText)
+                .font(.sora(14).monospaced())
+                .foregroundStyle(Color.stxMuted)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .help(status?.diagnostic ?? status?.displayValue ?? "")
+
+            HStack(spacing: 8) {
+                if let status, status.isOutdated, let latestVersion = status.latestVersion {
+                    APIProviderBadge(title: "Latest \(latestVersion)", tint: .orange)
+                }
+                Spacer(minLength: 8)
+                if needsInstallActions {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 8) {
+                            Button {
+                                copyText(cli.installCommand)
+                            } label: {
+                                Label("Copy Install", systemImage: "doc.on.doc")
+                            }
+                            Button {
+                                openURL(cli.installURL)
+                            } label: {
+                                Label("Install Page", systemImage: "arrow.up.right.square")
+                            }
+                        }
+                        HStack(spacing: 8) {
+                            Button {
+                                copyText(cli.installCommand)
+                            } label: {
+                                Image(systemName: "doc.on.doc")
+                                    .frame(width: 22, height: 18)
+                            }
+                            .help("Copy Install")
+                            Button {
+                                openURL(cli.installURL)
+                            } label: {
+                                Image(systemName: "arrow.up.right.square")
+                                    .frame(width: 22, height: 18)
+                            }
+                            .help("Install Page")
+                        }
+                    }
+                    .controlSize(.small)
+                }
+            }
+            .frame(minHeight: 24)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, minHeight: 138, alignment: .topLeading)
+        .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(borderColor, lineWidth: 1))
+    }
+
+    @ViewBuilder
+    private var statusAccessory: some View {
+        if isLoading && status == nil {
+            ProgressView()
+                .controlSize(.small)
+        } else if status?.isInstalled == true {
+            Image(systemName: "checkmark.circle")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(status?.isOutdated == true ? .orange : Color(red: 0.0, green: 0.65, blue: 0.38))
+        } else {
+            Image(systemName: "exclamationmark.circle")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(.orange)
+        }
+    }
+
+    private var detailText: String {
+        if isLoading && status == nil {
+            return "checking..."
+        }
+        return status?.displayValue ?? "not installed or not executable"
+    }
+
+    private var needsInstallActions: Bool {
+        guard !isLoading else { return false }
+        guard let status else { return true }
+        return !status.isInstalled || status.isOutdated
+    }
+
+    private var borderColor: Color {
+        if status?.isInstalled == true {
+            return status?.isOutdated == true ? Color.orange.opacity(0.35) : Color.stxAccent.opacity(0.25)
+        }
+        return Color.stxStroke
+    }
+}
+
+private struct CLIEnvironmentConflictPanel: View {
+    @Bindable var vm: CLIEnvironmentViewModel
+    let requestDelete: () -> Void
+    let copyText: (String) -> Void
+
+    var body: some View {
+        if vm.conflicts.isEmpty {
+            cleanPanel
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .center, spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundStyle(.orange)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Environment variable conflicts")
+                            .font(.sora(13, weight: .semibold))
+                        Text("\(vm.conflicts.count) ANTHROPIC / OPENAI variable\(vm.conflicts.count == 1 ? "" : "s") found in your local environment.")
+                            .font(.sora(11))
+                            .foregroundStyle(Color.stxMuted)
+                    }
+                    Spacer(minLength: 8)
+                    Button {
+                        vm.selectAllDeletableConflicts()
+                    } label: {
+                        Label("Select All", systemImage: "checklist")
+                    }
+                    .controlSize(.small)
+                    .disabled(vm.isCleaning || vm.conflicts.allSatisfy { !$0.isDeletable })
+
+                    Button(role: .destructive) {
+                        requestDelete()
+                    } label: {
+                        Label("Delete Selected", systemImage: "trash")
+                    }
+                    .controlSize(.small)
+                    .disabled(vm.selectedDeletableCount == 0 || vm.isCleaning)
+                }
+
+                LazyVStack(alignment: .leading, spacing: 8) {
+                    ForEach(vm.conflicts) { conflict in
+                        CLIEnvironmentConflictRow(
+                            conflict: conflict,
+                            isSelected: vm.isSelected(conflict),
+                            isRevealed: vm.isRevealed(conflict),
+                            toggleSelection: { vm.toggleSelection(conflict) },
+                            toggleReveal: { vm.toggleReveal(conflict) },
+                            copyText: copyText
+                        )
+                    }
+                }
+
+                if let result = vm.latestCleanupResult {
+                    cleanupResult(result)
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.orange.opacity(0.09), in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.orange.opacity(0.25), lineWidth: 1))
+        }
+    }
+
+    private var cleanPanel: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.circle")
+                .foregroundStyle(Color(red: 0.0, green: 0.65, blue: 0.38))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("No environment conflicts")
+                    .font(.sora(13, weight: .semibold))
+                Text("No ANTHROPIC or OPENAI overrides were found in process or shell config files.")
+                    .font(.sora(11))
+                    .foregroundStyle(Color.stxMuted)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 8)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.stxPanel.opacity(0.65), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.stxStroke, lineWidth: 1))
+    }
+
+    private func cleanupResult(_ result: CLIEnvironmentCleanupResult) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Last cleanup backup")
+                .font(.sora(10, weight: .semibold))
+                .foregroundStyle(Color.stxMuted)
+            Text(result.backupDirectory.path)
+                .font(.sora(10).monospaced())
+                .foregroundStyle(Color.stxMuted)
+                .lineLimit(2)
+                .truncationMode(.middle)
+                .textSelection(.enabled)
+            if !result.skippedConflicts.isEmpty {
+                Text("\(result.skippedConflicts.count) item\(result.skippedConflicts.count == 1 ? "" : "s") skipped")
+                    .font(.sora(10))
+                    .foregroundStyle(.orange)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.stxPanel.opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.stxStroke, lineWidth: 1))
+    }
+}
+
+private struct CLIEnvironmentConflictRow: View {
+    let conflict: CLIEnvironmentConflict
+    let isSelected: Bool
+    let isRevealed: Bool
+    let toggleSelection: () -> Void
+    let toggleReveal: () -> Void
+    let copyText: (String) -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Button(action: toggleSelection) {
+                Image(systemName: conflict.isDeletable ? (isSelected ? "checkmark.square.fill" : "square") : "lock")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(conflict.isDeletable ? Color.stxAccent : Color.stxMuted)
+                    .frame(width: 18, height: 18)
+            }
+            .buttonStyle(.plain)
+            .disabled(!conflict.isDeletable)
+            .help(conflict.isDeletable ? "Select for deletion" : "This source cannot be edited from here")
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 7) {
+                    Image(conflict.cli.assetName)
+                        .resizable()
+                        .renderingMode(.template)
+                        .scaledToFit()
+                        .frame(width: 14, height: 14)
+                        .foregroundStyle(Color.stxMuted)
+                    Text(conflict.varName)
+                        .font(.sora(12, weight: .semibold))
+                        .lineLimit(1)
+                    APIProviderBadge(title: conflict.cli.shortName)
+                    Spacer(minLength: 8)
+                }
+
+                HStack(spacing: 6) {
+                    Text("Value:")
+                    Text(isRevealed ? conflict.varValue : conflict.maskedValue)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Button {
+                        toggleReveal()
+                    } label: {
+                        Image(systemName: isRevealed ? "eye.slash" : "eye")
+                            .frame(width: 18, height: 16)
+                    }
+                    .buttonStyle(.plain)
+                    .help(isRevealed ? "Hide value" : "Reveal value")
+                }
+                .font(.sora(10).monospaced())
+                .foregroundStyle(Color.stxMuted)
+
+                HStack(spacing: 6) {
+                    Text(conflict.sourceDescription)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 8)
+                    Button {
+                        copyText(conflict.varName)
+                    } label: {
+                        Image(systemName: "doc.on.doc")
+                            .frame(width: 18, height: 16)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Copy variable")
+                    Button {
+                        copyText(conflict.sourceDescription)
+                    } label: {
+                        Image(systemName: "point.topleft.down.curvedto.point.bottomright.up")
+                            .frame(width: 18, height: 16)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Copy source")
+                }
+                .font(.sora(10))
+                .foregroundStyle(Color.stxMuted)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.stxPanel.opacity(0.75), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.stxStroke, lineWidth: 1))
     }
 }
 
