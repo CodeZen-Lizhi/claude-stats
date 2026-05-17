@@ -69,6 +69,17 @@ struct GeneralSettingsView: View {
                             .labelsHidden()
                             .toggleStyle(.switch)
                     }
+                    SettingRowDivider()
+                    SettingRow(title: "API key storage",
+                               description: "Where API Provider Switcher saves provider keys. JSON keeps them with provider data; Keychain stores references in the library.") {
+                        Picker("", selection: $prefs.apiProviderKeyStorageMode) {
+                            ForEach(APIProviderKeyStorageMode.allCases) { mode in
+                                Text(mode.displayName).tag(mode)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(maxWidth: 150)
+                    }
                 }
                 .settingCard()
             }

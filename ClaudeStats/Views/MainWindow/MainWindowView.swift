@@ -13,7 +13,7 @@ enum MainPage: String, CaseIterable, Identifiable, Sendable {
     var title: String {
         switch self {
         case .dashboard: "Dashboard"
-        case .configurations: "Configurations"
+        case .configurations: "Switcher"
         case .usage: "Usage"
         case .leaderboards: "Leaderboards"
         case .activity: "Activity"

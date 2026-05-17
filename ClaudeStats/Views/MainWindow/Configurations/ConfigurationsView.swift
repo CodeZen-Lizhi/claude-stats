@@ -1,531 +1,482 @@
-import AppKit
 import SwiftUI
 
 struct ConfigurationsView: View {
     @Environment(AppEnvironment.self) private var env
 
-    @State private var selectedProvider: ProviderKind = .claude
-    @State private var selectedScope: ConfigProfileScope = .global
-    @State private var selectedProfileID: UUID?
-    @State private var selectedSnapshotID: UUID?
-    @State private var captureName = ""
-    @State private var profilePendingApply: ConfigProfile?
-    @State private var pendingSelection: ConfigurationPendingSelection?
-    @State private var showDiscardDraftAlert = false
-    @State private var suppressProviderDirtyCheck = false
-    @State private var editor = ConfigurationEditorViewModel()
+    private let workspaceMaxWidth: CGFloat = 980
+    private let railColumnWidth: CGFloat = 78
+    private let providerColumnWidth: CGFloat = 330
+    private let columnSpacing: CGFloat = 14
+    private let railMinimumHeight: CGFloat = 144
+    private let editorModeContentHeight: CGFloat = 176
 
-    private var vm: ConfigurationProfilesViewModel { env.configurationProfiles }
-    private var screenSnapshot: ConfigurationScreenSnapshot {
-        let profiles = vm.profiles(for: selectedProvider)
-        let selectedProfile = selectedProfile(from: profiles)
-        let selectedSnapshot = selectedSnapshot(in: selectedProfile)
-        return ConfigurationScreenSnapshot(
-            profiles: profiles,
-            selectedProfile: selectedProfile,
-            selectedSnapshot: selectedSnapshot,
-            activeProfileID: vm.activeProfile(for: selectedProvider)?.id,
-            scopeOptions: vm.scopeOptions(for: selectedProvider),
-            statuses: vm.statuses,
-            latestBackupURL: selectedProfile.flatMap { vm.latestBackupURL(for: $0) }
-        )
-    }
-
-    private func selectedProfile(from profiles: [ConfigProfile]) -> ConfigProfile? {
-        guard let selectedProfileID else { return profiles.first }
-        return profiles.first { $0.id == selectedProfileID } ?? profiles.first
-    }
-
-    private func selectedSnapshot(in selectedProfile: ConfigProfile?) -> ConfigFileSnapshot? {
-        guard let selectedProfile else { return nil }
-        if let selectedSnapshotID,
-           let snapshot = selectedProfile.files.first(where: { $0.id == selectedSnapshotID }) {
-            return snapshot
-        }
-        return selectedProfile.files.first
-    }
+    @State private var editorMode: APIProviderEditorMode = .fields
+    @State private var cursorLine = 1
+    @State private var cursorColumn = 1
 
     var body: some View {
-        let snapshot = screenSnapshot
+        @Bindable var vm = env.apiProviders
 
-        CenteredPaneContainer {
-            VStack(alignment: .leading, spacing: 24) {
-                header
-                capturePanel(snapshot: snapshot)
-                content(snapshot: snapshot)
+        CenteredPaneContainer(maxWidth: workspaceMaxWidth, topPadding: 36) {
+            VStack(alignment: .leading, spacing: 18) {
+                header(vm: vm)
+                APIProviderWorkspaceLayout(
+                    railWidth: railColumnWidth,
+                    providerWidth: providerColumnWidth,
+                    editorMinWidth: providerColumnWidth,
+                    spacing: columnSpacing
+                ) {
+                    cliRail(vm: vm)
+                    providersColumn(vm: vm)
+                    editorColumn(vm: vm)
+                }
+                .frame(maxWidth: .infinity, alignment: .top)
             }
         }
         .task {
-            selectedProvider = env.preferences.selectedProvider
-            await vm.loadIfNeeded()
-            await vm.refreshScopeOptions(from: env.store.sessions)
-            normalizeSelection()
-            normalizeSnapshotSelection()
-            openSelectedSnapshot(force: true)
-            resetCaptureName()
+            await vm.loadIfNeeded(keyStorageMode: env.preferences.apiProviderKeyStorageMode)
         }
-        .onChange(of: env.store.lastRefreshedAt) { _, _ in
-            let sessions = env.store.sessions
-            Task { await vm.refreshScopeOptions(from: sessions) }
-        }
-        .onChange(of: selectedProvider) { oldValue, newValue in
-            if suppressProviderDirtyCheck {
-                suppressProviderDirtyCheck = false
-                handleProviderChanged()
-            } else if editor.isDirty {
-                pendingSelection = .provider(newValue)
-                suppressProviderDirtyCheck = true
-                selectedProvider = oldValue
-                showDiscardDraftAlert = true
-            } else {
-                handleProviderChanged()
-            }
-        }
-        .onChange(of: selectedScope) { _, _ in resetCaptureName() }
-        .sheet(item: $profilePendingApply) { profile in
-            ApplyConfigurationSheet(profile: profile, backupURL: vm.latestBackupURL(for: profile)) {
-                profilePendingApply = nil
-            } apply: {
-                Task {
-                    let ok = await vm.apply(profile)
-                    if ok {
-                        selectedProfileID = profile.id
-                        profilePendingApply = nil
-                        openSelectedSnapshot(force: false)
-                    }
-                }
-            }
+        .onChange(of: env.preferences.apiProviderKeyStorageMode) { _, newMode in
+            Task { await vm.reload(keyStorageMode: newMode) }
         }
         .alert("Configuration Error", isPresented: errorBinding) {
             Button("OK") { vm.clearError() }
         } message: {
             Text(vm.lastError ?? "")
         }
-        .alert("Discard Unsaved Changes?", isPresented: $showDiscardDraftAlert) {
-            Button("Cancel", role: .cancel) { pendingSelection = nil }
-            Button("Discard", role: .destructive) { commitPendingSelection() }
-        } message: {
-            Text("The current editor draft has not been saved to this profile.")
-        }
     }
 
-    private var header: some View {
+    private func header(vm: APIProviderSwitcherViewModel) -> some View {
         HStack(alignment: .center, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Configurations")
+                Text("API Provider Switcher")
                     .font(.sora(28, weight: .semibold))
-                Text("Capture and switch AI CLI configuration profiles with automatic backups.")
-                    .font(.sora(12))
-                    .foregroundStyle(Color.stxMuted)
+                HStack(spacing: 8) {
+                    Text(vm.selectedCLI.displayName)
+                    Text("·")
+                    Text(env.preferences.apiProviderKeyStorageMode.displayName)
+                }
+                .font(.sora(11))
+                .foregroundStyle(Color.stxMuted)
             }
             Spacer(minLength: 12)
-            Picker("", selection: $selectedProvider) {
-                ForEach(env.preferences.orderedEnabledProviders) { provider in
-                    Text(provider.displayName).tag(provider)
-                }
+            if vm.isWorking {
+                ProgressView()
+                    .controlSize(.small)
             }
-            .labelsHidden()
-            .frame(maxWidth: 180)
         }
     }
 
-    private func capturePanel(snapshot: ConfigurationScreenSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Capture Current")
-                        .font(.sora(15, weight: .semibold))
-                    Text("Save the files currently on disk as a reusable profile.")
-                        .font(.sora(11))
-                        .foregroundStyle(Color.stxMuted)
-                }
-                Spacer(minLength: 12)
-                Button {
-                    Task { await captureCurrent() }
-                } label: {
-                    Label("Capture", systemImage: "plus")
-                }
-                .disabled(vm.isWorking)
-            }
-
-            HStack(spacing: 10) {
-                TextField("Profile name", text: $captureName)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.sora(12))
-                Picker("", selection: $selectedScope) {
-                    ForEach(snapshot.scopeOptions) { scope in
-                        Text(scope.displayName).tag(scope)
+    private func cliRail(vm: APIProviderSwitcherViewModel) -> some View {
+        ScrollView(.vertical) {
+            VStack(spacing: 10) {
+                ForEach(APIProviderCLI.allCases) { cli in
+                    Button {
+                        editorMode = .fields
+                        vm.selectCLI(cli, keyStorageMode: env.preferences.apiProviderKeyStorageMode)
+                    } label: {
+                        Image(cli.assetName)
+                            .resizable()
+                            .renderingMode(.template)
+                            .scaledToFit()
+                            .frame(width: 28, height: 28)
+                            .foregroundStyle(vm.selectedCLI == cli ? Color.stxAccent : Color.stxMuted)
+                            .frame(width: 54, height: 54)
+                            .background {
+                                if vm.selectedCLI == cli {
+                                    RoundedRectangle(cornerRadius: 8).fill(Color.stxAccent.opacity(0.14))
+                                }
+                            }
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 8)
+                                    .strokeBorder(vm.selectedCLI == cli ? Color.stxAccent.opacity(0.4) : Color.clear, lineWidth: 1)
+                            }
                     }
+                    .buttonStyle(.plain)
+                    .help(cli.displayName)
                 }
-                .labelsHidden()
-                .frame(maxWidth: 180)
             }
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .top)
         }
-        .padding(14)
+        .scrollIndicators(.automatic)
+        .frame(width: railColumnWidth, alignment: .top)
+        .frame(maxHeight: .infinity, alignment: .top)
         .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.stxStroke, lineWidth: 1))
     }
 
-    private func content(snapshot: ConfigurationScreenSnapshot) -> some View {
-        ConfigurationResponsiveLayout {
-            profileList(snapshot: snapshot)
-            fileList(snapshot: snapshot)
-            editorDetail(snapshot: snapshot)
-        }
-    }
+    private func providersColumn(vm: APIProviderSwitcherViewModel) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Text("Providers")
+                    .font(.sora(15, weight: .semibold))
+                Spacer(minLength: 8)
+                Button {
+                    Task { await vm.importCurrent(keyStorageMode: env.preferences.apiProviderKeyStorageMode) }
+                } label: {
+                    Label("Import Current", systemImage: "square.and.arrow.down")
+                }
+                .controlSize(.small)
+                .disabled(vm.isWorking)
+                Menu {
+                    Button {
+                        Task { await vm.addProvider(keyStorageMode: env.preferences.apiProviderKeyStorageMode) }
+                    } label: {
+                        Label("Provider", systemImage: "plus")
+                    }
+                    Button {
+                        Task { await vm.addUniversalProvider(keyStorageMode: env.preferences.apiProviderKeyStorageMode) }
+                    } label: {
+                        Label("Universal Provider", systemImage: "point.3.connected.trianglepath.dotted")
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                        .frame(width: 22, height: 22)
+                }
+                .menuStyle(.button)
+                .controlSize(.small)
+                .disabled(vm.isWorking)
+                .help("New provider")
+            }
 
-    private func profileList(snapshot: ConfigurationScreenSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionTitle("Profiles")
-            VStack(spacing: 0) {
-                if snapshot.profiles.isEmpty {
-                    emptyProfiles
-                } else {
-                    ForEach(snapshot.profiles) { profile in
-                        ProfileListRow(
-                            profile: profile,
-                            status: snapshot.status(for: profile),
-                            isSelected: snapshot.selectedProfile?.id == profile.id,
-                            isActive: snapshot.activeProfileID == profile.id
-                        ) {
-                            requestSelectProfile(profile.id)
-                        }
-                        if profile.id != snapshot.profiles.last?.id {
-                            StxRule().padding(.leading, 12)
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: 12) {
+                    VStack(spacing: 0) {
+                        let providers = vm.providers(for: vm.selectedCLI)
+                        if providers.isEmpty {
+                            Text("No providers")
+                                .font(.sora(12))
+                                .foregroundStyle(Color.stxMuted)
+                                .padding(14)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        } else {
+                            ForEach(providers) { provider in
+                                APIProviderListRow(
+                                    provider: provider,
+                                    isSelected: vm.selectedProviderID == provider.id,
+                                    isActive: vm.isActive(provider)
+                                ) {
+                                    editorMode = .fields
+                                    vm.selectProvider(provider, keyStorageMode: env.preferences.apiProviderKeyStorageMode)
+                                }
+                                if provider.id != providers.last?.id {
+                                    StxRule().padding(.leading, 12)
+                                }
+                            }
                         }
                     }
+                    .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.stxStroke, lineWidth: 1))
+
+                    if let result = vm.latestApplyResult {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Last backup")
+                                .font(.sora(10, weight: .semibold))
+                                .foregroundStyle(Color.stxMuted)
+                            Text(result.backupDirectory.path)
+                                .font(.sora(10).monospaced())
+                                .foregroundStyle(Color.stxMuted)
+                                .lineLimit(2)
+                                .textSelection(.enabled)
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.stxPanel.opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.stxStroke, lineWidth: 1))
+                    }
                 }
+                .padding(.trailing, 2)
             }
+            .scrollIndicators(.automatic)
+        }
+        .frame(minWidth: providerColumnWidth, maxWidth: .infinity, alignment: .top)
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    @ViewBuilder
+    private func editorColumn(vm: APIProviderSwitcherViewModel) -> some View {
+        editorPanel(vm: vm)
+            .frame(minWidth: providerColumnWidth, maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private func editorPanel(vm: APIProviderSwitcherViewModel) -> some View {
+        if vm.draftProviderID == nil {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("No provider selected")
+                    .font(.sora(16, weight: .semibold))
+                Text("Create or import a provider.")
+                    .font(.sora(12))
+                    .foregroundStyle(Color.stxMuted)
+            }
+            .padding(18)
+            .frame(maxWidth: .infinity, minHeight: railMinimumHeight, alignment: .topLeading)
+            .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.stxStroke, lineWidth: 1))
+        } else {
+            VStack(alignment: .leading, spacing: 14) {
+                editorHeader(vm: vm)
+                Picker("", selection: $editorMode) {
+                    ForEach(APIProviderEditorMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 190)
+
+                if editorMode == .fields {
+                    providerFields(vm: vm)
+                        .frame(height: editorModeContentHeight, alignment: .top)
+                } else {
+                    rawEditor(vm: vm)
+                        .frame(height: editorModeContentHeight, alignment: .top)
+                }
+
+                editorActions(vm: vm)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, minHeight: railMinimumHeight, alignment: .topLeading)
             .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.stxStroke, lineWidth: 1))
         }
     }
 
-    @ViewBuilder
-    private func fileList(snapshot: ConfigurationScreenSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionTitle("Files")
-            if let selectedProfile = snapshot.selectedProfile {
-                VStack(alignment: .leading, spacing: 0) {
-                    if selectedProfile.files.isEmpty {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("No files captured")
-                                .font(.sora(13, weight: .medium))
-                            Text("Capture a profile with existing config files to edit it here.")
-                                .font(.sora(11))
-                                .foregroundStyle(Color.stxMuted)
-                        }
-                        .padding(14)
-                    } else {
-                        ForEach(selectedProfile.files) { file in
-                            ConfigFileSnapshotRow(
-                                snapshot: file,
-                                isSelected: snapshot.selectedSnapshot?.id == file.id
-                            ) {
-                                requestSelectSnapshot(file.id)
-                            }
-                            if file.id != selectedProfile.files.last?.id {
-                                StxRule().padding(.leading, 12)
-                            }
-                        }
+    private func editorHeader(vm: APIProviderSwitcherViewModel) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(vm.draftCLI.assetName)
+                .resizable()
+                .renderingMode(.template)
+                .scaledToFit()
+                .frame(width: 24, height: 24)
+                .foregroundStyle(Color.stxAccent)
+            VStack(alignment: .leading, spacing: 7) {
+                Text(vm.draftName.isEmpty ? "Provider" : vm.draftName)
+                    .font(.sora(18, weight: .semibold))
+                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    APIProviderBadge(title: vm.draftOrigin?.displayName ?? "Provider")
+                    APIProviderBadge(title: vm.draftCategory.displayName)
+                    if let provider = vm.selectedProvider, vm.isActive(provider) {
+                        APIProviderBadge(title: "Active", tint: Color.stxAccent)
+                    }
+                    if vm.draftIsDirty {
+                        APIProviderBadge(title: "Unsaved", tint: .orange)
                     }
                 }
-                .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.stxStroke, lineWidth: 1))
-            } else {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("No profile selected")
-                        .font(.sora(13, weight: .medium))
-                    Text("Capture the current configuration to start switching profiles.")
-                        .font(.sora(11))
-                        .foregroundStyle(Color.stxMuted)
+            }
+            Spacer(minLength: 12)
+        }
+    }
+
+    private func providerFields(vm: APIProviderSwitcherViewModel) -> some View {
+        @Bindable var bindableVM = vm
+        let isOfficial = bindableVM.draftOrigin?.kind == .official
+        let isUniversal = bindableVM.draftOrigin?.kind == .universal
+
+        return VStack(alignment: .leading, spacing: 12) {
+            APIProviderFieldRow(title: "Name") {
+                TextField("Provider name", text: $bindableVM.draftName)
+                    .textFieldStyle(.roundedBorder)
+            }
+            APIProviderFieldRow(title: "Category") {
+                Picker("", selection: $bindableVM.draftCategory) {
+                    ForEach(APIProviderCategory.allCases) { category in
+                        Text(category.displayName).tag(category)
+                    }
                 }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.stxStroke, lineWidth: 1))
+                .labelsHidden()
+                .disabled(isUniversal)
+            }
+            APIProviderFieldRow(title: "Base URL") {
+                TextField("https://api.example.com", text: $bindableVM.draftBaseURL)
+                    .textFieldStyle(.roundedBorder)
+            }
+            APIProviderFieldRow(title: "API Key") {
+                SecureField("API key", text: $bindableVM.draftAPIKey)
+                    .textFieldStyle(.roundedBorder)
+            }
+            APIProviderFieldRow(title: "Model") {
+                TextField(bindableVM.draftCLI == .claude ? "claude-compatible model" : "gpt-compatible model", text: $bindableVM.draftModel)
+                    .textFieldStyle(.roundedBorder)
             }
         }
+            .disabled(isOfficial || bindableVM.isWorking)
     }
 
-    private func editorDetail(snapshot: ConfigurationScreenSnapshot) -> some View {
-        ConfigurationEditorPane(
-            profile: snapshot.selectedProfile,
-            status: snapshot.selectedProfile.map { snapshot.status(for: $0) } ?? .unknown,
-            latestBackupURL: snapshot.latestBackupURL,
-            isWorking: vm.isWorking,
-            editor: editor,
-            saveToProfile: saveEditorToProfile,
-            saveToDisk: saveEditorToDisk,
-            revert: revertEditorDraft,
-            applyProfile: applySelectedProfile,
-            duplicateProfile: duplicateSelectedProfile,
-            deleteProfile: deleteSelectedProfile
-        )
-    }
+    private func rawEditor(vm: APIProviderSwitcherViewModel) -> some View {
+        @Bindable var bindableVM = vm
+        let isEditable = bindableVM.canSaveSelectedProvider && !bindableVM.isWorking
 
-    private var emptyProfiles: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("No profiles")
-                .font(.sora(13, weight: .medium))
-            Text("Capture the current \(selectedProvider.shortName) configuration.")
-                .font(.sora(11))
-                .foregroundStyle(Color.stxMuted)
+        return VStack(alignment: .leading, spacing: 8) {
+            ConfigurationTextEditor(
+                text: $bindableVM.draftRawConfig,
+                fileKind: bindableVM.draftCLI == .claude ? .json : .toml,
+                isEditable: isEditable
+            ) { line, column in
+                cursorLine = line
+                cursorColumn = column
+            }
+            .frame(maxHeight: .infinity)
+            .background(Color.black.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.stxStroke, lineWidth: 1))
+
+            HStack(spacing: 8) {
+                Text(bindableVM.draftCLI == .claude ? "settings.json" : "config.toml")
+                Text("·")
+                Text("\(cursorLine):\(cursorColumn)")
+                Spacer(minLength: 8)
+            }
+            .font(.sora(10).monospacedDigit())
+            .foregroundStyle(Color.stxMuted)
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func sectionTitle(_ title: String) -> some View {
-        Text(title)
-            .font(.sora(15, weight: .semibold))
+    private func editorActions(vm: APIProviderSwitcherViewModel) -> some View {
+        ViewThatFits(in: .horizontal) {
+            editorActionButtons(vm: vm, showLabels: true)
+            editorActionButtons(vm: vm, showLabels: false)
+        }
+        .controlSize(.small)
+    }
+
+    private func editorActionButtons(vm: APIProviderSwitcherViewModel, showLabels: Bool) -> some View {
+        HStack(spacing: 10) {
+            Button(role: .destructive) {
+                Task { await vm.deleteSelectedProvider(keyStorageMode: env.preferences.apiProviderKeyStorageMode) }
+            } label: {
+                actionLabel("Delete", systemImage: "trash", showLabels: showLabels)
+            }
+            .fixedSize(horizontal: showLabels, vertical: false)
+            .disabled(!vm.canDeleteSelectedProvider || vm.isWorking)
+            .help("Delete")
+
+            Spacer(minLength: 12)
+
+            Button {
+                vm.resetDraft(keyStorageMode: env.preferences.apiProviderKeyStorageMode)
+            } label: {
+                actionLabel("Revert", systemImage: "arrow.uturn.backward", showLabels: showLabels)
+            }
+            .fixedSize(horizontal: showLabels, vertical: false)
+            .disabled(!vm.draftIsDirty || vm.isWorking)
+            .help("Revert")
+
+            Button {
+                Task {
+                    await vm.saveDraft(rawMode: editorMode == .raw, keyStorageMode: env.preferences.apiProviderKeyStorageMode)
+                }
+            } label: {
+                actionLabel("Save Provider", systemImage: "square.and.arrow.down", showLabels: showLabels)
+            }
+            .fixedSize(horizontal: showLabels, vertical: false)
+            .disabled(!vm.canSaveSelectedProvider || !vm.draftIsDirty || vm.isWorking)
+            .help("Save Provider")
+
+            Button {
+                Task {
+                    await vm.enableSelectedProvider(rawMode: editorMode == .raw, keyStorageMode: env.preferences.apiProviderKeyStorageMode)
+                }
+            } label: {
+                actionLabel("Enable Provider", systemImage: "bolt.fill", showLabels: showLabels)
+            }
+            .fixedSize(horizontal: showLabels, vertical: false)
+            .buttonStyle(.borderedProminent)
+            .disabled(vm.selectedProvider == nil || vm.isWorking)
+            .help("Enable Provider")
+        }
+    }
+
+    @ViewBuilder
+    private func actionLabel(_ title: String, systemImage: String, showLabels: Bool) -> some View {
+        if showLabels {
+            Label(title, systemImage: systemImage)
+        } else {
+            Image(systemName: systemImage)
+                .frame(width: 22, height: 18)
+        }
     }
 
     private var errorBinding: Binding<Bool> {
         Binding(
-            get: { vm.lastError != nil },
+            get: { env.apiProviders.lastError != nil },
             set: { newValue in
-                if !newValue { vm.clearError() }
+                if !newValue { env.apiProviders.clearError() }
             }
         )
     }
-
-    private func captureCurrent() async {
-        let name = captureName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? vm.defaultProfileName(provider: selectedProvider, scope: selectedScope)
-            : captureName
-        if let profile = await vm.captureCurrent(name: name, provider: selectedProvider, scope: selectedScope) {
-            selectedProfileID = profile.id
-            selectedSnapshotID = profile.files.first?.id
-            editor.open(profile: profile, snapshot: profile.files.first)
-            resetCaptureName()
-        }
-    }
-
-    private func handleProviderChanged() {
-        normalizeSelection()
-        selectedScope = .global
-        normalizeSnapshotSelection()
-        openSelectedSnapshot(force: true)
-        resetCaptureName()
-    }
-
-    private func normalizeSelection() {
-        let available = vm.profiles(for: selectedProvider)
-        if let selectedProfileID, available.contains(where: { $0.id == selectedProfileID }) {
-            return
-        }
-        selectedProfileID = vm.activeProfile(for: selectedProvider)?.id ?? available.first?.id
-    }
-
-    private func normalizeSnapshotSelection() {
-        normalizeSnapshotSelection(in: selectedProfile(from: vm.profiles(for: selectedProvider)))
-    }
-
-    private func normalizeSnapshotSelection(in selectedProfile: ConfigProfile?) {
-        guard let selectedProfile else {
-            selectedSnapshotID = nil
-            return
-        }
-        if let selectedSnapshotID,
-           selectedProfile.files.contains(where: { $0.id == selectedSnapshotID }) {
-            return
-        }
-        selectedSnapshotID = selectedProfile.files.first?.id
-    }
-
-    private func requestSelectProfile(_ profileID: UUID) {
-        guard profileID != selectedProfileID else { return }
-        if editor.isDirty {
-            pendingSelection = .profile(profileID)
-            showDiscardDraftAlert = true
-        } else {
-            selectProfile(profileID)
-        }
-    }
-
-    private func requestSelectSnapshot(_ snapshotID: UUID) {
-        guard snapshotID != selectedSnapshotID else { return }
-        if editor.isDirty {
-            pendingSelection = .snapshot(snapshotID)
-            showDiscardDraftAlert = true
-        } else {
-            selectSnapshot(snapshotID)
-        }
-    }
-
-    private func commitPendingSelection() {
-        guard let pendingSelection else { return }
-        self.pendingSelection = nil
-        editor.clear()
-        switch pendingSelection {
-        case .provider(let provider):
-            suppressProviderDirtyCheck = true
-            selectedProvider = provider
-        case .profile(let profileID):
-            selectProfile(profileID)
-        case .snapshot(let snapshotID):
-            selectSnapshot(snapshotID)
-        }
-    }
-
-    private func selectProfile(_ profileID: UUID) {
-        selectedProfileID = profileID
-        normalizeSnapshotSelection()
-        openSelectedSnapshot(force: true)
-    }
-
-    private func selectSnapshot(_ snapshotID: UUID) {
-        selectedSnapshotID = snapshotID
-        openSelectedSnapshot(force: true)
-    }
-
-    private func openSelectedSnapshot(force: Bool = false) {
-        normalizeSnapshotSelection()
-        let selectedProfile = selectedProfile(from: vm.profiles(for: selectedProvider))
-        let selectedSnapshot = selectedSnapshot(in: selectedProfile)
-        guard let selectedProfile else {
-            editor.clear()
-            return
-        }
-        if force {
-            editor.open(profile: selectedProfile, snapshot: selectedSnapshot)
-        } else {
-            editor.syncIfClean(profile: selectedProfile, snapshot: selectedSnapshot)
-        }
-    }
-
-    private func saveEditorToProfile() {
-        guard let profileID = editor.profileID,
-              let snapshotID = editor.snapshotID else { return }
-        editor.setWorking(true)
-        Task {
-            let updatedProfile = await vm.saveSnapshotToProfile(
-                profileID: profileID,
-                snapshotID: snapshotID,
-                content: editor.draftContent
-            )
-            editor.setWorking(false)
-            syncEditorAfterSave(updatedProfile: updatedProfile, snapshotID: snapshotID)
-        }
-    }
-
-    private func saveEditorToDisk() {
-        guard let profileID = editor.profileID,
-              let snapshotID = editor.snapshotID else { return }
-        editor.setWorking(true)
-        Task {
-            let result = await vm.saveSnapshotToDisk(
-                profileID: profileID,
-                snapshotID: snapshotID,
-                content: editor.draftContent
-            )
-            editor.setWorking(false)
-            if let result {
-                syncEditorAfterSave(updatedProfile: result.updatedProfile, snapshotID: snapshotID, savedAt: result.savedAt)
-            }
-        }
-    }
-
-    private func syncEditorAfterSave(updatedProfile: ConfigProfile?, snapshotID: UUID, savedAt: Date = .now) {
-        guard let updatedProfile,
-              let snapshot = updatedProfile.files.first(where: { $0.id == snapshotID }) else { return }
-        selectedProfileID = updatedProfile.id
-        selectedSnapshotID = snapshot.id
-        editor.markSaved(profile: updatedProfile, snapshot: snapshot, savedAt: savedAt)
-    }
-
-    private func revertEditorDraft() {
-        let snapshot = screenSnapshot
-        guard let selectedProfile = snapshot.selectedProfile else { return }
-        editor.revert(profile: selectedProfile, snapshot: snapshot.selectedSnapshot)
-    }
-
-    private func applySelectedProfile() {
-        guard let selectedProfile = screenSnapshot.selectedProfile else { return }
-        profilePendingApply = selectedProfile
-    }
-
-    private func duplicateSelectedProfile() {
-        guard let selectedProfile = screenSnapshot.selectedProfile else { return }
-        Task {
-            if let copy = await vm.duplicate(selectedProfile) {
-                selectedProfileID = copy.id
-                selectedSnapshotID = copy.files.first?.id
-                editor.open(profile: copy, snapshot: copy.files.first)
-            }
-        }
-    }
-
-    private func deleteSelectedProfile() {
-        guard let selectedProfile = screenSnapshot.selectedProfile else { return }
-        Task {
-            await vm.delete(selectedProfile)
-            normalizeSelection()
-            normalizeSnapshotSelection()
-            openSelectedSnapshot(force: true)
-        }
-    }
-
-    private func resetCaptureName() {
-        captureName = vm.defaultProfileName(provider: selectedProvider, scope: selectedScope)
-    }
 }
 
-private struct ConfigurationScreenSnapshot {
-    let profiles: [ConfigProfile]
-    let selectedProfile: ConfigProfile?
-    let selectedSnapshot: ConfigFileSnapshot?
-    let activeProfileID: UUID?
-    let scopeOptions: [ConfigProfileScope]
-    let statuses: [UUID: ConfigProfileStatus]
-    let latestBackupURL: URL?
+private struct APIProviderWorkspaceLayout: Layout {
+    let railWidth: CGFloat
+    let providerWidth: CGFloat
+    let editorMinWidth: CGFloat
+    let spacing: CGFloat
 
-    func status(for profile: ConfigProfile) -> ConfigProfileStatus {
-        statuses[profile.id] ?? .unknown
+    private var stackedSpacing: CGFloat {
+        min(spacing, 8)
     }
-}
 
-private struct ConfigurationResponsiveLayout: Layout {
-    private let profileWidth: CGFloat = 270
-    private let filesWidth: CGFloat = 300
-    private let editorMinWidth: CGFloat = 360
-    private let spacing: CGFloat = 18
+    private var wideMinimumWidth: CGFloat {
+        railWidth + providerWidth + editorMinWidth + spacing * 2
+    }
 
-    private var horizontalBreakpoint: CGFloat {
-        profileWidth + filesWidth + editorMinWidth + spacing * 2
+    private var narrowWidth: CGFloat {
+        railWidth + providerWidth + spacing
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let proposedWidth = proposal.width ?? horizontalBreakpoint
-        guard subviews.count == 3, proposedWidth >= horizontalBreakpoint else {
-            return verticalSizeThatFits(proposal: proposal, subviews: subviews)
-        }
+        guard subviews.count == 3 else { return .zero }
 
-        let sizes = horizontalSizes(width: proposedWidth, subviews: subviews)
-        return CGSize(width: proposedWidth, height: sizes.map(\.height).max() ?? 0)
+        let availableWidth = proposal.width ?? wideMinimumWidth
+        if availableWidth >= wideMinimumWidth {
+            let editorWidth = max(editorMinWidth, availableWidth - railWidth - providerWidth - spacing * 2)
+            let editorSize = subviews[2].sizeThatFits(ProposedViewSize(width: editorWidth, height: nil))
+            return CGSize(
+                width: railWidth + providerWidth + editorWidth + spacing * 2,
+                height: editorSize.height
+            )
+        } else {
+            let layoutWidth = max(availableWidth, narrowWidth)
+            let detailWidth = max(providerWidth, layoutWidth - railWidth - spacing)
+            let editorSize = subviews[2].sizeThatFits(ProposedViewSize(width: detailWidth, height: nil))
+            let providerHeight = narrowProviderHeight(subviews: subviews, width: detailWidth, maxHeight: editorSize.height)
+            let stackedHeight = providerHeight + stackedSpacing + editorSize.height
+            return CGSize(width: layoutWidth, height: stackedHeight)
+        }
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        guard subviews.count == 3, bounds.width >= horizontalBreakpoint else {
-            placeVertically(in: bounds, subviews: subviews)
-            return
-        }
+        guard subviews.count == 3 else { return }
 
-        let editorWidth = bounds.width - profileWidth - filesWidth - spacing * 2
+        if bounds.width >= wideMinimumWidth {
+            placeWide(in: bounds, subviews: subviews)
+        } else {
+            placeNarrow(in: bounds, subviews: subviews)
+        }
+    }
+
+    private func placeWide(in bounds: CGRect, subviews: Subviews) {
+        let editorWidth = max(editorMinWidth, bounds.width - railWidth - providerWidth - spacing * 2)
+        let editorSize = subviews[2].sizeThatFits(ProposedViewSize(width: editorWidth, height: nil))
+        let columnHeight = editorSize.height
+
         var x = bounds.minX
         subviews[0].place(
             at: CGPoint(x: x, y: bounds.minY),
             anchor: .topLeading,
-            proposal: ProposedViewSize(width: profileWidth, height: nil)
+            proposal: ProposedViewSize(width: railWidth, height: columnHeight)
         )
-        x += profileWidth + spacing
+
+        x += railWidth + spacing
         subviews[1].place(
             at: CGPoint(x: x, y: bounds.minY),
             anchor: .topLeading,
-            proposal: ProposedViewSize(width: filesWidth, height: nil)
+            proposal: ProposedViewSize(width: providerWidth, height: columnHeight)
         )
-        x += filesWidth + spacing
+
+        x += providerWidth + spacing
         subviews[2].place(
             at: CGPoint(x: x, y: bounds.minY),
             anchor: .topLeading,
@@ -533,68 +484,68 @@ private struct ConfigurationResponsiveLayout: Layout {
         )
     }
 
-    private func horizontalSizes(width: CGFloat, subviews: Subviews) -> [CGSize] {
-        let editorWidth = width - profileWidth - filesWidth - spacing * 2
-        return [
-            subviews[0].sizeThatFits(ProposedViewSize(width: profileWidth, height: nil)),
-            subviews[1].sizeThatFits(ProposedViewSize(width: filesWidth, height: nil)),
-            subviews[2].sizeThatFits(ProposedViewSize(width: editorWidth, height: nil)),
-        ]
-    }
+    private func placeNarrow(in bounds: CGRect, subviews: Subviews) {
+        let detailWidth = max(providerWidth, bounds.width - railWidth - spacing)
+        let editorSize = subviews[2].sizeThatFits(ProposedViewSize(width: detailWidth, height: nil))
+        let providerHeight = narrowProviderHeight(subviews: subviews, width: detailWidth, maxHeight: editorSize.height)
+        let stackedHeight = providerHeight + stackedSpacing + editorSize.height
+        let originX = bounds.minX
+        let rightX = originX + railWidth + spacing
 
-    private func verticalSizeThatFits(proposal: ProposedViewSize, subviews: Subviews) -> CGSize {
-        let sizes = subviews.map { subview in
-            subview.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
-        }
-        let totalHeight = sizes.map(\.height).reduce(0, +) + spacing * CGFloat(max(0, subviews.count - 1))
-        return CGSize(
-            width: proposal.width ?? (sizes.map(\.width).max() ?? 0),
-            height: totalHeight
+        subviews[0].place(
+            at: CGPoint(x: originX, y: bounds.minY),
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: railWidth, height: stackedHeight)
+        )
+        subviews[1].place(
+            at: CGPoint(x: rightX, y: bounds.minY),
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: detailWidth, height: providerHeight)
+        )
+        subviews[2].place(
+            at: CGPoint(x: rightX, y: bounds.minY + providerHeight + stackedSpacing),
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: detailWidth, height: nil)
         )
     }
 
-    private func placeVertically(in bounds: CGRect, subviews: Subviews) {
-        var y = bounds.minY
-        for subview in subviews {
-            let size = subview.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
-            subview.place(
-                at: CGPoint(x: bounds.minX, y: y),
-                anchor: .topLeading,
-                proposal: ProposedViewSize(width: bounds.width, height: nil)
-            )
-            y += size.height + spacing
+    private func narrowProviderHeight(subviews: Subviews, width: CGFloat, maxHeight: CGFloat) -> CGFloat {
+        let naturalHeight = subviews[1].sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+        return min(naturalHeight, maxHeight)
+    }
+}
+
+private enum APIProviderEditorMode: String, CaseIterable, Identifiable {
+    case fields
+    case raw
+
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .fields: "Fields"
+        case .raw: "Raw"
         }
     }
 }
 
-private enum ConfigurationPendingSelection: Equatable {
-    case provider(ProviderKind)
-    case profile(UUID)
-    case snapshot(UUID)
-}
-
-private struct ProfileListRow: View {
-    let profile: ConfigProfile
-    let status: ConfigProfileStatus
+private struct APIProviderListRow: View {
+    let provider: CLIAPIProvider
     let isSelected: Bool
     let isActive: Bool
     let select: () -> Void
 
-    @State private var hovering = false
-
     var body: some View {
         Button(action: select) {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 7) {
                 HStack(spacing: 8) {
-                    Image(profile.provider.monochromeAssetName)
+                    Image(provider.cli.assetName)
                         .resizable()
                         .renderingMode(.template)
                         .scaledToFit()
                         .frame(width: 15, height: 15)
-                        .clipped()
                         .foregroundStyle(isSelected ? Color.stxAccent : Color.stxMuted)
-                    Text(profile.name)
-                        .font(.sora(12, weight: .medium))
+                    Text(provider.name)
+                        .font(.sora(12, weight: .semibold))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                     Spacer(minLength: 8)
@@ -602,14 +553,24 @@ private struct ProfileListRow: View {
                         Circle()
                             .fill(Color.stxAccent)
                             .frame(width: 7, height: 7)
-                            .help("Active")
                     }
                 }
-                HStack(spacing: 8) {
-                    Text(profile.scope.displayName)
-                    Text("\(profile.files.count) files")
+
+                HStack(spacing: 6) {
+                    APIProviderBadge(title: provider.origin.displayName)
+                    if provider.category != .official && provider.category != .imported {
+                        APIProviderBadge(title: provider.category.displayName)
+                    }
                     Spacer(minLength: 6)
-                    ProfileStatusBadge(status: status)
+                }
+
+                HStack(spacing: 6) {
+                    Text(provider.baseURL.isEmpty ? "Official endpoint" : provider.baseURL)
+                        .lineLimit(1)
+                    if !provider.model.isEmpty {
+                        Text("·")
+                        Text(provider.model).lineLimit(1)
+                    }
                 }
                 .font(.sora(10))
                 .foregroundStyle(Color.stxMuted)
@@ -618,153 +579,49 @@ private struct ProfileListRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 if isSelected {
-                    RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.10))
-                } else if hovering {
-                    RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.05))
+                    RoundedRectangle(cornerRadius: 7).fill(Color.stxAccent.opacity(0.10))
                 }
             }
-            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .padding(4)
-        .onHover { hovering = $0 }
     }
 }
 
-private struct ConfigFileSnapshotRow: View {
-    let snapshot: ConfigFileSnapshot
-    let isSelected: Bool
-    let select: () -> Void
-
-    @State private var hovering = false
+private struct APIProviderFieldRow<Content: View>: View {
+    let title: String
+    @ViewBuilder var content: () -> Content
 
     var body: some View {
-        HStack(alignment: .center, spacing: 0) {
-            Button(action: select) {
-                HStack(alignment: .center, spacing: 12) {
-                    Image(systemName: iconName)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(isSelected ? Color.stxAccent : Color.stxMuted)
-                        .frame(width: 18)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(snapshot.title)
-                            .font(.sora(12, weight: .medium))
-                        Text(snapshot.path)
-                            .font(.sora(10))
-                            .foregroundStyle(Color.stxMuted)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                    Spacer(minLength: 10)
-                    Text(snapshot.fileKind.displayName)
-                        .font(.sora(10))
-                        .foregroundStyle(Color.stxMuted)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            Button {
-                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: snapshot.path)])
-            } label: {
-                Image(systemName: "finder")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Color.stxMuted)
-            }
-            .buttonStyle(.plain)
-            .help("Reveal in Finder")
-            .frame(width: 28)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
-        .background {
-            if isSelected {
-                RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.10))
-            } else if hovering {
-                RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.05))
-            }
-        }
-        .padding(4)
-        .onHover { hovering = $0 }
-    }
-
-    private var iconName: String {
-        switch snapshot.fileKind {
-        case .json:
-            "curlybraces"
-        case .markdown:
-            "doc.text"
-        case .toml:
-            "slider.horizontal.3"
-        case .text:
-            "doc.plaintext"
-        }
-    }
-}
-
-private struct ProfileStatusBadge: View {
-    let status: ConfigProfileStatus
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(color)
-                .frame(width: 6, height: 6)
-            Text(status.displayName)
-                .lineLimit(1)
-        }
-    }
-
-    private var color: Color {
-        switch status {
-        case .clean:
-            Color.stxAccent
-        case .modified:
-            Color(red: 0.92, green: 0.58, blue: 0.16)
-        case .missing:
-            Color(red: 0.85, green: 0.22, blue: 0.18)
-        case .empty, .unknown:
-            Color.stxMuted
-        }
-    }
-}
-
-private struct ApplyConfigurationSheet: View {
-    let profile: ConfigProfile
-    let backupURL: URL?
-    let cancel: () -> Void
-    let apply: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Apply Profile")
-                .font(.sora(20, weight: .semibold))
-            Text("This will overwrite \(profile.files.count) configuration files. Claude Stats will create a timestamped backup before writing anything.")
-                .font(.sora(12))
+        HStack(alignment: .center, spacing: 12) {
+            Text(title)
+                .font(.sora(11, weight: .medium))
                 .foregroundStyle(Color.stxMuted)
-                .fixedSize(horizontal: false, vertical: true)
-            if let backupURL {
-                Text("Last backup: \(backupURL.path)")
-                    .font(.sora(10))
-                    .foregroundStyle(Color.stxMuted)
-                    .lineLimit(2)
-                    .truncationMode(.middle)
-            }
-            HStack {
-                Spacer()
-                Button("Cancel", action: cancel)
-                Button("Apply") { apply() }
-                    .keyboardShortcut(.defaultAction)
-            }
+                .frame(width: 86, alignment: .leading)
+            content()
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(22)
-        .frame(width: 420)
+    }
+}
+
+private struct APIProviderBadge: View {
+    let title: String
+    var tint: Color = Color.stxMuted
+
+    var body: some View {
+        Text(title)
+            .font(.sora(9, weight: .semibold))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(tint.opacity(0.12), in: Capsule())
+            .overlay(Capsule().strokeBorder(tint.opacity(0.2), lineWidth: 1))
     }
 }
 
 #if DEBUG
-#Preview("Configurations") {
+#Preview {
     ConfigurationsView()
         .environment(AppEnvironment.preview())
-        .frame(width: 980, height: 700)
+        .frame(width: 1180, height: 780)
 }
 #endif

@@ -14,6 +14,20 @@ enum MenuBarMetric: String, CaseIterable, Sendable, Identifiable {
     }
 }
 
+enum APIProviderKeyStorageMode: String, CaseIterable, Sendable, Identifiable {
+    case json
+    case keychain
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .json: "JSON"
+        case .keychain: "Keychain"
+        }
+    }
+}
+
 /// Thin, observable wrapper over the handful of `UserDefaults` keys the app
 /// uses. Writing a property persists it immediately.
 @MainActor
@@ -69,6 +83,9 @@ final class Preferences {
     }
     var terminalBackgroundStyle: TerminalBackgroundStyle {
         didSet { defaults.set(terminalBackgroundStyle.rawValue, forKey: Keys.terminalBackgroundStyle) }
+    }
+    var apiProviderKeyStorageMode: APIProviderKeyStorageMode {
+        didSet { defaults.set(apiProviderKeyStorageMode.rawValue, forKey: Keys.apiProviderKeyStorageMode) }
     }
 
     /// Which platforms the user has turned on. The switcher bar only appears
@@ -192,6 +209,7 @@ final class Preferences {
         sessionsExpandedOnAppOpen = (defaults.object(forKey: Keys.sessionsExpandedOnAppOpen) as? Bool) ?? false
         terminalChromeMode = TerminalChromeMode(rawValue: defaults.string(forKey: Keys.terminalChromeMode) ?? "") ?? .tabsAndStatus
         terminalBackgroundStyle = TerminalBackgroundStyle(rawValue: defaults.string(forKey: Keys.terminalBackgroundStyle) ?? "") ?? .fluidGradient
+        apiProviderKeyStorageMode = APIProviderKeyStorageMode(rawValue: defaults.string(forKey: Keys.apiProviderKeyStorageMode) ?? "") ?? .json
         aiActivityAnalysisEnabled = defaults.bool(forKey: Keys.aiActivityAnalysisEnabled)
         gitTrackingEnabled = defaults.bool(forKey: Keys.gitTrackingEnabled)
         gitOpensInWindow = defaults.bool(forKey: Keys.gitOpensInWindow)
@@ -239,6 +257,7 @@ final class Preferences {
         static let sessionsExpandedOnAppOpen = "sessionsExpandedOnAppOpen"
         static let terminalChromeMode = "terminalChromeMode"
         static let terminalBackgroundStyle = "terminalBackgroundStyle"
+        static let apiProviderKeyStorageMode = "apiProviderKeyStorageMode"
         static let aiActivityAnalysisEnabled = "aiActivityAnalysisEnabled"
         static let gitTrackingEnabled = "gitTrackingEnabled"
         static let gitOpensInWindow = "gitOpensInWindow"

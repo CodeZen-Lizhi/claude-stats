@@ -24,6 +24,7 @@ final class AppEnvironment {
     let github = GitHubViewModel()
     let leaderboards: LeaderboardSyncViewModel
     let configurationProfiles: ConfigurationProfilesViewModel
+    let apiProviders: APIProviderSwitcherViewModel
 
     init(
         pricing: ModelPricing,
@@ -41,6 +42,7 @@ final class AppEnvironment {
         self.gitActivity = GitActivityViewModel()
         self.leaderboards = LeaderboardSyncViewModel(preferences: preferences, store: store)
         self.configurationProfiles = ConfigurationProfilesViewModel(registry: providerRegistry)
+        self.apiProviders = APIProviderSwitcherViewModel()
     }
 
     convenience init() {
@@ -62,6 +64,7 @@ final class AppEnvironment {
     /// Kick off the first scan and the periodic refresh. Call once at launch.
     func start() {
         Task {
+            await apiProviders.loadIfNeeded(keyStorageMode: preferences.apiProviderKeyStorageMode)
             await configurationProfiles.loadIfNeeded()
             await store.refresh()
             leaderboards.start()
