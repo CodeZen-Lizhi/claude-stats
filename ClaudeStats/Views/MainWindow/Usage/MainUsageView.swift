@@ -18,6 +18,7 @@ struct MainUsageView: View {
         let summary = vm.summary(from: env.store, provider: provider)
         let series = summary.trendSeries()
         let includeCache = env.preferences.includeCacheInTokens
+        let costMode = env.preferences.costEstimationMode
         let cacheHitRate = env.store.cacheHitRate(for: summary.totalUsage, provider: provider)
 
         FadingScrollView {
@@ -27,6 +28,7 @@ struct MainUsageView: View {
                 UsageSummaryCards(
                     summary: summary,
                     includeCacheInTokens: includeCache,
+                    costEstimationMode: costMode,
                     cacheHitRate: cacheHitRate
                 )
                 UsageTrendPanel(
@@ -36,7 +38,7 @@ struct MainUsageView: View {
                     stackByType: $bvm.stackByType,
                     displayName: modelDisplayName
                 )
-                lowerPanels(summary: summary, series: series, includeCache: includeCache, cacheHitRate: cacheHitRate)
+                lowerPanels(summary: summary, series: series, includeCache: includeCache, costMode: costMode, cacheHitRate: cacheHitRate)
             }
             .padding(.horizontal, 20)
             .padding(.top, 52)
@@ -75,13 +77,14 @@ struct MainUsageView: View {
     }
 
     @ViewBuilder
-    private func lowerPanels(summary: UsageSummary, series: TrendSeries, includeCache: Bool, cacheHitRate: Double?) -> some View {
+    private func lowerPanels(summary: UsageSummary, series: TrendSeries, includeCache: Bool, costMode: CostEstimationMode, cacheHitRate: Double?) -> some View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .top, spacing: 12) {
                 UsageModelBreakdown(
                     models: summary.models,
                     series: series,
                     includeCacheInTokens: includeCache,
+                    costEstimationMode: costMode,
                     displayName: modelDisplayName
                 )
                 .frame(minWidth: 560, maxWidth: .infinity)
@@ -99,6 +102,7 @@ struct MainUsageView: View {
                     models: summary.models,
                     series: series,
                     includeCacheInTokens: includeCache,
+                    costEstimationMode: costMode,
                     displayName: modelDisplayName
                 )
                 UsageTokenCompositionPanel(

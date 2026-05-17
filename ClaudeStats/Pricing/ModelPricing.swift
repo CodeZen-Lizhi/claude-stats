@@ -88,6 +88,34 @@ struct ModelPricing: Sendable, Hashable {
                     cacheWrite1h: r.cacheWrite1h)
     }
 
+    func costEstimate(model: String, usage: TokenUsage) -> CostEstimate {
+        CostEstimate(standardAPI: cost(model: model, usage: usage))
+    }
+
+    /// Claude Code writes enough metadata for a slightly richer estimate on a
+    /// few request types. Keep the standard API estimate as the baseline, then
+    /// add only billable details that are explicit in the transcript.
+    func claudeCostEstimate(model: String,
+                            usage: TokenUsage,
+                            speed: String?,
+                            webSearchRequests: Int) -> CostEstimate {
+        let standard = cost(model: model, usage: usage)
+        var detailed = standard
+
+        if speed?.lowercased() == "fast", Self.supportsClaudeFastMode(model) {
+            let r = rate(for: model)
+            detailed = cost(usage: usage,
+                            input: r.input * 6,
+                            output: r.output * 6,
+                            cacheRead: r.cacheRead * 6,
+                            cacheWrite5m: r.cacheWrite5m * 6,
+                            cacheWrite1h: r.cacheWrite1h * 6)
+        }
+
+        detailed += Double(webSearchRequests) * Self.claudeWebSearchUSD
+        return CostEstimate(standardAPI: standard, detailedBilling: detailed)
+    }
+
     /// Estimated USD cost for one request/turn, using long-context rates when
     /// the raw prompt input for that turn crosses the model's published
     /// threshold.
@@ -118,6 +146,16 @@ struct ModelPricing: Sendable, Hashable {
             + Double(usage.cacheCreation1hTokens) / perMillion * cacheWrite1h
     }
 
+    private static let claudeWebSearchUSD = 10.0 / 1_000.0
+
+    private static func supportsClaudeFastMode(_ model: String) -> Bool {
+        let lower = model.lowercased()
+        return lower == "claude-opus-4-7"
+            || lower.hasPrefix("claude-opus-4-7-")
+            || lower == "claude-opus-4-6"
+            || lower.hasPrefix("claude-opus-4-6-")
+    }
+
     // MARK: Loading
 
     private struct File: Codable {
@@ -136,7 +174,7 @@ struct ModelPricing: Sendable, Hashable {
     /// resource is missing.
     static let fallback = ModelPricing(
         rates: [
-            "claude-opus-4-7": Rates.derived(input: 15, output: 75),
+            "claude-opus-4-7": Rates.derived(input: 5, output: 25),
             "claude-sonnet-4-6": Rates.derived(input: 3, output: 15),
             "claude-haiku-4-5": Rates.derived(input: 1, output: 5),
         ],

@@ -115,6 +115,55 @@ struct PreferencesTests {
         #expect(prefs.gitStatsScope == .head)
     }
 
+    @Test("Cost estimation mode defaults to API estimate")
+    func costEstimationModeDefault() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+
+        #expect(prefs.costEstimationMode == .standardAPI)
+    }
+
+    @Test("Cost estimation mode persists and invalid values fall back")
+    func costEstimationModePersists() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+        prefs.costEstimationMode = .detailedBilling
+
+        let reloaded = Preferences(defaults: defaults)
+        #expect(reloaded.costEstimationMode == .detailedBilling)
+
+        defaults.set("invoice", forKey: "costEstimationMode")
+        let invalid = Preferences(defaults: defaults)
+        #expect(invalid.costEstimationMode == .standardAPI)
+    }
+
+    @Test("Claude Status preferences default to visible claude.ai and Claude Code without alerts")
+    func claudeStatusDefaults() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+
+        #expect(prefs.claudeStatusVisibleComponentIDs == ClaudeStatusComponentCatalog.defaultVisibleComponentIDs)
+        #expect(prefs.claudeStatusNotificationsEnabled == false)
+        #expect(prefs.claudeStatusLastNotificationFingerprint == "")
+    }
+
+    @Test("Claude Status preferences persist and empty visible components fall back")
+    func claudeStatusPersists() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+        prefs.claudeStatusVisibleComponentIDs = [ClaudeStatusComponentCatalog.claudeAPIID]
+        prefs.claudeStatusNotificationsEnabled = true
+        prefs.claudeStatusLastNotificationFingerprint = "component:degraded"
+
+        let reloaded = Preferences(defaults: defaults)
+        #expect(reloaded.claudeStatusVisibleComponentIDs == [ClaudeStatusComponentCatalog.claudeAPIID])
+        #expect(reloaded.claudeStatusNotificationsEnabled == true)
+        #expect(reloaded.claudeStatusLastNotificationFingerprint == "component:degraded")
+
+        reloaded.claudeStatusVisibleComponentIDs = []
+        #expect(reloaded.claudeStatusVisibleComponentIDs == ClaudeStatusComponentCatalog.defaultVisibleComponentIDs)
+    }
+
     private func makeDefaults() -> UserDefaults {
         let suiteName = "com.claudestats.tests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName) ?? .standard

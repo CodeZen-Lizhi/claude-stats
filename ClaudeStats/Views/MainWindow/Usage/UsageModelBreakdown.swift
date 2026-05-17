@@ -4,6 +4,7 @@ struct UsageModelBreakdown: View {
     let models: [ModelUsage]
     let series: TrendSeries
     let includeCacheInTokens: Bool
+    let costEstimationMode: CostEstimationMode
     let displayName: (String) -> String
 
     var body: some View {
@@ -34,6 +35,7 @@ struct UsageModelBreakdown: View {
                             maxTokens: maxTokens,
                             allTokens: allTokens,
                             includeCacheInTokens: includeCacheInTokens,
+                            costEstimationMode: costEstimationMode,
                             displayName: displayName(model.model)
                         )
                         if model.id != models.last?.id {
@@ -70,6 +72,7 @@ private struct UsageModelRow: View {
     let maxTokens: Int
     let allTokens: Int
     let includeCacheInTokens: Bool
+    let costEstimationMode: CostEstimationMode
     let displayName: String
 
     private var share: Double {
@@ -92,7 +95,7 @@ private struct UsageModelRow: View {
                     .font(.sora(12, weight: .semibold).monospacedDigit())
                     .foregroundStyle(.primary)
                     .frame(minWidth: 72, alignment: .trailing)
-                Text(Format.cost(model.estimatedCost))
+                Text(Format.cost(model.estimatedCost(for: costEstimationMode)))
                     .font(.sora(12).monospacedDigit())
                     .foregroundStyle(Color.stxMuted)
                     .frame(minWidth: 70, alignment: .trailing)

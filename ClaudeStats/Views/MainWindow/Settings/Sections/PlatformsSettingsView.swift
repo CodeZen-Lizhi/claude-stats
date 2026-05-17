@@ -20,6 +20,12 @@ struct PlatformsSettingsView: View {
                 }
                 .settingCard()
             }
+
+            claudeStatusGroup(prefs: prefs)
+        }
+        .task {
+            await env.claudeStatus.refreshNotificationAuthorizationStatus()
+            await env.claudeStatus.refreshIfNeeded()
         }
     }
 
@@ -58,6 +64,74 @@ struct PlatformsSettingsView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
     }
+
+    private func claudeStatusGroup(prefs: Preferences) -> some View {
+        SettingGroup(
+            title: "Claude Status",
+            caption: "Shows selected Claude service health on the Dashboard. Alerts only monitor the components shown here."
+        ) {
+            VStack(spacing: 0) {
+                SettingRow(
+                    title: "Status alerts",
+                    description: claudeStatusAlertsDescription
+                ) {
+                    Toggle("", isOn: Binding(
+                        get: { prefs.claudeStatusNotificationsEnabled },
+                        set: { enabled in
+                            Task { await env.claudeStatus.setNotificationsEnabled(enabled) }
+                        }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .disabled(env.claudeStatus.isRequestingNotificationAuthorization)
+                }
+                SettingRowDivider()
+                let components = Array(env.claudeStatus.availableComponents.enumerated())
+                ForEach(components, id: \.element.id) { index, component in
+                    if index > 0 { SettingRowDivider() }
+                    claudeStatusComponentRow(component)
+                }
+            }
+            .settingCard()
+        }
+    }
+
+    private var claudeStatusAlertsDescription: String {
+        if env.claudeStatus.isRequestingNotificationAuthorization {
+            return "Waiting for macOS notification permission."
+        }
+        if env.claudeStatus.notificationPermissionDenied {
+            return "Notification permission is denied in macOS Settings."
+        }
+        return "Send a macOS notification when any shown Claude component is not operational."
+    }
+
+    private func claudeStatusComponentRow(_ component: ClaudeStatusComponent) -> some View {
+        let isVisible = env.claudeStatus.isComponentVisible(component)
+        let canHide = env.claudeStatus.canHideComponent(component)
+        return HStack(alignment: .center, spacing: 12) {
+            Circle()
+                .fill(component.status.settingsTint)
+                .frame(width: 8, height: 8)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(component.name)
+                    .font(.sora(13, weight: .medium))
+                Text(component.status.displayName)
+                    .font(.sora(11))
+                    .foregroundStyle(Color.stxMuted)
+            }
+            Spacer(minLength: 12)
+            Toggle("", isOn: Binding(
+                get: { env.claudeStatus.isComponentVisible(component) },
+                set: { env.claudeStatus.setComponentVisibility(component, isVisible: $0) }
+            ))
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .disabled(isVisible && !canHide)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+    }
 }
 
 #if DEBUG
@@ -68,3 +142,15 @@ struct PlatformsSettingsView: View {
         .frame(width: 720)
 }
 #endif
+
+private extension ClaudeStatusSeverity {
+    var settingsTint: Color {
+        switch self {
+        case .operational: Color.green
+        case .underMaintenance: Color.blue
+        case .degradedPerformance: Color.orange
+        case .partialOutage, .majorOutage: Color.red
+        case .unknown: Color.stxMuted
+        }
+    }
+}

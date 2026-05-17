@@ -22,6 +22,7 @@ final class AppEnvironment {
     let dashboard: DashboardViewModel
     let gitActivity: GitActivityViewModel
     let github = GitHubViewModel()
+    let claudeStatus: ClaudeStatusViewModel
     let leaderboards: LeaderboardSyncViewModel
     let configurationProfiles: ConfigurationProfilesViewModel
     let apiProviders: APIProviderSwitcherViewModel
@@ -43,6 +44,7 @@ final class AppEnvironment {
         self.cliEnvironment = cliEnvironment
         self.dashboard = DashboardViewModel(pricing: pricing)
         self.gitActivity = GitActivityViewModel()
+        self.claudeStatus = ClaudeStatusViewModel(preferences: preferences)
         self.leaderboards = LeaderboardSyncViewModel(preferences: preferences, store: store)
         self.configurationProfiles = ConfigurationProfilesViewModel(registry: providerRegistry)
         self.apiProviders = APIProviderSwitcherViewModel()
@@ -72,6 +74,7 @@ final class AppEnvironment {
             await store.refresh()
             leaderboards.start()
         }
+        claudeStatus.start()
         applyAutoRefreshSetting()
         updater.start()
         floatingStatsPanel.start(environment: self)

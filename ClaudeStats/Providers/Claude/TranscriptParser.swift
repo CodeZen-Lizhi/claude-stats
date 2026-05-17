@@ -9,11 +9,12 @@ import Foundation
 /// memory; acceptable for v0.1.)
 struct TranscriptParser: Sendable {
     let pricing: ModelPricing
+    private static let syntheticModelID = "<synthetic>"
 
     func parse(transcriptAt url: URL, fallbackTitle: String) async -> SessionStats? {
         guard let data = try? Data(contentsOf: url) else { return nil }
 
-        var perModel: [String: (count: Int, usage: TokenUsage)] = [:]
+        var perModel: [String: (count: Int, usage: TokenUsage, cost: CostEstimate)] = [:]
         var perModelHourly: [String: [Date: TokenUsage]] = [:]
         var messageCount = 0
         var firstActivity: Date?
@@ -39,10 +40,23 @@ struct TranscriptParser: Sendable {
                 if let date { messageTimestamps.append(date) }
                 let model = line.message?.model ?? "unknown"
                 let usage = line.message?.usage?.tokenUsage ?? .zero
+                let speed = line.message?.usage?.speed
+                let webSearchRequests = line.message?.usage?.serverToolUse?.webSearchRequests ?? 0
+                let cost = pricing.claudeCostEstimate(
+                    model: model,
+                    usage: usage,
+                    speed: speed,
+                    webSearchRequests: webSearchRequests
+                )
+                if model == Self.syntheticModelID, usage.total == 0, cost.detailedBilling == 0 {
+                    continue
+                }
+
                 if usage.total > 0 {
-                    var acc = perModel[model] ?? (0, .zero)
+                    var acc = perModel[model] ?? (0, .zero, .zero)
                     acc.count += 1
                     acc.usage += usage
+                    acc.cost += cost
                     perModel[model] = acc
                     if let date {
                         let hour = calendar.dateInterval(of: .hour, for: date)?.start
@@ -52,8 +66,9 @@ struct TranscriptParser: Sendable {
                 } else {
                     // Still count the model so a session with assistant turns
                     // but zero recorded usage doesn't vanish.
-                    var acc = perModel[model] ?? (0, .zero)
+                    var acc = perModel[model] ?? (0, .zero, .zero)
                     acc.count += 1
+                    acc.cost += cost
                     perModel[model] = acc
                 }
 
@@ -73,7 +88,7 @@ struct TranscriptParser: Sendable {
         }
 
         let models = perModel
-            .map { ModelUsage(model: $0.key, messageCount: $0.value.count, usage: $0.value.usage, pricing: pricing) }
+            .map { ModelUsage(model: $0.key, messageCount: $0.value.count, usage: $0.value.usage, costEstimate: $0.value.cost) }
             .sorted { $0.usage.total > $1.usage.total }
         let timeline = perModelHourly
             .flatMap { model, byHour in byHour.map { ModelBucket(model: model, start: $0.key, usage: $0.value) } }
@@ -184,6 +199,8 @@ private struct TranscriptLine: Decodable {
         let cacheCreationInputTokens: Int?
         let cacheReadInputTokens: Int?
         let cacheCreation: CacheCreation?
+        let speed: String?
+        let serverToolUse: ServerToolUse?
 
         enum CodingKeys: String, CodingKey {
             case inputTokens = "input_tokens"
@@ -191,6 +208,8 @@ private struct TranscriptLine: Decodable {
             case cacheCreationInputTokens = "cache_creation_input_tokens"
             case cacheReadInputTokens = "cache_read_input_tokens"
             case cacheCreation = "cache_creation"
+            case speed
+            case serverToolUse = "server_tool_use"
         }
 
         var tokenUsage: TokenUsage {
@@ -216,6 +235,14 @@ private struct TranscriptLine: Decodable {
         enum CodingKeys: String, CodingKey {
             case ephemeral5m = "ephemeral_5m_input_tokens"
             case ephemeral1h = "ephemeral_1h_input_tokens"
+        }
+    }
+
+    struct ServerToolUse: Decodable {
+        let webSearchRequests: Int?
+
+        enum CodingKeys: String, CodingKey {
+            case webSearchRequests = "web_search_requests"
         }
     }
 

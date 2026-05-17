@@ -37,7 +37,7 @@ struct SessionRow: View {
                             systemImage: "number"
                         )
                         .labelStyle(.titleAndIcon)
-                        Text(Format.cost(stats.totalCost))
+                        Text(Format.cost(stats.totalCost(for: env.preferences.costEstimationMode)))
                     }
                 }
                 .font(.sora(9).monospacedDigit())

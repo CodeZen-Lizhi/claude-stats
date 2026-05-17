@@ -3,6 +3,7 @@ import SwiftUI
 struct UsageSummaryCards: View {
     let summary: UsageSummary
     let includeCacheInTokens: Bool
+    let costEstimationMode: CostEstimationMode
     let cacheHitRate: Double?
 
     var body: some View {
@@ -10,7 +11,7 @@ struct UsageSummaryCards: View {
             Grid(horizontalSpacing: 12, verticalSpacing: 12) {
                 GridRow {
                     card("Total tokens", Format.tokens(summary.totalTokens(includingCacheRead: includeCacheInTokens)))
-                    card("Est. cost", Format.cost(summary.totalCost))
+                    card("Est. cost", Format.cost(summary.totalCost(for: costEstimationMode)))
                     card("Sessions", "\(summary.sessionCount)")
                 }
                 GridRow {
@@ -23,7 +24,7 @@ struct UsageSummaryCards: View {
             Grid(horizontalSpacing: 12, verticalSpacing: 12) {
                 GridRow {
                     card("Total tokens", Format.tokens(summary.totalTokens(includingCacheRead: includeCacheInTokens)))
-                    card("Est. cost", Format.cost(summary.totalCost))
+                    card("Est. cost", Format.cost(summary.totalCost(for: costEstimationMode)))
                 }
                 GridRow {
                     card("Sessions", "\(summary.sessionCount)")
@@ -47,6 +48,7 @@ struct UsageSummaryCards: View {
     UsageSummaryCards(
         summary: .empty(period: .last30Days),
         includeCacheInTokens: true,
+        costEstimationMode: .standardAPI,
         cacheHitRate: 0.84
     )
     .padding(24)

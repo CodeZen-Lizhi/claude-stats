@@ -75,6 +75,9 @@ struct DashboardView: View {
                login != env.preferences.githubLogin {
                 env.preferences.githubLogin = login
             }
+            if env.preferences.selectedProvider == .claude {
+                await env.claudeStatus.refreshIfNeeded()
+            }
         }
     }
 
@@ -138,6 +141,9 @@ struct DashboardView: View {
     private var overviewBody: some View {
         VStack(alignment: .leading, spacing: 16) {
             statsGrid
+            if env.preferences.selectedProvider == .claude {
+                ClaudeStatusCard(status: env.claudeStatus)
+            }
             heatmapsRow
             overlapSection
             ComparisonFooter(totalTokens: vm.stats.totalTokens)

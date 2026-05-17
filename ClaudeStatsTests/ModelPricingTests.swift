@@ -8,9 +8,43 @@ struct ModelPricingTests {
     @Test("Exact match wins over fuzzy fallback")
     func exactMatch() {
         let rate = ModelPricing.fallback.rate(for: "claude-opus-4-7")
-        #expect(rate.input == 15)
-        #expect(rate.output == 75)
+        #expect(rate.input == 5)
+        #expect(rate.output == 25)
         #expect(ModelPricing.fallback.hasExactRate(for: "claude-opus-4-7"))
+    }
+
+    @Test("Current Opus 4.5 and later prices use Anthropic's lower API rate")
+    func currentOpusPricing() {
+        let pricing = ModelPricing.loadDefault(bundle: .main, userFile: nil)
+        for model in ["claude-opus-4-7", "claude-opus-4-6", "claude-opus-4-5"] {
+            let rate = pricing.rate(for: model)
+            #expect(rate.input == 5)
+            #expect(rate.output == 25)
+            #expect(rate.cacheWrite5m == 6.25)
+            #expect(rate.cacheWrite1h == 10)
+            #expect(rate.cacheRead == 0.5)
+        }
+    }
+
+    @Test("Legacy Opus 4.1 and 4 prices keep their higher API rate")
+    func legacyOpusPricing() {
+        let pricing = ModelPricing.loadDefault(bundle: .main, userFile: nil)
+        for model in ["claude-opus-4-1", "claude-opus-4"] {
+            let rate = pricing.rate(for: model)
+            #expect(rate.input == 15)
+            #expect(rate.output == 75)
+            #expect(rate.cacheWrite5m == 18.75)
+            #expect(rate.cacheWrite1h == 30)
+            #expect(rate.cacheRead == 1.5)
+        }
+    }
+
+    @Test("Dated Claude ids match their dateless alias pricing")
+    func datedClaudeAliasPricing() {
+        let pricing = ModelPricing.loadDefault(bundle: .main, userFile: nil)
+        let rate = pricing.rate(for: "claude-opus-4-7-20260501")
+        #expect(rate.input == 5)
+        #expect(rate.output == 25)
     }
 
     @Test("Unknown Sonnet variant falls back to a sonnet rate")
@@ -80,6 +114,19 @@ struct ModelPricingTests {
         #expect(model?.estimatedCost == 8)
     }
 
+    @Test("Merged model usage preserves both standard and detailed costs")
+    func mergedUsagePreservesCostModes() {
+        let entries = [
+            ModelUsage(model: "model-a", messageCount: 1, usage: TokenUsage(inputTokens: 1), costEstimate: CostEstimate(standardAPI: 3, detailedBilling: 4)),
+            ModelUsage(model: "model-a", messageCount: 1, usage: TokenUsage(inputTokens: 2), costEstimate: CostEstimate(standardAPI: 5, detailedBilling: 7)),
+        ]
+
+        let merged = entries.merged(pricing: TestPricing.table)
+        let model = merged.first
+        #expect(model?.estimatedCost(for: .standardAPI) == 8)
+        #expect(model?.estimatedCost(for: .detailedBilling) == 11)
+    }
+
     @Test("User pricing files without long context remain compatible")
     func legacyPricingJSONCompatibility() throws {
         let root = try TempDir.make()
@@ -112,7 +159,7 @@ struct ModelPricingTests {
         // which is where `default-pricing.json` is copied.
         let pricing = ModelPricing.loadDefault(bundle: .main, userFile: nil)
         #expect(pricing.hasExactRate(for: "claude-opus-4-7"))
-        #expect(pricing.rate(for: "claude-opus-4-7").output == 75)
+        #expect(pricing.rate(for: "claude-opus-4-7").output == 25)
         #expect(pricing.hasExactRate(for: "gpt-5.4"))
         #expect(pricing.rate(for: "gpt-5.4").input == 2.5)
         #expect(pricing.rate(for: "gpt-5.4").cacheRead == 0.25)

@@ -21,7 +21,8 @@ struct MenuBarLabel: View {
         switch metric {
         case .tokens:
             return Format.tokens(summary.totalTokens(includingCacheRead: env.preferences.menuBarIncludesCache))
-        case .cost: return Format.cost(summary.totalCost)
+        case .cost:
+            return Format.cost(summary.totalCost(for: env.preferences.costEstimationMode))
         }
     }
 }

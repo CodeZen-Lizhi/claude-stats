@@ -73,7 +73,7 @@ struct SessionDetailView: View {
         Grid(horizontalSpacing: 12, verticalSpacing: 12) {
             GridRow {
                 StatCard(label: "Total tokens", value: Format.tokens(stats.totalTokens(includingCacheRead: includeCache)))
-                StatCard(label: "Estimated cost", value: Format.cost(stats.totalCost))
+                StatCard(label: "Estimated cost", value: Format.cost(stats.totalCost(for: env.preferences.costEstimationMode)))
                 StatCard(label: "Messages", value: "\(stats.messageCount)")
                 StatCard(label: "Last activity", value: Format.relativeDate(stats.lastActivity ?? session.lastModified))
             }

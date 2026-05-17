@@ -5,20 +5,24 @@ struct UsageSummary: Sendable, Hashable {
     let period: StatsPeriod
     let sessionCount: Int
     let models: [ModelUsage]
+    let messageCount: Int
     /// Hourly per-model buckets for the sessions counted in this period.
     let timeline: [ModelBucket]
 
     var totalUsage: TokenUsage { models.reduce(.zero) { $0 + $1.usage } }
     var totalTokens: Int { totalUsage.total }
-    var totalCost: Double { models.reduce(0) { $0 + $1.estimatedCost } }
-    var messageCount: Int { models.reduce(0) { $0 + $1.messageCount } }
+    var totalCost: Double { totalCost(for: .standardAPI) }
 
     func totalTokens(includingCacheRead: Bool) -> Int {
         totalUsage.total(includingCacheRead: includingCacheRead)
     }
 
+    func totalCost(for mode: CostEstimationMode) -> Double {
+        models.reduce(0) { $0 + $1.estimatedCost(for: mode) }
+    }
+
     static func empty(period: StatsPeriod) -> UsageSummary {
-        UsageSummary(period: period, sessionCount: 0, models: [], timeline: [])
+        UsageSummary(period: period, sessionCount: 0, models: [], messageCount: 0, timeline: [])
     }
 
     /// Build a summary from already-parsed sessions.
@@ -33,10 +37,11 @@ struct UsageSummary: Sendable, Hashable {
             return period.contains(when, now: now)
         }
         let allModels = inPeriod.flatMap { $0.stats?.models ?? [] }.merged(pricing: pricing)
+        let messageCount = inPeriod.reduce(0) { $0 + ($1.stats?.messageCount ?? 0) }
         let allTimeline = inPeriod.flatMap { $0.stats?.timeline ?? [] }
             .filter { period.contains($0.start, now: now) }
             .mergedByModelBucket()
-        return UsageSummary(period: period, sessionCount: inPeriod.count, models: allModels, timeline: allTimeline)
+        return UsageSummary(period: period, sessionCount: inPeriod.count, models: allModels, messageCount: messageCount, timeline: allTimeline)
     }
 
     /// Build a summary scoped to an explicit `[start, end]` range of calendar
@@ -54,10 +59,11 @@ struct UsageSummary: Sendable, Hashable {
             return when >= lo && when < hiExclusive
         }
         let allModels = inRange.flatMap { $0.stats?.models ?? [] }.merged(pricing: pricing)
+        let messageCount = inRange.reduce(0) { $0 + ($1.stats?.messageCount ?? 0) }
         let allTimeline = inRange.flatMap { $0.stats?.timeline ?? [] }
             .filter { $0.start >= lo && $0.start < hiExclusive }
             .mergedByModelBucket()
-        return UsageSummary(period: .allTime, sessionCount: inRange.count, models: allModels, timeline: allTimeline)
+        return UsageSummary(period: .allTime, sessionCount: inRange.count, models: allModels, messageCount: messageCount, timeline: allTimeline)
     }
 
     /// Per-model series for the trend chart: hourly across *today* for

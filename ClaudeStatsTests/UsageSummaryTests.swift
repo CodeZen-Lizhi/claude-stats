@@ -26,6 +26,20 @@ struct UsageSummaryTests {
                        filePath: "/\(id).jsonl", cwd: nil, lastModified: when, fileSize: 1, stats: stats)
     }
 
+    private func session(_ id: String, messageCount: Int, models: [ModelUsage]) -> Session {
+        let when = Date.now
+        let stats = SessionStats(
+            title: id,
+            messageCount: messageCount,
+            firstActivity: when,
+            lastActivity: when,
+            models: models,
+            timeline: []
+        )
+        return Session(id: id, externalID: id, provider: .claude, projectDirectoryName: "-p",
+                       filePath: "/\(id).jsonl", cwd: nil, lastModified: when, fileSize: 1, stats: stats)
+    }
+
     @Test("Only sessions inside the [start, end] day range count")
     func filtersByRange() {
         let sessions = [
@@ -61,5 +75,32 @@ struct UsageSummaryTests {
         let start = cal.date(byAdding: .day, value: -4, to: .now)!
         let summary = UsageSummary.makeCustom(start: start, end: .now, sessions: sessions, pricing: TestPricing.table)
         #expect(summary.trendSeries().granularity == .day)
+    }
+
+    @Test("Message counts come from session stats instead of model rows")
+    func messageCountUsesSessionStats() {
+        let visibleModel = ModelUsage(model: "model-a", messageCount: 1, usage: tokens(10), pricing: TestPricing.table)
+        let summary = UsageSummary.make(period: .allTime, sessions: [
+            session("synthetic-filtered", messageCount: 3, models: [visibleModel]),
+        ], pricing: TestPricing.table)
+
+        #expect(summary.messageCount == 3)
+        #expect(summary.models.first?.messageCount == 1)
+    }
+
+    @Test("Total cost can be read by selected estimate mode")
+    func totalCostByMode() {
+        let model = ModelUsage(
+            model: "model-a",
+            messageCount: 1,
+            usage: tokens(10),
+            costEstimate: CostEstimate(standardAPI: 1.25, detailedBilling: 3.5)
+        )
+        let summary = UsageSummary.make(period: .allTime, sessions: [
+            session("cost-mode", messageCount: 1, models: [model]),
+        ], pricing: TestPricing.table)
+
+        #expect(summary.totalCost(for: .standardAPI) == 1.25)
+        #expect(summary.totalCost(for: .detailedBilling) == 3.5)
     }
 }

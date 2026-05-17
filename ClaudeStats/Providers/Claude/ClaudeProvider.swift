@@ -66,6 +66,8 @@ struct ClaudeProvider: Provider {
     }
 
     static func prettyName(for id: String) -> String {
+        if id == "<synthetic>" { return "Claude internal" }
+
         var stripped = id
         if stripped.hasPrefix("claude-") { stripped.removeFirst("claude-".count) }
         let parts = stripped.split(separator: "-", omittingEmptySubsequences: true).map(String.init)

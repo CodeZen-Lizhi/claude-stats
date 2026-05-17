@@ -51,6 +51,12 @@ final class Preferences {
     var includeCacheInTokens: Bool {
         didSet { defaults.set(includeCacheInTokens, forKey: Keys.includeCacheInTokens) }
     }
+    /// Which cost estimate the UI displays. The standard API mode is the
+    /// stable baseline; detailed billing applies only billable details that
+    /// transcripts expose explicitly.
+    var costEstimationMode: CostEstimationMode {
+        didSet { defaults.set(costEstimationMode.rawValue, forKey: Keys.costEstimationMode) }
+    }
     /// Same setting, but specifically for the menu-bar status item. Independent
     /// so users can keep the app totals canonical while the menu bar shows a
     /// less inflated figure (or vice versa).
@@ -145,6 +151,26 @@ final class Preferences {
     var githubLogin: String {
         didSet { defaults.set(githubLogin, forKey: Keys.githubLogin) }
     }
+    /// Claude Status components shown on the Dashboard and monitored for
+    /// optional notifications. Defaults to `claude.ai` and `Claude Code`.
+    var claudeStatusVisibleComponentIDs: Set<String> {
+        didSet {
+            if claudeStatusVisibleComponentIDs.isEmpty {
+                claudeStatusVisibleComponentIDs = ClaudeStatusComponentCatalog.defaultVisibleComponentIDs
+            }
+            defaults.set(claudeStatusVisibleComponentIDs.sorted().joined(separator: ","), forKey: Keys.claudeStatusVisibleComponentIDs)
+        }
+    }
+    /// Opt-in to macOS notifications when one of the visible Claude Status
+    /// components is not operational.
+    var claudeStatusNotificationsEnabled: Bool {
+        didSet { defaults.set(claudeStatusNotificationsEnabled, forKey: Keys.claudeStatusNotificationsEnabled) }
+    }
+    /// Last abnormal visible-component status notification sent. Stored so the
+    /// app does not repeat the same alert across polling cycles or relaunches.
+    var claudeStatusLastNotificationFingerprint: String {
+        didSet { defaults.set(claudeStatusLastNotificationFingerprint, forKey: Keys.claudeStatusLastNotificationFingerprint) }
+    }
     /// Which colour scheme the Overlap heatmap should use.
     var overlapPalette: OverlapPalette {
         didSet { defaults.set(overlapPalette.rawValue, forKey: Keys.overlapPalette) }
@@ -201,6 +227,7 @@ final class Preferences {
         menuBarMetric = MenuBarMetric(rawValue: defaults.string(forKey: Keys.menuBarMetric) ?? "") ?? .tokens
         menuBarPeriod = StatsPeriod(rawValue: defaults.string(forKey: Keys.menuBarPeriod) ?? "") ?? .allTime
         includeCacheInTokens = (defaults.object(forKey: Keys.includeCacheInTokens) as? Bool) ?? true
+        costEstimationMode = CostEstimationMode(rawValue: defaults.string(forKey: Keys.costEstimationMode) ?? "") ?? .standardAPI
         menuBarIncludesCache = (defaults.object(forKey: Keys.menuBarIncludesCache) as? Bool) ?? true
         floatingTabEnabled = (defaults.object(forKey: Keys.floatingTabEnabled) as? Bool) ?? true
         floatingTabEdge = FloatingPanelEdge(rawValue: defaults.string(forKey: Keys.floatingTabEdge) ?? "") ?? .right
@@ -216,6 +243,14 @@ final class Preferences {
         gitStatsScope = GitStatsScope(rawValue: defaults.string(forKey: Keys.gitStatsScope) ?? "") ?? .head
         githubEnabled = defaults.bool(forKey: Keys.githubEnabled)
         githubLogin = defaults.string(forKey: Keys.githubLogin) ?? ""
+        let storedClaudeStatusComponentIDs = (defaults.string(forKey: Keys.claudeStatusVisibleComponentIDs) ?? "")
+            .split(separator: ",")
+            .map { String($0) }
+        claudeStatusVisibleComponentIDs = storedClaudeStatusComponentIDs.isEmpty
+            ? ClaudeStatusComponentCatalog.defaultVisibleComponentIDs
+            : Set(storedClaudeStatusComponentIDs)
+        claudeStatusNotificationsEnabled = defaults.bool(forKey: Keys.claudeStatusNotificationsEnabled)
+        claudeStatusLastNotificationFingerprint = defaults.string(forKey: Keys.claudeStatusLastNotificationFingerprint) ?? ""
         overlapPalette = OverlapPalette(rawValue: defaults.string(forKey: Keys.overlapPalette) ?? "") ?? .appCohesive
         leaderboardsEnabled = defaults.bool(forKey: Keys.leaderboardsEnabled)
         leaderboardNickname = defaults.string(forKey: Keys.leaderboardNickname) ?? ""
@@ -249,6 +284,7 @@ final class Preferences {
         static let menuBarMetric = "menuBarMetric"
         static let menuBarPeriod = "menuBarPeriod"
         static let includeCacheInTokens = "includeCacheInTokens"
+        static let costEstimationMode = "costEstimationMode"
         static let menuBarIncludesCache = "menuBarIncludesCache"
         static let floatingTabEnabled = "floatingTabEnabled"
         static let floatingTabEdge = "floatingTabEdge"
@@ -269,6 +305,9 @@ final class Preferences {
         static let rememberSelectedProvider = "rememberSelectedProvider"
         static let githubEnabled = "githubEnabled"
         static let githubLogin = "githubLogin"
+        static let claudeStatusVisibleComponentIDs = "claudeStatusVisibleComponentIDs"
+        static let claudeStatusNotificationsEnabled = "claudeStatusNotificationsEnabled"
+        static let claudeStatusLastNotificationFingerprint = "claudeStatusLastNotificationFingerprint"
         static let overlapPalette = "overlapPalette"
         static let leaderboardsEnabled = "leaderboardsEnabled"
         static let leaderboardNickname = "leaderboardNickname"

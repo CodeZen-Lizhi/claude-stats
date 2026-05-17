@@ -79,7 +79,7 @@ struct SessionListView: View {
             }
             .font(.sora(12))
         } else {
-            let groups = vm.projectGroups(from: store, provider: provider)
+            let groups = vm.projectGroups(from: store, provider: provider, costMode: env.preferences.costEstimationMode)
             if groups.isEmpty {
                 if store.isLoading && providerSessions.isEmpty {
                     ProgressView("Scanning sessions…")

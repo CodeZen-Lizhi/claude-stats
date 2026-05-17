@@ -103,4 +103,67 @@ struct TranscriptParserTests {
             .parse(transcriptAt: url, fallbackTitle: "demo")
         #expect(stats == nil)
     }
+
+    @Test("Hides zero-token synthetic model rows while preserving activity")
+    func hidesZeroTokenSyntheticRows() async throws {
+        let dir = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("session.jsonl")
+        let text = """
+        {"type":"user","timestamp":"2026-02-01T00:00:00.000Z","message":{"role":"user","content":"hello"}}
+        {"type":"assistant","timestamp":"2026-02-01T00:00:01.000Z","message":{"model":"model-a","usage":{"input_tokens":10,"output_tokens":5}}}
+        {"type":"assistant","timestamp":"2026-02-01T00:02:00.000Z","message":{"model":"<synthetic>","usage":{"input_tokens":0,"output_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}
+        """
+        try TempDir.write(text, to: url)
+
+        let stats = try #require(await TranscriptParser(pricing: TestPricing.table)
+            .parse(transcriptAt: url, fallbackTitle: "demo"))
+
+        #expect(stats.messageCount == 3)
+        #expect(stats.models.map(\.model) == ["model-a"])
+        #expect(stats.timeline.map(\.model) == ["model-a"])
+        let expectedLast = try Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse("2026-02-01T00:02:00.000Z")
+        #expect(stats.lastActivity == expectedLast)
+    }
+
+    @Test("Keeps non-zero synthetic model rows and labels them as internal")
+    func keepsNonZeroSyntheticRows() async throws {
+        let dir = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("session.jsonl")
+        let text = """
+        {"type":"assistant","timestamp":"2026-02-01T00:00:01.000Z","message":{"model":"<synthetic>","usage":{"input_tokens":10,"output_tokens":5}}}
+        """
+        try TempDir.write(text, to: url)
+
+        let stats = try #require(await TranscriptParser(pricing: TestPricing.table)
+            .parse(transcriptAt: url, fallbackTitle: "demo"))
+
+        #expect(stats.models.map(\.model) == ["<synthetic>"])
+        #expect(stats.models.first?.usage.total == 15)
+        #expect(ClaudeProvider.prettyName(for: "<synthetic>") == "Claude internal")
+    }
+
+    @Test("Detailed Claude billing applies fast mode and web search charges")
+    func detailedClaudeBillingAddsVisibleCharges() async throws {
+        let dir = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("session.jsonl")
+        let text = """
+        {"type":"assistant","timestamp":"2026-02-01T00:00:01.000Z","message":{"model":"claude-opus-4-7","usage":{"input_tokens":1000000,"output_tokens":1000000,"speed":"fast","server_tool_use":{"web_search_requests":2}}}}
+        """
+        try TempDir.write(text, to: url)
+
+        let pricing = ModelPricing(
+            rates: ["claude-opus-4-7": ModelPricing.Rates.derived(input: 5, output: 25)],
+            defaultRate: TestPricing.table.defaultRate
+        )
+        let stats = try #require(await TranscriptParser(pricing: pricing)
+            .parse(transcriptAt: url, fallbackTitle: "demo"))
+        let model = try #require(stats.models.first)
+
+        #expect(abs(model.estimatedCost(for: .standardAPI) - 30) < 1e-9)
+        #expect(abs(model.estimatedCost(for: .detailedBilling) - 180.02) < 1e-9)
+        #expect(abs(stats.totalCost(for: .detailedBilling) - 180.02) < 1e-9)
+    }
 }

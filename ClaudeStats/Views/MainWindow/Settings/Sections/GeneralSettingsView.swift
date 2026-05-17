@@ -70,6 +70,17 @@ struct GeneralSettingsView: View {
                             .toggleStyle(.switch)
                     }
                     SettingRowDivider()
+                    SettingRow(title: "Cost mode",
+                               description: "API estimate uses standard first-party token prices. Detailed billing also applies fast mode and web search charges when Claude logs expose them.") {
+                        Picker("", selection: $prefs.costEstimationMode) {
+                            ForEach(CostEstimationMode.allCases) { mode in
+                                Text(mode.displayName).tag(mode)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(maxWidth: 170)
+                    }
+                    SettingRowDivider()
                     SettingRow(title: "API key storage",
                                description: "Where API Provider Switcher saves provider keys. JSON keeps them with provider data; Keychain stores references in the library.") {
                         Picker("", selection: $prefs.apiProviderKeyStorageMode) {

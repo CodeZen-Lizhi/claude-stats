@@ -59,6 +59,7 @@ struct SidebarColumn: View {
         .onAppear { refreshSessionGroups() }
         .onChange(of: env.store.lastRefreshedAt) { _, _ in refreshSessionGroups() }
         .onChange(of: env.preferences.selectedProvider) { _, _ in refreshSessionGroups() }
+        .onChange(of: env.preferences.costEstimationMode) { _, _ in refreshSessionGroups() }
     }
 
     // MARK: - Top nav
@@ -237,7 +238,11 @@ struct SidebarColumn: View {
     }
 
     private func refreshSessionGroups() {
-        sessionsVM.refresh(from: env.store, provider: env.preferences.selectedProvider)
+        sessionsVM.refresh(
+            from: env.store,
+            provider: env.preferences.selectedProvider,
+            costMode: env.preferences.costEstimationMode
+        )
     }
 
     private func clearSearchFocus() {

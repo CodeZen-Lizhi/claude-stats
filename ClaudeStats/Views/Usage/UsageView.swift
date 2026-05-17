@@ -80,10 +80,11 @@ struct UsageView: View {
 
     private func statGrid(_ s: UsageSummary) -> some View {
         let includeCache = env.preferences.includeCacheInTokens
+        let costMode = env.preferences.costEstimationMode
         return Grid(horizontalSpacing: 10, verticalSpacing: 8) {
             GridRow {
                 statCell("Tokens", Format.tokens(s.totalTokens(includingCacheRead: includeCache)))
-                statCell("Est. cost", Format.cost(s.totalCost))
+                statCell("Est. cost", Format.cost(s.totalCost(for: costMode)))
             }
             GridRow {
                 statCell("Sessions", "\(s.sessionCount)")
@@ -452,6 +453,7 @@ struct UsageView: View {
                     .foregroundStyle(Color.stxMuted.opacity(0.7))
             } else {
                 let includeCache = env.preferences.includeCacheInTokens
+                let costMode = env.preferences.costEstimationMode
                 let maxTokens = max(1, s.models.map { $0.usage.total(includingCacheRead: includeCache) }.max() ?? 1)
                 ForEach(Array(s.models.enumerated()), id: \.element.id) { idx, model in
                     let color = ModelPalette.color(at: series.models.firstIndex(of: model.model) ?? idx)
@@ -467,7 +469,7 @@ struct UsageView: View {
                             Text(Format.tokens(model.usage.total(includingCacheRead: includeCache)))
                                 .font(.sora(10).monospacedDigit())
                                 .foregroundStyle(.primary)
-                            Text(Format.cost(model.estimatedCost))
+                            Text(Format.cost(model.estimatedCost(for: costMode)))
                                 .font(.sora(10).monospacedDigit())
                                 .foregroundStyle(Color.stxMuted)
                         }

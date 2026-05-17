@@ -111,7 +111,7 @@ struct FloatingStatsPanelView: View {
 
             HStack(alignment: .top, spacing: 10) {
                 metricBlock(title: "TOKENS", value: Format.tokens(summary.totalTokens(includingCacheRead: prefs.menuBarIncludesCache)))
-                metricBlock(title: "COST", value: Format.cost(summary.totalCost))
+                metricBlock(title: "COST", value: Format.cost(summary.totalCost(for: prefs.costEstimationMode)))
                 metricBlock(title: "SESSIONS", value: "\(summary.sessionCount)")
             }
 

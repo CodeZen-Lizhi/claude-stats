@@ -24,6 +24,7 @@ final class SessionListViewModel {
 
     @ObservationIgnored private var sourceSessions: [Session] = []
     @ObservationIgnored private var sourceProvider: ProviderKind?
+    @ObservationIgnored private var sourceCostMode: CostEstimationMode = .standardAPI
 
     enum SortOrder: String, CaseIterable, Identifiable {
         case recent, tokens, cost
@@ -54,24 +55,25 @@ final class SessionListViewModel {
         }
     }
 
-    func refresh(from store: SessionStore, provider: ProviderKind) {
+    func refresh(from store: SessionStore, provider: ProviderKind, costMode: CostEstimationMode) {
         let sessions = store.sessions(for: provider)
-        guard sourceProvider != provider || sourceSessions != sessions else { return }
+        guard sourceProvider != provider || sourceSessions != sessions || sourceCostMode != costMode else { return }
         sourceProvider = provider
+        sourceCostMode = costMode
         sourceSessions = sessions
         hasProviderSessions = !sessions.isEmpty
         rebuildProjectGroups()
     }
 
-    func projectGroups(from store: SessionStore, provider: ProviderKind) -> [ProjectGroup] {
-        makeProjectGroups(from: store.sessions(for: provider))
+    func projectGroups(from store: SessionStore, provider: ProviderKind, costMode: CostEstimationMode) -> [ProjectGroup] {
+        makeProjectGroups(from: store.sessions(for: provider), costMode: costMode)
     }
 
     private func rebuildProjectGroups() {
-        projectGroups = makeProjectGroups(from: sourceSessions)
+        projectGroups = makeProjectGroups(from: sourceSessions, costMode: sourceCostMode)
     }
 
-    private func makeProjectGroups(from sourceSessions: [Session]) -> [ProjectGroup] {
+    private func makeProjectGroups(from sourceSessions: [Session], costMode: CostEstimationMode) -> [ProjectGroup] {
         var sessions = sourceSessions
 
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -85,7 +87,7 @@ final class SessionListViewModel {
 
         let grouped = Dictionary(grouping: sessions, by: \.projectDirectoryName)
         var groups = grouped.map { key, value -> ProjectGroup in
-            let sorted = sortedSessions(value)
+            let sorted = sortedSessions(value, costMode: costMode)
             let lastActivity = value
                 .map { $0.stats?.lastActivity ?? $0.lastModified }
                 .max() ?? .distantPast
@@ -103,14 +105,14 @@ final class SessionListViewModel {
         return groups
     }
 
-    private func sortedSessions(_ sessions: [Session]) -> [Session] {
+    private func sortedSessions(_ sessions: [Session], costMode: CostEstimationMode) -> [Session] {
         switch sortOrder {
         case .recent:
             sessions.sorted { ($0.stats?.lastActivity ?? $0.lastModified) > ($1.stats?.lastActivity ?? $1.lastModified) }
         case .tokens:
             sessions.sorted { ($0.stats?.totalTokens ?? 0) > ($1.stats?.totalTokens ?? 0) }
         case .cost:
-            sessions.sorted { ($0.stats?.totalCost ?? 0) > ($1.stats?.totalCost ?? 0) }
+            sessions.sorted { ($0.stats?.totalCost(for: costMode) ?? 0) > ($1.stats?.totalCost(for: costMode) ?? 0) }
         }
     }
 }
