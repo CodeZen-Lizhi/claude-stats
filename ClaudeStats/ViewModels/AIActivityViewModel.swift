@@ -52,7 +52,19 @@ final class AIActivityViewModel {
     /// drives `.task(id:)` off it.
     private(set) var reloadToken: UInt64 = 0
 
+    @ObservationIgnored
+    private var activeReloadID: UInt64 = 0
+    @ObservationIgnored
+    private let focusIntervalLoader: @Sendable (DateInterval, Set<String>) async -> Result<[AppFocusInterval], ScreenTimeService.Failure>
     private let calendar = Calendar.current
+
+    init(
+        focusIntervalLoader: @escaping @Sendable (DateInterval, Set<String>) async -> Result<[AppFocusInterval], ScreenTimeService.Failure> = { range, bundleIDs in
+            ScreenTimeService().focusIntervals(in: range, bundleIDs: bundleIDs)
+        }
+    ) {
+        self.focusIntervalLoader = focusIntervalLoader
+    }
 
     var today: Date { calendar.startOfDay(for: .now) }
     var canStepForward: Bool { selectedDay < today }
@@ -95,8 +107,14 @@ final class AIActivityViewModel {
         codingSurfaceBundleIDs: Set<String>,
         cliHostBundleIDs: Set<String>
     ) async {
+        activeReloadID &+= 1
+        let reloadID = activeReloadID
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            if reloadID == activeReloadID {
+                isLoading = false
+            }
+        }
 
         let range = queryRange()
         let mode = self.range
@@ -104,10 +122,10 @@ final class AIActivityViewModel {
         let cal = calendar
         let days = trendDays()
         let bundleIDs = codingSurfaceBundleIDs.union(cliHostBundleIDs)
+        let focusIntervalLoader = self.focusIntervalLoader
 
         let outcome = await Task.detached(priority: .userInitiated) { () -> Outcome in
-            let service = ScreenTimeService()
-            switch service.focusIntervals(in: range, bundleIDs: bundleIDs) {
+            switch await focusIntervalLoader(range, bundleIDs) {
             case .failure(let f):
                 return .failure(f)
             case .success(let focus):
@@ -137,6 +155,8 @@ final class AIActivityViewModel {
                 }
             }
         }.value
+
+        guard reloadID == activeReloadID, !Task.isCancelled else { return }
 
         switch outcome {
         case .failure(.noFullDiskAccess):

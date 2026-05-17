@@ -21,6 +21,10 @@ struct ProviderRegistry: Sendable {
         ]
     }
 
+    init(providers: [any Provider]) {
+        self.providers = providers
+    }
+
     func provider(for kind: ProviderKind) -> (any Provider)? {
         providers.first { $0.kind == kind }
     }

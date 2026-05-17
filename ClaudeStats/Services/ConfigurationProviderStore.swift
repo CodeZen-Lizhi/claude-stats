@@ -92,6 +92,14 @@ struct ConfigurationProviderStore: Sendable {
         }.value
     }
 
+    func deleteStoredSecrets(_ secrets: [APIProviderSecret], retainedIn library: ConfigurationProviderLibrary) {
+        let retainedAccounts = Self.keychainAccounts(in: library)
+        let accounts = Set(secrets.compactMap(\.keychainAccount))
+        for account in accounts where !retainedAccounts.contains(account) {
+            secretStore.deleteAPIKey(account: account)
+        }
+    }
+
     func ensureSystemProviders(
         in library: ConfigurationProviderLibrary,
         keyStorageMode: APIProviderKeyStorageMode
@@ -335,6 +343,21 @@ struct ConfigurationProviderStore: Sendable {
 
     static func universalChildID(universalID: String, cli: APIProviderCLI) -> String {
         "universal-\(cli.rawValue)-\(universalID)"
+    }
+
+    private static func keychainAccounts(in library: ConfigurationProviderLibrary) -> Set<String> {
+        var accounts = Set<String>()
+        for provider in library.cliProviders {
+            if let account = provider.apiKey.keychainAccount {
+                accounts.insert(account)
+            }
+        }
+        for provider in library.universalProviders {
+            if let account = provider.apiKey.keychainAccount {
+                accounts.insert(account)
+            }
+        }
+        return accounts
     }
 
     private func readClaudeSettingsText() async throws -> String {

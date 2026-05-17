@@ -238,6 +238,67 @@ struct APIProviderSwitcherTests {
         #expect(store.resolvedAPIKey(for: keychainProvider.apiKey) == "sk-keychain")
     }
 
+    @MainActor
+    @Test("Deleting a Keychain provider removes its stored key")
+    func deletingKeychainProviderRemovesStoredKey() async throws {
+        let temp = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let secretStore = InMemoryAPIProviderSecretStore()
+        secretStore.saveAPIKey("sk-old", account: "claude-provider")
+        let store = makeStore(temp: temp, secretStore: secretStore)
+        let provider = CLIAPIProvider(
+            id: "provider",
+            cli: .claude,
+            origin: .appSpecific,
+            name: "Provider",
+            apiKey: .keychain(account: "claude-provider")
+        )
+        try await store.saveLibrary(ConfigurationProviderLibrary(cliProviders: [provider]))
+        let vm = APIProviderSwitcherViewModel(store: store)
+
+        await vm.reload(keyStorageMode: .keychain)
+        let loadedProvider = try #require(vm.providers(for: .claude).first { $0.id == "provider" })
+        vm.selectProvider(loadedProvider, keyStorageMode: .keychain)
+
+        await vm.deleteSelectedProvider(keyStorageMode: .keychain)
+
+        #expect(secretStore.readAPIKey(account: "claude-provider") == nil)
+        #expect(vm.providers(for: .claude).contains { $0.id == "provider" } == false)
+    }
+
+    @MainActor
+    @Test("Switching a provider away from Keychain removes the old stored key")
+    func switchingProviderAwayFromKeychainRemovesOldStoredKey() async throws {
+        let temp = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let secretStore = InMemoryAPIProviderSecretStore()
+        secretStore.saveAPIKey("sk-old", account: "claude-provider")
+        let store = makeStore(temp: temp, secretStore: secretStore)
+        let provider = CLIAPIProvider(
+            id: "provider",
+            cli: .claude,
+            origin: .appSpecific,
+            name: "Provider",
+            apiKey: .keychain(account: "claude-provider")
+        )
+        try await store.saveLibrary(ConfigurationProviderLibrary(cliProviders: [provider]))
+        let vm = APIProviderSwitcherViewModel(store: store)
+
+        await vm.reload(keyStorageMode: .keychain)
+        let loadedProvider = try #require(vm.providers(for: .claude).first { $0.id == "provider" })
+        vm.selectProvider(loadedProvider, keyStorageMode: .keychain)
+        vm.draftAPIKey = "sk-json"
+
+        let saved = await vm.saveDraft(rawMode: false, keyStorageMode: .json)
+
+        let updatedProvider = try #require(vm.providers(for: .claude).first { $0.id == "provider" })
+        #expect(saved)
+        #expect(updatedProvider.apiKey == .inline("sk-json"))
+        #expect(secretStore.readAPIKey(account: "claude-provider") == nil)
+    }
+
     @Test("Provider library persists CLI-keyed maps as string dictionaries")
     func providerLibraryPersistsCLIMaps() async throws {
         let temp = try TempDir.make()

@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 /// The app's source of truth for sessions and aggregate usage. Owns the
-/// scan/parse pipeline and a parse cache keyed by `(session id, file size)`
+/// scan/parse pipeline and a parse cache keyed by transcript metadata
 /// so a refresh only re-parses transcripts that actually changed.
 @MainActor
 @Observable
@@ -19,7 +19,11 @@ final class SessionStore {
     private var cache: [String: CacheEntry] = [:]
     private var autoRefreshTask: Task<Void, Never>?
 
-    private struct CacheEntry { let fileSize: Int64; let stats: SessionStats }
+    private struct CacheEntry {
+        let fileSize: Int64
+        let lastModified: Date
+        let stats: SessionStats
+    }
 
     /// Max transcripts parsed concurrently.
     private static let parseBatchSize = 16
@@ -100,19 +104,22 @@ final class SessionStore {
         dataDirectoryExists = registry.providers.contains { $0.dataDirectoryExists }
 
         let providerByKind = Dictionary(uniqueKeysWithValues: registry.providers.map { ($0.kind, $0) })
-        let stale = discovered.filter { cache[$0.id]?.fileSize != $0.fileSize }
+        let stale = discovered.filter { session in
+            guard let entry = cache[session.id] else { return true }
+            return entry.fileSize != session.fileSize || entry.lastModified != session.lastModified
+        }
 
         var index = 0
         while index < stale.count {
             let batch = stale[index ..< min(index + Self.parseBatchSize, stale.count)]
             index += Self.parseBatchSize
-            await withTaskGroup(of: (String, Int64, SessionStats?).self) { group in
+            await withTaskGroup(of: (String, Int64, Date, SessionStats?).self) { group in
                 for session in batch {
                     guard let provider = providerByKind[session.provider] else { continue }
-                    group.addTask { (session.id, session.fileSize, await provider.parse(session)) }
+                    group.addTask { (session.id, session.fileSize, session.lastModified, await provider.parse(session)) }
                 }
-                for await (id, size, stats) in group {
-                    if let stats { cache[id] = CacheEntry(fileSize: size, stats: stats) }
+                for await (id, size, lastModified, stats) in group {
+                    if let stats { cache[id] = CacheEntry(fileSize: size, lastModified: lastModified, stats: stats) }
                 }
             }
         }

@@ -206,13 +206,20 @@ final class APIProviderSwitcherViewModel {
         isWorking = true
         defer { isWorking = false }
         do {
+            let removedSecrets: [APIProviderSecret]
             if provider.origin.kind == .universal, let universalID = provider.origin.universalID {
+                let removedUniversals = library.universalProviders.filter { $0.id == universalID }
+                let removedChildren = library.cliProviders.filter { $0.origin.kind == .universal && $0.origin.universalID == universalID }
+                removedSecrets = removedUniversals.map(\.apiKey) + removedChildren.map(\.apiKey)
                 library.universalProviders.removeAll { $0.id == universalID }
                 library.cliProviders.removeAll { $0.origin.kind == .universal && $0.origin.universalID == universalID }
             } else {
+                let removedProviders = library.cliProviders.filter { $0.cli == provider.cli && $0.id == provider.id }
+                removedSecrets = removedProviders.map(\.apiKey)
                 library.cliProviders.removeAll { $0.cli == provider.cli && $0.id == provider.id }
             }
             try await store.saveLibrary(library)
+            store.deleteStoredSecrets(removedSecrets, retainedIn: library)
             selectedProviderID = nil
             normalizeSelection(keyStorageMode: keyStorageMode)
         } catch {
@@ -239,10 +246,12 @@ final class APIProviderSwitcherViewModel {
         }
 
         let saved: CLIAPIProvider
+        var replacedSecrets: [APIProviderSecret] = []
         if existing.origin.kind == .universal, let universalID = existing.origin.universalID {
             guard let universalIndex = library.universalProviders.firstIndex(where: { $0.id == universalID }) else {
                 throw ConfigurationProviderStoreError.providerNotFound
             }
+            replacedSecrets.append(library.universalProviders[universalIndex].apiKey)
             let updatedUniversal = try store.universalBySavingDraft(
                 existing: library.universalProviders[universalIndex],
                 editedCLI: draftCLI,
@@ -253,6 +262,8 @@ final class APIProviderSwitcherViewModel {
                 keyStorageMode: keyStorageMode
             )
             library.universalProviders[universalIndex] = updatedUniversal
+            let removedChildren = library.cliProviders.filter { $0.origin.kind == .universal && $0.origin.universalID == universalID }
+            replacedSecrets.append(contentsOf: removedChildren.map(\.apiKey))
             library.cliProviders.removeAll { $0.origin.kind == .universal && $0.origin.universalID == universalID }
             library.cliProviders.append(contentsOf: store.childProviders(for: updatedUniversal, keyStorageMode: keyStorageMode))
             let childID = ConfigurationProviderStore.universalChildID(universalID: universalID, cli: draftCLI)
@@ -272,11 +283,13 @@ final class APIProviderSwitcherViewModel {
                 rawMode: rawMode,
                 keyStorageMode: keyStorageMode
             )
+            replacedSecrets.append(existing.apiKey)
             replaceCLIProvider(updated)
             saved = updated
         }
 
         try await store.saveLibrary(library)
+        store.deleteStoredSecrets(replacedSecrets, retainedIn: library)
         draftIsDirty = false
         return saved
     }
