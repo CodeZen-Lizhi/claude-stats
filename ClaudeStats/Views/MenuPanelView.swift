@@ -210,6 +210,8 @@ struct MenuPanelView: View {
     private static let panelSize = CGSize(width: 380, height: 560)
 
     @State private var pane: StatsPane = .usage
+    @State private var updateAvailable = false
+    @State private var availableUpdateVersion: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -223,6 +225,11 @@ struct MenuPanelView: View {
         .background(MenuPanelWindowSizeLock(size: Self.panelSize))
         .font(.sora(13))
         .tint(.stxAccent)
+        .onAppear(perform: syncUpdateAvailability)
+        .onReceive(NotificationCenter.default.publisher(for: UpdaterController.updateAvailabilityDidChange)) { _ in
+            syncUpdateAvailability()
+        }
+        .animation(.easeOut(duration: 0.16), value: updateAvailable)
     }
 
     private var footer: some View {
@@ -240,6 +247,10 @@ struct MenuPanelView: View {
                 }
             }
             .buttonStyle(.plain)
+            if updateAvailable {
+                updateButton
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            }
             Button {
                 NSApp.activate(ignoringOtherApps: true)
                 openWindow(id: ShareExportView.windowID)
@@ -270,6 +281,42 @@ struct MenuPanelView: View {
         .foregroundStyle(Color.stxMuted)
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
+    }
+
+    private var updateButton: some View {
+        Button {
+            env.updater.checkForUpdates()
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 10, weight: .bold))
+                Text("UPDATE")
+                    .font(.sora(10, weight: .semibold))
+                    .tracking(0.8)
+            }
+            .lineLimit(1)
+            .padding(.horizontal, 9)
+            .frame(height: 24)
+            .background(Color.stxAccent.opacity(0.14), in: Capsule())
+            .overlay(Capsule().strokeBorder(Color.stxAccent.opacity(0.58), lineWidth: 1))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(Color.stxAccent)
+        .help(updateButtonHelp)
+        .accessibilityLabel(updateButtonHelp)
+    }
+
+    private var updateButtonHelp: String {
+        if let availableUpdateVersion {
+            return "Install update \(availableUpdateVersion)"
+        }
+        return "Install update"
+    }
+
+    private func syncUpdateAvailability() {
+        updateAvailable = env.updater.updateAvailable
+        availableUpdateVersion = env.updater.availableUpdateVersion
     }
 }
 

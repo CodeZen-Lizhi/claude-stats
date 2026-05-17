@@ -13,7 +13,13 @@ import Sparkle
 /// dialog can appear behind everything with no way to focus it. The coordinator
 /// is ref-counted so this composes with other consumers (e.g. the main window).
 final class UpdaterController: NSObject {
+    static let updateAvailabilityDidChange = Notification.Name("ClaudeStats.updateAvailabilityDidChange")
+
     private var controller: SPUStandardUpdaterController?
+    private var dockVisibilityAcquired = false
+
+    private(set) var updateAvailable = false
+    private(set) var availableUpdateVersion: String?
 
     /// Create and start the Sparkle updater. Idempotent; safe to call once at
     /// launch. Kept out of `init` so `AppEnvironment.preview()` / tests can hold
@@ -41,22 +47,88 @@ final class UpdaterController: NSObject {
         NSApp.activate(ignoringOtherApps: true)
         controller?.checkForUpdates(nil)
     }
+
+    private func markUpdateAvailable(_ item: SUAppcastItem) {
+        let version = item.displayVersionString.trimmingCharacters(in: .whitespacesAndNewlines)
+        setUpdateAvailability(true, version: version.isEmpty ? nil : version)
+    }
+
+    private func clearUpdateAvailability() {
+        setUpdateAvailability(false, version: nil)
+    }
+
+    private func setUpdateAvailability(_ available: Bool, version: String?) {
+        guard updateAvailable != available || availableUpdateVersion != version else { return }
+        updateAvailable = available
+        availableUpdateVersion = version
+        NotificationCenter.default.post(name: Self.updateAvailabilityDidChange, object: self)
+    }
+
+    private func acquireDockVisibilityForUpdateUI() {
+        guard !dockVisibilityAcquired else { return }
+        dockVisibilityAcquired = true
+        MainActor.assumeIsolated { DockVisibilityCoordinator.shared.acquire() }
+    }
+
+    private func releaseDockVisibilityForUpdateUI() {
+        guard dockVisibilityAcquired else { return }
+        dockVisibilityAcquired = false
+        MainActor.assumeIsolated { DockVisibilityCoordinator.shared.release() }
+    }
 }
 
-extension UpdaterController: SPUUpdaterDelegate {}
+extension UpdaterController: SPUUpdaterDelegate {
+    func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
+        markUpdateAvailable(item)
+    }
+
+    func updaterDidNotFindUpdate(_ updater: SPUUpdater) {
+        clearUpdateAvailability()
+    }
+
+    func updaterDidNotFindUpdate(_ updater: SPUUpdater, error: any Error) {
+        clearUpdateAvailability()
+    }
+
+    func updater(
+        _ updater: SPUUpdater,
+        userDidMake choice: SPUUserUpdateChoice,
+        forUpdate updateItem: SUAppcastItem,
+        state: SPUUserUpdateState
+    ) {
+        clearUpdateAvailability()
+    }
+}
 
 extension UpdaterController: SPUStandardUserDriverDelegate {
-    // Sparkle invokes user-driver callbacks on the main thread; `assumeIsolated`
-    // hops onto the main actor without capturing `self`.
+    // Sparkle invokes user-driver callbacks on the main thread. Keep app-owned
+    // state updates synchronous, and isolate only the AppKit dock-policy calls.
+    var supportsGentleScheduledUpdateReminders: Bool { true }
+
+    func standardUserDriverShouldHandleShowingScheduledUpdate(
+        _ update: SUAppcastItem,
+        andInImmediateFocus immediateFocus: Bool
+    ) -> Bool {
+        false
+    }
+
     func standardUserDriverWillHandleShowingUpdate(
         _ handleShowingUpdate: Bool,
         forUpdate update: SUAppcastItem,
         state: SPUUserUpdateState
     ) {
-        MainActor.assumeIsolated { DockVisibilityCoordinator.shared.acquire() }
+        markUpdateAvailable(update)
+        if handleShowingUpdate {
+            acquireDockVisibilityForUpdateUI()
+        }
+    }
+
+    func standardUserDriverDidReceiveUserAttention(forUpdate update: SUAppcastItem) {
+        clearUpdateAvailability()
     }
 
     func standardUserDriverWillFinishUpdateSession() {
-        MainActor.assumeIsolated { DockVisibilityCoordinator.shared.release() }
+        clearUpdateAvailability()
+        releaseDockVisibilityForUpdateUI()
     }
 }
