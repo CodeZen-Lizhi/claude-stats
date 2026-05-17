@@ -93,6 +93,23 @@ final class Preferences {
     var apiProviderKeyStorageMode: APIProviderKeyStorageMode {
         didSet { defaults.set(apiProviderKeyStorageMode.rawValue, forKey: Keys.apiProviderKeyStorageMode) }
     }
+    var systemMonitorEnabled: Bool {
+        didSet { defaults.set(systemMonitorEnabled, forKey: Keys.systemMonitorEnabled) }
+    }
+    var systemMonitorRefreshRate: SystemMonitorRefreshRate {
+        didSet { defaults.set(systemMonitorRefreshRate.rawValue, forKey: Keys.systemMonitorRefreshRate) }
+    }
+    var systemMonitorVisibleModules: Set<SystemMonitorModule> {
+        didSet {
+            if systemMonitorVisibleModules.isEmpty {
+                systemMonitorVisibleModules = SystemMonitorModule.defaultVisible
+            }
+            defaults.set(
+                systemMonitorVisibleModules.map(\.rawValue).sorted().joined(separator: ","),
+                forKey: Keys.systemMonitorVisibleModules
+            )
+        }
+    }
 
     /// Which platforms the user has turned on. The switcher bar only appears
     /// when this has more than one entry; otherwise the panel shows the single
@@ -263,6 +280,14 @@ final class Preferences {
         terminalChromeMode = TerminalChromeMode(rawValue: defaults.string(forKey: Keys.terminalChromeMode) ?? "") ?? .tabsAndStatus
         terminalBackgroundStyle = TerminalBackgroundStyle(rawValue: defaults.string(forKey: Keys.terminalBackgroundStyle) ?? "") ?? .fluidGradient
         apiProviderKeyStorageMode = APIProviderKeyStorageMode(rawValue: defaults.string(forKey: Keys.apiProviderKeyStorageMode) ?? "") ?? .json
+        systemMonitorEnabled = defaults.bool(forKey: Keys.systemMonitorEnabled)
+        systemMonitorRefreshRate = SystemMonitorRefreshRate(rawValue: defaults.string(forKey: Keys.systemMonitorRefreshRate) ?? "") ?? .threeSeconds
+        let storedSystemMonitorModules = (defaults.string(forKey: Keys.systemMonitorVisibleModules) ?? "")
+            .split(separator: ",")
+            .compactMap { SystemMonitorModule(rawValue: String($0)) }
+        systemMonitorVisibleModules = storedSystemMonitorModules.isEmpty
+            ? SystemMonitorModule.defaultVisible
+            : Set(storedSystemMonitorModules)
         aiActivityAnalysisEnabled = defaults.bool(forKey: Keys.aiActivityAnalysisEnabled)
         gitTrackingEnabled = defaults.bool(forKey: Keys.gitTrackingEnabled)
         gitOpensInWindow = defaults.bool(forKey: Keys.gitOpensInWindow)
@@ -337,6 +362,9 @@ final class Preferences {
         static let terminalChromeMode = "terminalChromeMode"
         static let terminalBackgroundStyle = "terminalBackgroundStyle"
         static let apiProviderKeyStorageMode = "apiProviderKeyStorageMode"
+        static let systemMonitorEnabled = "systemMonitorEnabled"
+        static let systemMonitorRefreshRate = "systemMonitorRefreshRate"
+        static let systemMonitorVisibleModules = "systemMonitorVisibleModules"
         static let aiActivityAnalysisEnabled = "aiActivityAnalysisEnabled"
         static let gitTrackingEnabled = "gitTrackingEnabled"
         static let gitOpensInWindow = "gitOpensInWindow"

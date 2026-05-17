@@ -88,6 +88,43 @@ struct PreferencesTests {
         #expect(prefs.terminalBackgroundStyle == .fluidGradient)
     }
 
+    @Test("System Monitor defaults are off with balanced refresh and all modules")
+    func systemMonitorDefaults() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+
+        #expect(prefs.systemMonitorEnabled == false)
+        #expect(prefs.systemMonitorRefreshRate == .threeSeconds)
+        #expect(prefs.systemMonitorVisibleModules == SystemMonitorModule.defaultVisible)
+    }
+
+    @Test("System Monitor preferences persist and invalid refresh falls back")
+    func systemMonitorPreferencesPersist() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+        prefs.systemMonitorEnabled = true
+        prefs.systemMonitorRefreshRate = .tenSeconds
+        prefs.systemMonitorVisibleModules = [.cpu, .memory, .network]
+
+        let reloaded = Preferences(defaults: defaults)
+        #expect(reloaded.systemMonitorEnabled == true)
+        #expect(reloaded.systemMonitorRefreshRate == .tenSeconds)
+        #expect(reloaded.systemMonitorVisibleModules == [.cpu, .memory, .network])
+
+        defaults.set("continuous", forKey: "systemMonitorRefreshRate")
+        let invalid = Preferences(defaults: defaults)
+        #expect(invalid.systemMonitorRefreshRate == .threeSeconds)
+    }
+
+    @Test("System Monitor empty module selection falls back to defaults")
+    func systemMonitorEmptyModulesFallBack() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+        prefs.systemMonitorVisibleModules = []
+
+        #expect(prefs.systemMonitorVisibleModules == SystemMonitorModule.defaultVisible)
+    }
+
     @Test("Git language stats scope defaults to HEAD")
     func gitStatsScopeDefault() {
         let defaults = makeDefaults()

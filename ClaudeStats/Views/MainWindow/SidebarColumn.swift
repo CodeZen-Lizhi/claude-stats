@@ -41,6 +41,7 @@ struct SidebarColumn: View {
             sectionHeader("TOOLS")
             navRow(.configurations)
             if env.preferences.gitTrackingEnabled { navRow(.git) }
+            if env.preferences.systemMonitorEnabled { navRow(.system) }
             navRow(.terminal)
 
             sessionsSection

@@ -27,6 +27,7 @@ final class AppEnvironment {
     let configurationProfiles: ConfigurationProfilesViewModel
     let apiProviders: APIProviderSwitcherViewModel
     let cliEnvironment: CLIEnvironmentViewModel
+    let systemMonitor: SystemMonitorViewModel
 
     init(
         pricing: ModelPricing,
@@ -34,7 +35,8 @@ final class AppEnvironment {
         providerRegistry: ProviderRegistry,
         store: SessionStore,
         terminalStore: EmbeddedTerminalStore = EmbeddedTerminalStore(),
-        cliEnvironment: CLIEnvironmentViewModel = CLIEnvironmentViewModel()
+        cliEnvironment: CLIEnvironmentViewModel = CLIEnvironmentViewModel(),
+        systemMonitor: SystemMonitorViewModel = SystemMonitorViewModel()
     ) {
         self.pricing = pricing
         self.preferences = preferences
@@ -42,6 +44,7 @@ final class AppEnvironment {
         self.store = store
         self.terminalStore = terminalStore
         self.cliEnvironment = cliEnvironment
+        self.systemMonitor = systemMonitor
         self.dashboard = DashboardViewModel(pricing: pricing)
         self.gitActivity = GitActivityViewModel()
         self.claudeStatus = ClaudeStatusViewModel(preferences: preferences)

@@ -85,6 +85,9 @@ targets:
     dependencies:
       - package: Sparkle
       - target: GhosttyEmbed
+      - sdk: IOKit.framework
+      - sdk: SystemConfiguration.framework
+      - sdk: CoreWLAN.framework
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.claudestats.ClaudeStats

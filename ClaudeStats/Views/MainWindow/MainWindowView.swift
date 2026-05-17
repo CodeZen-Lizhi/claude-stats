@@ -2,12 +2,12 @@ import AppKit
 import SwiftUI
 
 /// Top-level page shown in the main window's detail column. Settings live in
-/// their own "settings mode" (see ``SettingsModeView``), not as a `MainPage`.
+/// their own main-window mode, not as a `MainPage`.
 /// Sessions are no longer a top-level page — they live as a sidebar section
 /// whose project/session rows drive a separate ``Session`` selection that
 /// overrides the page detail.
 enum MainPage: String, CaseIterable, Identifiable, Sendable {
-    case dashboard, configurations, usage, leaderboards, activity, git, terminal
+    case dashboard, configurations, usage, leaderboards, activity, git, system, terminal
     var id: String { rawValue }
 
     var title: String {
@@ -18,6 +18,7 @@ enum MainPage: String, CaseIterable, Identifiable, Sendable {
         case .leaderboards: "Leaderboards"
         case .activity: "Activity"
         case .git: "Git"
+        case .system: "System"
         case .terminal: "Terminal"
         }
     }
@@ -30,6 +31,7 @@ enum MainPage: String, CaseIterable, Identifiable, Sendable {
         case .leaderboards: "trophy"
         case .activity: "waveform"
         case .git: "arrow.triangle.branch"
+        case .system: "cpu"
         case .terminal: "terminal"
         }
     }
@@ -49,9 +51,11 @@ struct MainWindowView: View {
     static let windowID = "main-window"
 
     @Environment(AppEnvironment.self) private var env
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @SceneStorage("mainWindow.selectedPage") private var pageRaw: String = MainPage.dashboard.rawValue
     @SceneStorage("mainWindow.sidebarVisible") private var sidebarVisible: Bool = true
-    @SceneStorage("mainWindow.inSettingsMode") private var inSettingsMode: Bool = false
+    @SceneStorage("mainWindow.mode") private var modeRaw: String = MainWindowMode.app.rawValue
+    @SceneStorage("mainWindow.settingsSection") private var settingsSectionRaw: String = SettingsSection.general.rawValue
     @State private var page: MainPage = .dashboard
     /// When non-nil, the detail pane shows session detail instead of the page.
     /// Held here (not in the sidebar) because the detail view needs it too.
@@ -65,6 +69,7 @@ struct MainWindowView: View {
         var pages: [MainPage] = [.dashboard, .configurations, .usage, .leaderboards]
         if env.preferences.aiActivityAnalysisEnabled { pages.append(.activity) }
         if env.preferences.gitTrackingEnabled { pages.append(.git) }
+        if env.preferences.systemMonitorEnabled { pages.append(.system) }
         pages.append(.terminal)
         return pages
     }
@@ -76,48 +81,55 @@ struct MainWindowView: View {
         return env.store.sessions.first { $0.id == id }
     }
 
+    private var mode: MainWindowMode {
+        MainWindowMode(rawValue: modeRaw) ?? .app
+    }
+
+    private var settingsSection: SettingsSection {
+        SettingsSection(rawValue: settingsSectionRaw) ?? .general
+    }
+
+    private var settingsSectionBinding: Binding<SettingsSection> {
+        Binding(
+            get: { settingsSection },
+            set: { settingsSectionRaw = $0.rawValue }
+        )
+    }
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             VisualEffectBackground(material: .sidebar, blendingMode: .behindWindow)
 
-            if inSettingsMode {
-                SettingsModeView(onExit: {
-                    withAnimation(.easeInOut(duration: 0.2)) { inSettingsMode = false }
-                })
-                .transition(.opacity)
-            } else {
-                HStack(spacing: 0) {
-                    if sidebarVisible {
-                        SidebarColumn(
-                            page: $page,
-                            selectedSessionID: $selectedSessionID,
-                            sessionsExpanded: $sessionsExpanded,
-                            availablePages: availablePages,
-                            onOpenSettings: {
-                                withAnimation(.easeInOut(duration: 0.2)) { inSettingsMode = true }
-                            }
-                        )
-                        .frame(width: 240)
-                        .transition(.move(edge: .leading).combined(with: .opacity))
-                    }
-
-                    DetailPanel(
-                        roundedLeading: sidebarVisible,
-                        boundaryFalloffEnabled: env.preferences.detailPanelBoundaryFalloffEnabled
-                    ) { detail }
-                    .background {
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .onTapGesture { clearTextFocus() }
-                    }
-                }
-                .transition(.opacity)
+            MainWindowModeShell(
+                mode: mode,
+                sidebarVisible: sidebarVisible,
+                boundaryFalloffEnabled: env.preferences.detailPanelBoundaryFalloffEnabled
+            ) {
+                SidebarColumn(
+                    page: $page,
+                    selectedSessionID: $selectedSessionID,
+                    sessionsExpanded: $sessionsExpanded,
+                    availablePages: availablePages,
+                    onOpenSettings: openSettings
+                )
+            } settingsSidebar: {
+                SettingsSidebarColumn(section: settingsSectionBinding, onExit: closeSettings)
+            } appDetail: {
+                detail
+            } settingsDetail: {
+                SettingsDetailView(section: settingsSection)
+            }
+            .background {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { clearTextFocus() }
             }
 
-            if !inSettingsMode {
+            if mode == .app {
                 sidebarToggle
                     .padding(.leading, 81)
                     .padding(.top, 11)
+                    .transition(.opacity)
             }
         }
         .ignoresSafeArea()
@@ -145,8 +157,11 @@ struct MainWindowView: View {
         .onChange(of: env.preferences.gitTrackingEnabled) { _, on in
             if !on && page == .git { page = .dashboard }
         }
+        .onChange(of: env.preferences.systemMonitorEnabled) { _, on in
+            if !on && page == .system { page = .dashboard }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openSettingsInMainWindow)) { _ in
-            withAnimation(.easeInOut(duration: 0.2)) { inSettingsMode = true }
+            openSettings()
         }
     }
 
@@ -193,6 +208,8 @@ struct MainWindowView: View {
                 MainActivityView()
             case .git:
                 MainGitActivityView()
+            case .system:
+                MainSystemMonitorView()
             case .terminal:
                 TerminalWorkspaceView(store: env.terminalStore)
             }
@@ -201,6 +218,27 @@ struct MainWindowView: View {
 
     private func clearTextFocus() {
         NSApp.keyWindow?.makeFirstResponder(nil)
+    }
+
+    private func openSettings() {
+        transition(to: .settings)
+    }
+
+    private func closeSettings() {
+        transition(to: .app)
+    }
+
+    private func transition(to nextMode: MainWindowMode) {
+        clearTextFocus()
+        guard mode != nextMode else { return }
+
+        if reduceMotion {
+            modeRaw = nextMode.rawValue
+        } else {
+            withAnimation(MainWindowMotion.modeSwitchAnimation) {
+                modeRaw = nextMode.rawValue
+            }
+        }
     }
 }
 
