@@ -9,6 +9,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
     case tracking
     case leaderboards
     case github
+    case terminal
     case about
 
     var id: String { rawValue }
@@ -21,6 +22,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
         case .tracking:  "Tracking"
         case .leaderboards: "Leaderboards"
         case .github:    "GitHub"
+        case .terminal:  "Terminal"
         case .about:     "About"
         }
     }
@@ -33,6 +35,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
         case .tracking:  "waveform.path.ecg"
         case .leaderboards: "trophy"
         case .github:    "chevron.left.forwardslash.chevron.right"
+        case .terminal:  "terminal"
         case .about:     "info.circle"
         }
     }

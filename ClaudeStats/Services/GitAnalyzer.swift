@@ -59,14 +59,20 @@ struct GitAnalyzer: Sendable {
     }
 
     func codeStats(for repo: GitRepo) -> GitRepoCodeStats {
-        GitCodeStatsAnalyzer().stats(repoRoot: repo.rootPath, trackedFiles: trackedFiles(in: repo))
+        codeStats(for: repo, scope: .head)
     }
 
-    func repoInspectorStats(for repo: GitRepo) -> GitRepoInspectorStats {
+    func codeStats(for repo: GitRepo, scope: GitStatsScope) -> GitRepoCodeStats {
         let trackedFiles = trackedFiles(in: repo)
+        return GitLinguistAnalyzer().stats(repo: repo, scope: scope, trackedFiles: trackedFiles)
+    }
+
+    func repoInspectorStats(for repo: GitRepo, scope: GitStatsScope = .head) -> GitRepoInspectorStats {
+        let trackedFiles = trackedFiles(in: repo)
+        let code = GitLinguistAnalyzer().stats(repo: repo, scope: scope, trackedFiles: trackedFiles)
         return GitRepoInspectorStats(
-            code: GitCodeStatsAnalyzer().stats(repoRoot: repo.rootPath, trackedFiles: trackedFiles),
-            codeContributors: codeContributionStats(for: repo, trackedFiles: trackedFiles),
+            code: code,
+            codeContributors: codeContributionStats(for: repo, codeFiles: code.codeFilePaths, scope: scope),
             contributors: contributorStats(for: repo)
         )
     }
@@ -122,17 +128,27 @@ struct GitAnalyzer: Sendable {
     }
 
     func codeContributionStats(for repo: GitRepo) -> [GitCodeContributionStat] {
-        codeContributionStats(for: repo, trackedFiles: trackedFiles(in: repo))
+        codeContributionStats(for: repo, scope: .head)
     }
 
-    private func codeContributionStats(for repo: GitRepo, trackedFiles: [String]) -> [GitCodeContributionStat] {
+    func codeContributionStats(for repo: GitRepo, scope: GitStatsScope) -> [GitCodeContributionStat] {
+        let trackedFiles = trackedFiles(in: repo)
+        let code = GitLinguistAnalyzer().stats(repo: repo, scope: scope, trackedFiles: trackedFiles)
+        return codeContributionStats(for: repo, codeFiles: code.codeFilePaths, scope: scope)
+    }
+
+    private func codeContributionStats(for repo: GitRepo, codeFiles: [String], scope: GitStatsScope) -> [GitCodeContributionStat] {
         guard isAvailable else { return [] }
-        let codeFiles = GitCodeStatsAnalyzer().recognizedTextFiles(repoRoot: repo.rootPath, trackedFiles: trackedFiles)
         guard !codeFiles.isEmpty else { return [] }
 
         var counters: [String: CodeContributionCounter] = [:]
         for path in codeFiles {
-            guard let output = runGit(["-C", repo.rootPath, "blame", "--line-porcelain", "--", path]) else {
+            var args = ["-C", repo.rootPath, "blame", "--line-porcelain"]
+            if scope == .head {
+                args.append("HEAD")
+            }
+            args.append(contentsOf: ["--", path])
+            guard let output = runGit(args) else {
                 continue
             }
             Self.accumulateCodeContribution(fromBlame: output, into: &counters)
@@ -244,7 +260,67 @@ struct GitAnalyzer: Sendable {
                     "--decorate-refs-exclude=refs/remotes", "-n", "\(limit)", "--pretty=\(format)"]
         guard let output = runGit(args) else { return nil }
         let commits = Self.parseGraphLog(output)
-        return GitGraph(repo: repo, commits: commits, truncated: commits.count >= limit)
+        return GitGraph(
+            repo: repo,
+            commits: commits,
+            truncated: commits.count >= limit,
+            workingTree: workingTreeSummary(for: repo)
+        )
+    }
+
+    /// Working tree changes that are not represented by a commit. This includes
+    /// staged, unstaged, conflicted, and untracked files.
+    func workingTreeSummary(for repo: GitRepo) -> GitWorkingTreeSummary {
+        guard isAvailable else { return .clean }
+        guard let output = runGit(["-C", repo.rootPath, "status", "--porcelain=v1"]) else { return .clean }
+        return Self.parseWorkingTreeStatus(output)
+    }
+
+    static func parseWorkingTreeStatus(_ output: String) -> GitWorkingTreeSummary {
+        let changes = output
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .compactMap(parseWorkingTreeStatusLine)
+            .sorted {
+                if $0.kind.shortLabel != $1.kind.shortLabel {
+                    return $0.kind.shortLabel < $1.kind.shortLabel
+                }
+                return $0.displayPath.localizedStandardCompare($1.displayPath) == .orderedAscending
+            }
+        return GitWorkingTreeSummary(changes: changes)
+    }
+
+    private static func parseWorkingTreeStatusLine(_ rawLine: Substring) -> GitWorkingTreeChange? {
+        let line = String(rawLine)
+        guard line.count >= 4 else { return nil }
+        let indexStatus = String(line.prefix(1))
+        let worktreeStatus = String(line.dropFirst().prefix(1))
+        var path = String(line.dropFirst(3))
+        var oldPath: String?
+
+        if let arrow = path.range(of: " -> ") {
+            oldPath = String(path[..<arrow.lowerBound])
+            path = String(path[arrow.upperBound...])
+        }
+
+        let kind = workingTreeKind(indexStatus: indexStatus, worktreeStatus: worktreeStatus)
+        return GitWorkingTreeChange(
+            path: path,
+            oldPath: oldPath,
+            indexStatus: indexStatus,
+            worktreeStatus: worktreeStatus,
+            kind: kind
+        )
+    }
+
+    private static func workingTreeKind(indexStatus: String, worktreeStatus: String) -> GitWorkingTreeChange.Kind {
+        if indexStatus == "?" && worktreeStatus == "?" { return .untracked }
+        if indexStatus == "U" || worktreeStatus == "U" { return .conflicted }
+        if indexStatus == "R" || worktreeStatus == "R" { return .renamed }
+        if indexStatus == "C" || worktreeStatus == "C" { return .copied }
+        if indexStatus == "D" || worktreeStatus == "D" { return .deleted }
+        if indexStatus == "A" || worktreeStatus == "A" { return .added }
+        if indexStatus == "M" || worktreeStatus == "M" { return .modified }
+        return .changed
     }
 
     /// Per-file churn for one commit (`git show --numstat`). Empty for merge

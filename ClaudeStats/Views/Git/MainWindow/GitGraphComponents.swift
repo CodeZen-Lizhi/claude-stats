@@ -11,6 +11,7 @@ struct GitGraphRowView: View {
     let nodeRadius: CGFloat
     let railWidth: CGFloat
     let isSelected: Bool
+    var connectsFromTop = false
     let action: () -> Void
 
     @State private var hovering = false
@@ -22,7 +23,8 @@ struct GitGraphRowView: View {
                     row: row,
                     laneSpacing: laneSpacing,
                     railPad: railPad,
-                    nodeRadius: nodeRadius
+                    nodeRadius: nodeRadius,
+                    connectsFromTop: connectsFromTop
                 )
                 .frame(width: railWidth)
 
@@ -94,6 +96,7 @@ private struct GitGraphRailView: View {
     let laneSpacing: CGFloat
     let railPad: CGFloat
     let nodeRadius: CGFloat
+    let connectsFromTop: Bool
 
     private func x(_ column: Int) -> CGFloat { railPad + CGFloat(column) * laneSpacing }
     private func color(_ idx: Int) -> Color { Color.stxRamp[idx % Color.stxRamp.count] }
@@ -110,7 +113,7 @@ private struct GitGraphRailView: View {
                 ctx.stroke(p, with: .color(color(lane.colorIndex)), lineWidth: 1.6)
             }
 
-            if !row.isBranchTip {
+            if connectsFromTop || !row.isBranchTip {
                 var p = Path()
                 p.move(to: CGPoint(x: x(row.column), y: 0))
                 p.addLine(to: CGPoint(x: x(row.column), y: midY))
@@ -152,6 +155,119 @@ private struct GitGraphRailView: View {
                 ctx.stroke(ring, with: .color(color(row.colorIndex)), lineWidth: 1.6)
             }
         }
+    }
+}
+
+struct GitWorkingTreeRowView: View {
+    let summary: GitWorkingTreeSummary
+    let rowHeight: CGFloat
+    let railPad: CGFloat
+    let nodeRadius: CGFloat
+    let railWidth: CGFloat
+    let railColorIndex: Int
+    let isSelected: Bool
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                GitWorkingTreeRailView(
+                    railPad: railPad,
+                    nodeRadius: nodeRadius,
+                    railColorIndex: railColorIndex
+                )
+                    .frame(width: railWidth)
+
+                GitWorkingTreeIcon()
+                    .frame(width: 20, height: 20)
+
+                Text(summary.title)
+                    .font(.sora(13, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Spacer(minLength: 8)
+            }
+            .padding(.trailing, 14)
+            .frame(height: rowHeight)
+            .background((hovering || isSelected) ? Color.primary.opacity(0.05) : Color.clear)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .accessibilityLabel(Text(summary.title))
+    }
+}
+
+private struct GitWorkingTreeRailView: View {
+    let railPad: CGFloat
+    let nodeRadius: CGFloat
+    let railColorIndex: Int
+
+    private func color(_ idx: Int) -> Color { Color.stxRamp[idx % Color.stxRamp.count] }
+
+    var body: some View {
+        Canvas { ctx, size in
+            let midY = size.height / 2
+            let railColor = color(railColorIndex)
+            var p = Path()
+            p.move(to: CGPoint(x: railPad, y: midY + nodeRadius + 2))
+            p.addLine(to: CGPoint(x: railPad, y: size.height))
+            ctx.stroke(
+                p,
+                with: .color(railColor),
+                style: StrokeStyle(lineWidth: 1.6, lineCap: .round, dash: [2, 4])
+            )
+
+            let c = CGPoint(x: railPad, y: midY)
+            let ring = Path(ellipseIn: CGRect(
+                x: c.x - nodeRadius - 2,
+                y: c.y - nodeRadius - 2,
+                width: (nodeRadius + 2) * 2,
+                height: (nodeRadius + 2) * 2
+            ))
+            ctx.fill(ring, with: .color(Color.stxBackground))
+            ctx.stroke(ring, with: .color(railColor), lineWidth: 1.8)
+        }
+    }
+}
+
+private struct GitWorkingTreeIcon: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: 4, style: .continuous)
+            .strokeBorder(
+                Color.stxMuted.opacity(0.55),
+                style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+            )
+            .background(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(Color.primary.opacity(0.025))
+            )
+    }
+}
+
+struct GitWorkingTreeKindPill: View {
+    let kind: GitWorkingTreeChange.Kind
+
+    private var tint: Color {
+        switch kind {
+        case .added, .copied, .untracked: return GitPalette.add
+        case .deleted: return GitPalette.del
+        case .renamed: return GitPalette.tag
+        case .conflicted: return Color.red
+        case .modified, .changed: return GitPalette.head
+        }
+    }
+
+    var body: some View {
+        Text(kind.shortLabel)
+            .font(.sora(8, weight: .semibold).monospacedDigit())
+            .foregroundStyle(tint)
+            .frame(width: 28, alignment: .leading)
+            .help(kind.label)
     }
 }
 

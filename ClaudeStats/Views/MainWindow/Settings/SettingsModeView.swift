@@ -4,6 +4,8 @@ import SwiftUI
 /// `SettingsSidebarColumn` with a `DetailPanel` rendering the selected
 /// `SettingsSection`. Owned (and toggled on/off) by ``MainWindowView``.
 struct SettingsModeView: View {
+    @Environment(AppEnvironment.self) private var env
+
     var onExit: () -> Void
 
     @SceneStorage("mainWindow.settingsSection") private var sectionRaw: String = SettingsSection.general.rawValue
@@ -14,7 +16,10 @@ struct SettingsModeView: View {
             SettingsSidebarColumn(section: $section, onExit: onExit)
                 .frame(width: 220)
 
-            DetailPanel(roundedLeading: true) {
+            DetailPanel(
+                roundedLeading: true,
+                boundaryFalloffEnabled: env.preferences.detailPanelBoundaryFalloffEnabled
+            ) {
                 FadingScrollView {
                     VStack(alignment: .leading, spacing: 32) {
                         Text(section.title)
@@ -43,6 +48,7 @@ struct SettingsModeView: View {
         case .tracking:  TrackingSettingsView()
         case .leaderboards: LeaderboardsSettingsView()
         case .github:    GitHubSettingsView()
+        case .terminal:  TerminalSettingsView()
         case .about:     AboutSettingsView()
         }
     }

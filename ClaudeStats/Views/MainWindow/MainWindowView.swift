@@ -97,7 +97,10 @@ struct MainWindowView: View {
                         .transition(.move(edge: .leading).combined(with: .opacity))
                     }
 
-                    DetailPanel(roundedLeading: sidebarVisible) { detail }
+                    DetailPanel(
+                        roundedLeading: sidebarVisible,
+                        boundaryFalloffEnabled: env.preferences.detailPanelBoundaryFalloffEnabled
+                    ) { detail }
                 }
                 .transition(.opacity)
             }

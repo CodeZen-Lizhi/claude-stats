@@ -11,11 +11,17 @@ final class ConfigurationProfilesViewModel {
     private(set) var lastError: String?
 
     @ObservationIgnored private let store: ConfigurationProfileStore
+    @ObservationIgnored private let editorService: ConfigurationEditorService
     @ObservationIgnored private let registry: ProviderRegistry
     @ObservationIgnored private var hasLoaded = false
 
-    init(store: ConfigurationProfileStore = ConfigurationProfileStore(), registry: ProviderRegistry) {
+    init(
+        store: ConfigurationProfileStore = ConfigurationProfileStore(),
+        registry: ProviderRegistry,
+        editorService: ConfigurationEditorService? = nil
+    ) {
         self.store = store
+        self.editorService = editorService ?? ConfigurationEditorService(profileStore: store)
         self.registry = registry
     }
 
@@ -59,6 +65,17 @@ final class ConfigurationProfilesViewModel {
     func latestBackupURL(for profile: ConfigProfile) -> URL? {
         guard let path = library.latestBackupDirectoryByProfileID[profile.id] else { return nil }
         return URL(fileURLWithPath: path, isDirectory: true)
+    }
+
+    func profile(id: UUID) -> ConfigProfile? {
+        library.profiles.first { $0.id == id }
+    }
+
+    func snapshot(profileID: UUID, snapshotID: UUID) -> ConfigFileSnapshot? {
+        library.profiles
+            .first { $0.id == profileID }?
+            .files
+            .first { $0.id == snapshotID }
     }
 
     func scopeOptions(for provider: ProviderKind, sessions: [Session]) -> [ConfigProfileScope] {
@@ -185,6 +202,59 @@ final class ConfigurationProfilesViewModel {
         }
     }
 
+    func saveSnapshotToProfile(profileID: UUID, snapshotID: UUID, content: String) async -> ConfigProfile? {
+        guard let profile = profile(id: profileID) else {
+            lastError = ConfigurationProfileStoreError.profileNotFound.localizedDescription
+            return nil
+        }
+
+        isWorking = true
+        defer { isWorking = false }
+
+        do {
+            let updatedProfile = try editorService.profileByUpdatingSnapshot(
+                profile,
+                snapshotID: snapshotID,
+                content: content
+            )
+            replaceProfile(updatedProfile)
+            try await persist()
+            await refreshStatuses()
+            return updatedProfile
+        } catch {
+            lastError = error.localizedDescription
+            Log.app.error("Failed to save configuration snapshot: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
+    func saveSnapshotToDisk(profileID: UUID, snapshotID: UUID, content: String) async -> ConfigurationEditorDiskSaveResult? {
+        guard let profile = profile(id: profileID) else {
+            lastError = ConfigurationProfileStoreError.profileNotFound.localizedDescription
+            return nil
+        }
+
+        isWorking = true
+        defer { isWorking = false }
+
+        do {
+            let result = try await editorService.saveSnapshotToDisk(
+                profile: profile,
+                snapshotID: snapshotID,
+                content: content
+            )
+            replaceProfile(result.updatedProfile)
+            library.latestBackupDirectoryByProfileID[profileID] = result.backupDirectory.path
+            try await persist()
+            await refreshStatuses()
+            return result
+        } catch {
+            lastError = error.localizedDescription
+            Log.app.error("Failed to save configuration file to disk: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
     func refreshStatuses() async {
         var refreshed: [UUID: ConfigProfileStatus] = [:]
         for profile in library.profiles {
@@ -212,5 +282,10 @@ final class ConfigurationProfilesViewModel {
     private func updateProfile(_ id: UUID, mutate: (inout ConfigProfile) -> Void) {
         guard let index = library.profiles.firstIndex(where: { $0.id == id }) else { return }
         mutate(&library.profiles[index])
+    }
+
+    private func replaceProfile(_ profile: ConfigProfile) {
+        guard let index = library.profiles.firstIndex(where: { $0.id == profile.id }) else { return }
+        library.profiles[index] = profile
     }
 }

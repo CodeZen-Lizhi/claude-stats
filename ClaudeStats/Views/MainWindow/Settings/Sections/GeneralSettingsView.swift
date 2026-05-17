@@ -49,6 +49,13 @@ struct GeneralSettingsView: View {
                             .toggleStyle(.switch)
                     }
                     SettingRowDivider()
+                    SettingRow(title: "Detail edge fade",
+                               description: "Blend the main detail pane into the sidebar with a soft boundary fade.") {
+                        Toggle("", isOn: $prefs.detailPanelBoundaryFalloffEnabled)
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                    }
+                    SettingRowDivider()
                     SettingRow(title: "Include cache reads in token counts",
                                description: "Anthropic's API re-reports the cached context on every assistant turn, so the same tokens get counted many times. Turn off to show only \u{201C}new\u{201D} traffic (input + output + cache writes). Estimated cost is unaffected.") {
                         Toggle("", isOn: $prefs.includeCacheInTokens)

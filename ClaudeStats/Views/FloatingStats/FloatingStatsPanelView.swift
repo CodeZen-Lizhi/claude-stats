@@ -23,14 +23,16 @@ struct FloatingStatsPanelView: View {
                 expandedContent
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
             } else {
-                collapsedContent(edge: edge)
+                collapsedContent(edge: edge, size: size)
                     .transition(.opacity)
             }
         }
         .frame(width: size.width, height: size.height)
-        .background(.regularMaterial, in: shape)
+        .background {
+            shape.fill(.regularMaterial)
+        }
+        .clipShape(shape)
         .overlay(shape.stroke(Color.stxStroke, lineWidth: 1))
-        .shadow(color: .black.opacity(0.20), radius: 14, x: 0, y: 6)
         .contentShape(Rectangle())
         .overlay(FloatingHoverTracker(onHoverChanged: onHoverChanged).accessibilityHidden(true))
         .font(.sora(13))
@@ -42,19 +44,58 @@ struct FloatingStatsPanelView: View {
         .accessibilityLabel("Claude Stats floating tab")
     }
 
-    private func collapsedContent(edge: FloatingPanelEdge) -> some View {
+    private func collapsedContent(edge: FloatingPanelEdge, size: CGSize) -> some View {
         let title = env.preferences.selectedProvider.shortName.lowercased()
-        return Text(title)
-            .font(.sora(15, weight: .semibold))
-            .tracking(1.4)
+        return Group {
+            if edge.isVertical {
+                sideCollapsedTitle(title, edge: edge, size: size)
+            } else {
+                horizontalCollapsedTitle(title)
+            }
+        }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(Metrics.collapsedContentPadding)
+            .overlay(dragHandle)
+            .accessibilityHint("Hover to expand. Drag to snap to another screen edge.")
+    }
+
+    private func horizontalCollapsedTitle(_ title: String) -> some View {
+        Text(title)
+            .font(.sora(13, weight: .semibold))
+            .tracking(1.1)
             .foregroundStyle(.primary)
             .lineLimit(1)
             .minimumScaleFactor(0.75)
-            .rotationEffect(rotation(for: edge))
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(8)
-            .overlay(dragHandle)
-            .accessibilityHint("Hover to expand. Drag to snap to another screen edge.")
+    }
+
+    private func sideCollapsedTitle(_ title: String, edge: FloatingPanelEdge, size: CGSize) -> some View {
+        let innerSize = CGSize(
+            width: max(size.width - Metrics.collapsedContentPadding * 2, 1),
+            height: max(size.height - Metrics.collapsedContentPadding * 2, 1)
+        )
+
+        return sideCollapsedTitleText(title)
+            .frame(width: innerSize.height, height: innerSize.width)
+            .rotationEffect(sideTitleRotation(for: edge))
+            .frame(width: innerSize.width, height: innerSize.height)
+            .accessibilityLabel(title)
+    }
+
+    private func sideCollapsedTitleText(_ title: String) -> some View {
+        Text(title)
+            .font(.sora(14, weight: .semibold))
+            .tracking(1.1)
+            .foregroundStyle(.primary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+    }
+
+    private func sideTitleRotation(for edge: FloatingPanelEdge) -> Angle {
+        switch edge {
+        case .right: .degrees(-90)
+        case .left: .degrees(90)
+        case .top, .bottom: .zero
+        }
     }
 
     private var expandedContent: some View {
@@ -162,14 +203,6 @@ struct FloatingStatsPanelView: View {
         .accessibilityLabel(label)
     }
 
-    private func rotation(for edge: FloatingPanelEdge) -> Angle {
-        switch edge {
-        case .right: .degrees(-90)
-        case .left: .degrees(90)
-        case .top, .bottom: .zero
-        }
-    }
-
     private var dragHandle: some View {
         FloatingDragHandle(
             onDragBegan: onDragBegan,
@@ -177,6 +210,10 @@ struct FloatingStatsPanelView: View {
             onDragEnded: onDragEnded
         )
         .accessibilityHidden(true)
+    }
+
+    private enum Metrics {
+        static let collapsedContentPadding: CGFloat = 8
     }
 }
 

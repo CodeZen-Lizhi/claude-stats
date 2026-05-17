@@ -130,7 +130,7 @@ public final class EmbeddedTerminalStore: ObservableObject {
     private static func ensureConfigFile(at url: URL) {
         let fm = FileManager.default
         if fm.fileExists(atPath: url.path) {
-            repairConfigFile(at: url)
+            updateExistingConfigFile(at: url)
             return
         }
 
@@ -142,22 +142,42 @@ public final class EmbeddedTerminalStore: ObservableObject {
 
             macos-titlebar-style = hidden
             window-decoration = false
+
+            \(managedAppearanceBlock)
             """.write(to: url, atomically: true, encoding: .utf8)
         } catch {
             assertionFailure("Failed to create embedded Ghostty config: \(error)")
         }
     }
 
-    private static func repairConfigFile(at url: URL) {
-        guard
-            let contents = try? String(contentsOf: url, encoding: .utf8),
-            contents.contains("theme = dark:Builtin Dark,light:Builtin Light")
-        else { return }
+    private static func updateExistingConfigFile(at url: URL) {
+        guard let contents = try? String(contentsOf: url, encoding: .utf8) else { return }
+        let repaired = repairLegacyConfig(contents)
+        let updated = replacingManagedAppearanceBlock(in: repaired)
+        guard updated != contents else { return }
+        try? updated.write(to: url, atomically: true, encoding: .utf8)
+    }
 
-        let repaired = contents
+    private static func repairLegacyConfig(_ contents: String) -> String {
+        contents
             .replacingOccurrences(of: "\ntheme = dark:Builtin Dark,light:Builtin Light", with: "")
             .replacingOccurrences(of: "theme = dark:Builtin Dark,light:Builtin Light\n", with: "")
-        try? repaired.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    private static func replacingManagedAppearanceBlock(in contents: String) -> String {
+        if
+            let startRange = contents.range(of: managedAppearanceStart),
+            let endRange = contents.range(
+                of: managedAppearanceEnd,
+                range: startRange.upperBound..<contents.endIndex
+            )
+        {
+            var updated = contents
+            updated.replaceSubrange(startRange.lowerBound..<endRange.upperBound, with: managedAppearanceBlock)
+            return updated
+        }
+
+        return contents.trimmingTrailingNewlines + "\n\n" + managedAppearanceBlock + "\n"
     }
 
     private static func resourcesDirectoryURL() -> URL {
@@ -165,6 +185,21 @@ public final class EmbeddedTerminalStore: ObservableObject {
         return (bundle.resourceURL ?? bundle.bundleURL)
             .appendingPathComponent("Resources", isDirectory: true)
     }
+
+    private static let managedAppearanceStart = "# Claude Stats terminal appearance: begin"
+    private static let managedAppearanceEnd = "# Claude Stats terminal appearance: end"
+    private static let managedAppearanceBlock = """
+    \(managedAppearanceStart)
+    background = 0b0d10
+    foreground = e9eef5
+    cursor-color = f06b1f
+    selection-background = 385763
+    selection-foreground = f7fbff
+    font-size = 13
+    window-padding-x = 12
+    window-padding-y = 10
+    \(managedAppearanceEnd)
+    """
 }
 
 extension EmbeddedTerminalStore: @preconcurrency GhosttyAppDelegate {
@@ -277,5 +312,13 @@ private extension Optional where Wrapped == String {
 private extension String {
     var nilIfEmpty: String? {
         isEmpty ? nil : self
+    }
+
+    var trimmingTrailingNewlines: String {
+        var copy = self
+        while copy.last == "\n" || copy.last == "\r" {
+            copy.removeLast()
+        }
+        return copy
     }
 }

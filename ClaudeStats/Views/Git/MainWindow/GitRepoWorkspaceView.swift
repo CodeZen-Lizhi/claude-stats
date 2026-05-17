@@ -7,6 +7,7 @@ struct GitRepoWorkspaceView: View {
     @State private var inspectorMode: GitInspectorMode = .repo
 
     private static let rowHeight: CGFloat = 36
+    private static let workingTreeRowHeight: CGFloat = 56
     private static let laneSpacing: CGFloat = 14
     private static let railPad: CGFloat = 15
     private static let nodeRadius: CGFloat = 3
@@ -96,6 +97,11 @@ struct GitRepoWorkspaceView: View {
                 Text("\(graph.commits.count)\(graph.truncated ? "+" : "") commits")
                     .font(.sora(10).monospacedDigit())
                     .foregroundStyle(Color.stxMuted)
+                if graph.workingTree.isDirty {
+                    Text("\(graph.workingTree.fileCount) modified")
+                        .font(.sora(10).monospacedDigit())
+                        .foregroundStyle(Color.stxMuted)
+                }
                 if graph.truncated {
                     Button {
                         vm.loadMore()
@@ -115,9 +121,24 @@ struct GitRepoWorkspaceView: View {
 
     @ViewBuilder
     private var graphContent: some View {
-        if let layout = vm.layout, !layout.rows.isEmpty {
+        if let graph = vm.graph, let layout = vm.layout, graph.workingTree.isDirty || !layout.rows.isEmpty {
+            let hasWorkingTree = graph.workingTree.isDirty
             FadingScrollView {
                 LazyVStack(spacing: 0) {
+                    if hasWorkingTree {
+                        GitWorkingTreeRowView(
+                            summary: graph.workingTree,
+                            rowHeight: Self.workingTreeRowHeight,
+                            railPad: Self.railPad,
+                            nodeRadius: Self.nodeRadius,
+                            railWidth: railWidth,
+                            railColorIndex: layout.rows.first?.colorIndex ?? 0,
+                            isSelected: inspectorMode == .workingTree
+                        ) {
+                            inspectorMode = .workingTree
+                            vm.selectWorkingTree()
+                        }
+                    }
                     ForEach(layout.rows) { row in
                         GitGraphRowView(
                             row: row,
@@ -126,7 +147,8 @@ struct GitRepoWorkspaceView: View {
                             railPad: Self.railPad,
                             nodeRadius: Self.nodeRadius,
                             railWidth: railWidth,
-                            isSelected: vm.selectedHash == row.commit.hash
+                            isSelected: inspectorMode == .commit && vm.selectedHash == row.commit.hash,
+                            connectsFromTop: hasWorkingTree && row.id == layout.rows.first?.id
                         ) {
                             inspectorMode = .commit
                             vm.selectCommit(row.commit.hash)
@@ -152,7 +174,7 @@ struct GitRepoWorkspaceView: View {
 
 private struct GitCommitInspector: View {
     let repo: GitRepo
-    let vm: GitRepoGraphViewModel
+    @Bindable var vm: GitRepoGraphViewModel
 
     @Binding var mode: GitInspectorMode
 
@@ -166,13 +188,15 @@ private struct GitCommitInspector: View {
                 switch mode {
                 case .commit:
                     commitBody
+                case .workingTree:
+                    workingTreeBody
                 case .repo:
                     repoBody
                 }
             }
         }
         .background(Color.primary.opacity(0.025))
-        .task(id: "\(repo.id)|\(mode.rawValue)") {
+        .task(id: "\(repo.id)|\(mode.rawValue)|\(vm.statsLoadID)") {
             guard mode == .repo else { return }
             await vm.loadRepoStats(repo: repo)
         }
@@ -189,14 +213,14 @@ private struct GitCommitInspector: View {
             )
             if vm.diffPath == nil {
                 Picker("", selection: $mode) {
-                    ForEach(GitInspectorMode.allCases) { mode in
+                    ForEach(GitInspectorMode.modes(hasWorkingTree: vm.graph?.workingTree.isDirty == true)) { mode in
                         Text(mode.label).tag(mode)
                     }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .controlSize(.mini)
-                .frame(width: 112)
+                .frame(width: vm.graph?.workingTree.isDirty == true ? 176 : 112)
                 .help("Switch inspector mode")
             }
             if vm.isDetailLoading || vm.isDiffLoading || vm.isStatsLoading {
@@ -212,6 +236,7 @@ private struct GitCommitInspector: View {
         if vm.diffPath != nil { return "FILE DIFF" }
         switch mode {
         case .commit: return "COMMIT INSPECTOR"
+        case .workingTree: return "WORKING TREE"
         case .repo: return "REPO INSPECTOR"
         }
     }
@@ -369,11 +394,107 @@ private struct GitCommitInspector: View {
     }
 
     @ViewBuilder
+    private var workingTreeBody: some View {
+        if let summary = vm.graph?.workingTree, summary.isDirty {
+            FadingScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    workingTreeSummary(summary)
+                    workingTreeFiles(summary)
+                }
+                .padding(14)
+            }
+        } else {
+            GitWorkspaceInlineEmptyState("No working tree changes.")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private func workingTreeSummary(_ summary: GitWorkingTreeSummary) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 9) {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(GitPalette.head)
+                    .frame(width: 28, height: 28)
+                    .background(Color.stxAccent.opacity(0.10), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(summary.title)
+                        .font(.sora(13, weight: .semibold))
+                    Text("Changes not represented by any commit in the graph.")
+                        .font(.sora(10))
+                        .foregroundStyle(Color.stxMuted)
+                }
+            }
+
+            HStack(spacing: 6) {
+                if summary.stagedCount > 0 {
+                    WorkingTreeCountPill(label: "staged", count: summary.stagedCount)
+                }
+                if summary.unstagedCount > 0 {
+                    WorkingTreeCountPill(label: "unstaged", count: summary.unstagedCount)
+                }
+            }
+        }
+        .padding(12)
+        .gitWorkspaceCard()
+    }
+
+    private func workingTreeFiles(_ summary: GitWorkingTreeSummary) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("FILES CHANGED")
+                    .font(.sora(10, weight: .semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(Color.stxMuted)
+                Spacer()
+                Text("\(summary.fileCount)")
+                    .font(.sora(9).monospacedDigit())
+                    .foregroundStyle(Color.stxMuted)
+            }
+            .padding(12)
+
+            StxRule()
+
+            ForEach(summary.changes) { change in
+                HStack(spacing: 8) {
+                    GitWorkingTreeKindPill(kind: change.kind)
+                    Text(change.displayPath)
+                        .font(.sora(10))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 6)
+                    if change.isStaged {
+                        Text("staged")
+                            .font(.sora(8, weight: .semibold))
+                            .foregroundStyle(Color.stxMuted)
+                    }
+                    if change.isUnstaged {
+                        Text("unstaged")
+                            .font(.sora(8, weight: .semibold))
+                            .foregroundStyle(Color.stxMuted)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                if change.id != summary.changes.last?.id { StxRule() }
+            }
+        }
+        .gitWorkspaceCard()
+    }
+
+    @ViewBuilder
     private var repoBody: some View {
         if let stats = vm.repoStats {
             FadingScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    GitRepoLineCountPanel(stats: stats.code)
+                    GitRepoStatsScopePanel(scope: $vm.statsScope, stats: stats.code)
+                    if let warning = stats.code.warning {
+                        GitWorkspaceInlineEmptyState(warning)
+                            .padding(12)
+                            .gitWorkspaceCard()
+                    }
+                    GitRepoLanguagePanel(stats: stats.code)
                     GitRepoCodeContributorsPanel(rows: stats.codeContributors)
                     GitRepoContributorsPanel(
                         title: "TOP COMMITTERS",
@@ -500,6 +621,7 @@ private struct TrailingFadeMask: View {
 
 private enum GitInspectorMode: String, CaseIterable, Identifiable {
     case commit
+    case workingTree
     case repo
 
     var id: String { rawValue }
@@ -507,23 +629,74 @@ private enum GitInspectorMode: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .commit: return "Commit"
+        case .workingTree: return "Worktree"
         case .repo: return "Repo"
+        }
+    }
+
+    static func modes(hasWorkingTree: Bool) -> [GitInspectorMode] {
+        hasWorkingTree ? [.commit, .workingTree, .repo] : [.commit, .repo]
+    }
+}
+
+private struct WorkingTreeCountPill: View {
+    let label: String
+    let count: Int
+
+    var body: some View {
+        Text("\(count) \(label)")
+            .font(.sora(9, weight: .semibold).monospacedDigit())
+            .foregroundStyle(Color.stxMuted)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Color.primary.opacity(0.06), in: Capsule())
+    }
+}
+
+private struct GitRepoStatsScopePanel: View {
+    @Binding var scope: GitStatsScope
+    let stats: GitRepoCodeStats
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            panelHeader(title: "LANGUAGE ENGINE", detail: stats.engine.label)
+            HStack(spacing: 8) {
+                Picker("", selection: $scope) {
+                    ForEach(GitStatsScope.allCases) { scope in
+                        Text(scope.label).tag(scope)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .controlSize(.mini)
+                .help("Switch between committed HEAD statistics and current working tree statistics")
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(Format.bytes(stats.totalBytes))
+                        .font(.sora(10, weight: .semibold).monospacedDigit())
+                    Text("\(Format.tokens(stats.sourceLines)) SLOC")
+                        .font(.sora(9).monospacedDigit())
+                        .foregroundStyle(Color.stxMuted)
+                }
+            }
+            .padding(10)
+            .gitWorkspaceCard()
         }
     }
 }
 
-private struct GitRepoLineCountPanel: View {
+private struct GitRepoLanguagePanel: View {
     let stats: GitRepoCodeStats
 
-    private var total: Int { max(stats.codeAndCommentLines, 0) }
+    private var total: Int { max(stats.totalBytes, 0) }
     private var rows: [GitStatBarRow.Model] {
         let languageRows = stats.languageRows.prefix(7).enumerated().map { index, row in
             GitStatBarRow.Model(
                 id: row.language,
                 rank: index + 1,
                 label: row.language,
-                value: Format.tokens(row.codeAndCommentLines),
-                ratio: total > 0 ? Double(row.codeAndCommentLines) / Double(total) : 0,
+                value: languageValue(row),
+                ratio: row.byteShare,
                 color: Color.stxRamp[index % Color.stxRamp.count]
             )
         }
@@ -531,8 +704,8 @@ private struct GitRepoLineCountPanel: View {
             GitStatBarRow.Model(
                 id: "total",
                 rank: nil,
-                label: "Total Lines",
-                value: Format.tokens(total),
+                label: "Total Bytes",
+                value: Format.bytes(total),
                 ratio: total > 0 ? 1 : 0,
                 color: GitPalette.head
             )
@@ -541,16 +714,27 @@ private struct GitRepoLineCountPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            panelHeader(title: "LINE COUNT", detail: "Code and Comments")
-            GitStatBarList(rows: rows)
+            panelHeader(title: "LANGUAGE MIX", detail: "Linguist bytes + scc SLOC")
+            if stats.languageRows.isEmpty {
+                GitWorkspaceInlineEmptyState("No language statistics available.")
+                    .gitWorkspaceCard()
+            } else {
+                GitStatBarList(rows: rows)
+            }
             HStack(spacing: 6) {
-                Text("\(stats.textFileCount) text files")
+                Text("\(stats.analyzedFiles) analyzed")
                 Text("-")
-                Text("\(stats.skippedBinaryFileCount) skipped")
+                Text("\(stats.skippedFiles) skipped")
+                Text("-")
+                Text("\(Format.tokens(stats.totalLines)) lines")
             }
             .font(.sora(9))
             .foregroundStyle(Color.stxMuted)
         }
+    }
+
+    private func languageValue(_ row: GitRepoCodeStats.LanguageRow) -> String {
+        "\(Format.percent(row.byteShare)) \(Format.bytes(row.sizeBytes)) / \(Format.tokens(row.sourceLines))"
     }
 }
 

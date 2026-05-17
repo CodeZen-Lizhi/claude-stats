@@ -13,6 +13,17 @@ enum Format {
         }
     }
 
+    /// Compact byte sizes: `847 B`, `12.34 KB`, `4.12 MB`, `2.00 GB`.
+    static func bytes(_ count: Int) -> String {
+        let n = Double(count)
+        switch abs(count) {
+        case 1_000_000_000...: return String(format: "%.2f GB", n / 1_000_000_000)
+        case 1_000_000...:     return String(format: "%.2f MB", n / 1_000_000)
+        case 1_000...:         return String(format: "%.2f KB", n / 1_000)
+        default:               return "\(count) B"
+        }
+    }
+
     /// `$0.00`, `$1.23`, `$12.34`. Always two decimals; never localizes the
     /// currency symbol away (this is an estimate, not a billing figure).
     static func cost(_ amount: Double) -> String {

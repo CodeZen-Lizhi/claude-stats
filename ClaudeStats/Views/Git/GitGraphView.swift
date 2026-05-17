@@ -11,6 +11,7 @@ struct GitGraphView: View {
 
     // Rail geometry — `rowHeight` must be fixed so each row's `Canvas` lines up.
     private static let rowHeight: CGFloat = 38
+    private static let workingTreeRowHeight: CGFloat = 56
     private static let laneSpacing: CGFloat = 14
     private static let railPad: CGFloat = 15
     private static let nodeRadius: CGFloat = 3
@@ -107,6 +108,11 @@ struct GitGraphView: View {
                 Text("\(g.commits.count)\(g.truncated ? "+" : "") commit\(g.commits.count == 1 ? "" : "s")")
                     .font(.sora(9).monospacedDigit())
                     .foregroundStyle(Color.stxMuted)
+                if g.workingTree.isDirty {
+                    Text("\(g.workingTree.fileCount) modified")
+                        .font(.sora(9).monospacedDigit())
+                        .foregroundStyle(Color.stxMuted)
+                }
                 if g.truncated {
                     Button("More") { limit += 200 }
                         .buttonStyle(.plain)
@@ -123,9 +129,25 @@ struct GitGraphView: View {
 
     @ViewBuilder
     private var content: some View {
-        if let layout, !layout.rows.isEmpty {
+        if let graph, let layout, graph.workingTree.isDirty || !layout.rows.isEmpty {
+            let hasWorkingTree = graph.workingTree.isDirty
             FadingScrollView {
                 LazyVStack(spacing: 0) {
+                    if hasWorkingTree {
+                        GitWorkingTreeRowView(
+                            summary: graph.workingTree,
+                            rowHeight: Self.workingTreeRowHeight,
+                            railPad: Self.railPad,
+                            nodeRadius: Self.nodeRadius,
+                            railWidth: railWidth,
+                            railColorIndex: layout.rows.first?.colorIndex ?? 0,
+                            isSelected: false
+                        ) {
+                            withAnimation(.easeInOut(duration: 0.18)) {
+                                expandedHash = nil
+                            }
+                        }
+                    }
                     ForEach(layout.rows) { row in
                         VStack(spacing: 0) {
                             GitGraphRowView(row: row,
@@ -134,7 +156,8 @@ struct GitGraphView: View {
                                             railPad: Self.railPad,
                                             nodeRadius: Self.nodeRadius,
                                             railWidth: railWidth,
-                                            isSelected: expandedHash == row.id) {
+                                            isSelected: expandedHash == row.id,
+                                            connectsFromTop: hasWorkingTree && row.id == layout.rows.first?.id) {
                                 toggle(row.commit.hash)
                             }
                             if expandedHash == row.id {

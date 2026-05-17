@@ -124,6 +124,28 @@ struct GitAnalyzerTests {
         #expect(lastContext.oldLine == 12 && lastContext.newLine == 13)
     }
 
+    @Test("parseWorkingTreeStatus reads staged, unstaged, renamed and untracked files")
+    func parseWorkingTreeStatusBasics() throws {
+        let output = [
+            " M Sources/App.swift",
+            "M  Sources/Store.swift",
+            "A  Sources/NewFile.swift",
+            "R  Sources/OldName.swift -> Sources/NewName.swift",
+            "?? Scratch Notes.md",
+        ].joined(separator: "\n")
+        let summary = GitAnalyzer.parseWorkingTreeStatus(output)
+
+        #expect(summary.fileCount == 5)
+        #expect(summary.stagedCount == 3)
+        #expect(summary.unstagedCount == 2)
+        #expect(summary.changes.contains { $0.path == "Sources/App.swift" && $0.kind == .modified && $0.isUnstaged })
+        #expect(summary.changes.contains { $0.path == "Sources/Store.swift" && $0.kind == .modified && $0.isStaged })
+        let renamed = try #require(summary.changes.first { $0.path == "Sources/NewName.swift" })
+        #expect(renamed.oldPath == "Sources/OldName.swift")
+        #expect(renamed.displayPath == "Sources/OldName.swift -> Sources/NewName.swift")
+        #expect(summary.changes.contains { $0.path == "Scratch Notes.md" && $0.kind == .untracked })
+    }
+
     // MARK: - bucketing
 
     @Test("RepoActivity.buckets groups commits per repo per calendar unit")

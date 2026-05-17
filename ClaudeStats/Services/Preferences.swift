@@ -58,6 +58,15 @@ final class Preferences {
     var floatingTabAnchor: Double {
         didSet { defaults.set(floatingTabAnchor, forKey: Keys.floatingTabAnchor) }
     }
+    var detailPanelBoundaryFalloffEnabled: Bool {
+        didSet { defaults.set(detailPanelBoundaryFalloffEnabled, forKey: Keys.detailPanelBoundaryFalloffEnabled) }
+    }
+    var terminalChromeMode: TerminalChromeMode {
+        didSet { defaults.set(terminalChromeMode.rawValue, forKey: Keys.terminalChromeMode) }
+    }
+    var terminalBackgroundStyle: TerminalBackgroundStyle {
+        didSet { defaults.set(terminalBackgroundStyle.rawValue, forKey: Keys.terminalBackgroundStyle) }
+    }
 
     /// Which platforms the user has turned on. The switcher bar only appears
     /// when this has more than one entry; otherwise the panel shows the single
@@ -169,9 +178,12 @@ final class Preferences {
         menuBarPeriod = StatsPeriod(rawValue: defaults.string(forKey: Keys.menuBarPeriod) ?? "") ?? .allTime
         includeCacheInTokens = (defaults.object(forKey: Keys.includeCacheInTokens) as? Bool) ?? true
         menuBarIncludesCache = (defaults.object(forKey: Keys.menuBarIncludesCache) as? Bool) ?? true
-        floatingTabEnabled = defaults.bool(forKey: Keys.floatingTabEnabled)
+        floatingTabEnabled = (defaults.object(forKey: Keys.floatingTabEnabled) as? Bool) ?? true
         floatingTabEdge = FloatingPanelEdge(rawValue: defaults.string(forKey: Keys.floatingTabEdge) ?? "") ?? .right
         floatingTabAnchor = (defaults.object(forKey: Keys.floatingTabAnchor) as? Double) ?? 0.5
+        detailPanelBoundaryFalloffEnabled = (defaults.object(forKey: Keys.detailPanelBoundaryFalloffEnabled) as? Bool) ?? true
+        terminalChromeMode = TerminalChromeMode(rawValue: defaults.string(forKey: Keys.terminalChromeMode) ?? "") ?? .tabsAndStatus
+        terminalBackgroundStyle = TerminalBackgroundStyle(rawValue: defaults.string(forKey: Keys.terminalBackgroundStyle) ?? "") ?? .fluidGradient
         aiActivityAnalysisEnabled = defaults.bool(forKey: Keys.aiActivityAnalysisEnabled)
         gitTrackingEnabled = defaults.bool(forKey: Keys.gitTrackingEnabled)
         gitOpensInWindow = defaults.bool(forKey: Keys.gitOpensInWindow)
@@ -214,6 +226,9 @@ final class Preferences {
         static let floatingTabEnabled = "floatingTabEnabled"
         static let floatingTabEdge = "floatingTabEdge"
         static let floatingTabAnchor = "floatingTabAnchor"
+        static let detailPanelBoundaryFalloffEnabled = "detailPanelBoundaryFalloffEnabled"
+        static let terminalChromeMode = "terminalChromeMode"
+        static let terminalBackgroundStyle = "terminalBackgroundStyle"
         static let aiActivityAnalysisEnabled = "aiActivityAnalysisEnabled"
         static let gitTrackingEnabled = "gitTrackingEnabled"
         static let gitOpensInWindow = "gitOpensInWindow"

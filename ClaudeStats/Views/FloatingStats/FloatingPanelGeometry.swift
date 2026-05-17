@@ -4,8 +4,8 @@ import Foundation
 /// Pure geometry for the floating stats tab. Coordinates are in AppKit's
 /// global screen space, using `NSScreen.visibleFrame`-style rects.
 enum FloatingPanelGeometry {
-    static let collapsedVerticalSize = CGSize(width: 44, height: 132)
-    static let collapsedHorizontalSize = CGSize(width: 132, height: 44)
+    static let collapsedVerticalSize = CGSize(width: 36, height: 108)
+    static let collapsedHorizontalSize = CGSize(width: 108, height: 36)
     static let expandedSize = CGSize(width: 300, height: 220)
 
     static func size(edge: FloatingPanelEdge, expanded: Bool) -> CGSize {

@@ -48,6 +48,13 @@ dist/
 GhosttyEmbed/Resources/*
 !GhosttyEmbed/Resources/.gitkeep
 
+# === Generated language-stat runtime resources === #
+ClaudeStats/Resources/GitTools/bin/*
+ClaudeStats/Resources/GitTools/gems/*
+ClaudeStats/Resources/GitTools/runtime/*
+ClaudeStats/Resources/GitTools/manifest.json
+!ClaudeStats/Resources/GitTools/bin/.gitkeep
+
 # === Misc === #
 *.log
 *.orig

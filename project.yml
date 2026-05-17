@@ -77,6 +77,11 @@ targets:
     platform: macOS
     sources:
       - path: ClaudeStats
+        excludes:
+          - Resources/GitTools
+      - path: ClaudeStats/Resources/GitTools
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: Sparkle
       - target: GhosttyEmbed

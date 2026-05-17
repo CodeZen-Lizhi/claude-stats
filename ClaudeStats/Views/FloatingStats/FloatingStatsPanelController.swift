@@ -131,7 +131,11 @@ final class FloatingStatsPanelController {
         )
         .environment(environment)
 
-        panel.contentView = NSHostingView(rootView: rootView)
+        let hostingView = NSHostingView(rootView: rootView)
+        hostingView.wantsLayer = true
+        hostingView.layer?.isOpaque = false
+        hostingView.layer?.backgroundColor = NSColor.clear.cgColor
+        panel.contentView = hostingView
         self.panel = panel
         panel.orderFrontRegardless()
     }

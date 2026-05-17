@@ -7,14 +7,27 @@ struct ConfigurationsView: View {
     @State private var selectedProvider: ProviderKind = .claude
     @State private var selectedScope: ConfigProfileScope = .global
     @State private var selectedProfileID: UUID?
+    @State private var selectedSnapshotID: UUID?
     @State private var captureName = ""
     @State private var profilePendingApply: ConfigProfile?
+    @State private var pendingSelection: ConfigurationPendingSelection?
+    @State private var showDiscardDraftAlert = false
+    @State private var suppressProviderDirtyCheck = false
+    @State private var editor = ConfigurationEditorViewModel()
 
     private var vm: ConfigurationProfilesViewModel { env.configurationProfiles }
     private var profiles: [ConfigProfile] { vm.profiles(for: selectedProvider) }
     private var selectedProfile: ConfigProfile? {
         guard let selectedProfileID else { return profiles.first }
         return profiles.first { $0.id == selectedProfileID } ?? profiles.first
+    }
+    private var selectedSnapshot: ConfigFileSnapshot? {
+        guard let selectedProfile else { return nil }
+        if let selectedSnapshotID,
+           let snapshot = selectedProfile.files.first(where: { $0.id == selectedSnapshotID }) {
+            return snapshot
+        }
+        return selectedProfile.files.first
     }
     private var scopeOptions: [ConfigProfileScope] {
         vm.scopeOptions(for: selectedProvider, sessions: env.store.sessions)
@@ -32,12 +45,22 @@ struct ConfigurationsView: View {
             selectedProvider = env.preferences.selectedProvider
             await vm.loadIfNeeded()
             normalizeSelection()
+            normalizeSnapshotSelection()
+            openSelectedSnapshot(force: true)
             resetCaptureName()
         }
-        .onChange(of: selectedProvider) { _, _ in
-            normalizeSelection()
-            selectedScope = .global
-            resetCaptureName()
+        .onChange(of: selectedProvider) { oldValue, newValue in
+            if suppressProviderDirtyCheck {
+                suppressProviderDirtyCheck = false
+                handleProviderChanged()
+            } else if editor.isDirty {
+                pendingSelection = .provider(newValue)
+                suppressProviderDirtyCheck = true
+                selectedProvider = oldValue
+                showDiscardDraftAlert = true
+            } else {
+                handleProviderChanged()
+            }
         }
         .onChange(of: selectedScope) { _, _ in resetCaptureName() }
         .sheet(item: $profilePendingApply) { profile in
@@ -49,6 +72,7 @@ struct ConfigurationsView: View {
                     if ok {
                         selectedProfileID = profile.id
                         profilePendingApply = nil
+                        openSelectedSnapshot(force: false)
                     }
                 }
             }
@@ -57,6 +81,12 @@ struct ConfigurationsView: View {
             Button("OK") { vm.clearError() }
         } message: {
             Text(vm.lastError ?? "")
+        }
+        .alert("Discard Unsaved Changes?", isPresented: $showDiscardDraftAlert) {
+            Button("Cancel", role: .cancel) { pendingSelection = nil }
+            Button("Discard", role: .destructive) { commitPendingSelection() }
+        } message: {
+            Text("The current editor draft has not been saved to this profile.")
         }
     }
 
@@ -121,13 +151,16 @@ struct ConfigurationsView: View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .top, spacing: 18) {
                 profileList
-                    .frame(width: 310)
-                profileDetail
+                    .frame(width: 270)
+                fileList
+                    .frame(width: 300)
+                editorDetail
                     .frame(maxWidth: .infinity, alignment: .topLeading)
             }
             VStack(alignment: .leading, spacing: 18) {
                 profileList
-                profileDetail
+                fileList
+                editorDetail
             }
         }
     }
@@ -146,7 +179,7 @@ struct ConfigurationsView: View {
                             isSelected: selectedProfile?.id == profile.id,
                             isActive: vm.activeProfile(for: selectedProvider)?.id == profile.id
                         ) {
-                            selectedProfileID = profile.id
+                            requestSelectProfile(profile.id)
                         }
                         if profile.id != profiles.last?.id {
                             StxRule().padding(.leading, 12)
@@ -160,17 +193,31 @@ struct ConfigurationsView: View {
     }
 
     @ViewBuilder
-    private var profileDetail: some View {
+    private var fileList: some View {
         VStack(alignment: .leading, spacing: 10) {
             sectionTitle("Files")
             if let selectedProfile {
                 VStack(alignment: .leading, spacing: 0) {
-                    profileActions(selectedProfile)
-                    StxRule()
-                    ForEach(selectedProfile.files) { snapshot in
-                        ConfigFileSnapshotRow(snapshot: snapshot)
-                        if snapshot.id != selectedProfile.files.last?.id {
-                            StxRule().padding(.leading, 12)
+                    if selectedProfile.files.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("No files captured")
+                                .font(.sora(13, weight: .medium))
+                            Text("Capture a profile with existing config files to edit it here.")
+                                .font(.sora(11))
+                                .foregroundStyle(Color.stxMuted)
+                        }
+                        .padding(14)
+                    } else {
+                        ForEach(selectedProfile.files) { snapshot in
+                            ConfigFileSnapshotRow(
+                                snapshot: snapshot,
+                                isSelected: selectedSnapshot?.id == snapshot.id
+                            ) {
+                                requestSelectSnapshot(snapshot.id)
+                            }
+                            if snapshot.id != selectedProfile.files.last?.id {
+                                StxRule().padding(.leading, 12)
+                            }
                         }
                     }
                 }
@@ -192,43 +239,20 @@ struct ConfigurationsView: View {
         }
     }
 
-    private func profileActions(_ profile: ConfigProfile) -> some View {
-        HStack(alignment: .center, spacing: 10) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(profile.name)
-                    .font(.sora(15, weight: .semibold))
-                Text("\(profile.scope.displayName) • \(profile.files.count) files")
-                    .font(.sora(11))
-                    .foregroundStyle(Color.stxMuted)
-            }
-            Spacer(minLength: 12)
-            Button("Apply") { profilePendingApply = profile }
-                .disabled(vm.isWorking)
-            Button("Duplicate") {
-                Task {
-                    if let copy = await vm.duplicate(profile) {
-                        selectedProfileID = copy.id
-                    }
-                }
-            }
-            .disabled(vm.isWorking)
-            Button("Delete", role: .destructive) {
-                Task {
-                    await vm.delete(profile)
-                    normalizeSelection()
-                }
-            }
-            .disabled(vm.isWorking)
-            if let backupURL = vm.latestBackupURL(for: profile) {
-                Button {
-                    NSWorkspace.shared.activateFileViewerSelecting([backupURL])
-                } label: {
-                    Image(systemName: "arrow.uturn.backward.circle")
-                }
-                .help("Reveal Backup")
-            }
-        }
-        .padding(14)
+    private var editorDetail: some View {
+        ConfigurationEditorPane(
+            profile: selectedProfile,
+            status: selectedProfile.map { vm.status(for: $0) } ?? .unknown,
+            latestBackupURL: selectedProfile.flatMap { vm.latestBackupURL(for: $0) },
+            isWorking: vm.isWorking,
+            editor: editor,
+            saveToProfile: saveEditorToProfile,
+            saveToDisk: saveEditorToDisk,
+            revert: revertEditorDraft,
+            applyProfile: applySelectedProfile,
+            duplicateProfile: duplicateSelectedProfile,
+            deleteProfile: deleteSelectedProfile
+        )
     }
 
     private var emptyProfiles: some View {
@@ -263,8 +287,18 @@ struct ConfigurationsView: View {
             : captureName
         if let profile = await vm.captureCurrent(name: name, provider: selectedProvider, scope: selectedScope) {
             selectedProfileID = profile.id
+            selectedSnapshotID = profile.files.first?.id
+            editor.open(profile: profile, snapshot: profile.files.first)
             resetCaptureName()
         }
+    }
+
+    private func handleProviderChanged() {
+        normalizeSelection()
+        selectedScope = .global
+        normalizeSnapshotSelection()
+        openSelectedSnapshot(force: true)
+        resetCaptureName()
     }
 
     private func normalizeSelection() {
@@ -275,9 +309,157 @@ struct ConfigurationsView: View {
         selectedProfileID = vm.activeProfile(for: selectedProvider)?.id ?? available.first?.id
     }
 
+    private func normalizeSnapshotSelection() {
+        guard let selectedProfile else {
+            selectedSnapshotID = nil
+            return
+        }
+        if let selectedSnapshotID,
+           selectedProfile.files.contains(where: { $0.id == selectedSnapshotID }) {
+            return
+        }
+        selectedSnapshotID = selectedProfile.files.first?.id
+    }
+
+    private func requestSelectProfile(_ profileID: UUID) {
+        guard profileID != selectedProfileID else { return }
+        if editor.isDirty {
+            pendingSelection = .profile(profileID)
+            showDiscardDraftAlert = true
+        } else {
+            selectProfile(profileID)
+        }
+    }
+
+    private func requestSelectSnapshot(_ snapshotID: UUID) {
+        guard snapshotID != selectedSnapshotID else { return }
+        if editor.isDirty {
+            pendingSelection = .snapshot(snapshotID)
+            showDiscardDraftAlert = true
+        } else {
+            selectSnapshot(snapshotID)
+        }
+    }
+
+    private func commitPendingSelection() {
+        guard let pendingSelection else { return }
+        self.pendingSelection = nil
+        editor.clear()
+        switch pendingSelection {
+        case .provider(let provider):
+            suppressProviderDirtyCheck = true
+            selectedProvider = provider
+        case .profile(let profileID):
+            selectProfile(profileID)
+        case .snapshot(let snapshotID):
+            selectSnapshot(snapshotID)
+        }
+    }
+
+    private func selectProfile(_ profileID: UUID) {
+        selectedProfileID = profileID
+        normalizeSnapshotSelection()
+        openSelectedSnapshot(force: true)
+    }
+
+    private func selectSnapshot(_ snapshotID: UUID) {
+        selectedSnapshotID = snapshotID
+        openSelectedSnapshot(force: true)
+    }
+
+    private func openSelectedSnapshot(force: Bool = false) {
+        normalizeSnapshotSelection()
+        guard let selectedProfile else {
+            editor.clear()
+            return
+        }
+        if force {
+            editor.open(profile: selectedProfile, snapshot: selectedSnapshot)
+        } else {
+            editor.syncIfClean(profile: selectedProfile, snapshot: selectedSnapshot)
+        }
+    }
+
+    private func saveEditorToProfile() {
+        guard let profileID = editor.profileID,
+              let snapshotID = editor.snapshotID else { return }
+        editor.setWorking(true)
+        Task {
+            let updatedProfile = await vm.saveSnapshotToProfile(
+                profileID: profileID,
+                snapshotID: snapshotID,
+                content: editor.draftContent
+            )
+            editor.setWorking(false)
+            syncEditorAfterSave(updatedProfile: updatedProfile, snapshotID: snapshotID)
+        }
+    }
+
+    private func saveEditorToDisk() {
+        guard let profileID = editor.profileID,
+              let snapshotID = editor.snapshotID else { return }
+        editor.setWorking(true)
+        Task {
+            let result = await vm.saveSnapshotToDisk(
+                profileID: profileID,
+                snapshotID: snapshotID,
+                content: editor.draftContent
+            )
+            editor.setWorking(false)
+            if let result {
+                syncEditorAfterSave(updatedProfile: result.updatedProfile, snapshotID: snapshotID, savedAt: result.savedAt)
+            }
+        }
+    }
+
+    private func syncEditorAfterSave(updatedProfile: ConfigProfile?, snapshotID: UUID, savedAt: Date = .now) {
+        guard let updatedProfile,
+              let snapshot = updatedProfile.files.first(where: { $0.id == snapshotID }) else { return }
+        selectedProfileID = updatedProfile.id
+        selectedSnapshotID = snapshot.id
+        editor.markSaved(profile: updatedProfile, snapshot: snapshot, savedAt: savedAt)
+    }
+
+    private func revertEditorDraft() {
+        guard let selectedProfile else { return }
+        editor.revert(profile: selectedProfile, snapshot: selectedSnapshot)
+    }
+
+    private func applySelectedProfile() {
+        guard let selectedProfile else { return }
+        profilePendingApply = selectedProfile
+    }
+
+    private func duplicateSelectedProfile() {
+        guard let selectedProfile else { return }
+        Task {
+            if let copy = await vm.duplicate(selectedProfile) {
+                selectedProfileID = copy.id
+                selectedSnapshotID = copy.files.first?.id
+                editor.open(profile: copy, snapshot: copy.files.first)
+            }
+        }
+    }
+
+    private func deleteSelectedProfile() {
+        guard let selectedProfile else { return }
+        Task {
+            await vm.delete(selectedProfile)
+            normalizeSelection()
+            normalizeSnapshotSelection()
+            openSelectedSnapshot(force: true)
+        }
+    }
+
     private func resetCaptureName() {
         captureName = vm.defaultProfileName(provider: selectedProvider, scope: selectedScope)
     }
+}
+
+private enum ConfigurationPendingSelection: Equatable {
+    case provider(ProviderKind)
+    case profile(UUID)
+    case snapshot(UUID)
 }
 
 private struct ProfileListRow: View {
@@ -340,36 +522,58 @@ private struct ProfileListRow: View {
 
 private struct ConfigFileSnapshotRow: View {
     let snapshot: ConfigFileSnapshot
+    let isSelected: Bool
+    let select: () -> Void
+
+    @State private var hovering = false
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Image(systemName: iconName)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Color.stxMuted)
-                .frame(width: 18)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(snapshot.title)
-                    .font(.sora(12, weight: .medium))
-                Text(snapshot.path)
-                    .font(.sora(10))
-                    .foregroundStyle(Color.stxMuted)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+        HStack(alignment: .center, spacing: 0) {
+            Button(action: select) {
+                HStack(alignment: .center, spacing: 12) {
+                    Image(systemName: iconName)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(isSelected ? Color.stxAccent : Color.stxMuted)
+                        .frame(width: 18)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(snapshot.title)
+                            .font(.sora(12, weight: .medium))
+                        Text(snapshot.path)
+                            .font(.sora(10))
+                            .foregroundStyle(Color.stxMuted)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    Spacer(minLength: 10)
+                    Text(snapshot.fileKind.displayName)
+                        .font(.sora(10))
+                        .foregroundStyle(Color.stxMuted)
+                }
+                .contentShape(Rectangle())
             }
-            Spacer(minLength: 10)
-            Text(snapshot.fileKind.displayName)
-                .font(.sora(10))
-                .foregroundStyle(Color.stxMuted)
+            .buttonStyle(.plain)
             Button {
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: snapshot.path)])
             } label: {
                 Image(systemName: "finder")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Color.stxMuted)
             }
             .buttonStyle(.plain)
             .help("Reveal in Finder")
+            .frame(width: 28)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
+        .background {
+            if isSelected {
+                RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.10))
+            } else if hovering {
+                RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.05))
+            }
+        }
+        .padding(4)
+        .onHover { hovering = $0 }
     }
 
     private var iconName: String {

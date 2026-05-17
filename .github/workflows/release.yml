@@ -49,6 +49,12 @@ name: Release
 #                             Requires GitHub Pages enabled for the gh-pages
 #                             branch on the public releases repo.
 #
+# Git language stats runtime:
+#   The workflow builds a relocatable GitTools runtime from pinned Ruby,
+#   github-linguist, and scc versions before packaging the app. `release-build.sh`
+#   requires LINGUIST_RUNTIME_SOURCE so we never ship a Homebrew-dependent
+#   development wrapper.
+#
 # Note: the final step pushes a commit to `master`. If `master` has branch
 # protection that blocks the built-in GITHUB_TOKEN, either relax it for this
 # workflow or swap in a PAT with `contents: write`.
@@ -131,7 +137,7 @@ jobs:
 
       - name: Install build tools
         run: |
-          brew install xcodegen zig@0.15
+          brew install xcodegen zig@0.15 ruby-build go cmake pkg-config icu4c libgit2 openssl@3 readline libyaml gmp
           ZIG_PREFIX="$(brew --prefix zig@0.15)"
           ZIG_CACHE="$RUNNER_TEMP/zig-cache"
           mkdir -p "$ZIG_CACHE"
@@ -197,11 +203,17 @@ jobs:
       - name: Bump version in project.yml
         run: bash scripts/bump-version.sh "${{ steps.version.outputs.version }}" "${{ steps.version.outputs.build }}"
 
+      - name: Build GitTools runtime
+        run: |
+          bash scripts/build-gittools-runtime.sh "$RUNNER_TEMP/gittools-runtime"
+          bash scripts/verify-gittools-runtime.sh "$RUNNER_TEMP/gittools-runtime"
+
       - name: Build app and package artifacts
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
           APP_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+          LINGUIST_RUNTIME_SOURCE: ${{ runner.temp }}/gittools-runtime
         run: |
           # Defensive: actool talks to these XPC agents and they can be left in a
           # bad state after switching Xcode, which crashes asset-catalog compilation.

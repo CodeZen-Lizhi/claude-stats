@@ -24,6 +24,10 @@
 #   APPLE_ID + APP_PASSWORD    Apple ID + app-specific password for notarytool
 #   NOTARY_KEYCHAIN_PROFILE    (alternative to APPLE_ID/APP_PASSWORD) a stored notarytool profile
 #
+# Environment (all release builds):
+#   LINGUIST_RUNTIME_SOURCE    relocatable GitTools runtime produced by
+#                              scripts/build-gittools-runtime.sh
+#
 # The finished artifacts are written to ./dist/.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -43,6 +47,9 @@ SIGNED=0
 
 echo "==> Building Claude Stats $VERSION (Release, $([[ $SIGNED -eq 1 ]] && echo "signed + notarized" || echo "unsigned"))"
 GHOSTTY_XCFRAMEWORK_TARGET="${GHOSTTY_XCFRAMEWORK_TARGET:-native}" bash scripts/build-ghosttykit.sh
+REQUIRE_LINGUIST_RUNTIME="${REQUIRE_LINGUIST_RUNTIME:-1}" \
+REQUIRE_RELOCATABLE_LINGUIST_RUNTIME="${REQUIRE_RELOCATABLE_LINGUIST_RUNTIME:-1}" \
+    bash scripts/build-linguist-runtime.sh
 bash scripts/generate.sh
 
 rm -rf "$DERIVED" "$DIST"
@@ -81,6 +88,9 @@ xcodebuild \
 
 [[ -d "$APP" ]] || { echo "error: build did not produce $APP" >&2; exit 1; }
 
+echo "==> Verifying bundled GitTools runtime"
+bash scripts/verify-gittools-runtime.sh "$APP/Contents/Resources/GitTools"
+
 if [[ $SIGNED -eq 1 ]]; then
     # Xcode combines our requested CloudKit entitlements with restricted values
     # from the provisioning profile, including `com.apple.application-identifier`.
@@ -113,6 +123,15 @@ if [[ $SIGNED -eq 1 ]]; then
         done
         codesign --force --options runtime --timestamp \
             --sign "$SIGN_IDENTITY" "$SPARKLE_FW"
+    fi
+    GITTOOLS_DIR="$APP/Contents/Resources/GitTools"
+    if [[ -d "$GITTOOLS_DIR" ]]; then
+        while IFS= read -r -d '' item; do
+            if file "$item" | grep -q 'Mach-O'; then
+                codesign --force --options runtime --timestamp \
+                    --sign "$SIGN_IDENTITY" "$item"
+            fi
+        done < <(find "$GITTOOLS_DIR" -type f -print0)
     fi
     codesign --force --options runtime --timestamp \
         --sign "$SIGN_IDENTITY" \

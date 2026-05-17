@@ -16,6 +16,13 @@ final class GitRepoGraphViewModel {
     private(set) var currentRepoID: String?
     private(set) var loadedLimit = 0
 
+    var statsScope: GitStatsScope = .head {
+        didSet {
+            guard oldValue != statsScope else { return }
+            invalidateStatsRequest()
+            repoStats = nil
+        }
+    }
     var selectedHash: String?
     var diffPath: String?
     var limit = 200
@@ -63,6 +70,10 @@ final class GitRepoGraphViewModel {
 
     var diffLoadID: String {
         "\(currentRepoID ?? "")|\(selectedHash ?? "")|\(diffPath ?? "")"
+    }
+
+    var statsLoadID: String {
+        "\(currentRepoID ?? "")|\(statsScope.rawValue)"
     }
 
     func loadGraph(repo: GitRepo) async {
@@ -161,12 +172,14 @@ final class GitRepoGraphViewModel {
         defer { finishStatsRequest(requestID) }
 
         let requestedRepoID = repo.id
+        let requestedScope = statsScope
         let stats = await Task.detached(priority: .userInitiated) {
-            GitAnalyzer().repoInspectorStats(for: repo)
+            GitAnalyzer().repoInspectorStats(for: repo, scope: requestedScope)
         }.value
 
         guard statsRequestID == requestID,
-              currentRepoID == requestedRepoID else { return }
+              currentRepoID == requestedRepoID,
+              statsScope == requestedScope else { return }
         repoStats = stats
     }
 
@@ -175,6 +188,15 @@ final class GitRepoGraphViewModel {
         invalidateDetailRequest()
         invalidateDiffRequest()
         selectedHash = hash
+        commitDetail = nil
+        diffPath = nil
+        fileDiff = nil
+    }
+
+    func selectWorkingTree() {
+        invalidateDetailRequest()
+        invalidateDiffRequest()
+        selectedHash = nil
         commitDetail = nil
         diffPath = nil
         fileDiff = nil
@@ -212,6 +234,7 @@ final class GitRepoGraphViewModel {
         diffPath = nil
         loadedLimit = 0
         limit = 200
+        statsScope = .head
     }
 
     private func reconcileSelection() {
@@ -284,19 +307,28 @@ final class GitRepoGraphViewModel {
 private extension GitRepoInspectorStats {
     static let preview = GitRepoInspectorStats(
         code: GitRepoCodeStats(
+            engine: .linguist,
+            scope: .head,
+            warning: nil,
             totalFiles: 24,
-            textFileCount: 19,
-            skippedBinaryFileCount: 5,
+            analyzedFiles: 19,
+            skippedFiles: 5,
+            totalBytes: 552_480,
             totalLines: 18_712,
-            codeLines: 15_920,
-            commentLines: 1_421,
-            blankLines: 1_371,
+            sourceLines: 15_920,
+            codeFilePaths: [
+                "ClaudeStats/App/ClaudeStatsApp.swift",
+                "ClaudeStats/Services/GitAnalyzer.swift",
+                "ClaudeStats/Views/Git/MainWindow/GitRepoWorkspaceView.swift",
+                "project.yml",
+                "scripts/run-debug.sh",
+            ],
             languageRows: [
-                .init(language: "Swift", fileCount: 14, totalLines: 17_313, codeLines: 14_880, commentLines: 1_140, blankLines: 1_293),
-                .init(language: "YAML", fileCount: 2, totalLines: 372, codeLines: 320, commentLines: 18, blankLines: 34),
-                .init(language: "Shell Script", fileCount: 2, totalLines: 360, codeLines: 300, commentLines: 22, blankLines: 38),
-                .init(language: "JSON", fileCount: 1, totalLines: 281, codeLines: 260, commentLines: 0, blankLines: 21),
-                .init(language: "Markdown", fileCount: 1, totalLines: 236, codeLines: 160, commentLines: 0, blankLines: 76),
+                .init(language: "Swift", fileCount: 14, sizeBytes: 489_600, byteShare: 0.886, totalLines: 17_313, sourceLines: 14_880),
+                .init(language: "YAML", fileCount: 2, sizeBytes: 24_480, byteShare: 0.044, totalLines: 372, sourceLines: 320),
+                .init(language: "Shell", fileCount: 2, sizeBytes: 17_880, byteShare: 0.032, totalLines: 360, sourceLines: 300),
+                .init(language: "JSON", fileCount: 1, sizeBytes: 11_920, byteShare: 0.022, totalLines: 281, sourceLines: 260),
+                .init(language: "Markdown", fileCount: 1, sizeBytes: 8_600, byteShare: 0.016, totalLines: 236, sourceLines: 160),
             ]
         ),
         codeContributors: [

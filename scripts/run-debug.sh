@@ -13,6 +13,7 @@ DERIVED=/tmp/claude-stats-build
 APP="$DERIVED/Build/Products/Debug/Claude Stats.app"
 
 bash scripts/build-ghosttykit.sh
+bash scripts/build-linguist-runtime.sh
 bash scripts/generate.sh
 
 # Kill any running instance so the rebuild can replace it.

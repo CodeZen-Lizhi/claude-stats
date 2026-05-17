@@ -27,12 +27,97 @@ struct GraphCommit: Sendable, Identifiable, Hashable {
     var shortHash: String { String(hash.prefix(7)) }
 }
 
+/// One uncommitted working-tree change from `git status --porcelain`.
+struct GitWorkingTreeChange: Sendable, Identifiable, Hashable {
+    enum Kind: Sendable, Hashable {
+        case added
+        case modified
+        case deleted
+        case renamed
+        case copied
+        case untracked
+        case conflicted
+        case changed
+
+        var label: String {
+            switch self {
+            case .added: return "Added"
+            case .modified: return "Modified"
+            case .deleted: return "Deleted"
+            case .renamed: return "Renamed"
+            case .copied: return "Copied"
+            case .untracked: return "Untracked"
+            case .conflicted: return "Conflict"
+            case .changed: return "Changed"
+            }
+        }
+
+        var shortLabel: String {
+            switch self {
+            case .added: return "ADD"
+            case .modified: return "MOD"
+            case .deleted: return "DEL"
+            case .renamed: return "REN"
+            case .copied: return "CPY"
+            case .untracked: return "NEW"
+            case .conflicted: return "CON"
+            case .changed: return "CHG"
+            }
+        }
+    }
+
+    let path: String
+    let oldPath: String?
+    let indexStatus: String
+    let worktreeStatus: String
+    let kind: Kind
+
+    var id: String { "\(indexStatus)\(worktreeStatus)|\(oldPath ?? "")|\(path)" }
+    var isStaged: Bool { indexStatus != " " && indexStatus != "?" }
+    var isUnstaged: Bool { indexStatus == "?" || worktreeStatus != " " }
+
+    var displayPath: String {
+        guard let oldPath, !oldPath.isEmpty else { return path }
+        return "\(oldPath) -> \(path)"
+    }
+}
+
+/// Summary of changes that are present in the working tree but not represented
+/// by any commit in the graph.
+struct GitWorkingTreeSummary: Sendable, Equatable {
+    let changes: [GitWorkingTreeChange]
+
+    static let clean = GitWorkingTreeSummary(changes: [])
+
+    var isDirty: Bool { !changes.isEmpty }
+    var fileCount: Int { changes.count }
+    var stagedCount: Int { changes.filter(\.isStaged).count }
+    var unstagedCount: Int { changes.filter(\.isUnstaged).count }
+
+    var title: String {
+        "\(fileCount) modified file\(fileCount == 1 ? "" : "s")"
+    }
+}
+
 /// The commit list for one repo, in display order (`--date-order`, newest first).
 struct GitGraph: Sendable {
     let repo: GitRepo
     let commits: [GraphCommit]
     /// `true` when the log hit the requested limit (more history exists).
     let truncated: Bool
+    let workingTree: GitWorkingTreeSummary
+
+    init(
+        repo: GitRepo,
+        commits: [GraphCommit],
+        truncated: Bool,
+        workingTree: GitWorkingTreeSummary = .clean
+    ) {
+        self.repo = repo
+        self.commits = commits
+        self.truncated = truncated
+        self.workingTree = workingTree
+    }
 }
 
 /// One file's churn within a commit — the expanded-row detail in the graph.
