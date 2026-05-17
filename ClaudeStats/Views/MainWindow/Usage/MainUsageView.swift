@@ -210,11 +210,7 @@ private extension MainUsageView {
 
 extension View {
     func mainUsagePanel(padding: CGFloat = 14) -> some View {
-        self
-            .padding(padding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.stxStroke, lineWidth: 1))
+        mainWindowPanel(padding: padding)
     }
 }
 

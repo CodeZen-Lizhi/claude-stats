@@ -190,7 +190,7 @@ struct MainWindowView: View {
             case .leaderboards:
                 CenteredPaneContainer(topPadding: 46) { LeaderboardsView() }
             case .activity:
-                CenteredPaneContainer(topPadding: 38) { AIActivityView(mode: .interactive) }
+                MainActivityView()
             case .git:
                 MainGitActivityView()
             case .terminal:

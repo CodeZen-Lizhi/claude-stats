@@ -12,6 +12,13 @@ enum ActivityRange: String, CaseIterable, Identifiable, Sendable {
         case .last30Days: "30D"
         }
     }
+    var mainWindowLabel: String {
+        switch self {
+        case .day: "Day"
+        case .last7Days: "7d"
+        case .last30Days: "30d"
+        }
+    }
     /// Number of days the trend modes span (1 for `.day`, unused there).
     var dayCount: Int {
         switch self {
