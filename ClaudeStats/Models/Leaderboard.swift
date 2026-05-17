@@ -55,6 +55,48 @@ struct LeaderboardScore: Sendable, Hashable, Identifiable {
     let updatedAt: Date
 }
 
+struct LeaderboardScoreHistoryPoint: Sendable, Hashable, Identifiable {
+    let metric: LeaderboardMetric
+    let period: LeaderboardPeriod
+    let periodKey: String
+    let startUTC: Date
+    let endUTC: Date?
+    let score: Int64
+    let updatedAt: Date?
+
+    var id: String { "\(metric.rawValue)-\(period.rawValue)-\(periodKey)" }
+
+    init(metric: LeaderboardMetric,
+         period: LeaderboardPeriod,
+         window: LeaderboardPeriodWindow,
+         score: Int64,
+         updatedAt: Date?) {
+        self.metric = metric
+        self.period = period
+        self.periodKey = window.periodKey
+        self.startUTC = window.startUTC
+        self.endUTC = window.endUTC
+        self.score = score
+        self.updatedAt = updatedAt
+    }
+}
+
+enum LeaderboardSelectionResolver {
+    static func selectedScore(preferredUserHash: String?,
+                              currentUserHash: String?,
+                              scores: [LeaderboardScore]) -> LeaderboardScore? {
+        if let preferredUserHash,
+           let score = scores.first(where: { $0.userHash == preferredUserHash }) {
+            return score
+        }
+        if let currentUserHash,
+           let score = scores.first(where: { $0.userHash == currentUserHash }) {
+            return score
+        }
+        return scores.first
+    }
+}
+
 struct LeaderboardSubmission: Sendable, Hashable {
     let metric: LeaderboardMetric
     let period: LeaderboardPeriod
@@ -164,8 +206,84 @@ enum LeaderboardPeriodCalculator {
         }
     }
 
+    static func window(for period: LeaderboardPeriod, periodKey: String) -> LeaderboardPeriodWindow? {
+        switch period {
+        case .day:
+            let parts = periodKey.split(separator: "-").compactMap { Int($0) }
+            guard parts.count == 3,
+                  let start = utcGregorianCalendar.date(from: DateComponents(
+                    timeZone: utcGregorianCalendar.timeZone,
+                    year: parts[0],
+                    month: parts[1],
+                    day: parts[2]
+                  )) else {
+                return nil
+            }
+            let end = utcGregorianCalendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86_400)
+            return LeaderboardPeriodWindow(period: period, periodKey: periodKey, startUTC: start, endUTC: end)
+        case .week:
+            let pieces = periodKey.components(separatedBy: "-W").compactMap { Int($0) }
+            guard pieces.count == 2,
+                  let start = utcISOCalendar.date(from: DateComponents(
+                    calendar: utcISOCalendar,
+                    timeZone: utcISOCalendar.timeZone,
+                    weekday: 2,
+                    weekOfYear: pieces[1],
+                    yearForWeekOfYear: pieces[0]
+                  )) else {
+                return nil
+            }
+            let end = utcISOCalendar.date(byAdding: .weekOfYear, value: 1, to: start) ?? start.addingTimeInterval(7 * 86_400)
+            return LeaderboardPeriodWindow(period: period, periodKey: periodKey, startUTC: start, endUTC: end)
+        case .month:
+            let parts = periodKey.split(separator: "-").compactMap { Int($0) }
+            guard parts.count == 2,
+                  let start = utcGregorianCalendar.date(from: DateComponents(
+                    timeZone: utcGregorianCalendar.timeZone,
+                    year: parts[0],
+                    month: parts[1],
+                    day: 1
+                  )) else {
+                return nil
+            }
+            let end = utcGregorianCalendar.date(byAdding: .month, value: 1, to: start)
+                ?? start.addingTimeInterval(31 * 86_400)
+            return LeaderboardPeriodWindow(period: period, periodKey: periodKey, startUTC: start, endUTC: end)
+        case .allTime:
+            return periodKey == "all" ? window(for: .allTime) : nil
+        }
+    }
+
+    static func historyWindows(for period: LeaderboardPeriod, anchorWindow: LeaderboardPeriodWindow) -> [LeaderboardPeriodWindow] {
+        switch period {
+        case .day:
+            return historyWindows(period: period, anchorDate: anchorWindow.startUTC, count: 14) { date, offset in
+                date.addingTimeInterval(TimeInterval(-offset * 86_400))
+            }
+        case .week:
+            return historyWindows(period: period, anchorDate: anchorWindow.startUTC, count: 12) { date, offset in
+                utcISOCalendar.date(byAdding: .weekOfYear, value: -offset, to: date) ?? date
+            }
+        case .month:
+            return historyWindows(period: period, anchorDate: anchorWindow.startUTC, count: 12) { date, offset in
+                utcGregorianCalendar.date(byAdding: .month, value: -offset, to: date) ?? date
+            }
+        case .allTime:
+            return []
+        }
+    }
+
     static func windows(now: Date = .now) -> [LeaderboardPeriodWindow] {
         LeaderboardPeriod.allCases.map { window(for: $0, now: now) }
+    }
+
+    private static func historyWindows(period: LeaderboardPeriod,
+                                       anchorDate: Date,
+                                       count: Int,
+                                       dateForOffset: (Date, Int) -> Date) -> [LeaderboardPeriodWindow] {
+        stride(from: count - 1, through: 0, by: -1).map { offset in
+            window(for: period, now: dateForOffset(anchorDate, offset))
+        }
     }
 
     private static var utcGregorianCalendar: Calendar {

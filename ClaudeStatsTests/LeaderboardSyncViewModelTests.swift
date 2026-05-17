@@ -157,6 +157,110 @@ struct LeaderboardSyncViewModelTests {
         #expect(fixture.viewModel.currentUserScore?.nickname == "Not Ada")
     }
 
+    @Test("Daily score history fetches 14 windows oldest to current")
+    func dailyScoreHistoryWindowOrder() async {
+        let fixture = makeFixture(enabled: true)
+        let anchor = LeaderboardPeriodCalculator.window(for: .day, now: dateUTC(2026, 5, 16, 8))
+
+        await fixture.viewModel.loadScoreHistory(
+            userHash: "userhash",
+            metric: .tokensWithCache,
+            period: .day,
+            anchorWindow: anchor
+        )
+
+        #expect(await fixture.client.fetchedHistoryPeriodKeys() == [
+            "2026-05-03",
+            "2026-05-04",
+            "2026-05-05",
+            "2026-05-06",
+            "2026-05-07",
+            "2026-05-08",
+            "2026-05-09",
+            "2026-05-10",
+            "2026-05-11",
+            "2026-05-12",
+            "2026-05-13",
+            "2026-05-14",
+            "2026-05-15",
+            "2026-05-16",
+        ])
+        #expect(fixture.viewModel.selectedUserHistory.count == 14)
+    }
+
+    @Test("Score history fills missing records with zero")
+    func scoreHistoryFillsMissingRecordsWithZero() async {
+        let fixture = makeFixture(enabled: true)
+        let now = dateUTC(2026, 5, 16, 8)
+        await fixture.client.setScores([
+            "2026-05-15": [
+                score(
+                    id: "score-history",
+                    userHash: "userhash",
+                    rank: 1,
+                    nickname: "Ada",
+                    value: 42_000,
+                    metric: .tokensWithCache,
+                    period: .day,
+                    periodKey: "2026-05-15",
+                    now: now
+                ),
+            ],
+        ])
+
+        await fixture.viewModel.loadScoreHistory(
+            userHash: "userhash",
+            metric: .tokensWithCache,
+            period: .day,
+            anchorWindow: LeaderboardPeriodCalculator.window(for: .day, now: now)
+        )
+
+        let valuesByKey = Dictionary(uniqueKeysWithValues: fixture.viewModel.selectedUserHistory.map { ($0.periodKey, $0.score) })
+        #expect(valuesByKey["2026-05-14"] == 0)
+        #expect(valuesByKey["2026-05-15"] == 42_000)
+        #expect(valuesByKey["2026-05-16"] == 0)
+    }
+
+    @Test("All-time score history does not query CloudKit")
+    func allTimeScoreHistoryDoesNotFetch() async {
+        let fixture = makeFixture(enabled: true)
+
+        await fixture.viewModel.loadScoreHistory(
+            userHash: "userhash",
+            metric: .tokensWithCache,
+            period: .allTime,
+            anchorWindow: LeaderboardPeriodCalculator.window(for: .allTime)
+        )
+
+        #expect(await fixture.client.fetchedHistoryPeriodKeys().isEmpty)
+        #expect(fixture.viewModel.selectedUserHistory.isEmpty)
+    }
+
+    @Test("Selection resolver keeps preferred user before falling back")
+    func selectionResolverKeepsPreferredUserBeforeFallback() {
+        let now = dateUTC(2026, 5, 16, 8)
+        let scores = [
+            score(id: "score-a", userHash: "otherhash", rank: 1, nickname: "Ada", value: 200, now: now),
+            score(id: "score-b", userHash: "userhash", rank: 2, nickname: "Not Ada", value: 150, now: now),
+        ]
+
+        #expect(LeaderboardSelectionResolver.selectedScore(
+            preferredUserHash: "otherhash",
+            currentUserHash: "userhash",
+            scores: scores
+        )?.userHash == "otherhash")
+        #expect(LeaderboardSelectionResolver.selectedScore(
+            preferredUserHash: "missing",
+            currentUserHash: "userhash",
+            scores: scores
+        )?.userHash == "userhash")
+        #expect(LeaderboardSelectionResolver.selectedScore(
+            preferredUserHash: "missing",
+            currentUserHash: "also-missing",
+            scores: scores
+        )?.userHash == "otherhash")
+    }
+
     private func makeFixture(enabled: Bool) -> Fixture {
         let suiteName = "com.claudestats.tests.leaderboards.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName) ?? .standard
@@ -214,13 +318,16 @@ struct LeaderboardSyncViewModelTests {
                        rank: Int,
                        nickname: String,
                        value: Int64,
+                       metric: LeaderboardMetric = .tokensWithCache,
+                       period: LeaderboardPeriod = .allTime,
+                       periodKey: String = "all",
                        now: Date) -> LeaderboardScore {
         LeaderboardScore(
             id: id,
             userHash: userHash,
-            metric: .tokensWithCache,
-            period: .allTime,
-            periodKey: "all",
+            metric: metric,
+            period: period,
+            periodKey: periodKey,
             score: value,
             rank: rank,
             nickname: nickname,
@@ -244,6 +351,7 @@ private actor FakeLeaderboardClient: LeaderboardCloudServicing {
     private var profilesByHash: [String: LeaderboardProfile] = [:]
     private var scoresByPeriodKey: [String: [LeaderboardScore]] = [:]
     private var fetchedKeys: [String] = []
+    private var fetchedHistoryKeys: [String] = []
 
     func setAccountState(_ state: LeaderboardCloudAccountState) {
         self.state = state
@@ -267,6 +375,10 @@ private actor FakeLeaderboardClient: LeaderboardCloudServicing {
 
     func fetchedPeriodKeys() -> [String] {
         fetchedKeys
+    }
+
+    func fetchedHistoryPeriodKeys() -> [String] {
+        fetchedHistoryKeys
     }
 
     func accountState() async -> LeaderboardCloudAccountState {
@@ -313,5 +425,24 @@ private actor FakeLeaderboardClient: LeaderboardCloudServicing {
                      limit: Int) async throws -> [LeaderboardScore] {
         fetchedKeys.append(periodKey)
         return scoresByPeriodKey[periodKey] ?? []
+    }
+
+    func fetchScoreHistory(userHash: String,
+                           metric: LeaderboardMetric,
+                           period: LeaderboardPeriod,
+                           windows: [LeaderboardPeriodWindow]) async throws -> [LeaderboardScoreHistoryPoint] {
+        fetchedHistoryKeys.append(contentsOf: windows.map(\.periodKey))
+        return windows.map { window in
+            let score = scoresByPeriodKey[window.periodKey]?.first {
+                $0.userHash == userHash && $0.metric == metric && $0.period == period
+            }
+            return LeaderboardScoreHistoryPoint(
+                metric: metric,
+                period: period,
+                window: window,
+                score: score?.score ?? 0,
+                updatedAt: score?.updatedAt
+            )
+        }
     }
 }

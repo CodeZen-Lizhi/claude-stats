@@ -1,0 +1,453 @@
+import SwiftUI
+
+struct LeaderboardListColumn: View {
+    @Binding var metric: LeaderboardMetric
+    @Binding var period: LeaderboardPeriod
+
+    let scores: [LeaderboardScore]
+    let topScore: Int64
+    let selectedScoreID: String?
+    let currentUserHash: String?
+    let syncStatusText: String
+    let isLoadingScores: Bool
+    let scoreError: String?
+    let scoreEmptyMessage: String?
+    let lastLoadedPeriodKey: String?
+    let isSyncBusy: Bool
+    let leaderboardsEnabled: Bool
+    let onRefresh: () -> Void
+    let onSync: () -> Void
+    let onSelectScore: (LeaderboardScore) -> Void
+    let onOpenSettings: () -> Void
+
+    private var topThree: [(rank: Int, score: LeaderboardScore?)] {
+        [
+            (1, scores.indices.contains(0) ? scores[0] : nil),
+            (2, scores.indices.contains(1) ? scores[1] : nil),
+            (3, scores.indices.contains(2) ? scores[2] : nil),
+        ]
+    }
+
+    private var remainingScores: [LeaderboardScore] {
+        Array(scores.dropFirst(3))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            header
+            if leaderboardsEnabled {
+                summaryStrip
+                podiumSection
+                scoresPanel
+            } else {
+                disabledPanel
+            }
+        }
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("LEADERBOARDS")
+                    .font(.sora(11, weight: .semibold))
+                    .tracking(1.2)
+                    .foregroundStyle(Color.stxMuted)
+                Text("Global rankings")
+                    .font(.sora(24, weight: .semibold))
+                    .lineLimit(1)
+                Text("Aggregate usage scores in shared UTC windows.")
+                    .font(.sora(12))
+                    .foregroundStyle(Color.stxMuted)
+                    .lineLimit(1)
+            }
+
+            if leaderboardsEnabled {
+                VStack(alignment: .leading, spacing: 8) {
+                    ViewThatFits(in: .horizontal) {
+                        LeaderboardMetricChips(metric: $metric, compact: false)
+                        LeaderboardMetricChips(metric: $metric, compact: true)
+                    }
+                    ViewThatFits(in: .horizontal) {
+                        LeaderboardPeriodChips(period: $period, compact: false)
+                        LeaderboardPeriodChips(period: $period, compact: true)
+                    }
+                    HStack(spacing: 8) {
+                        if isLoadingScores {
+                            ProgressView()
+                                .controlSize(.small)
+                                .help("Loading leaderboard scores")
+                        }
+                        Button(action: onRefresh) {
+                            Label("Refresh", systemImage: "arrow.clockwise")
+                                .labelStyle(.titleAndIcon)
+                        }
+                        .controlSize(.small)
+                        .disabled(isLoadingScores)
+
+                        Button(action: onSync) {
+                            Label("Sync mine", systemImage: "icloud.and.arrow.up")
+                                .labelStyle(.titleAndIcon)
+                        }
+                        .controlSize(.small)
+                        .disabled(isSyncBusy)
+                    }
+                    .font(.sora(11, weight: .medium))
+                }
+            }
+        }
+    }
+
+    private var summaryStrip: some View {
+        LazyVGrid(
+            columns: [
+                GridItem(.flexible(), spacing: 10),
+                GridItem(.flexible(), spacing: 10),
+            ],
+            spacing: 10
+        ) {
+            LeaderboardSummaryCard(label: "Entries", value: scores.isEmpty ? "--" : "\(scores.count)")
+            LeaderboardSummaryCard(label: "Top score", value: topScore > 0 ? LeaderboardFormat.score(topScore, metric: metric) : "--")
+            LeaderboardSummaryCard(label: "Your rank", value: yourRankLabel)
+            LeaderboardSummaryCard(label: "Sync", value: syncStatusText)
+        }
+    }
+
+    @ViewBuilder
+    private var podiumSection: some View {
+        if let scoreError {
+            LeaderboardNotice(message: scoreError)
+        } else if scores.isEmpty && !isLoadingScores {
+            LeaderboardNotice(message: scoreEmptyMessage ?? "No scores for this UTC period yet.")
+        } else if !scores.isEmpty {
+            VStack(spacing: 8) {
+                ForEach(topThree, id: \.rank) { item in
+                    LeaderboardPodiumCompactRow(
+                        score: item.score,
+                        fallbackRank: item.rank,
+                        topScore: topScore,
+                        isSelected: item.score?.id == selectedScoreID,
+                        isCurrentUser: isCurrentUser(item.score),
+                        onSelect: onSelectScore
+                    )
+                }
+            }
+        }
+    }
+
+    private var scoresPanel: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("TOP 100")
+                    .font(.sora(13, weight: .semibold))
+                    .tracking(1.0)
+                if let lastLoadedPeriodKey {
+                    Text(lastLoadedPeriodKey)
+                        .font(.sora(10).monospacedDigit())
+                        .foregroundStyle(Color.stxMuted)
+                }
+                Spacer(minLength: 8)
+                Text(metric.displayName)
+                    .font(.sora(10))
+                    .foregroundStyle(Color.stxMuted)
+                    .lineLimit(1)
+            }
+            .padding(.bottom, 10)
+
+            if remainingScores.isEmpty {
+                Text(scores.count <= 3 ? "The podium has everyone for this window." : "No additional ranks.")
+                    .font(.sora(12))
+                    .foregroundStyle(Color.stxMuted)
+                    .frame(maxWidth: .infinity, minHeight: 72, alignment: .center)
+            } else {
+                LazyVStack(spacing: 0) {
+                    ForEach(remainingScores) { score in
+                        LeaderboardScoreRow(
+                            score: score,
+                            formattedScore: LeaderboardFormat.score(score.score, metric: score.metric),
+                            topScore: topScore,
+                            isSelected: score.id == selectedScoreID,
+                            isCurrentUser: isCurrentUser(score),
+                            onSelect: onSelectScore
+                        )
+                        if score.id != remainingScores.last?.id {
+                            StxRule()
+                        }
+                    }
+                }
+            }
+        }
+        .mainWindowPanel(padding: 14)
+    }
+
+    private var disabledPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Image(systemName: "trophy")
+                .font(.system(size: 22, weight: .medium))
+                .foregroundStyle(Color.stxAccent)
+            Text("Leaderboards are off")
+                .font(.sora(16, weight: .semibold))
+            Text("Enable them in Settings, choose a public nickname, then sync aggregate scores and a generated Beam avatar to CloudKit.")
+                .font(.sora(12))
+                .foregroundStyle(Color.stxMuted)
+                .fixedSize(horizontal: false, vertical: true)
+            Button(action: onOpenSettings) {
+                BracketBox(spacing: 5) {
+                    Label("OPEN SETTINGS", systemImage: "gearshape")
+                        .labelStyle(.titleAndIcon)
+                        .font(.sora(10, weight: .medium))
+                        .tracking(0.8)
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.stxAccent)
+        }
+        .mainWindowPanel(padding: 16)
+    }
+
+    private var yourRankLabel: String {
+        guard let currentUserHash,
+              let rank = scores.first(where: { $0.userHash == currentUserHash })?.rank else {
+            return "--"
+        }
+        return "#\(rank)"
+    }
+
+    private func isCurrentUser(_ score: LeaderboardScore?) -> Bool {
+        guard let score else { return false }
+        return isCurrentUser(score)
+    }
+
+    private func isCurrentUser(_ score: LeaderboardScore) -> Bool {
+        guard let currentUserHash else { return false }
+        return score.userHash == currentUserHash
+    }
+}
+
+private struct LeaderboardSummaryCard: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(label.uppercased())
+                .font(.sora(8, weight: .medium))
+                .tracking(0.4)
+                .foregroundStyle(Color.stxMuted)
+            Text(value)
+                .font(.sora(14, weight: .semibold).monospacedDigit())
+                .lineLimit(1)
+                .minimumScaleFactor(0.58)
+                .frame(height: 19, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.stxStroke, lineWidth: 1))
+    }
+}
+
+private struct LeaderboardPodiumCompactRow: View {
+    let score: LeaderboardScore?
+    let fallbackRank: Int
+    let topScore: Int64
+    let isSelected: Bool
+    let isCurrentUser: Bool
+    let onSelect: (LeaderboardScore) -> Void
+
+    var body: some View {
+        if let score {
+            Button {
+                onSelect(score)
+            } label: {
+                rowContent(score: score)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Rank \(score.rank ?? fallbackRank), \(score.nickname), \(LeaderboardFormat.score(score.score, metric: score.metric))")
+        } else {
+            waitingContent
+        }
+    }
+
+    private func rowContent(score: LeaderboardScore) -> some View {
+        HStack(spacing: 12) {
+            rankBadge(score.rank ?? fallbackRank)
+            BeamAvatarView(seed: LeaderboardFormat.avatarSeed(for: score), size: fallbackRank == 1 ? 44 : 38)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(score.nickname)
+                        .font(.sora(13, weight: .semibold))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    if isCurrentUser {
+                        youBadge
+                    }
+                }
+                Text("Updated \(Format.relativeDate(score.updatedAt))")
+                    .font(.sora(9))
+                    .foregroundStyle(Color.stxMuted)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(alignment: .trailing, spacing: 5) {
+                Text(LeaderboardFormat.score(score.score, metric: score.metric))
+                    .font(.sora(fallbackRank == 1 ? 14 : 12, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(fallbackRank == 1 ? Color.stxAccent : .primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
+                LeaderboardScoreBar(fraction: fraction(for: score), active: isCurrentUser || isSelected)
+                    .frame(width: 74)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, fallbackRank == 1 ? 12 : 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(rowBackground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(rowStroke, lineWidth: isSelected || isCurrentUser ? 1.5 : 1)
+        )
+    }
+
+    private var waitingContent: some View {
+        HStack(spacing: 12) {
+            rankBadge(fallbackRank)
+            Text("Waiting")
+                .font(.sora(12, weight: .medium))
+                .foregroundStyle(Color.stxMuted)
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.stxPanel.opacity(0.65), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.stxStroke, lineWidth: 1))
+    }
+
+    private var rowBackground: Color {
+        if isSelected || isCurrentUser { return Color.stxAccent.opacity(0.08) }
+        return fallbackRank == 1 ? Color.stxPanel : Color.stxPanel.opacity(0.78)
+    }
+
+    private var rowStroke: Color {
+        if isSelected || isCurrentUser { return Color.stxAccent }
+        return Color.stxStroke
+    }
+
+    private var youBadge: some View {
+        Text("YOU")
+            .font(.sora(8, weight: .semibold))
+            .tracking(0.6)
+            .foregroundStyle(Color.stxAccent)
+    }
+
+    private func rankBadge(_ rank: Int) -> some View {
+        Text("#\(rank)")
+            .font(.sora(13, weight: .semibold).monospacedDigit())
+            .foregroundStyle(rank == 1 ? Color.stxAccent : Color.stxMuted)
+            .frame(width: 36, alignment: .leading)
+    }
+
+    private func fraction(for score: LeaderboardScore) -> Double {
+        guard topScore > 0 else { return 0 }
+        return min(max(Double(score.score) / Double(topScore), 0), 1)
+    }
+}
+
+private struct LeaderboardScoreRow: View {
+    let score: LeaderboardScore
+    let formattedScore: String
+    let topScore: Int64
+    let isSelected: Bool
+    let isCurrentUser: Bool
+    let onSelect: (LeaderboardScore) -> Void
+
+    private var fraction: Double {
+        guard topScore > 0 else { return 0 }
+        return min(max(Double(score.score) / Double(topScore), 0), 1)
+    }
+
+    var body: some View {
+        Button {
+            onSelect(score)
+        } label: {
+            HStack(spacing: 10) {
+                Text("#\(score.rank ?? 0)")
+                    .font(.sora(11, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(isCurrentUser || isSelected ? Color.stxAccent : Color.stxMuted)
+                    .frame(width: 38, alignment: .leading)
+                BeamAvatarView(seed: LeaderboardFormat.avatarSeed(for: score), size: 28)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(score.nickname)
+                            .font(.sora(12, weight: .semibold))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        if isCurrentUser {
+                            Text("YOU")
+                                .font(.sora(8, weight: .semibold))
+                                .tracking(0.6)
+                                .foregroundStyle(Color.stxAccent)
+                        }
+                    }
+                    Text("Updated \(Format.relativeDate(score.updatedAt))")
+                        .font(.sora(9))
+                        .foregroundStyle(Color.stxMuted)
+                }
+                .frame(minWidth: 88, maxWidth: .infinity, alignment: .leading)
+
+                VStack(alignment: .trailing, spacing: 5) {
+                    Text(formattedScore)
+                        .font(.sora(12, weight: .semibold).monospacedDigit())
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.65)
+                    LeaderboardScoreBar(fraction: fraction, active: isCurrentUser || isSelected)
+                        .frame(width: 70)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 9)
+            .background {
+                if isCurrentUser || isSelected {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.stxAccent.opacity(0.08))
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Rank \(score.rank ?? 0), \(score.nickname), \(formattedScore)")
+    }
+}
+
+private struct LeaderboardScoreBar: View {
+    let fraction: Double
+    let active: Bool
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color.primary.opacity(0.08))
+                Capsule()
+                    .fill(active ? Color.stxAccent : Color.primary.opacity(0.38))
+                    .frame(width: max(4, proxy.size.width * fraction))
+            }
+        }
+        .frame(height: 6)
+    }
+}
+
+private struct LeaderboardNotice: View {
+    let message: String
+
+    var body: some View {
+        Text(message)
+            .font(.sora(12))
+            .foregroundStyle(Color.stxMuted)
+            .frame(maxWidth: .infinity, minHeight: 96, alignment: .center)
+            .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.stxStroke, lineWidth: 1))
+    }
+}

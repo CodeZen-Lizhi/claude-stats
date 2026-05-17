@@ -58,6 +58,10 @@ protocol LeaderboardCloudServicing: Sendable {
                      period: LeaderboardPeriod,
                      periodKey: String,
                      limit: Int) async throws -> [LeaderboardScore]
+    func fetchScoreHistory(userHash: String,
+                           metric: LeaderboardMetric,
+                           period: LeaderboardPeriod,
+                           windows: [LeaderboardPeriodWindow]) async throws -> [LeaderboardScoreHistoryPoint]
 }
 
 enum CloudKitLeaderboardConfig {
@@ -384,6 +388,50 @@ struct CloudKitLeaderboardClient: LeaderboardCloudServicing {
                         profile: userHash.flatMap { profiles[$0] }
                     )
                 }
+        } catch {
+            throw LeaderboardCloudError.cloudKit(Self.shortCloudKitMessage(error))
+        }
+    }
+
+    func fetchScoreHistory(userHash: String,
+                           metric: LeaderboardMetric,
+                           period: LeaderboardPeriod,
+                           windows: [LeaderboardPeriodWindow]) async throws -> [LeaderboardScoreHistoryPoint] {
+        guard period != .allTime, !windows.isEmpty else { return [] }
+        try ensureCloudKitEntitlement()
+        let ids = windows.map { window in
+            CKRecord.ID(recordName: CloudKitLeaderboardRecordMapper.recordName(
+                userHash: userHash,
+                metric: metric,
+                period: period,
+                periodKey: window.periodKey
+            ))
+        }
+        do {
+            let results = try await publicDatabase.records(
+                for: ids,
+                desiredKeys: CloudKitLeaderboardRecordMapper.desiredKeys
+            )
+            return zip(windows, ids).map { window, id in
+                guard let result = results[id],
+                      case .success(let record) = result,
+                      let score = CloudKitLeaderboardRecordMapper.score(from: record, rank: 0) else {
+                    return LeaderboardScoreHistoryPoint(
+                        metric: metric,
+                        period: period,
+                        window: window,
+                        score: 0,
+                        updatedAt: nil
+                    )
+                }
+                return LeaderboardScoreHistoryPoint(
+                    metric: metric,
+                    period: period,
+                    window: window,
+                    score: score.score,
+                    updatedAt: score.updatedAt
+                )
+            }
         } catch {
             throw LeaderboardCloudError.cloudKit(Self.shortCloudKitMessage(error))
         }

@@ -35,6 +35,9 @@ final class LeaderboardSyncViewModel {
     private(set) var lastLoadedPeriodKey: String?
     private(set) var currentUserHash: String?
     private(set) var isSavingProfile = false
+    private(set) var selectedUserHistory: [LeaderboardScoreHistoryPoint] = []
+    private(set) var isLoadingSelectedUserHistory = false
+    private(set) var selectedUserHistoryError: String?
 
     var avatarSeed: String {
         preferences.leaderboardAvatarSeed.isEmpty
@@ -227,6 +230,47 @@ final class LeaderboardSyncViewModel {
             scoreEmptyMessage = nil
             scoreError = error.localizedDescription
         }
+    }
+
+    func loadScoreHistory(userHash: String,
+                          metric: LeaderboardMetric,
+                          period: LeaderboardPeriod,
+                          anchorWindow: LeaderboardPeriodWindow) async {
+        selectedUserHistoryError = nil
+        let windows = LeaderboardPeriodCalculator.historyWindows(for: period, anchorWindow: anchorWindow)
+        guard !windows.isEmpty else {
+            selectedUserHistory = []
+            isLoadingSelectedUserHistory = false
+            return
+        }
+
+        isLoadingSelectedUserHistory = true
+        defer { isLoadingSelectedUserHistory = false }
+
+        do {
+            let points = try await client.fetchScoreHistory(
+                userHash: userHash,
+                metric: metric,
+                period: period,
+                windows: windows
+            )
+            guard !Task.isCancelled else { return }
+            selectedUserHistory = points
+        } catch is CancellationError {
+            return
+        } catch let error as LeaderboardCloudError {
+            selectedUserHistory = []
+            selectedUserHistoryError = error.description
+        } catch {
+            selectedUserHistory = []
+            selectedUserHistoryError = error.localizedDescription
+        }
+    }
+
+    func clearSelectedUserHistory() {
+        selectedUserHistory = []
+        selectedUserHistoryError = nil
+        isLoadingSelectedUserHistory = false
     }
 
     func randomizeAvatar() async {

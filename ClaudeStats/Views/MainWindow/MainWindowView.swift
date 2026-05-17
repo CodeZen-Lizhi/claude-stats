@@ -203,7 +203,7 @@ struct MainWindowView: View {
             case .usage:
                 MainUsageView()
             case .leaderboards:
-                CenteredPaneContainer(topPadding: 46) { LeaderboardsView() }
+                LeaderboardsView()
             case .activity:
                 MainActivityView()
             case .git:
