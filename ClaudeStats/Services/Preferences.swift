@@ -188,6 +188,26 @@ final class Preferences {
     var claudeStatusLastNotificationFingerprint: String {
         didSet { defaults.set(claudeStatusLastNotificationFingerprint, forKey: Keys.claudeStatusLastNotificationFingerprint) }
     }
+    /// OpenAI Status product groups shown on the Dashboard and monitored for
+    /// optional notifications. Defaults to ChatGPT and Codex.
+    var openAIStatusVisibleGroupIDs: Set<String> {
+        didSet {
+            if openAIStatusVisibleGroupIDs.isEmpty {
+                openAIStatusVisibleGroupIDs = OpenAIStatusGroupCatalog.defaultVisibleGroupIDs
+            }
+            defaults.set(openAIStatusVisibleGroupIDs.sorted().joined(separator: ","), forKey: Keys.openAIStatusVisibleGroupIDs)
+        }
+    }
+    /// Opt-in to macOS notifications when one of the visible OpenAI Status
+    /// product groups is not operational.
+    var openAIStatusNotificationsEnabled: Bool {
+        didSet { defaults.set(openAIStatusNotificationsEnabled, forKey: Keys.openAIStatusNotificationsEnabled) }
+    }
+    /// Last abnormal visible OpenAI Status notification sent. Stored so the app
+    /// does not repeat the same alert across polling cycles or relaunches.
+    var openAIStatusLastNotificationFingerprint: String {
+        didSet { defaults.set(openAIStatusLastNotificationFingerprint, forKey: Keys.openAIStatusLastNotificationFingerprint) }
+    }
     /// Which colour scheme the Overlap heatmap should use.
     var overlapPalette: OverlapPalette {
         didSet { defaults.set(overlapPalette.rawValue, forKey: Keys.overlapPalette) }
@@ -302,6 +322,14 @@ final class Preferences {
             : Set(storedClaudeStatusComponentIDs)
         claudeStatusNotificationsEnabled = defaults.bool(forKey: Keys.claudeStatusNotificationsEnabled)
         claudeStatusLastNotificationFingerprint = defaults.string(forKey: Keys.claudeStatusLastNotificationFingerprint) ?? ""
+        let storedOpenAIStatusGroupIDs = (defaults.string(forKey: Keys.openAIStatusVisibleGroupIDs) ?? "")
+            .split(separator: ",")
+            .map { String($0) }
+        openAIStatusVisibleGroupIDs = storedOpenAIStatusGroupIDs.isEmpty
+            ? OpenAIStatusGroupCatalog.defaultVisibleGroupIDs
+            : Set(storedOpenAIStatusGroupIDs)
+        openAIStatusNotificationsEnabled = defaults.bool(forKey: Keys.openAIStatusNotificationsEnabled)
+        openAIStatusLastNotificationFingerprint = defaults.string(forKey: Keys.openAIStatusLastNotificationFingerprint) ?? ""
         overlapPalette = OverlapPalette(rawValue: defaults.string(forKey: Keys.overlapPalette) ?? "") ?? .appCohesive
         leaderboardsEnabled = defaults.bool(forKey: Keys.leaderboardsEnabled)
         leaderboardNickname = defaults.string(forKey: Keys.leaderboardNickname) ?? ""
@@ -383,6 +411,9 @@ final class Preferences {
         static let claudeStatusVisibleComponentIDs = "claudeStatusVisibleComponentIDs"
         static let claudeStatusNotificationsEnabled = "claudeStatusNotificationsEnabled"
         static let claudeStatusLastNotificationFingerprint = "claudeStatusLastNotificationFingerprint"
+        static let openAIStatusVisibleGroupIDs = "openAIStatusVisibleGroupIDs"
+        static let openAIStatusNotificationsEnabled = "openAIStatusNotificationsEnabled"
+        static let openAIStatusLastNotificationFingerprint = "openAIStatusLastNotificationFingerprint"
         static let overlapPalette = "overlapPalette"
         static let leaderboardsEnabled = "leaderboardsEnabled"
         static let leaderboardNickname = "leaderboardNickname"

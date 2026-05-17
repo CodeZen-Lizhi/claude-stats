@@ -22,10 +22,13 @@ struct PlatformsSettingsView: View {
             }
 
             claudeStatusGroup(prefs: prefs)
+            openAIStatusGroup(prefs: prefs)
         }
         .task {
             await env.claudeStatus.refreshNotificationAuthorizationStatus()
             await env.claudeStatus.refreshIfNeeded()
+            await env.openAIStatus.refreshNotificationAuthorizationStatus()
+            await env.openAIStatus.refreshIfNeeded()
         }
     }
 
@@ -132,6 +135,74 @@ struct PlatformsSettingsView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
     }
+
+    private func openAIStatusGroup(prefs: Preferences) -> some View {
+        SettingGroup(
+            title: "OpenAI Status",
+            caption: "Shows selected OpenAI product health on the Dashboard. Alerts only monitor the product groups shown here."
+        ) {
+            VStack(spacing: 0) {
+                SettingRow(
+                    title: "Status alerts",
+                    description: openAIStatusAlertsDescription
+                ) {
+                    Toggle("", isOn: Binding(
+                        get: { prefs.openAIStatusNotificationsEnabled },
+                        set: { enabled in
+                            Task { await env.openAIStatus.setNotificationsEnabled(enabled) }
+                        }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .disabled(env.openAIStatus.isRequestingNotificationAuthorization)
+                }
+                SettingRowDivider()
+                let groups = Array(env.openAIStatus.availableGroups.enumerated())
+                ForEach(groups, id: \.element.id) { index, group in
+                    if index > 0 { SettingRowDivider() }
+                    openAIStatusGroupRow(group)
+                }
+            }
+            .settingCard()
+        }
+    }
+
+    private var openAIStatusAlertsDescription: String {
+        if env.openAIStatus.isRequestingNotificationAuthorization {
+            return "Waiting for macOS notification permission."
+        }
+        if env.openAIStatus.notificationPermissionDenied {
+            return "Notification permission is denied in macOS Settings."
+        }
+        return "Send a macOS notification when any shown OpenAI product group is not operational."
+    }
+
+    private func openAIStatusGroupRow(_ group: OpenAIStatusGroup) -> some View {
+        let isVisible = env.openAIStatus.isGroupVisible(group)
+        let canHide = env.openAIStatus.canHideGroup(group)
+        return HStack(alignment: .center, spacing: 12) {
+            Circle()
+                .fill(group.status.settingsTint)
+                .frame(width: 8, height: 8)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(group.name)
+                    .font(.sora(13, weight: .medium))
+                Text(group.status.displayName)
+                    .font(.sora(11))
+                    .foregroundStyle(Color.stxMuted)
+            }
+            Spacer(minLength: 12)
+            Toggle("", isOn: Binding(
+                get: { env.openAIStatus.isGroupVisible(group) },
+                set: { env.openAIStatus.setGroupVisibility(group, isVisible: $0) }
+            ))
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .disabled(isVisible && !canHide)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+    }
 }
 
 #if DEBUG
@@ -150,6 +221,18 @@ private extension ClaudeStatusSeverity {
         case .underMaintenance: Color.blue
         case .degradedPerformance: Color.orange
         case .partialOutage, .majorOutage: Color.red
+        case .unknown: Color.stxMuted
+        }
+    }
+}
+
+private extension OpenAIStatusSeverity {
+    var settingsTint: Color {
+        switch self {
+        case .operational: Color.green
+        case .underMaintenance: Color.blue
+        case .degradedPerformance: Color.orange
+        case .partialOutage, .fullOutage: Color.red
         case .unknown: Color.stxMuted
         }
     }

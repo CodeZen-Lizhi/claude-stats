@@ -77,6 +77,8 @@ struct DashboardView: View {
             }
             if env.preferences.selectedProvider == .claude {
                 await env.claudeStatus.refreshIfNeeded()
+            } else if env.preferences.selectedProvider == .codex {
+                await env.openAIStatus.refreshIfNeeded()
             }
         }
     }
@@ -143,6 +145,8 @@ struct DashboardView: View {
             statsGrid
             if env.preferences.selectedProvider == .claude {
                 ClaudeStatusCard(status: env.claudeStatus)
+            } else if env.preferences.selectedProvider == .codex {
+                OpenAIStatusCard(status: env.openAIStatus)
             }
             heatmapsRow
             overlapSection

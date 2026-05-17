@@ -201,6 +201,33 @@ struct PreferencesTests {
         #expect(reloaded.claudeStatusVisibleComponentIDs == ClaudeStatusComponentCatalog.defaultVisibleComponentIDs)
     }
 
+    @Test("OpenAI Status preferences default to visible ChatGPT and Codex without alerts")
+    func openAIStatusDefaults() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+
+        #expect(prefs.openAIStatusVisibleGroupIDs == OpenAIStatusGroupCatalog.defaultVisibleGroupIDs)
+        #expect(prefs.openAIStatusNotificationsEnabled == false)
+        #expect(prefs.openAIStatusLastNotificationFingerprint == "")
+    }
+
+    @Test("OpenAI Status preferences persist and empty visible groups fall back")
+    func openAIStatusPersists() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+        prefs.openAIStatusVisibleGroupIDs = [OpenAIStatusGroupCatalog.apisID]
+        prefs.openAIStatusNotificationsEnabled = true
+        prefs.openAIStatusLastNotificationFingerprint = "group:degraded"
+
+        let reloaded = Preferences(defaults: defaults)
+        #expect(reloaded.openAIStatusVisibleGroupIDs == [OpenAIStatusGroupCatalog.apisID])
+        #expect(reloaded.openAIStatusNotificationsEnabled == true)
+        #expect(reloaded.openAIStatusLastNotificationFingerprint == "group:degraded")
+
+        reloaded.openAIStatusVisibleGroupIDs = []
+        #expect(reloaded.openAIStatusVisibleGroupIDs == OpenAIStatusGroupCatalog.defaultVisibleGroupIDs)
+    }
+
     @Test("Legacy IDE bundle preferences migrate to coding surfaces")
     func legacyIDEBundlePreferencesMigrate() {
         let defaults = makeDefaults()
