@@ -110,6 +110,10 @@ final class Preferences {
     var gitOpensInWindow: Bool {
         didSet { defaults.set(gitOpensInWindow, forKey: Keys.gitOpensInWindow) }
     }
+    /// Which tree the repo language/SLOC inspector uses.
+    var gitStatsScope: GitStatsScope {
+        didSet { defaults.set(gitStatsScope.rawValue, forKey: Keys.gitStatsScope) }
+    }
     /// Opt-in to comparing local activity against the GitHub contribution
     /// graph on the Dashboard. Off by default — the dashboard's GitHub panel
     /// only appears when this is on and a PAT is configured.
@@ -187,6 +191,7 @@ final class Preferences {
         aiActivityAnalysisEnabled = defaults.bool(forKey: Keys.aiActivityAnalysisEnabled)
         gitTrackingEnabled = defaults.bool(forKey: Keys.gitTrackingEnabled)
         gitOpensInWindow = defaults.bool(forKey: Keys.gitOpensInWindow)
+        gitStatsScope = GitStatsScope(rawValue: defaults.string(forKey: Keys.gitStatsScope) ?? "") ?? .head
         githubEnabled = defaults.bool(forKey: Keys.githubEnabled)
         githubLogin = defaults.string(forKey: Keys.githubLogin) ?? ""
         overlapPalette = OverlapPalette(rawValue: defaults.string(forKey: Keys.overlapPalette) ?? "") ?? .appCohesive
@@ -232,6 +237,7 @@ final class Preferences {
         static let aiActivityAnalysisEnabled = "aiActivityAnalysisEnabled"
         static let gitTrackingEnabled = "gitTrackingEnabled"
         static let gitOpensInWindow = "gitOpensInWindow"
+        static let gitStatsScope = "gitStatsScope"
         static let ideBundleIDsAdded = "ideBundleIDsAdded"
         static let ideBundleIDsRemoved = "ideBundleIDsRemoved"
         static let enabledProviders = "enabledProviders"

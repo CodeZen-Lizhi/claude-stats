@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct GitRepoWorkspaceView: View {
+    @Environment(AppEnvironment.self) private var env
+
     let repo: GitRepo
     let repoSelectionToken: UInt64
     @State private var vm: GitRepoGraphViewModel
@@ -54,6 +56,12 @@ struct GitRepoWorkspaceView: View {
         }
         .task(id: "\(repo.id)|\(vm.selectedHash ?? "")|\(vm.diffPath ?? "")") {
             await vm.loadDiff(repo: repo)
+        }
+        .onAppear {
+            vm.statsScope = env.preferences.gitStatsScope
+        }
+        .onChange(of: env.preferences.gitStatsScope) { _, newValue in
+            vm.statsScope = newValue
         }
         .onChange(of: repo.id) { _, _ in
             showRepoInspector()
@@ -488,7 +496,6 @@ private struct GitCommitInspector: View {
         if let stats = vm.repoStats {
             FadingScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    GitRepoStatsScopePanel(scope: $vm.statsScope, stats: stats.code)
                     if let warning = stats.code.warning {
                         GitWorkspaceInlineEmptyState(warning)
                             .padding(12)
@@ -653,42 +660,10 @@ private struct WorkingTreeCountPill: View {
     }
 }
 
-private struct GitRepoStatsScopePanel: View {
-    @Binding var scope: GitStatsScope
-    let stats: GitRepoCodeStats
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            panelHeader(title: "LANGUAGE ENGINE", detail: stats.engine.label)
-            HStack(spacing: 8) {
-                Picker("", selection: $scope) {
-                    ForEach(GitStatsScope.allCases) { scope in
-                        Text(scope.label).tag(scope)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .controlSize(.mini)
-                .help("Switch between committed HEAD statistics and current working tree statistics")
-
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(Format.bytes(stats.totalBytes))
-                        .font(.sora(10, weight: .semibold).monospacedDigit())
-                    Text("\(Format.tokens(stats.sourceLines)) SLOC")
-                        .font(.sora(9).monospacedDigit())
-                        .foregroundStyle(Color.stxMuted)
-                }
-            }
-            .padding(10)
-            .gitWorkspaceCard()
-        }
-    }
-}
-
 private struct GitRepoLanguagePanel: View {
     let stats: GitRepoCodeStats
 
-    private var total: Int { max(stats.totalBytes, 0) }
+    private var totalLines: Int { max(stats.totalLines, 0) }
     private var rows: [GitStatBarRow.Model] {
         let languageRows = stats.languageRows.prefix(7).enumerated().map { index, row in
             GitStatBarRow.Model(
@@ -704,9 +679,9 @@ private struct GitRepoLanguagePanel: View {
             GitStatBarRow.Model(
                 id: "total",
                 rank: nil,
-                label: "Total Bytes",
-                value: Format.bytes(total),
-                ratio: total > 0 ? 1 : 0,
+                label: "Total Lines",
+                value: Format.tokens(totalLines),
+                ratio: totalLines > 0 ? 1 : 0,
                 color: GitPalette.head
             )
         ] + languageRows
@@ -726,7 +701,7 @@ private struct GitRepoLanguagePanel: View {
                 Text("-")
                 Text("\(stats.skippedFiles) skipped")
                 Text("-")
-                Text("\(Format.tokens(stats.totalLines)) lines")
+                Text(Format.bytes(stats.totalBytes))
             }
             .font(.sora(9))
             .foregroundStyle(Color.stxMuted)

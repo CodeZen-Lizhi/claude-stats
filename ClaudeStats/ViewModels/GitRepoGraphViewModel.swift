@@ -234,7 +234,6 @@ final class GitRepoGraphViewModel {
         diffPath = nil
         loadedLimit = 0
         limit = 200
-        statsScope = .head
     }
 
     private func reconcileSelection() {

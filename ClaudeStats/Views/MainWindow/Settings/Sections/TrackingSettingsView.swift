@@ -166,6 +166,30 @@ struct TrackingSettingsView: View {
                         .labelsHidden()
                         .frame(maxWidth: 180)
                     }
+                    SettingRowDivider()
+                    SettingRow(
+                        title: "Language engine",
+                        description: "Language detection uses GitHub Linguist; scc supplies line counts."
+                    ) {
+                        Text("GitHub Linguist + scc")
+                            .font(.sora(12, weight: .semibold))
+                            .foregroundStyle(Color.stxMuted)
+                    }
+                    SettingRowDivider()
+                    SettingRow(
+                        title: "Statistics scope",
+                        description: "HEAD counts committed code; Working Tree includes local uncommitted files."
+                    ) {
+                        Picker("", selection: $prefs.gitStatsScope) {
+                            ForEach(GitStatsScope.allCases) { scope in
+                                Text(scope.label).tag(scope)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .controlSize(.small)
+                        .frame(maxWidth: 220)
+                    }
                 }
             }
             .settingCard()

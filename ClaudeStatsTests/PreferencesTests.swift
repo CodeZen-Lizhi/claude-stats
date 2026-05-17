@@ -88,6 +88,33 @@ struct PreferencesTests {
         #expect(prefs.terminalBackgroundStyle == .fluidGradient)
     }
 
+    @Test("Git language stats scope defaults to HEAD")
+    func gitStatsScopeDefault() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+
+        #expect(prefs.gitStatsScope == .head)
+    }
+
+    @Test("Git language stats scope preference persists")
+    func gitStatsScopePersists() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+        prefs.gitStatsScope = .workingTree
+
+        let reloaded = Preferences(defaults: defaults)
+        #expect(reloaded.gitStatsScope == .workingTree)
+    }
+
+    @Test("Invalid git language stats scope falls back safely")
+    func invalidGitStatsScopeFallsBack() {
+        let defaults = makeDefaults()
+        defaults.set("index", forKey: "gitStatsScope")
+
+        let prefs = Preferences(defaults: defaults)
+        #expect(prefs.gitStatsScope == .head)
+    }
+
     private func makeDefaults() -> UserDefaults {
         let suiteName = "com.claudestats.tests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName) ?? .standard
