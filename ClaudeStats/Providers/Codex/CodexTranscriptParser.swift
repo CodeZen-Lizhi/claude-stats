@@ -19,7 +19,7 @@ struct CodexTranscriptParser: Sendable {
         guard let data = try? Data(contentsOf: url) else { return nil }
 
         var currentModel = Self.defaultModel
-        var perModel: [String: (count: Int, usage: TokenUsage)] = [:]
+        var perModel: [String: (count: Int, usage: TokenUsage, cost: Double)] = [:]
         var perModelHourly: [String: [Date: TokenUsage]] = [:]
         var messageCount = 0
         var firstActivity: Date?
@@ -61,9 +61,14 @@ struct CodexTranscriptParser: Sendable {
                 guard let delta = payload.info?.lastTokenUsage else { break }
                 let usage = delta.tokenUsage
                 guard usage.total > 0 else { break }
-                var acc = perModel[currentModel] ?? (0, .zero)
+                var acc = perModel[currentModel] ?? (0, .zero, 0)
                 acc.count += 1
                 acc.usage += usage
+                acc.cost += pricing.cost(
+                    model: currentModel,
+                    usage: usage,
+                    contextInputTokens: delta.rawInputTokens
+                )
                 perModel[currentModel] = acc
                 if let date {
                     let hour = calendar.dateInterval(of: .hour, for: date)?.start ?? calendar.startOfDay(for: date)
@@ -76,7 +81,7 @@ struct CodexTranscriptParser: Sendable {
         }
 
         let models = perModel
-            .map { ModelUsage(model: $0.key, messageCount: $0.value.count, usage: $0.value.usage, pricing: pricing) }
+            .map { ModelUsage(model: $0.key, messageCount: $0.value.count, usage: $0.value.usage, estimatedCost: $0.value.cost) }
             .sorted { $0.usage.total > $1.usage.total }
         let timeline = perModelHourly
             .flatMap { model, byHour in byHour.map { ModelBucket(model: model, start: $0.key, usage: $0.value) } }
@@ -188,7 +193,7 @@ private struct CodexLine: Decodable {
         /// the cached tokens are priced at the read rate, not the input rate.
         var tokenUsage: TokenUsage {
             let cached = cachedInputTokens ?? 0
-            let input = max(0, (inputTokens ?? 0) - cached)
+            let input = max(0, rawInputTokens - cached)
             return TokenUsage(
                 inputTokens: input,
                 outputTokens: outputTokens ?? 0,
@@ -197,6 +202,8 @@ private struct CodexLine: Decodable {
                 cacheCreation1hTokens: 0
             )
         }
+
+        var rawInputTokens: Int { inputTokens ?? 0 }
     }
 }
 

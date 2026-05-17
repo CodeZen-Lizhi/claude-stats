@@ -7,11 +7,21 @@ import Foundation
 struct ModelPricing: Sendable, Hashable {
     /// Dollars per 1,000,000 tokens for each token category.
     struct Rates: Sendable, Hashable, Codable {
+        struct LongContext: Sendable, Hashable, Codable {
+            var thresholdInputTokens: Int
+            var input: Double
+            var output: Double
+            var cacheWrite5m: Double
+            var cacheWrite1h: Double
+            var cacheRead: Double
+        }
+
         var input: Double
         var output: Double
         var cacheWrite5m: Double
         var cacheWrite1h: Double
         var cacheRead: Double
+        var longContext: LongContext? = nil
 
         /// Derive cache rates from the input rate using Anthropic's ratios
         /// (5m write = 1.25×, 1h write = 2×, read = 0.1×) when a config file
@@ -38,6 +48,19 @@ struct ModelPricing: Sendable, Hashable {
     func rate(for model: String) -> Rates {
         if let exact = rates[model] { return exact }
         let lower = model.lowercased()
+        if let prefixed = rates
+            .keys
+            .sorted(by: { $0.count > $1.count })
+            .first(where: {
+                let key = $0.lowercased()
+                guard lower.hasPrefix(key + "-") else { return false }
+                let suffix = lower.dropFirst(key.count + 1)
+                let yearPrefix = suffix.prefix(4)
+                return yearPrefix.count == 4 && yearPrefix.allSatisfy(\.isNumber)
+            }),
+           let r = rates[prefixed] {
+            return r
+        }
         func first(containing needle: String) -> Rates? {
             rates.first { $0.key.lowercased().contains(needle) }?.value
         }
@@ -57,12 +80,42 @@ struct ModelPricing: Sendable, Hashable {
     /// Estimated USD cost for a chunk of usage attributed to `model`.
     func cost(model: String, usage: TokenUsage) -> Double {
         let r = rate(for: model)
+        return cost(usage: usage,
+                    input: r.input,
+                    output: r.output,
+                    cacheRead: r.cacheRead,
+                    cacheWrite5m: r.cacheWrite5m,
+                    cacheWrite1h: r.cacheWrite1h)
+    }
+
+    /// Estimated USD cost for one request/turn, using long-context rates when
+    /// the raw prompt input for that turn crosses the model's published
+    /// threshold.
+    func cost(model: String, usage: TokenUsage, contextInputTokens: Int) -> Double {
+        let r = rate(for: model)
+        if let long = r.longContext, contextInputTokens > long.thresholdInputTokens {
+            return cost(usage: usage,
+                        input: long.input,
+                        output: long.output,
+                        cacheRead: long.cacheRead,
+                        cacheWrite5m: long.cacheWrite5m,
+                        cacheWrite1h: long.cacheWrite1h)
+        }
+        return cost(model: model, usage: usage)
+    }
+
+    private func cost(usage: TokenUsage,
+                      input: Double,
+                      output: Double,
+                      cacheRead: Double,
+                      cacheWrite5m: Double,
+                      cacheWrite1h: Double) -> Double {
         let perMillion = 1_000_000.0
-        return Double(usage.inputTokens) / perMillion * r.input
-            + Double(usage.outputTokens) / perMillion * r.output
-            + Double(usage.cacheReadTokens) / perMillion * r.cacheRead
-            + Double(usage.cacheCreation5mTokens) / perMillion * r.cacheWrite5m
-            + Double(usage.cacheCreation1hTokens) / perMillion * r.cacheWrite1h
+        return Double(usage.inputTokens) / perMillion * input
+            + Double(usage.outputTokens) / perMillion * output
+            + Double(usage.cacheReadTokens) / perMillion * cacheRead
+            + Double(usage.cacheCreation5mTokens) / perMillion * cacheWrite5m
+            + Double(usage.cacheCreation1hTokens) / perMillion * cacheWrite1h
     }
 
     // MARK: Loading
