@@ -77,6 +77,7 @@ final class AppEnvironment {
 
     /// Kick off the first scan and the periodic refresh. Call once at launch.
     func start() {
+        LaunchAtLogin.enableByDefaultIfNeeded()
         store.onRefresh = { [weak self] in
             self?.leaderboards.scheduleSilentSyncAfterDataRefresh()
         }
