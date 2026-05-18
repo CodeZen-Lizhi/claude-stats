@@ -27,6 +27,67 @@ enum NetworkSection: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+enum NetworkResolvedTrafficLayout: String, Sendable, Equatable {
+    case stacked
+    case sideBySide
+}
+
+enum NetworkTrafficLayoutConstants {
+    static let defaultAutoBreakpoint: Double = 900
+    static let minimumAutoBreakpoint: Double = 640
+    static let maximumAutoBreakpoint: Double = 1600
+    static let autoBreakpointStep: Double = 20
+
+    static func clampedAutoBreakpoint(_ value: Double) -> Double {
+        guard value.isFinite else { return defaultAutoBreakpoint }
+        return min(max(value, minimumAutoBreakpoint), maximumAutoBreakpoint)
+    }
+}
+
+enum NetworkTrafficLayoutMode: String, CaseIterable, Identifiable, Sendable {
+    case automatic
+    case stacked
+    case sideBySide
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .automatic: "Auto"
+        case .stacked: "Top Bottom"
+        case .sideBySide: "Left Right"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .automatic: "square.grid.2x2"
+        case .stacked: "rectangle.split.1x2"
+        case .sideBySide: "rectangle.split.2x1"
+        }
+    }
+
+    var help: String {
+        switch self {
+        case .automatic: "Automatically arrange traffic and payload panes"
+        case .stacked: "Place traffic above Request and Response panes"
+        case .sideBySide: "Place traffic beside Request and Response panes"
+        }
+    }
+
+    func resolved(width: Double, breakpoint: Double) -> NetworkResolvedTrafficLayout {
+        switch self {
+        case .automatic:
+            let clampedBreakpoint = NetworkTrafficLayoutConstants.clampedAutoBreakpoint(breakpoint)
+            return width < clampedBreakpoint ? .stacked : .sideBySide
+        case .stacked:
+            return .stacked
+        case .sideBySide:
+            return .sideBySide
+        }
+    }
+}
+
 enum NetworkInspectorSide: String, CaseIterable, Identifiable, Sendable, Hashable {
     case request
     case response

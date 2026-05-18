@@ -3,35 +3,39 @@ import SwiftUI
 
 struct NetworkTrafficView: View {
     @Bindable var store: NetworkDebuggerStore
-    private static let inspectorBreakpoint: CGFloat = 900
+    @Bindable var preferences: Preferences
 
     var body: some View {
         GeometryReader { proxy in
-            if proxy.size.width >= Self.inspectorBreakpoint {
-                wideLayout
-            } else {
-                narrowLayout
+            switch preferences.networkTrafficLayoutMode.resolved(
+                width: Double(proxy.size.width),
+                breakpoint: preferences.networkTrafficAutoBreakpoint
+            ) {
+            case .sideBySide:
+                sideBySideLayout
+            case .stacked:
+                stackedLayout
             }
         }
     }
 
-    private var wideLayout: some View {
+    private var sideBySideLayout: some View {
         HSplitView {
             trafficTable
                 .frame(minWidth: 420, idealWidth: 720, maxWidth: .infinity, maxHeight: .infinity)
 
-            inspector
-                .frame(minWidth: 280, idealWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
+            inspector(.vertical)
+                .frame(minWidth: 360, idealWidth: 430, maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
-    private var narrowLayout: some View {
+    private var stackedLayout: some View {
         VSplitView {
             trafficTable
                 .frame(minHeight: 220, maxHeight: .infinity)
 
-            inspector
-                .frame(minHeight: 260, idealHeight: 320, maxHeight: .infinity)
+            inspector(.horizontal)
+                .frame(minHeight: 280, idealHeight: 340, maxHeight: .infinity)
         }
     }
 
@@ -40,8 +44,108 @@ struct NetworkTrafficView: View {
         .frame(minHeight: 190, maxHeight: .infinity)
     }
 
-    private var inspector: some View {
-        NetworkFlowInspector(store: store)
+    private func inspector(_ arrangement: NetworkInspectorPaneArrangement) -> some View {
+        NetworkFlowInspector(store: store, arrangement: arrangement)
+    }
+}
+
+private enum NetworkInspectorPaneArrangement {
+    case vertical
+    case horizontal
+}
+
+struct NetworkTrafficLayoutControls: View {
+    @Bindable var preferences: Preferences
+    @State private var showingAutoSettings = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            layoutButton(.automatic) {
+                preferences.networkTrafficLayoutMode = .automatic
+                showingAutoSettings = true
+            }
+            .popover(isPresented: $showingAutoSettings, arrowEdge: .bottom) {
+                NetworkTrafficAutoLayoutPopover(preferences: preferences)
+                    .padding(14)
+                    .frame(width: 260)
+            }
+
+            layoutButton(.stacked) {
+                preferences.networkTrafficLayoutMode = .stacked
+            }
+
+            layoutButton(.sideBySide) {
+                preferences.networkTrafficLayoutMode = .sideBySide
+            }
+        }
+        .padding(3)
+        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.stxStroke.opacity(0.75), lineWidth: 1))
+    }
+
+    private func layoutButton(_ mode: NetworkTrafficLayoutMode, action: @escaping () -> Void) -> some View {
+        let isSelected = preferences.networkTrafficLayoutMode == mode
+        return Button(action: action) {
+            Image(systemName: mode.symbol)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(isSelected ? Color.stxAccent : Color.stxMuted)
+                .frame(width: 26, height: 24)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(isSelected ? Color.stxAccent.opacity(0.14) : Color.clear)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .strokeBorder(isSelected ? Color.stxAccent.opacity(0.35) : Color.clear, lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .help(mode.help)
+        .accessibilityLabel(Text(mode.title))
+    }
+}
+
+private struct NetworkTrafficAutoLayoutPopover: View {
+    @Bindable var preferences: Preferences
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("AUTO BREAKPOINT")
+                    .font(.sora(10, weight: .semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(Color.stxMuted)
+
+                Spacer(minLength: 8)
+
+                Text("\(Int(preferences.networkTrafficAutoBreakpoint.rounded())) pt")
+                    .font(.sora(10).monospacedDigit())
+                    .foregroundStyle(Color.primary.opacity(0.82))
+            }
+
+            Slider(
+                value: $preferences.networkTrafficAutoBreakpoint,
+                in: NetworkTrafficLayoutConstants.minimumAutoBreakpoint...NetworkTrafficLayoutConstants.maximumAutoBreakpoint,
+                step: NetworkTrafficLayoutConstants.autoBreakpointStep
+            )
+            .controlSize(.small)
+
+            HStack(spacing: 8) {
+                Text("\(Int(NetworkTrafficLayoutConstants.minimumAutoBreakpoint))")
+                Spacer()
+                Text("\(Int(NetworkTrafficLayoutConstants.maximumAutoBreakpoint))")
+            }
+            .font(.sora(9).monospacedDigit())
+            .foregroundStyle(Color.stxMuted.opacity(0.8))
+
+            Button {
+                preferences.resetNetworkTrafficAutoBreakpoint()
+            } label: {
+                Label("Reset to 900 pt", systemImage: "arrow.counterclockwise")
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+        }
     }
 }
 
@@ -98,6 +202,11 @@ private struct NetworkNativeTrafficTable: NSViewRepresentable {
         for column in NetworkTrafficColumn.allCases {
             let tableColumn = NSTableColumn(identifier: column.identifier)
             tableColumn.title = column.title
+            let headerCell = NSTableHeaderCell(textCell: column.title)
+            headerCell.font = .networkTableSora(size: 13, weight: .semibold)
+            headerCell.textColor = .labelColor
+            headerCell.alignment = column.alignment
+            tableColumn.headerCell = headerCell
             tableColumn.width = column.idealWidth
             tableColumn.minWidth = column.minWidth
             tableColumn.maxWidth = column.maxWidth
@@ -355,12 +464,12 @@ private enum NetworkTrafficColumn: String, CaseIterable {
 
     func font(for flow: NetworkFlow) -> NSFont {
         switch self {
-        case .url, .number, .method, .status, .time, .duration, .request, .response:
-            NSFont.monospacedSystemFont(ofSize: 11, weight: self == .method || self == .status ? .semibold : .regular)
+        case .method, .status:
+            .networkTableSora(size: 11, weight: .semibold)
         case .state:
-            NSFont.systemFont(ofSize: 12, weight: .medium)
+            .networkTableSora(size: 12, weight: .medium)
         default:
-            NSFont.systemFont(ofSize: 11, weight: .regular)
+            .networkTableSora(size: 11, weight: .regular)
         }
     }
 
@@ -403,45 +512,74 @@ private enum NetworkTrafficColumn: String, CaseIterable {
 
 private struct NetworkFlowInspector: View {
     @Bindable var store: NetworkDebuggerStore
+    let arrangement: NetworkInspectorPaneArrangement
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            inspectorHeader
-            StxRule()
-            inspectorBody
+        Group {
+            switch arrangement {
+            case .vertical:
+                VSplitView {
+                    payloadPane(.request)
+                        .frame(minHeight: 170, idealHeight: 240, maxHeight: .infinity)
+                    payloadPane(.response)
+                        .frame(minHeight: 170, idealHeight: 260, maxHeight: .infinity)
+                }
+            case .horizontal:
+                HSplitView {
+                    payloadPane(.request)
+                        .frame(minWidth: 260, idealWidth: 420, maxWidth: .infinity)
+                    payloadPane(.response)
+                        .frame(minWidth: 260, idealWidth: 420, maxWidth: .infinity)
+                }
+            }
         }
         .background(Color.primary.opacity(0.025))
     }
 
-    private var inspectorHeader: some View {
+    private func payloadPane(_ side: NetworkInspectorSide) -> some View {
+        NetworkPayloadPane(store: store, side: side)
+    }
+}
+
+private struct NetworkPayloadPane: View {
+    @Bindable var store: NetworkDebuggerStore
+    let side: NetworkInspectorSide
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            paneHeader
+            StxRule()
+            paneBody
+        }
+        .background(Color.primary.opacity(0.025))
+    }
+
+    private var paneHeader: some View {
         HStack(spacing: 8) {
-            Text("FLOW INSPECTOR")
+            Text(side.title.uppercased())
                 .font(.sora(11, weight: .semibold))
                 .tracking(1.0)
                 .foregroundStyle(Color.stxMuted)
                 .lineLimit(1)
 
-            Picker("", selection: $store.selectedInspectorSide) {
-                ForEach(NetworkInspectorSide.allCases) { side in
-                    Text(side.title).tag(side)
-                }
+            Spacer(minLength: 8)
+
+            if let flow = store.selectedFlow {
+                headerBadge(flow)
+                Text("#\(flow.number)")
+                    .font(.sora(10).monospacedDigit())
+                    .foregroundStyle(Color.stxMuted)
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .controlSize(.mini)
-            .frame(width: 146)
-            .help("Switch inspector side")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
     }
 
     @ViewBuilder
-    private var inspectorBody: some View {
+    private var paneBody: some View {
         if let flow = store.selectedFlow {
             FadingScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    summaryCard(flow)
+                VStack(alignment: .leading, spacing: 12) {
                     payloadCard(flow)
                 }
                 .padding(14)
@@ -452,47 +590,10 @@ private struct NetworkFlowInspector: View {
         }
     }
 
-    private func summaryCard(_ flow: NetworkFlow) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                methodBadge(flow.request.method)
-                statusBadge(flow)
-                Spacer(minLength: 6)
-                Text("#\(flow.number)")
-                    .font(.sora(10).monospacedDigit())
-                    .foregroundStyle(Color.stxMuted)
-            }
-
-            Text(flow.request.url)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(Color.primary.opacity(0.86))
-                .lineLimit(3)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-
-            VStack(spacing: 6) {
-                metaRow("Client", flow.clientName)
-                metaRow("Protocol", flow.flowProtocol.rawValue)
-                metaRow("Duration", duration(flow))
-                metaRow("Request", bytes(flow.requestBytes))
-                metaRow("Response", bytes(flow.responseBytes))
-            }
-
-            if let message = flow.errorDescription, !message.isEmpty {
-                Text(message)
-                    .font(.sora(10))
-                    .foregroundStyle(Color.red)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(12)
-        .networkInspectorCard()
-    }
-
     private func payloadCard(_ flow: NetworkFlow) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
-                Text(store.selectedInspectorSide.title.uppercased())
+                Text("PAYLOAD")
                     .font(.sora(10, weight: .semibold))
                     .tracking(0.8)
                     .foregroundStyle(Color.stxMuted)
@@ -534,13 +635,23 @@ private struct NetworkFlowInspector: View {
 
     private var selectedTab: Binding<NetworkInspectorTab> {
         Binding {
-            store.selectedInspectorSide == .request ? store.selectedRequestTab : store.selectedResponseTab
+            side == .request ? store.selectedRequestTab : store.selectedResponseTab
         } set: { tab in
-            if store.selectedInspectorSide == .request {
+            if side == .request {
                 store.selectedRequestTab = tab
             } else {
                 store.selectedResponseTab = tab
             }
+        }
+    }
+
+    @ViewBuilder
+    private func headerBadge(_ flow: NetworkFlow) -> some View {
+        switch side {
+        case .request:
+            methodBadge(flow.request.method)
+        case .response:
+            statusBadge(flow)
         }
     }
 
@@ -562,21 +673,6 @@ private struct NetworkFlowInspector: View {
             .background(statusColor(flow).opacity(0.14), in: Capsule())
     }
 
-    private func metaRow(_ label: String, _ value: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text(label)
-                .font(.sora(9, weight: .semibold))
-                .foregroundStyle(Color.stxMuted)
-                .frame(width: 58, alignment: .leading)
-            Text(value)
-                .font(.sora(10).monospacedDigit())
-                .foregroundStyle(Color.primary.opacity(0.82))
-                .lineLimit(1)
-                .truncationMode(.middle)
-            Spacer(minLength: 0)
-        }
-    }
-
     private func content(for flow: NetworkFlow) -> String {
         switch selectedTab.wrappedValue {
         case .header:
@@ -593,15 +689,15 @@ private struct NetworkFlowInspector: View {
     }
 
     private func headers(for flow: NetworkFlow) -> [NetworkHeaderPair] {
-        store.selectedInspectorSide == .request ? flow.request.headers : flow.response.headers
+        side == .request ? flow.request.headers : flow.response.headers
     }
 
     private func payloadBody(for flow: NetworkFlow) -> NetworkBody {
-        store.selectedInspectorSide == .request ? flow.request.body : flow.response.body
+        side == .request ? flow.request.body : flow.response.body
     }
 
     private func queryString(for flow: NetworkFlow) -> String {
-        guard store.selectedInspectorSide == .request,
+        guard side == .request,
               let components = URLComponents(string: flow.request.url),
               let items = components.queryItems,
               !items.isEmpty else { return "" }
@@ -609,7 +705,7 @@ private struct NetworkFlowInspector: View {
     }
 
     private func raw(for flow: NetworkFlow) -> String {
-        if store.selectedInspectorSide == .request {
+        if side == .request {
             let head = "\(flow.request.method) \(flow.request.url) \(flow.request.httpVersion)"
             return ([head] + flow.request.headers.map { "\($0.name): \($0.value)" }).joined(separator: "\n")
                 + "\n\n"
@@ -671,6 +767,16 @@ private extension View {
         self
             .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.stxStroke, lineWidth: 1))
+    }
+}
+
+private extension NSFont {
+    static func networkTableSora(size: CGFloat, weight: NSFont.Weight = .regular) -> NSFont {
+        let descriptor = NSFontDescriptor(fontAttributes: [
+            .family: Theme.fontFamily,
+            .traits: [NSFontDescriptor.TraitKey.weight: weight.rawValue],
+        ])
+        return NSFont(descriptor: descriptor, size: size) ?? .systemFont(ofSize: size, weight: weight)
     }
 }
 

@@ -13,7 +13,6 @@ final class NetworkDebuggerStore: @unchecked Sendable {
     var searchText = ""
     var selectedRequestTab: NetworkInspectorTab = .header
     var selectedResponseTab: NetworkInspectorTab = .body
-    var selectedInspectorSide: NetworkInspectorSide = .request
     var selectedProtocol: NetworkFlowProtocol?
     var isSystemProxyWorking = false
     var isCertificateWorking = false

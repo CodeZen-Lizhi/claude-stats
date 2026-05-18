@@ -142,7 +142,7 @@ struct MainWindowView: View {
                     .onTapGesture { clearTextFocus() }
             }
 
-            if mode == .app {
+            if mode == .app || mode == .network {
                 sidebarToggle
                     .padding(.leading, 81)
                     .padding(.top, 11)

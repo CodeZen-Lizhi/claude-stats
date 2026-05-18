@@ -6,11 +6,19 @@ struct NetworkDetailView: View {
     private let horizontalInset: CGFloat = 20
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
-            StxRule()
-            content
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        ZStack(alignment: .topTrailing) {
+            VStack(alignment: .leading, spacing: 0) {
+                header
+                StxRule()
+                content
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
+            if section == .traffic {
+                NetworkTrafficLayoutControls(preferences: env.preferences)
+                    .padding(.top, 15)
+                    .padding(.trailing, horizontalInset)
+            }
         }
     }
 
@@ -37,7 +45,7 @@ struct NetworkDetailView: View {
     private var content: some View {
         switch section {
         case .traffic:
-            NetworkTrafficView(store: env.networkDebugger)
+            NetworkTrafficView(store: env.networkDebugger, preferences: env.preferences)
         case .setup:
             NetworkToolScroll {
                 NetworkSetupView(store: env.networkDebugger)

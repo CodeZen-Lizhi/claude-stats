@@ -56,6 +56,54 @@ struct PreferencesTests {
         #expect(reloaded.detailPanelBoundaryFalloffEnabled == false)
     }
 
+    @Test("Network traffic layout defaults to automatic with default breakpoint")
+    func networkTrafficLayoutDefaults() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+
+        #expect(prefs.networkTrafficLayoutMode == .automatic)
+        #expect(prefs.networkTrafficAutoBreakpoint == NetworkTrafficLayoutConstants.defaultAutoBreakpoint)
+    }
+
+    @Test("Network traffic layout preferences persist and invalid mode falls back")
+    func networkTrafficLayoutPersists() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+        prefs.networkTrafficLayoutMode = .sideBySide
+        prefs.networkTrafficAutoBreakpoint = 1040
+
+        let reloaded = Preferences(defaults: defaults)
+        #expect(reloaded.networkTrafficLayoutMode == .sideBySide)
+        #expect(reloaded.networkTrafficAutoBreakpoint == 1040)
+
+        defaults.set("diagonal", forKey: "networkTrafficLayoutMode")
+        let invalid = Preferences(defaults: defaults)
+        #expect(invalid.networkTrafficLayoutMode == .automatic)
+    }
+
+    @Test("Network traffic auto breakpoint clamps and resets")
+    func networkTrafficAutoBreakpointClampsAndResets() {
+        let defaults = makeDefaults()
+        defaults.set(2_000.0, forKey: "networkTrafficAutoBreakpoint")
+
+        let prefs = Preferences(defaults: defaults)
+        #expect(prefs.networkTrafficAutoBreakpoint == NetworkTrafficLayoutConstants.maximumAutoBreakpoint)
+
+        prefs.networkTrafficAutoBreakpoint = 100
+        #expect(prefs.networkTrafficAutoBreakpoint == NetworkTrafficLayoutConstants.minimumAutoBreakpoint)
+
+        prefs.resetNetworkTrafficAutoBreakpoint()
+        #expect(prefs.networkTrafficAutoBreakpoint == NetworkTrafficLayoutConstants.defaultAutoBreakpoint)
+    }
+
+    @Test("Network traffic layout resolution follows mode and breakpoint")
+    func networkTrafficLayoutResolution() {
+        #expect(NetworkTrafficLayoutMode.automatic.resolved(width: 899, breakpoint: 900) == .stacked)
+        #expect(NetworkTrafficLayoutMode.automatic.resolved(width: 900, breakpoint: 900) == .sideBySide)
+        #expect(NetworkTrafficLayoutMode.stacked.resolved(width: 1600, breakpoint: 900) == .stacked)
+        #expect(NetworkTrafficLayoutMode.sideBySide.resolved(width: 640, breakpoint: 1200) == .sideBySide)
+    }
+
     @Test("Terminal appearance defaults use full chrome and fluid background")
     func terminalAppearanceDefaults() {
         let defaults = makeDefaults()

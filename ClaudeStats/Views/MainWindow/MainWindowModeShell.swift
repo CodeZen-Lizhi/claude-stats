@@ -98,7 +98,7 @@ struct MainWindowModeShell<AppSidebar: View, SettingsSidebar: View, NetworkSideb
         case .settings:
             MainWindowMotion.settingsSidebarWidth
         case .network:
-            MainWindowMotion.networkSidebarWidth
+            sidebarVisible ? MainWindowMotion.networkSidebarWidth : 0
         }
     }
 
@@ -114,7 +114,14 @@ struct MainWindowModeShell<AppSidebar: View, SettingsSidebar: View, NetworkSideb
     }
 
     private var detailRoundedLeading: Bool {
-        mode == .settings || mode == .network || sidebarVisible
+        switch mode {
+        case .app:
+            return sidebarVisible
+        case .settings:
+            return true
+        case .network:
+            return sidebarVisible
+        }
     }
 
     private var appSidebarIsActive: Bool {
@@ -126,7 +133,7 @@ struct MainWindowModeShell<AppSidebar: View, SettingsSidebar: View, NetworkSideb
     }
 
     private var networkSidebarIsActive: Bool {
-        mode == .network
+        mode == .network && sidebarVisible
     }
 
     private var sidebarDeck: some View {
@@ -144,6 +151,7 @@ struct MainWindowModeShell<AppSidebar: View, SettingsSidebar: View, NetworkSideb
 
             networkSidebar
                 .frame(width: MainWindowMotion.networkSidebarWidth)
+                .opacity(sidebarVisible ? 1 : 0)
                 .allowsHitTesting(networkSidebarIsActive)
                 .accessibilityHidden(!networkSidebarIsActive)
         }
