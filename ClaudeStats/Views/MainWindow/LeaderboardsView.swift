@@ -198,7 +198,7 @@ struct LeaderboardsView: View {
             leaderboardsEnabled: env.preferences.leaderboardsEnabled,
             onSelectScore: selectScore,
             onOpenSettings: {
-                NotificationCenter.default.post(name: .openSettingsInMainWindow, object: nil)
+                NotificationCenter.default.post(name: .openSettingsInMainWindow, object: SettingsSection.features)
             }
         )
     }

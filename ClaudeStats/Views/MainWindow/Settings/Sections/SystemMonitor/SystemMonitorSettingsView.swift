@@ -2,31 +2,30 @@ import SwiftUI
 
 struct SystemMonitorSettingsView: View {
     @Environment(AppEnvironment.self) private var env
+    var onSelectSection: (SettingsSection) -> Void = { _ in }
 
     var body: some View {
         @Bindable var prefs = env.preferences
 
         VStack(alignment: .leading, spacing: 28) {
+            if !prefs.systemMonitorEnabled {
+                FeatureDisabledNotice(
+                    featureName: "System Monitor",
+                    message: "Turn it on in Features to edit sampling and visible modules."
+                ) {
+                    onSelectSection(.features)
+                }
+            }
+
             SettingGroup(title: "Preview") {
                 SystemMonitorPreview()
             }
-
-            SettingGroup(title: "Availability") {
-                VStack(spacing: 0) {
-                    SettingRow(
-                        title: "Enable System Monitor",
-                        description: "Shows the System page in Tools and starts read-only sampling only while that page is open."
-                    ) {
-                        Toggle("", isOn: $prefs.systemMonitorEnabled)
-                            .labelsHidden()
-                    }
-                }
-                .settingCard()
-            }
+            .disabledSettingsBlock(!prefs.systemMonitorEnabled)
 
             SettingGroup(title: "Refresh Rate", caption: "Lower rates reduce energy impact.") {
                 SystemMonitorRefreshRatePicker(selection: $prefs.systemMonitorRefreshRate)
             }
+            .disabledSettingsBlock(!prefs.systemMonitorEnabled)
 
             SettingGroup(title: "Modules") {
                 VStack(spacing: 0) {
@@ -42,6 +41,7 @@ struct SystemMonitorSettingsView: View {
                 }
                 .settingCard()
             }
+            .disabledSettingsBlock(!prefs.systemMonitorEnabled)
         }
     }
 

@@ -8,7 +8,6 @@ import SwiftUI
 /// breakdown table.
 struct DashboardView: View {
     @Environment(AppEnvironment.self) private var env
-    @Environment(\.openSettings) private var openSettings
 
     @SceneStorage("dashboard.section") private var sectionRaw: String = DashboardViewModel.Section.overview.rawValue
     @SceneStorage("dashboard.period") private var periodRaw: String = StatsPeriod.last30Days.rawValue
@@ -299,11 +298,11 @@ struct DashboardView: View {
 
     private var githubDisplay: GitHubDisplay {
         guard env.preferences.githubEnabled else {
-            return .placeholder(message: "Enable GitHub in Settings to compare your contributions.", isCTA: true)
+            return .placeholder(message: "Enable GitHub in Features to compare your contributions.", isCTA: true)
         }
         switch env.github.status {
         case .disconnected:
-            return .placeholder(message: "Connect a GitHub account in Settings to see your contribution graph.", isCTA: true)
+            return .placeholder(message: "Connect a GitHub account in Features to see your contribution graph.", isCTA: true)
         case .connecting:
             return .placeholder(message: "Fetching contribution graph…", isCTA: false)
         case .connected, .failed:
@@ -330,9 +329,9 @@ struct DashboardView: View {
                 .foregroundStyle(Color.stxMuted)
                 .fixedSize(horizontal: false, vertical: true)
             if isCTA {
-                Button { openSettings() } label: {
+                Button { openFeaturesSettings() } label: {
                     BracketBox(spacing: 5) {
-                        Label("OPEN SETTINGS", systemImage: "gearshape")
+                        Label("OPEN FEATURES", systemImage: "switch.2")
                             .labelStyle(.titleAndIcon)
                             .font(.sora(10))
                             .tracking(0.8)
@@ -363,6 +362,10 @@ struct DashboardView: View {
         case .githubOnly: "GitHub activity only"
         case .neither: "No activity"
         }
+    }
+
+    private func openFeaturesSettings() {
+        NotificationCenter.default.post(name: .openSettingsInMainWindow, object: SettingsSection.features)
     }
 
     // MARK: - Stat-card formatting helpers

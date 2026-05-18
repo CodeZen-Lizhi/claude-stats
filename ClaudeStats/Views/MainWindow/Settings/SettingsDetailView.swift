@@ -4,6 +4,7 @@ import SwiftUI
 /// `MainWindowModeShell` owns the sidebar and `DetailPanel` chrome.
 struct SettingsDetailView: View {
     let section: SettingsSection
+    var onSelectSection: (SettingsSection) -> Void = { _ in }
 
     var body: some View {
         FadingScrollView {
@@ -25,12 +26,13 @@ struct SettingsDetailView: View {
     private var sectionContent: some View {
         switch section {
         case .general: GeneralSettingsView()
+        case .features: FeaturesSettingsView(onSelectSection: onSelectSection)
         case .menuBar: MenuBarSettingsView()
         case .platforms: PlatformsSettingsView()
-        case .tracking: TrackingSettingsView()
-        case .leaderboards: LeaderboardsSettingsView()
-        case .github: GitHubSettingsView()
-        case .systemMonitor: SystemMonitorSettingsView()
+        case .tracking: TrackingSettingsView(onSelectSection: onSelectSection)
+        case .leaderboards: LeaderboardsSettingsView(onSelectSection: onSelectSection)
+        case .github: GitHubSettingsView(onSelectSection: onSelectSection)
+        case .systemMonitor: SystemMonitorSettingsView(onSelectSection: onSelectSection)
         case .terminal: TerminalSettingsView()
         case .about: AboutSettingsView()
         }

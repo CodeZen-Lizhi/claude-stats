@@ -132,7 +132,7 @@ struct MainWindowView: View {
             } appDetail: {
                 detail
             } settingsDetail: {
-                SettingsDetailView(section: settingsSection)
+                SettingsDetailView(section: settingsSection, onSelectSection: selectSettingsSection)
             } networkDetail: {
                 NetworkDetailView(section: networkSection)
             }
@@ -177,8 +177,8 @@ struct MainWindowView: View {
         .onChange(of: env.preferences.systemMonitorEnabled) { _, on in
             if !on && page == .system { page = .dashboard }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .openSettingsInMainWindow)) { _ in
-            openSettings()
+        .onReceive(NotificationCenter.default.publisher(for: .openSettingsInMainWindow)) { notification in
+            openSettings(section: notification.object as? SettingsSection)
         }
     }
 
@@ -238,7 +238,18 @@ struct MainWindowView: View {
     }
 
     private func openSettings() {
+        openSettings(section: nil)
+    }
+
+    private func openSettings(section: SettingsSection?) {
+        if let section {
+            settingsSectionRaw = section.rawValue
+        }
         transition(to: .settings)
+    }
+
+    private func selectSettingsSection(_ section: SettingsSection) {
+        settingsSectionRaw = section.rawValue
     }
 
     private func openNetwork() {

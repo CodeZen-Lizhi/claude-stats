@@ -111,13 +111,13 @@ struct LeaderboardListColumn: View {
                 .foregroundStyle(Color.stxAccent)
             Text("Leaderboards are off")
                 .font(.sora(16, weight: .semibold))
-            Text("Enable them in Settings, choose a public nickname, then sync aggregate scores and a generated Beam avatar to CloudKit.")
+            Text("Enable them in Features, choose a public nickname, then sync aggregate scores and a generated Beam avatar to CloudKit.")
                 .font(.sora(12))
                 .foregroundStyle(Color.stxMuted)
                 .fixedSize(horizontal: false, vertical: true)
             Button(action: onOpenSettings) {
                 BracketBox(spacing: 5) {
-                    Label("OPEN SETTINGS", systemImage: "gearshape")
+                    Label("OPEN FEATURES", systemImage: "switch.2")
                         .labelStyle(.titleAndIcon)
                         .font(.sora(10, weight: .medium))
                         .tracking(0.8)

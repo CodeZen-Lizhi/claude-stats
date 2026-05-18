@@ -2,133 +2,38 @@ import SwiftUI
 
 struct LeaderboardsSettingsView: View {
     @Environment(AppEnvironment.self) private var env
-
-    private var canSync: Bool {
-        env.preferences.leaderboardsEnabled
-            && !env.preferences.leaderboardNickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && env.leaderboards.syncStatus != .syncing
-            && env.leaderboards.syncStatus != .checkingAccount
-            && !env.leaderboards.isSavingProfile
-    }
-
-    private var canRandomizeAvatar: Bool {
-        env.preferences.leaderboardsEnabled
-            && env.leaderboards.syncStatus != .syncing
-            && env.leaderboards.syncStatus != .checkingAccount
-            && !env.leaderboards.isSavingProfile
-    }
+    var onSelectSection: (SettingsSection) -> Void = { _ in }
 
     var body: some View {
         @Bindable var prefs = env.preferences
 
         VStack(alignment: .leading, spacing: 28) {
-            SettingGroup(
-                title: "CloudKit Leaderboards",
-                caption: "Publishes aggregate scores to CloudKit's public database. The app never uploads prompts, paths, session titles, model names, or transcript content."
-            ) {
-                VStack(spacing: 0) {
-                    SettingRow(title: "Join leaderboards",
-                               description: "Disabled by default. Turning this on uses your iCloud account only to write aggregate scores.") {
-                        Toggle("", isOn: $prefs.leaderboardsEnabled)
-                            .labelsHidden()
-                            .toggleStyle(.switch)
-                    }
-
-                    if prefs.leaderboardsEnabled {
-                        SettingRowDivider()
-                        nicknameRow(prefs: prefs)
-                        SettingRowDivider()
-                        avatarRow
-                        SettingRowDivider()
-                        statusRow
-                        SettingRowDivider()
-                        syncRow
-                    }
+            if !prefs.leaderboardsEnabled {
+                FeatureDisabledNotice(
+                    featureName: "CloudKit Leaderboards",
+                    message: "Turn them on in Features to edit your public profile and sync aggregate scores."
+                ) {
+                    onSelectSection(.features)
                 }
-                .settingCard()
             }
 
-            if prefs.leaderboardsEnabled {
+            VStack(alignment: .leading, spacing: 28) {
+                SettingGroup(
+                    title: "CloudKit Leaderboards",
+                    caption: "Publishes aggregate scores to CloudKit's public database. The app never uploads prompts, paths, session titles, model names, or transcript content."
+                ) {
+                    LeaderboardProfileSettings()
+                        .settingCard()
+                }
                 activityNote
                 privacyGroup
             }
+            .disabledSettingsBlock(!prefs.leaderboardsEnabled)
         }
         .task { await env.leaderboards.checkAccountStatus() }
         .onChange(of: prefs.leaderboardsEnabled) { _, enabled in
             if enabled {
                 Task { await env.leaderboards.syncIfDue(force: false) }
-            }
-        }
-    }
-
-    private func nicknameRow(prefs: Preferences) -> some View {
-        @Bindable var prefs = prefs
-        return SettingRow(title: "Public nickname",
-                          description: "Shown on the leaderboard instead of your iCloud identity.") {
-            TextField("Nickname", text: $prefs.leaderboardNickname)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 220)
-                .onSubmit { Task { await env.leaderboards.syncNow() } }
-        }
-    }
-
-    private var avatarRow: some View {
-        SettingRow(title: "Public avatar",
-                   description: "A generated Beam avatar linked to your iCloud leaderboard profile.") {
-            HStack(spacing: 10) {
-                BeamAvatarView(seed: env.leaderboards.avatarSeed, size: 46, isDecorative: false)
-                Button {
-                    Task { await env.leaderboards.randomizeAvatar() }
-                } label: {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 13, weight: .semibold))
-                        .frame(width: 28, height: 28)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(Color.stxAccent)
-                .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.stxStroke, lineWidth: 1))
-                .help("Randomize avatar")
-                .disabled(!canRandomizeAvatar)
-                if env.leaderboards.isSavingProfile {
-                    ProgressView()
-                        .controlSize(.mini)
-                }
-            }
-        }
-    }
-
-    private var statusRow: some View {
-        SettingRow(title: "Status") {
-            VStack(alignment: .trailing, spacing: 3) {
-                HStack(spacing: 6) {
-                    if env.leaderboards.syncStatus == .checkingAccount || env.leaderboards.syncStatus == .syncing {
-                        ProgressView().controlSize(.mini)
-                    }
-                    Text(env.leaderboards.syncStatus.displayText)
-                        .font(.sora(12))
-                        .foregroundStyle(statusColor)
-                }
-                Text(env.leaderboards.accountState.displayText)
-                    .font(.sora(11))
-                    .foregroundStyle(Color.stxMuted)
-            }
-        }
-    }
-
-    private var syncRow: some View {
-        SettingRow(title: "Sync",
-                   description: "Runs once per day while the app is open. You can force a sync here.") {
-            HStack(spacing: 8) {
-                if let last = env.preferences.leaderboardLastSyncedAt {
-                    Text(Format.shortDate(last))
-                        .font(.sora(11))
-                        .foregroundStyle(Color.stxMuted)
-                }
-                Button("Sync now") {
-                    Task { await env.leaderboards.syncNow() }
-                }
-                .disabled(!canSync)
             }
         }
     }
@@ -168,15 +73,6 @@ struct LeaderboardsSettingsView: View {
                 .font(.sora(11))
                 .foregroundStyle(Color.stxMuted)
                 .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private var statusColor: Color {
-        switch env.leaderboards.syncStatus {
-        case .failed, .needsNickname:
-            return .stxAccent
-        default:
-            return .stxMuted
         }
     }
 }

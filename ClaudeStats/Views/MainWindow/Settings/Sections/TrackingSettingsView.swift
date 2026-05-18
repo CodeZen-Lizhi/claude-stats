@@ -6,6 +6,7 @@ struct TrackingSettingsView: View {
     @State private var fullDiskAccessOK = ScreenTimeService.canRead()
     @State private var newCodingSurfaceBundleID = ""
     @State private var newCLIHostBundleID = ""
+    var onSelectSection: (SettingsSection) -> Void = { _ in }
 
     var body: some View {
         @Bindable var prefs = env.preferences
@@ -25,23 +26,23 @@ struct TrackingSettingsView: View {
             title: "AI Activity Analysis",
             caption: "Adds an Activity tab that compares coding surfaces, CLI hosts, and AI activity. Reading Screen Time requires Full Disk Access."
         ) {
-            VStack(spacing: 0) {
-                SettingRow(title: "Enable AI activity analysis") {
-                    Toggle("", isOn: $prefs.aiActivityAnalysisEnabled)
-                        .labelsHidden()
-                        .toggleStyle(.switch)
+            if !prefs.aiActivityAnalysisEnabled {
+                FeatureDisabledNotice(
+                    featureName: "AI Activity Analysis",
+                    message: "Turn it on in Features to edit Screen Time access and coding surface settings."
+                ) {
+                    onSelectSection(.features)
                 }
+            }
 
-                if prefs.aiActivityAnalysisEnabled {
-                    SettingRowDivider()
-                    fullDiskAccessRow
-                }
+            VStack(spacing: 0) {
+                fullDiskAccessRow
             }
             .settingCard()
+            .disabledSettingsBlock(!prefs.aiActivityAnalysisEnabled)
 
-            if prefs.aiActivityAnalysisEnabled {
-                activitySurfaceListCard(prefs: prefs)
-            }
+            activitySurfaceListCard(prefs: prefs)
+                .disabledSettingsBlock(!prefs.aiActivityAnalysisEnabled)
         }
     }
 
@@ -201,49 +202,51 @@ struct TrackingSettingsView: View {
             title: "Git Tracking",
             caption: "Reads commit history of repos you've used Claude Code in (via the `git` command) and compares it with your Claude activity — churn, recent commits, and a usage-vs-commits timeline."
         ) {
-            VStack(spacing: 0) {
-                SettingRow(title: "Enable git tracking") {
-                    Toggle("", isOn: $prefs.gitTrackingEnabled)
-                        .labelsHidden()
-                        .toggleStyle(.switch)
+            if !prefs.gitTrackingEnabled {
+                FeatureDisabledNotice(
+                    featureName: "Git Tracking",
+                    message: "Turn it on in Features to edit git workspace behavior."
+                ) {
+                    onSelectSection(.features)
                 }
-                if prefs.gitTrackingEnabled {
-                    SettingRowDivider()
-                    SettingRow(title: "Open git view in") {
-                        Picker("", selection: $prefs.gitOpensInWindow) {
-                            Text("Panel tab").tag(false)
-                            Text("Separate window").tag(true)
+            }
+
+            VStack(spacing: 0) {
+                SettingRow(title: "Open git view in") {
+                    Picker("", selection: $prefs.gitOpensInWindow) {
+                        Text("Panel tab").tag(false)
+                        Text("Separate window").tag(true)
+                    }
+                    .labelsHidden()
+                    .frame(maxWidth: 180)
+                }
+                SettingRowDivider()
+                SettingRow(
+                    title: "Language engine",
+                    description: "Language detection uses GitHub Linguist; scc supplies line counts."
+                ) {
+                    Text("GitHub Linguist + scc")
+                        .font(.sora(12, weight: .semibold))
+                        .foregroundStyle(Color.stxMuted)
+                }
+                SettingRowDivider()
+                SettingRow(
+                    title: "Statistics scope",
+                    description: "HEAD counts committed code; Working Tree includes local uncommitted files."
+                ) {
+                    Picker("", selection: $prefs.gitStatsScope) {
+                        ForEach(GitStatsScope.allCases) { scope in
+                            Text(scope.label).tag(scope)
                         }
-                        .labelsHidden()
-                        .frame(maxWidth: 180)
                     }
-                    SettingRowDivider()
-                    SettingRow(
-                        title: "Language engine",
-                        description: "Language detection uses GitHub Linguist; scc supplies line counts."
-                    ) {
-                        Text("GitHub Linguist + scc")
-                            .font(.sora(12, weight: .semibold))
-                            .foregroundStyle(Color.stxMuted)
-                    }
-                    SettingRowDivider()
-                    SettingRow(
-                        title: "Statistics scope",
-                        description: "HEAD counts committed code; Working Tree includes local uncommitted files."
-                    ) {
-                        Picker("", selection: $prefs.gitStatsScope) {
-                            ForEach(GitStatsScope.allCases) { scope in
-                                Text(scope.label).tag(scope)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-                        .controlSize(.small)
-                        .frame(maxWidth: 220)
-                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .controlSize(.small)
+                    .frame(maxWidth: 220)
                 }
             }
             .settingCard()
+            .disabledSettingsBlock(!prefs.gitTrackingEnabled)
         }
     }
 }
