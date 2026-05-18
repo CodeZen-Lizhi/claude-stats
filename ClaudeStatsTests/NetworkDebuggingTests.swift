@@ -183,6 +183,111 @@ struct NetworkDebuggingTests {
         #expect(await systemProxy.disabledServices.isEmpty)
     }
 
+    @Test("Helper snapshot maps to network helper state")
+    func helperSnapshotMapsToNetworkHelperState() {
+        let snapshot = RockxyHelperSnapshot(
+            status: .unreachable,
+            action: .retry,
+            isReachable: false,
+            registrationStatus: "registered",
+            installedVersion: "0.7.0",
+            installedBuild: 6,
+            installedProtocolVersion: 1,
+            bundledVersion: "0.7.1",
+            bundledBuild: 7,
+            expectedProtocolVersion: 1,
+            lastErrorMessage: "Connection failed",
+            statusMessage: "Helper unreachable",
+            canUsePrivilegedHelper: false
+        )
+
+        let state = NetworkDebuggerStore.helperState(from: snapshot)
+
+        #expect(state.statusMessage == "Helper unreachable")
+        #expect(state.detailMessage == "Connection failed")
+        #expect(state.action == .retry)
+        #expect(state.isReachable == false)
+        #expect(state.canUsePrivilegedHelper == false)
+    }
+
+    @Test("Rockxy certificate snapshot preserves local certificate UI state")
+    func certificateSnapshotMapsToNetworkCertificateState() {
+        let current = NetworkCertificateState(
+            rootCAPath: "/old/rootCA.pem",
+            isTrusted: false,
+            isMITMEnabled: true,
+            sslHostAllowlist: ["api.example.test"],
+            statusMessage: nil
+        )
+        let snapshot = RockxyCertificateSnapshot(
+            rootCAPath: "/tmp/rockxy/rootCA.pem",
+            hasGeneratedCertificate: true,
+            isInstalledInKeychain: true,
+            hasTrustSettings: false,
+            isSystemTrustValidated: true,
+            notValidBefore: nil,
+            notValidAfter: nil,
+            fingerprintSHA256: "AA:BB",
+            commonName: "Rockxy Root CA",
+            lastValidationErrorMessage: nil
+        )
+
+        let state = NetworkCertificateService.state(
+            from: snapshot,
+            preserving: current,
+            statusMessage: "Root CA trusted."
+        )
+
+        #expect(state.rootCAPath == "/tmp/rockxy/rootCA.pem")
+        #expect(state.isTrusted == true)
+        #expect(state.isMITMEnabled == true)
+        #expect(state.sslHostAllowlist == ["api.example.test"])
+        #expect(state.statusMessage == "Root CA trusted.")
+    }
+
+    @Test("Certificate validation error overrides success status message")
+    func certificateValidationErrorOverridesStatusMessage() {
+        let snapshot = RockxyCertificateSnapshot(
+            rootCAPath: "/tmp/rockxy/rootCA.pem",
+            hasGeneratedCertificate: true,
+            isInstalledInKeychain: false,
+            hasTrustSettings: false,
+            isSystemTrustValidated: false,
+            notValidBefore: nil,
+            notValidAfter: nil,
+            fingerprintSHA256: nil,
+            commonName: nil,
+            lastValidationErrorMessage: "Trust validation failed"
+        )
+
+        let state = NetworkCertificateService.state(
+            from: snapshot,
+            preserving: .empty,
+            statusMessage: "Root CA trusted."
+        )
+
+        #expect(state.isTrusted == false)
+        #expect(state.statusMessage == "Trust validation failed")
+    }
+
+    @Test("LaunchDaemon plist uses ClaudeStats Rockxy helper identity")
+    func launchDaemonPlistUsesClaudeStatsIdentity() throws {
+        let data = try RockxyHelperLaunchDaemonPlist.data(
+            machServiceName: "com.claudestats.rockxy.helper",
+            bundleProgram: "Contents/Library/HelperTools/RockxyHelperTool",
+            allowedCallerIdentifiers: ["com.claudestats.ClaudeStats"]
+        )
+        let object = try PropertyListSerialization.propertyList(from: data, format: nil)
+        let plist = try #require(object as? [String: Any])
+
+        #expect(plist["Label"] as? String == "com.claudestats.rockxy.helper")
+        #expect(plist["BundleProgram"] as? String == "Contents/Library/HelperTools/RockxyHelperTool")
+        #expect(plist["AssociatedBundleIdentifiers"] as? [String] == ["com.claudestats.ClaudeStats"])
+
+        let machServices = try #require(plist["MachServices"] as? [String: Bool])
+        #expect(machServices["com.claudestats.rockxy.helper"] == true)
+    }
+
     private func makeTransaction(
         method: String,
         url: URL,

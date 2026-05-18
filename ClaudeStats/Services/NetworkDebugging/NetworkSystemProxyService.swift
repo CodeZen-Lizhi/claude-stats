@@ -1,6 +1,33 @@
 import Foundation
+import RockxyBackendEmbed
 
 struct NetworkSystemProxyService: NetworkSystemProxyManaging, Sendable {
+    private static let helperManagedService = "Rockxy Helper"
+    private let direct = DirectNetworkSystemProxyService()
+
+    func enable(endpoint: NetworkProxyEndpoint) async throws -> NetworkSystemProxyStatus {
+        let helper = await RockxyHelperController.shared.refreshStatus()
+        if helper.canUsePrivilegedHelper {
+            try await RockxyHelperController.shared.overrideSystemProxy(port: endpoint.port)
+            return NetworkSystemProxyStatus(
+                isEnabled: true,
+                managedServices: [Self.helperManagedService],
+                lastError: nil
+            )
+        }
+        return try await direct.enable(endpoint: endpoint)
+    }
+
+    func disable(services: [String]) async throws -> NetworkSystemProxyStatus {
+        if services == [Self.helperManagedService] {
+            try await RockxyHelperController.shared.restoreSystemProxy()
+            return .idle
+        }
+        return try await direct.disable(services: services)
+    }
+}
+
+private struct DirectNetworkSystemProxyService: Sendable {
     func enable(endpoint: NetworkProxyEndpoint) async throws -> NetworkSystemProxyStatus {
         try await Task.detached(priority: .userInitiated) {
             let services = try Self.networkServices()

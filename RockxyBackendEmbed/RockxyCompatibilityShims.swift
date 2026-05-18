@@ -38,37 +38,6 @@ enum RequestHookOutcome {
     case mockFailure
 }
 
-enum HelperManager {
-    enum HelperStatus: Equatable {
-        case notInstalled
-        case requiresApproval
-        case installedCompatible
-        case installedOutdated
-        case installedIncompatible
-        case unreachable
-        case signingMismatch
-    }
-
-    @MainActor
-    static let shared = HelperManagerState()
-}
-
-@MainActor
-final class HelperManagerState {
-    let status: HelperManager.HelperStatus = .notInstalled
-    let isReachable = false
-}
-
-actor HelperConnection {
-    static let shared = HelperConnection()
-
-    func cleanupStaleCertificates(activeFingerprint _: String) async throws -> Int {
-        0
-    }
-
-    func installRootCertificate(derData _: Data) async throws {}
-}
-
 actor ScriptPluginManager {
     func runRequestHook(on request: HTTPRequestData) async -> RequestHookOutcome {
         .forward(request)

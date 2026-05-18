@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import RockxyBackendEmbed
 
 @MainActor
 @Observable
@@ -7,6 +8,7 @@ final class NetworkDebuggerStore: @unchecked Sendable {
     var selectedSection: NetworkSection = .traffic
     var captureStatus: NetworkCaptureStatus = .stopped
     var systemProxyStatus: NetworkSystemProxyStatus = .idle
+    var helperState: NetworkHelperState = .empty
     var certificateState: NetworkCertificateState = .empty
     var flows: [NetworkFlow] = []
     var selectedFlowID: UUID?
@@ -15,6 +17,7 @@ final class NetworkDebuggerStore: @unchecked Sendable {
     var selectedResponseTab: NetworkInspectorTab = .body
     var selectedProtocol: NetworkFlowProtocol?
     var isSystemProxyWorking = false
+    var isHelperWorking = false
     var isCertificateWorking = false
 
     private let proxyBackend: any NetworkProxyBackend
@@ -109,6 +112,42 @@ final class NetworkDebuggerStore: @unchecked Sendable {
         selectedFlowID = nil
     }
 
+    func refreshHelperStatus() {
+        isHelperWorking = true
+        Task { @MainActor in
+            let snapshot = await RockxyHelperController.shared.refreshStatus()
+            helperState = Self.helperState(from: snapshot)
+            isHelperWorking = false
+        }
+    }
+
+    func performHelperAction() {
+        guard let action = helperState.action else { return }
+        isHelperWorking = true
+        Task { @MainActor in
+            do {
+                let snapshot: RockxyHelperSnapshot
+                switch action {
+                case .install:
+                    snapshot = try await RockxyHelperController.shared.install()
+                case .update:
+                    snapshot = try await RockxyHelperController.shared.update()
+                case .retry:
+                    snapshot = await RockxyHelperController.shared.retryConnection()
+                case .reinstall:
+                    snapshot = try await RockxyHelperController.shared.reinstall()
+                case .openSettings:
+                    RockxyHelperController.shared.openSystemSettingsLoginItems()
+                    snapshot = await RockxyHelperController.shared.refreshStatus()
+                }
+                helperState = Self.helperState(from: snapshot)
+            } catch {
+                helperState.detailMessage = error.localizedDescription
+            }
+            isHelperWorking = false
+        }
+    }
+
     func enableSystemProxy() {
         enableSystemProxy(autoTriggered: false)
     }
@@ -160,12 +199,12 @@ final class NetworkDebuggerStore: @unchecked Sendable {
 
     func generateRootCA() {
         isCertificateWorking = true
+        let currentState = certificateState
         Task { @concurrent in
             do {
-                let path = try await certificateService.generateRootCA()
+                let state = try await certificateService.generateRootCA(preserving: currentState)
                 await MainActor.run {
-                    certificateState.rootCAPath = path
-                    certificateState.statusMessage = "Root CA generated."
+                    certificateState = state
                     isCertificateWorking = false
                 }
             } catch {
@@ -178,17 +217,17 @@ final class NetworkDebuggerStore: @unchecked Sendable {
     }
 
     func trustRootCA() {
-        guard let path = certificateState.rootCAPath else {
+        guard certificateState.rootCAPath != nil else {
             certificateState.statusMessage = "Generate a Root CA first."
             return
         }
         isCertificateWorking = true
+        let currentState = certificateState
         Task { @concurrent in
             do {
-                try await certificateService.trustRootCA(path: path)
+                let state = try await certificateService.trustRootCA(preserving: currentState)
                 await MainActor.run {
-                    certificateState.isTrusted = true
-                    certificateState.statusMessage = "Root CA trusted in login keychain."
+                    certificateState = state
                     isCertificateWorking = false
                 }
             } catch {
@@ -230,6 +269,33 @@ final class NetworkDebuggerStore: @unchecked Sendable {
         case .failed(let message):
             captureStatus = .failed(message)
             Log.network.error("Network proxy failed: \(message, privacy: .public)")
+        }
+    }
+
+    static func helperState(from snapshot: RockxyHelperSnapshot) -> NetworkHelperState {
+        NetworkHelperState(
+            statusMessage: snapshot.statusMessage,
+            detailMessage: snapshot.lastErrorMessage,
+            action: snapshot.action.map(NetworkHelperAction.init),
+            isReachable: snapshot.isReachable,
+            canUsePrivilegedHelper: snapshot.canUsePrivilegedHelper
+        )
+    }
+}
+
+private extension NetworkHelperAction {
+    init(_ action: RockxyHelperAction) {
+        switch action {
+        case .install:
+            self = .install
+        case .update:
+            self = .update
+        case .retry:
+            self = .retry
+        case .reinstall:
+            self = .reinstall
+        case .openSettings:
+            self = .openSettings
         }
     }
 }

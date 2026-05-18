@@ -300,6 +300,45 @@ struct NetworkSystemProxyStatus: Sendable, Equatable {
     static let idle = NetworkSystemProxyStatus(isEnabled: false, managedServices: [], lastError: nil)
 }
 
+enum NetworkHelperAction: String, Sendable, Equatable {
+    case install
+    case update
+    case retry
+    case reinstall
+    case openSettings
+
+    var title: String {
+        switch self {
+        case .install:
+            "Install"
+        case .update:
+            "Update"
+        case .retry:
+            "Retry"
+        case .reinstall:
+            "Reinstall"
+        case .openSettings:
+            "Open Settings"
+        }
+    }
+}
+
+struct NetworkHelperState: Sendable, Equatable {
+    var statusMessage: String
+    var detailMessage: String?
+    var action: NetworkHelperAction?
+    var isReachable: Bool
+    var canUsePrivilegedHelper: Bool
+
+    static let empty = NetworkHelperState(
+        statusMessage: "Checking helper...",
+        detailMessage: nil,
+        action: nil,
+        isReachable: false,
+        canUsePrivilegedHelper: false
+    )
+}
+
 struct NetworkCertificateState: Sendable, Equatable {
     var rootCAPath: String?
     var isTrusted: Bool

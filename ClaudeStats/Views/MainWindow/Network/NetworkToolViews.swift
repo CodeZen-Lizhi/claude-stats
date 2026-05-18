@@ -60,6 +60,8 @@ struct NetworkSetupView: View {
             }
             .toggleStyle(.checkbox)
 
+            helperStatusRow
+
             if let error = store.systemProxyStatus.lastError, !error.isEmpty {
                 Text(error)
                     .font(.sora(11))
@@ -74,6 +76,38 @@ struct NetworkSetupView: View {
             }
         }
         .mainWindowPanel()
+        .task {
+            store.refreshHelperStatus()
+        }
+    }
+
+    private var helperStatusRow: some View {
+        HStack(spacing: 8) {
+            Label(store.helperState.statusMessage, systemImage: store.helperState.canUsePrivilegedHelper ? "checkmark.seal" : "wrench.and.screwdriver")
+                .font(.sora(11, weight: .medium))
+                .foregroundStyle(store.helperState.canUsePrivilegedHelper ? .green : Color.stxMuted)
+                .lineLimit(1)
+
+            if let detail = store.helperState.detailMessage, !detail.isEmpty {
+                Text(detail)
+                    .font(.sora(10))
+                    .foregroundStyle(Color.stxMuted)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
+            Spacer()
+
+            if let action = store.helperState.action {
+                Button {
+                    store.performHelperAction()
+                } label: {
+                    Text(action.title)
+                }
+                .font(.sora(10, weight: .medium))
+                .disabled(store.isHelperWorking)
+            }
+        }
     }
 
     private var commandsCard: some View {
