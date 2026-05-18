@@ -53,7 +53,9 @@ protocol LeaderboardCloudServicing: Sendable {
     func currentUserHash() async throws -> String
     func saveProfile(_ profile: LeaderboardProfileDraft) async throws -> LeaderboardProfile
     func fetchProfile(userHash: String) async throws -> LeaderboardProfile?
-    func submit(_ submissions: [LeaderboardSubmission], profile: LeaderboardProfileDraft) async throws -> LeaderboardProfile
+    func submit(_ submissions: [LeaderboardSubmission],
+                historySubmissions: [LeaderboardHistorySubmission],
+                profile: LeaderboardProfileDraft) async throws -> LeaderboardProfile
     func fetchScores(metric: LeaderboardMetric,
                      period: LeaderboardPeriod,
                      periodKey: String,
@@ -113,6 +115,7 @@ enum CloudKitLeaderboardRecordMapper {
         static let updatedAt = "updatedAt"
         static let avatarSeed = "avatarSeed"
         static let avatarVariant = "avatarVariant"
+        static let historyStartMonthKey = "historyStartMonthKey"
     }
 
     static let avatarVariant = "beam"
@@ -132,6 +135,7 @@ enum CloudKitLeaderboardRecordMapper {
         Field.nickname,
         Field.avatarSeed,
         Field.avatarVariant,
+        Field.historyStartMonthKey,
         Field.updatedAt,
     ]
 
@@ -145,6 +149,13 @@ enum CloudKitLeaderboardRecordMapper {
                            period: LeaderboardPeriod,
                            periodKey: String) -> String {
         "score_v1_\(userHash)_\(metric.rawValue)_\(period.rawValue)_\(periodKey)"
+    }
+
+    static func historyRecordName(userHash: String,
+                                  metric: LeaderboardMetric,
+                                  bucketPeriod: LeaderboardPeriod,
+                                  periodKey: String) -> String {
+        "history_v1_\(userHash)_\(metric.rawValue)_\(bucketPeriod.rawValue)_\(periodKey)"
     }
 
     static func record(from submission: LeaderboardSubmission, userHash: String) -> CKRecord {
@@ -171,6 +182,29 @@ enum CloudKitLeaderboardRecordMapper {
         return record
     }
 
+    static func historyRecord(from submission: LeaderboardHistorySubmission, userHash: String) -> CKRecord {
+        let recordID = CKRecord.ID(recordName: historyRecordName(
+            userHash: userHash,
+            metric: submission.metric,
+            bucketPeriod: submission.bucketPeriod,
+            periodKey: submission.periodKey
+        ))
+        let record = CKRecord(recordType: CloudKitLeaderboardConfig.recordType, recordID: recordID)
+        record[Field.userHash] = userHash
+        record[Field.metric] = submission.metric.rawValue
+        record[Field.period] = submission.bucketPeriod.rawValue
+        record[Field.periodKey] = submission.periodKey
+        record[Field.score] = NSNumber(value: submission.score)
+        record[Field.providerScope] = CloudKitLeaderboardConfig.providerScope
+        record[Field.periodStartUTC] = submission.periodStartUTC as NSDate
+        if let periodEndUTC = submission.periodEndUTC {
+            record[Field.periodEndUTC] = periodEndUTC as NSDate
+        }
+        record[Field.appVersion] = submission.appVersion
+        record[Field.updatedAt] = submission.updatedAt as NSDate
+        return record
+    }
+
     static func profileRecordName(userHash: String) -> String {
         "profile_v1_\(userHash)"
     }
@@ -182,6 +216,9 @@ enum CloudKitLeaderboardRecordMapper {
         record[Field.nickname] = profile.nickname
         record[Field.avatarSeed] = profile.avatarSeed
         record[Field.avatarVariant] = avatarVariant
+        if let historyStartMonthKey = profile.historyStartMonthKey {
+            record[Field.historyStartMonthKey] = historyStartMonthKey
+        }
         record[Field.metric] = profileMetric
         record[Field.period] = profilePeriod
         record[Field.periodKey] = profilePeriodKey
@@ -204,6 +241,7 @@ enum CloudKitLeaderboardRecordMapper {
             return nil
         }
         let avatarSeed = record[Field.avatarSeed] as? String
+        let historyStartMonthKey = record[Field.historyStartMonthKey] as? String
         let updatedAt = (record[Field.updatedAt] as? Date)
             ?? (record[Field.updatedAt] as? NSDate).map { $0 as Date }
             ?? record.modificationDate
@@ -212,6 +250,7 @@ enum CloudKitLeaderboardRecordMapper {
             userHash: userHash,
             nickname: nickname,
             avatarSeed: avatarSeed?.isEmpty == false ? avatarSeed : nil,
+            historyStartMonthKey: historyStartMonthKey?.isEmpty == false ? historyStartMonthKey : nil,
             updatedAt: updatedAt
         )
     }
@@ -249,6 +288,22 @@ enum CloudKitLeaderboardRecordMapper {
             rank: rank,
             nickname: profile?.nickname ?? nickname,
             avatarSeed: profile?.avatarSeed,
+            updatedAt: updatedAt
+        )
+    }
+
+    static func historyPoint(from record: CKRecord,
+                             metric: LeaderboardMetric,
+                             window: LeaderboardPeriodWindow) -> LeaderboardScoreHistoryPoint? {
+        guard let scoreNumber = record[Field.score] as? NSNumber else { return nil }
+        let updatedAt = (record[Field.updatedAt] as? Date)
+            ?? (record[Field.updatedAt] as? NSDate).map { $0 as Date }
+            ?? record.modificationDate
+        return LeaderboardScoreHistoryPoint(
+            metric: metric,
+            period: window.period,
+            window: window,
+            score: scoreNumber.int64Value,
             updatedAt: updatedAt
         )
     }
@@ -302,6 +357,7 @@ struct CloudKitLeaderboardClient: LeaderboardCloudServicing {
             userHash: userHash,
             nickname: profile.nickname,
             avatarSeed: profile.avatarSeed,
+            historyStartMonthKey: profile.historyStartMonthKey,
             updatedAt: profile.updatedAt
         )
     }
@@ -322,13 +378,15 @@ struct CloudKitLeaderboardClient: LeaderboardCloudServicing {
         }
     }
 
-    func submit(_ submissions: [LeaderboardSubmission], profile: LeaderboardProfileDraft) async throws -> LeaderboardProfile {
-        guard !submissions.isEmpty else { return try await saveProfile(profile) }
+    func submit(_ submissions: [LeaderboardSubmission],
+                historySubmissions: [LeaderboardHistorySubmission],
+                profile: LeaderboardProfileDraft) async throws -> LeaderboardProfile {
+        guard !submissions.isEmpty || !historySubmissions.isEmpty else { return try await saveProfile(profile) }
         let userHash = try await availableUserHash()
         let profileRecord = CloudKitLeaderboardRecordMapper.profileRecord(userHash: userHash, profile: profile)
-        let records = [profileRecord] + submissions.map {
-            CloudKitLeaderboardRecordMapper.record(from: $0, userHash: userHash)
-        }
+        let records = [profileRecord]
+            + submissions.map { CloudKitLeaderboardRecordMapper.record(from: $0, userHash: userHash) }
+            + historySubmissions.map { CloudKitLeaderboardRecordMapper.historyRecord(from: $0, userHash: userHash) }
         let result = try await publicDatabase.modifyRecords(
             saving: records,
             deleting: [],
@@ -348,6 +406,7 @@ struct CloudKitLeaderboardClient: LeaderboardCloudServicing {
             userHash: userHash,
             nickname: profile.nickname,
             avatarSeed: profile.avatarSeed,
+            historyStartMonthKey: profile.historyStartMonthKey,
             updatedAt: profile.updatedAt
         )
     }
@@ -397,13 +456,13 @@ struct CloudKitLeaderboardClient: LeaderboardCloudServicing {
                            metric: LeaderboardMetric,
                            period: LeaderboardPeriod,
                            windows: [LeaderboardPeriodWindow]) async throws -> [LeaderboardScoreHistoryPoint] {
-        guard period != .allTime, !windows.isEmpty else { return [] }
+        guard !windows.isEmpty else { return [] }
         try ensureCloudKitEntitlement()
         let ids = windows.map { window in
-            CKRecord.ID(recordName: CloudKitLeaderboardRecordMapper.recordName(
+            CKRecord.ID(recordName: CloudKitLeaderboardRecordMapper.historyRecordName(
                 userHash: userHash,
                 metric: metric,
-                period: period,
+                bucketPeriod: window.period,
                 periodKey: window.periodKey
             ))
         }
@@ -415,22 +474,16 @@ struct CloudKitLeaderboardClient: LeaderboardCloudServicing {
             return zip(windows, ids).map { window, id in
                 guard let result = results[id],
                       case .success(let record) = result,
-                      let score = CloudKitLeaderboardRecordMapper.score(from: record, rank: 0) else {
+                      let point = CloudKitLeaderboardRecordMapper.historyPoint(from: record, metric: metric, window: window) else {
                     return LeaderboardScoreHistoryPoint(
                         metric: metric,
-                        period: period,
+                        period: window.period,
                         window: window,
                         score: 0,
                         updatedAt: nil
                     )
                 }
-                return LeaderboardScoreHistoryPoint(
-                    metric: metric,
-                    period: period,
-                    window: window,
-                    score: score.score,
-                    updatedAt: score.updatedAt
-                )
+                return point
             }
         } catch {
             throw LeaderboardCloudError.cloudKit(Self.shortCloudKitMessage(error))

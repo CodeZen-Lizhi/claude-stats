@@ -111,10 +111,24 @@ struct LeaderboardSubmission: Sendable, Hashable {
     var id: String { "\(metric.rawValue)-\(period.rawValue)-\(periodKey)" }
 }
 
+struct LeaderboardHistorySubmission: Sendable, Hashable {
+    let metric: LeaderboardMetric
+    let bucketPeriod: LeaderboardPeriod
+    let periodKey: String
+    let score: Int64
+    let periodStartUTC: Date
+    let periodEndUTC: Date?
+    let appVersion: String
+    let updatedAt: Date
+
+    var id: String { "\(metric.rawValue)-\(bucketPeriod.rawValue)-\(periodKey)" }
+}
+
 struct LeaderboardProfile: Sendable, Hashable, Identifiable {
     let userHash: String
     let nickname: String
     let avatarSeed: String?
+    let historyStartMonthKey: String?
     let updatedAt: Date
 
     var id: String { userHash }
@@ -123,15 +137,18 @@ struct LeaderboardProfile: Sendable, Hashable, Identifiable {
 struct LeaderboardProfileDraft: Sendable, Hashable {
     let nickname: String
     let avatarSeed: String
+    let historyStartMonthKey: String?
     let appVersion: String
     let updatedAt: Date
 
     init(nickname: String,
          avatarSeed: String,
+         historyStartMonthKey: String? = nil,
          appVersion: String = Self.appVersion,
          updatedAt: Date = .now) {
         self.nickname = nickname
         self.avatarSeed = avatarSeed
+        self.historyStartMonthKey = historyStartMonthKey
         self.appVersion = appVersion
         self.updatedAt = updatedAt
     }
@@ -255,21 +272,41 @@ enum LeaderboardPeriodCalculator {
     }
 
     static func historyWindows(for period: LeaderboardPeriod, anchorWindow: LeaderboardPeriodWindow) -> [LeaderboardPeriodWindow] {
+        historyScope(for: period, now: anchorWindow.startUTC, historyStart: nil)
+    }
+
+    static func historyScope(for period: LeaderboardPeriod,
+                             now: Date = .now,
+                             historyStart: Date? = nil) -> [LeaderboardPeriodWindow] {
         switch period {
         case .day:
-            return historyWindows(period: period, anchorDate: anchorWindow.startUTC, count: 14) { date, offset in
+            return historyWindows(period: period, anchorDate: window(for: .day, now: now).startUTC, count: 7) { date, offset in
                 date.addingTimeInterval(TimeInterval(-offset * 86_400))
             }
         case .week:
-            return historyWindows(period: period, anchorDate: anchorWindow.startUTC, count: 12) { date, offset in
+            return historyWindows(period: period, anchorDate: window(for: .week, now: now).startUTC, count: 4) { date, offset in
                 utcISOCalendar.date(byAdding: .weekOfYear, value: -offset, to: date) ?? date
             }
         case .month:
-            return historyWindows(period: period, anchorDate: anchorWindow.startUTC, count: 12) { date, offset in
+            return historyWindows(period: period, anchorDate: window(for: .month, now: now).startUTC, count: 3) { date, offset in
                 utcGregorianCalendar.date(byAdding: .month, value: -offset, to: date) ?? date
             }
         case .allTime:
-            return []
+            guard let historyStart else { return [] }
+            let firstMonth = window(for: .month, now: historyStart).startUTC
+            let currentMonth = window(for: .month, now: now).startUTC
+            guard firstMonth <= currentMonth else { return [window(for: .month, now: currentMonth)] }
+
+            var windows: [LeaderboardPeriodWindow] = []
+            var cursor = firstMonth
+            while cursor <= currentMonth {
+                windows.append(window(for: .month, now: cursor))
+                guard let next = utcGregorianCalendar.date(byAdding: .month, value: 1, to: cursor) else {
+                    break
+                }
+                cursor = next
+            }
+            return windows
         }
     }
 

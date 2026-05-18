@@ -231,16 +231,14 @@ struct LeaderboardsView: View {
     private func loadSelectedUserHistoryIfNeeded() async {
         guard env.preferences.leaderboardsEnabled,
               let score = selectedScore,
-              let userHash = score.userHash,
-              period != .allTime else {
+              let userHash = score.userHash else {
             env.leaderboards.clearSelectedUserHistory()
             return
         }
         await env.leaderboards.loadScoreHistory(
             userHash: userHash,
             metric: metric,
-            period: period,
-            anchorWindow: anchorWindow
+            period: period
         )
     }
 }

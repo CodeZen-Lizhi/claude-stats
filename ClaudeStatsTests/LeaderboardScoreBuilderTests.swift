@@ -81,10 +81,111 @@ struct LeaderboardScoreBuilderTests {
         #expect(withActivity.first { $0.metric == .activityMinutes }?.score == 60)
     }
 
+    @Test("History points use timeline buckets instead of session last activity")
+    func historyUsesTimelineBuckets() {
+        let now = dateUTC(2026, 5, 16, 8)
+        let sessions = [
+            session(
+                "cross-day",
+                provider: .claude,
+                at: dateUTC(2026, 5, 16, 23),
+                usage: TokenUsage(inputTokens: 9_999),
+                timeline: [
+                    ModelBucket(model: "model", start: dateUTC(2026, 5, 15, 23), usage: TokenUsage(inputTokens: 100)),
+                    ModelBucket(model: "model", start: dateUTC(2026, 5, 16, 1), usage: TokenUsage(inputTokens: 250, cacheReadTokens: 1_000)),
+                ]
+            )
+        ]
+
+        let withCache = builder.historyPoints(
+            sessions: sessions,
+            metric: .tokensWithCache,
+            period: .day,
+            includeActivity: false,
+            now: now
+        )
+        let withoutCache = builder.historyPoints(
+            sessions: sessions,
+            metric: .tokensWithoutCacheRead,
+            period: .day,
+            includeActivity: false,
+            now: now
+        )
+
+        let withCacheByKey = Dictionary(uniqueKeysWithValues: withCache.map { ($0.periodKey, $0.score) })
+        let withoutCacheByKey = Dictionary(uniqueKeysWithValues: withoutCache.map { ($0.periodKey, $0.score) })
+        #expect(withCacheByKey["2026-05-15"] == 100)
+        #expect(withCacheByKey["2026-05-16"] == 1_250)
+        #expect(withoutCacheByKey["2026-05-16"] == 250)
+    }
+
+    @Test("History scopes are fixed and zero-filled")
+    func historyScopes() {
+        let now = dateUTC(2026, 5, 16, 8)
+
+        #expect(LeaderboardPeriodCalculator.historyScope(for: .day, now: now).map(\.periodKey) == [
+            "2026-05-10", "2026-05-11", "2026-05-12", "2026-05-13", "2026-05-14", "2026-05-15", "2026-05-16",
+        ])
+        #expect(LeaderboardPeriodCalculator.historyScope(for: .week, now: now).map(\.periodKey) == [
+            "2026-W17", "2026-W18", "2026-W19", "2026-W20",
+        ])
+        #expect(LeaderboardPeriodCalculator.historyScope(for: .month, now: now).map(\.periodKey) == [
+            "2026-03", "2026-04", "2026-05",
+        ])
+        #expect(LeaderboardPeriodCalculator.historyScope(
+            for: .allTime,
+            now: now,
+            historyStart: dateUTC(2026, 2, 7)
+        ).map(\.periodKey) == [
+            "2026-02", "2026-03", "2026-04", "2026-05",
+        ])
+
+        let points = builder.historyPoints(
+            sessions: [],
+            metric: .tokensWithCache,
+            period: .day,
+            includeActivity: false,
+            now: now
+        )
+        #expect(points.count == 7)
+        #expect(points.allSatisfy { $0.score == 0 })
+    }
+
+    @Test("History submissions include token and activity metrics")
+    func historySubmissionsIncludeMetrics() {
+        let now = dateUTC(2026, 5, 16, 8)
+        let sessions = [
+            session("history", provider: .claude, at: now,
+                    usage: TokenUsage(inputTokens: 20),
+                    timeline: [
+                        ModelBucket(model: "model", start: dateUTC(2026, 5, 16, 1), usage: TokenUsage(inputTokens: 20)),
+                    ],
+                    activityIntervals: [
+                        DateInterval(start: dateUTC(2026, 5, 16, 1), end: dateUTC(2026, 5, 16, 1, minute: 30)),
+                    ]),
+        ]
+
+        let submissions = builder.historySubmissions(
+            sessions: sessions,
+            includeActivity: true,
+            now: now,
+            appVersion: "test"
+        )
+
+        #expect(submissions.contains {
+            $0.metric == .tokensWithCache && $0.bucketPeriod == .day && $0.periodKey == "2026-05-16" && $0.score == 20
+        })
+        #expect(submissions.contains {
+            $0.metric == .activityMinutes && $0.bucketPeriod == .day && $0.periodKey == "2026-05-16" && $0.score == 30
+        })
+        #expect(builder.historyStartMonthKey(sessions: sessions) == "2026-05")
+    }
+
     private func session(_ id: String,
                          provider: ProviderKind,
                          at date: Date,
                          usage: TokenUsage,
+                         timeline: [ModelBucket] = [],
                          activityIntervals: [DateInterval] = []) -> Session {
         let stats = SessionStats(
             title: id,
@@ -92,7 +193,7 @@ struct LeaderboardScoreBuilderTests {
             firstActivity: date,
             lastActivity: date,
             models: [ModelUsage(model: "model", messageCount: 1, usage: usage, pricing: TestPricing.table)],
-            timeline: [],
+            timeline: timeline,
             activityIntervals: activityIntervals
         )
         return Session(

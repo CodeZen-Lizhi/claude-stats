@@ -39,6 +39,28 @@ struct LeaderboardCloudKitMappingTests {
         #expect(record[CloudKitLeaderboardRecordMapper.Field.providerScope] as? String == "all")
     }
 
+    @Test("History record name is separated from score records")
+    func historyRecordMapping() {
+        let submission = LeaderboardHistorySubmission(
+            metric: .tokensWithCache,
+            bucketPeriod: .month,
+            periodKey: "2026-05",
+            score: 123_000,
+            periodStartUTC: Date(timeIntervalSince1970: 1_767_916_800),
+            periodEndUTC: Date(timeIntervalSince1970: 1_770_595_200),
+            appVersion: "1.2.3",
+            updatedAt: Date(timeIntervalSince1970: 1_768_200_000)
+        )
+        let record = CloudKitLeaderboardRecordMapper.historyRecord(from: submission, userHash: "userhash")
+
+        #expect(record.recordID.recordName == "history_v1_userhash_tokensWithCache_month_2026-05")
+        #expect(record.recordID.recordName != "score_v1_userhash_tokensWithCache_month_2026-05")
+        #expect(record[CloudKitLeaderboardRecordMapper.Field.metric] as? String == "tokensWithCache")
+        #expect(record[CloudKitLeaderboardRecordMapper.Field.period] as? String == "month")
+        #expect(record[CloudKitLeaderboardRecordMapper.Field.periodKey] as? String == "2026-05")
+        #expect((record[CloudKitLeaderboardRecordMapper.Field.score] as? NSNumber)?.int64Value == 123_000)
+    }
+
     @Test("CKRecord maps back to a Sendable score value")
     func scoreMapping() {
         let submission = LeaderboardSubmission(
@@ -85,6 +107,7 @@ struct LeaderboardCloudKitMappingTests {
             profile: LeaderboardProfileDraft(
                 nickname: "New Name",
                 avatarSeed: "avatar-seed",
+                historyStartMonthKey: "2026-05",
                 appVersion: "1.2.3",
                 updatedAt: Date(timeIntervalSince1970: 1_768_210_000)
             )
@@ -94,7 +117,9 @@ struct LeaderboardCloudKitMappingTests {
         #expect(CloudKitLeaderboardRecordMapper.profileRecordName(userHash: "userhash") == "profile_v1_userhash")
         #expect(mappedProfile?.nickname == "New Name")
         #expect(mappedProfile?.avatarSeed == "avatar-seed")
+        #expect(mappedProfile?.historyStartMonthKey == "2026-05")
         #expect(profile[CloudKitLeaderboardRecordMapper.Field.avatarVariant] as? String == "beam")
+        #expect(profile[CloudKitLeaderboardRecordMapper.Field.historyStartMonthKey] as? String == "2026-05")
         #expect(CloudKitLeaderboardRecordMapper.userHash(from: scoreRecord) == "userhash")
         #expect(CloudKitLeaderboardRecordMapper.score(
             from: scoreRecord,

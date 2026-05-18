@@ -43,35 +43,47 @@ struct LeaderboardOverviewPanel: View {
     private var controls: some View {
         VStack(alignment: .leading, spacing: 8) {
             ViewThatFits(in: .horizontal) {
-                LeaderboardMetricChips(metric: $metric, compact: false)
-                LeaderboardMetricChips(metric: $metric, compact: true)
+                metricAndActionsRow(compactMetric: false)
+                metricAndActionsRow(compactMetric: true)
             }
             ViewThatFits(in: .horizontal) {
                 LeaderboardPeriodChips(period: $period, compact: false)
                 LeaderboardPeriodChips(period: $period, compact: true)
             }
-            HStack(spacing: 8) {
-                if isLoadingScores {
-                    ProgressView()
-                        .controlSize(.small)
-                        .help("Loading leaderboard scores")
-                }
-                Button(action: onRefresh) {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                        .labelStyle(.titleAndIcon)
-                }
-                .controlSize(.small)
-                .disabled(isLoadingScores)
-
-                Button(action: onSync) {
-                    Label("Sync mine", systemImage: "icloud.and.arrow.up")
-                        .labelStyle(.titleAndIcon)
-                }
-                .controlSize(.small)
-                .disabled(isSyncBusy)
-            }
-            .font(.sora(11, weight: .medium))
         }
+    }
+
+    private func metricAndActionsRow(compactMetric: Bool) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            LeaderboardMetricChips(metric: $metric, compact: compactMetric)
+            Spacer(minLength: 12)
+            actionButtons
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var actionButtons: some View {
+        HStack(spacing: 8) {
+            if isLoadingScores {
+                ProgressView()
+                    .controlSize(.small)
+                    .help("Loading leaderboard scores")
+            }
+            Button(action: onRefresh) {
+                Label("Refresh", systemImage: "arrow.clockwise")
+                    .labelStyle(.titleAndIcon)
+            }
+            .controlSize(.small)
+            .disabled(isLoadingScores)
+
+            Button(action: onSync) {
+                Label("Sync mine", systemImage: "icloud.and.arrow.up")
+                    .labelStyle(.titleAndIcon)
+            }
+            .controlSize(.small)
+            .disabled(isSyncBusy)
+        }
+        .font(.sora(11, weight: .medium))
     }
 
     private var summaryStrip: some View {

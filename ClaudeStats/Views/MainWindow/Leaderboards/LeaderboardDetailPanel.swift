@@ -99,9 +99,7 @@ struct LeaderboardDetailPanel: View {
                     .lineLimit(1)
             }
 
-            if period == .allTime {
-                LeaderboardHistoryMessage("All-time totals do not have a period trend.")
-            } else if score.userHash == nil {
+            if score.userHash == nil {
                 LeaderboardHistoryMessage("History is unavailable for this legacy score.")
             } else if isLoadingHistory {
                 ProgressView()
@@ -110,7 +108,7 @@ struct LeaderboardDetailPanel: View {
             } else if let historyError {
                 LeaderboardHistoryMessage(historyError)
             } else if history.isEmpty || history.allSatisfy({ $0.score == 0 }) {
-                LeaderboardHistoryMessage("No historical scores for this user in these windows.")
+                LeaderboardHistoryMessage("No local history for this user in these windows.")
             } else {
                 LeaderboardHistoryChart(points: history, metric: metric, period: period)
             }
@@ -135,10 +133,10 @@ struct LeaderboardDetailPanel: View {
 
     private var historyCaption: String {
         switch period {
-        case .day: "Last 14 days"
-        case .week: "Last 12 weeks"
-        case .month: "Last 12 months"
-        case .allTime: "All-time"
+        case .day: "Last 7 days"
+        case .week: "Last 4 weeks"
+        case .month: "Last 3 months"
+        case .allTime: "All-time by month"
         }
     }
 
@@ -272,7 +270,7 @@ private struct LeaderboardHistoryChart: View {
         case .day: .day
         case .week: .weekOfYear
         case .month: .month
-        case .allTime: .day
+        case .allTime: .month
         }
     }
 
@@ -283,7 +281,11 @@ private struct LeaderboardHistoryChart: View {
             Text(date, format: .dateTime.month(.abbreviated))
                 .font(.sora(8))
                 .foregroundStyle(Color.stxMuted)
-        case .day, .week, .allTime:
+        case .allTime:
+            Text(date, format: .dateTime.month(.abbreviated).year(.twoDigits))
+                .font(.sora(8))
+                .foregroundStyle(Color.stxMuted)
+        case .day, .week:
             Text(date, format: .dateTime.month(.abbreviated).day())
                 .font(.sora(8))
                 .foregroundStyle(Color.stxMuted)

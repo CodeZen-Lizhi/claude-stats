@@ -41,6 +41,7 @@ struct LeaderboardSyncViewModelTests {
 
         await fixture.viewModel.syncIfDue(force: true)
         #expect(await fixture.client.submittedCount() == 8)
+        #expect(await fixture.client.submittedHistoryCount() > 0)
         #expect(fixture.preferences.leaderboardLastSubmittedPeriodKeys.contains("allTime:all"))
     }
 
@@ -157,26 +158,18 @@ struct LeaderboardSyncViewModelTests {
         #expect(fixture.viewModel.currentUserScore?.nickname == "Not Ada")
     }
 
-    @Test("Daily score history fetches 14 windows oldest to current")
-    func dailyScoreHistoryWindowOrder() async {
+    @Test("Remote daily history fetches 7 windows oldest to current")
+    func remoteDailyHistoryWindowOrder() async {
         let fixture = makeFixture(enabled: true)
-        let anchor = LeaderboardPeriodCalculator.window(for: .day, now: dateUTC(2026, 5, 16, 8))
 
         await fixture.viewModel.loadScoreHistory(
-            userHash: "userhash",
+            userHash: "otherhash",
             metric: .tokensWithCache,
             period: .day,
-            anchorWindow: anchor
+            now: dateUTC(2026, 5, 16, 8)
         )
 
         #expect(await fixture.client.fetchedHistoryPeriodKeys() == [
-            "2026-05-03",
-            "2026-05-04",
-            "2026-05-05",
-            "2026-05-06",
-            "2026-05-07",
-            "2026-05-08",
-            "2026-05-09",
             "2026-05-10",
             "2026-05-11",
             "2026-05-12",
@@ -185,34 +178,22 @@ struct LeaderboardSyncViewModelTests {
             "2026-05-15",
             "2026-05-16",
         ])
-        #expect(fixture.viewModel.selectedUserHistory.count == 14)
+        #expect(fixture.viewModel.selectedUserHistory.count == 7)
     }
 
-    @Test("Score history fills missing records with zero")
-    func scoreHistoryFillsMissingRecordsWithZero() async {
+    @Test("Remote history fills missing records with zero")
+    func remoteHistoryFillsMissingRecordsWithZero() async {
         let fixture = makeFixture(enabled: true)
         let now = dateUTC(2026, 5, 16, 8)
-        await fixture.client.setScores([
-            "2026-05-15": [
-                score(
-                    id: "score-history",
-                    userHash: "userhash",
-                    rank: 1,
-                    nickname: "Ada",
-                    value: 42_000,
-                    metric: .tokensWithCache,
-                    period: .day,
-                    periodKey: "2026-05-15",
-                    now: now
-                ),
-            ],
+        await fixture.client.setHistory([
+            "2026-05-15": 42_000,
         ])
 
         await fixture.viewModel.loadScoreHistory(
-            userHash: "userhash",
+            userHash: "otherhash",
             metric: .tokensWithCache,
             period: .day,
-            anchorWindow: LeaderboardPeriodCalculator.window(for: .day, now: now)
+            now: now
         )
 
         let valuesByKey = Dictionary(uniqueKeysWithValues: fixture.viewModel.selectedUserHistory.map { ($0.periodKey, $0.score) })
@@ -221,19 +202,74 @@ struct LeaderboardSyncViewModelTests {
         #expect(valuesByKey["2026-05-16"] == 0)
     }
 
-    @Test("All-time score history does not query CloudKit")
-    func allTimeScoreHistoryDoesNotFetch() async {
-        let fixture = makeFixture(enabled: true)
+    @Test("Current user history is computed locally without CloudKit history fetch")
+    func currentUserHistoryUsesLocalTimeline() async {
+        let now = dateUTC(2026, 5, 16, 8)
+        let sessions = [
+            session(
+                "timeline",
+                provider: .claude,
+                at: now,
+                tokens: 0,
+                timeline: [
+                    ModelBucket(model: "model", start: dateUTC(2026, 5, 15, 22), usage: TokenUsage(inputTokens: 100)),
+                    ModelBucket(model: "model", start: dateUTC(2026, 5, 16, 1), usage: TokenUsage(inputTokens: 250)),
+                ]
+            )
+        ]
+        let fixture = makeFixture(enabled: true, sessions: sessions)
+        await fixture.viewModel.checkAccountStatus()
 
         await fixture.viewModel.loadScoreHistory(
             userHash: "userhash",
             metric: .tokensWithCache,
-            period: .allTime,
-            anchorWindow: LeaderboardPeriodCalculator.window(for: .allTime)
+            period: .day,
+            now: now
         )
 
         #expect(await fixture.client.fetchedHistoryPeriodKeys().isEmpty)
-        #expect(fixture.viewModel.selectedUserHistory.isEmpty)
+        let valuesByKey = Dictionary(uniqueKeysWithValues: fixture.viewModel.selectedUserHistory.map { ($0.periodKey, $0.score) })
+        #expect(valuesByKey["2026-05-15"] == 100)
+        #expect(valuesByKey["2026-05-16"] == 250)
+    }
+
+    @Test("Remote all-time history uses profile start month")
+    func remoteAllTimeHistoryUsesProfileStartMonth() async {
+        let fixture = makeFixture(enabled: true)
+        let now = dateUTC(2026, 5, 16, 8)
+        await fixture.client.setProfile(userHash: "otherhash", historyStartMonthKey: "2026-03")
+        await fixture.client.setHistory([
+            "2026-03": 10,
+            "2026-05": 30,
+        ])
+
+        await fixture.viewModel.loadScoreHistory(
+            userHash: "otherhash",
+            metric: .tokensWithCache,
+            period: .allTime,
+            now: now
+        )
+
+        #expect(await fixture.client.fetchedHistoryPeriodKeys() == ["2026-03", "2026-04", "2026-05"])
+        let valuesByKey = Dictionary(uniqueKeysWithValues: fixture.viewModel.selectedUserHistory.map { ($0.periodKey, $0.score) })
+        #expect(valuesByKey["2026-03"] == 10)
+        #expect(valuesByKey["2026-04"] == 0)
+        #expect(valuesByKey["2026-05"] == 30)
+    }
+
+    @Test("Remote all-time history reports missing profile metadata")
+    func remoteAllTimeHistoryWithoutMetadataShowsUnavailable() async {
+        let fixture = makeFixture(enabled: true)
+
+        await fixture.viewModel.loadScoreHistory(
+            userHash: "otherhash",
+            metric: .tokensWithCache,
+            period: .allTime,
+            now: dateUTC(2026, 5, 16, 8)
+        )
+
+        #expect(await fixture.client.fetchedHistoryPeriodKeys().isEmpty)
+        #expect(fixture.viewModel.selectedUserHistoryError == "This user has not uploaded local history yet.")
     }
 
     @Test("Selection resolver keeps preferred user before falling back")
@@ -261,7 +297,7 @@ struct LeaderboardSyncViewModelTests {
         )?.userHash == "otherhash")
     }
 
-    private func makeFixture(enabled: Bool) -> Fixture {
+    private func makeFixture(enabled: Bool, sessions: [Session]? = nil) -> Fixture {
         let suiteName = "com.claudestats.tests.leaderboards.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName) ?? .standard
         defaults.removePersistentDomain(forName: suiteName)
@@ -271,7 +307,7 @@ struct LeaderboardSyncViewModelTests {
 
         let store = SessionStore(registry: ProviderRegistry(pricing: TestPricing.table), pricing: TestPricing.table)
         let now = Date()
-        store.loadPreviewSessions([
+        store.loadPreviewSessions(sessions ?? [
             session("a", provider: .claude, at: now, tokens: 100),
             session("b", provider: .codex, at: now.addingTimeInterval(60), tokens: 200),
         ])
@@ -285,7 +321,11 @@ struct LeaderboardSyncViewModelTests {
         return Fixture(preferences: preferences, viewModel: viewModel, client: client)
     }
 
-    private func session(_ id: String, provider: ProviderKind, at date: Date, tokens: Int) -> Session {
+    private func session(_ id: String,
+                         provider: ProviderKind,
+                         at date: Date,
+                         tokens: Int,
+                         timeline: [ModelBucket] = []) -> Session {
         let usage = TokenUsage(inputTokens: tokens, outputTokens: 0, cacheReadTokens: 0,
                                cacheCreation5mTokens: 0, cacheCreation1hTokens: 0)
         let stats = SessionStats(
@@ -294,7 +334,7 @@ struct LeaderboardSyncViewModelTests {
             firstActivity: date,
             lastActivity: date,
             models: [ModelUsage(model: "model", messageCount: 1, usage: usage, pricing: TestPricing.table)],
-            timeline: []
+            timeline: timeline
         )
         return Session(id: id, externalID: id, provider: provider, projectDirectoryName: "-p",
                        filePath: "/\(id).jsonl", cwd: nil, lastModified: date, fileSize: 1, stats: stats)
@@ -347,9 +387,11 @@ private actor FakeLeaderboardClient: LeaderboardCloudServicing {
     private var state: LeaderboardCloudAccountState = .available
     private var userHash = "userhash"
     private var submitted: [LeaderboardSubmission] = []
+    private var submittedHistory: [LeaderboardHistorySubmission] = []
     private var savedProfiles: [LeaderboardProfile] = []
     private var profilesByHash: [String: LeaderboardProfile] = [:]
     private var scoresByPeriodKey: [String: [LeaderboardScore]] = [:]
+    private var historyByPeriodKey: [String: Int64] = [:]
     private var fetchedKeys: [String] = []
     private var fetchedHistoryKeys: [String] = []
 
@@ -359,6 +401,10 @@ private actor FakeLeaderboardClient: LeaderboardCloudServicing {
 
     func submittedCount() -> Int {
         submitted.count
+    }
+
+    func submittedHistoryCount() -> Int {
+        submittedHistory.count
     }
 
     func savedProfileCount() -> Int {
@@ -371,6 +417,20 @@ private actor FakeLeaderboardClient: LeaderboardCloudServicing {
 
     func setScores(_ scoresByPeriodKey: [String: [LeaderboardScore]]) {
         self.scoresByPeriodKey = scoresByPeriodKey
+    }
+
+    func setHistory(_ historyByPeriodKey: [String: Int64]) {
+        self.historyByPeriodKey = historyByPeriodKey
+    }
+
+    func setProfile(userHash: String, historyStartMonthKey: String?) {
+        profilesByHash[userHash] = LeaderboardProfile(
+            userHash: userHash,
+            nickname: "Remote User",
+            avatarSeed: "avatar-\(userHash)",
+            historyStartMonthKey: historyStartMonthKey,
+            updatedAt: Date()
+        )
     }
 
     func fetchedPeriodKeys() -> [String] {
@@ -403,6 +463,7 @@ private actor FakeLeaderboardClient: LeaderboardCloudServicing {
             userHash: try await currentUserHash(),
             nickname: profile.nickname,
             avatarSeed: profile.avatarSeed,
+            historyStartMonthKey: profile.historyStartMonthKey,
             updatedAt: profile.updatedAt
         )
         savedProfiles.append(saved)
@@ -414,8 +475,11 @@ private actor FakeLeaderboardClient: LeaderboardCloudServicing {
         profilesByHash[userHash]
     }
 
-    func submit(_ submissions: [LeaderboardSubmission], profile: LeaderboardProfileDraft) async throws -> LeaderboardProfile {
+    func submit(_ submissions: [LeaderboardSubmission],
+                historySubmissions: [LeaderboardHistorySubmission],
+                profile: LeaderboardProfileDraft) async throws -> LeaderboardProfile {
         submitted.append(contentsOf: submissions)
+        submittedHistory.append(contentsOf: historySubmissions)
         return try await saveProfile(profile)
     }
 
@@ -433,15 +497,12 @@ private actor FakeLeaderboardClient: LeaderboardCloudServicing {
                            windows: [LeaderboardPeriodWindow]) async throws -> [LeaderboardScoreHistoryPoint] {
         fetchedHistoryKeys.append(contentsOf: windows.map(\.periodKey))
         return windows.map { window in
-            let score = scoresByPeriodKey[window.periodKey]?.first {
-                $0.userHash == userHash && $0.metric == metric && $0.period == period
-            }
             return LeaderboardScoreHistoryPoint(
                 metric: metric,
-                period: period,
+                period: window.period,
                 window: window,
-                score: score?.score ?? 0,
-                updatedAt: score?.updatedAt
+                score: historyByPeriodKey[window.periodKey] ?? 0,
+                updatedAt: nil
             )
         }
     }

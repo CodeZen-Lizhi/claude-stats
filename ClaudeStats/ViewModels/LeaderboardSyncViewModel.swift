@@ -161,7 +161,12 @@ final class LeaderboardSyncViewModel {
             includeActivity: includeActivity,
             now: .now
         )
-        guard !submissions.isEmpty else {
+        let historySubmissions = builder.historySubmissions(
+            sessions: store.sessions,
+            includeActivity: includeActivity,
+            now: .now
+        )
+        guard !submissions.isEmpty || !historySubmissions.isEmpty else {
             let reason = "No leaderboard scores to submit yet."
             preferences.leaderboardLastSyncError = reason
             syncStatus = .failed(reason)
@@ -171,7 +176,8 @@ final class LeaderboardSyncViewModel {
         do {
             let profile = try await client.submit(
                 submissions,
-                profile: LeaderboardProfileDraft(nickname: nickname, avatarSeed: ensureLocalAvatarSeed())
+                historySubmissions: historySubmissions,
+                profile: profileDraft(nickname: nickname)
             )
             remember(profile: profile)
             let syncedAt = Date()
@@ -235,9 +241,29 @@ final class LeaderboardSyncViewModel {
     func loadScoreHistory(userHash: String,
                           metric: LeaderboardMetric,
                           period: LeaderboardPeriod,
-                          anchorWindow: LeaderboardPeriodWindow) async {
+                          now: Date = .now) async {
         selectedUserHistoryError = nil
-        let windows = LeaderboardPeriodCalculator.historyWindows(for: period, anchorWindow: anchorWindow)
+        if userHash == currentUserHash {
+            let points = builder.historyPoints(
+                sessions: store.sessions,
+                metric: metric,
+                period: period,
+                includeActivity: includeActivityHistory,
+                now: now
+            )
+            selectedUserHistory = points
+            isLoadingSelectedUserHistory = false
+            return
+        }
+
+        let historyStart = await remoteHistoryStartDate(userHash: userHash, period: period)
+        if selectedUserHistoryError != nil {
+            selectedUserHistory = []
+            isLoadingSelectedUserHistory = false
+            return
+        }
+
+        let windows = LeaderboardPeriodCalculator.historyScope(for: period, now: now, historyStart: historyStart)
         guard !windows.isEmpty else {
             selectedUserHistory = []
             isLoadingSelectedUserHistory = false
@@ -273,6 +299,10 @@ final class LeaderboardSyncViewModel {
         isLoadingSelectedUserHistory = false
     }
 
+    private var includeActivityHistory: Bool {
+        preferences.aiActivityAnalysisEnabled && ScreenTimeService.canRead()
+    }
+
     func randomizeAvatar() async {
         let previous = ensureLocalAvatarSeed()
         var next = LeaderboardAvatarSeed.random()
@@ -297,6 +327,25 @@ final class LeaderboardSyncViewModel {
                 for: .day,
                 now: now.addingTimeInterval(TimeInterval(-dayOffset * 86_400))
             )
+        }
+    }
+
+    private func remoteHistoryStartDate(userHash: String, period: LeaderboardPeriod) async -> Date? {
+        guard period == .allTime else { return nil }
+        do {
+            guard let profile = try await client.fetchProfile(userHash: userHash),
+                  let monthKey = profile.historyStartMonthKey,
+                  let window = LeaderboardPeriodCalculator.window(for: .month, periodKey: monthKey) else {
+                selectedUserHistoryError = "This user has not uploaded local history yet."
+                return nil
+            }
+            return window.startUTC
+        } catch let error as LeaderboardCloudError {
+            selectedUserHistoryError = error.description
+            return nil
+        } catch {
+            selectedUserHistoryError = error.localizedDescription
+            return nil
         }
     }
 
@@ -371,10 +420,7 @@ final class LeaderboardSyncViewModel {
 
         syncStatus = .syncing
         do {
-            let profile = try await client.saveProfile(LeaderboardProfileDraft(
-                nickname: nickname,
-                avatarSeed: ensureLocalAvatarSeed()
-            ))
+            let profile = try await client.saveProfile(profileDraft(nickname: nickname))
             remember(profile: profile)
             preferences.leaderboardLastSyncError = ""
             syncStatus = statusAfterAccountCheck()
@@ -393,6 +439,14 @@ final class LeaderboardSyncViewModel {
            !avatarSeed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             preferences.leaderboardAvatarSeed = avatarSeed
         }
+    }
+
+    private func profileDraft(nickname: String) -> LeaderboardProfileDraft {
+        LeaderboardProfileDraft(
+            nickname: nickname,
+            avatarSeed: ensureLocalAvatarSeed(),
+            historyStartMonthKey: builder.historyStartMonthKey(sessions: store.sessions)
+        )
     }
 
     private func statusAfterAccountCheck() -> SyncStatus {
