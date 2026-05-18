@@ -13,6 +13,12 @@ struct GitRepoWorkspaceView: View {
     private static let laneSpacing: CGFloat = 14
     private static let railPad: CGFloat = 15
     private static let nodeRadius: CGFloat = 3
+    private static let graphInspectorSplitFraction: CGFloat = 0.63
+    private static let graphMinWidth: CGFloat = 220
+    private static let graphIdealWidth: CGFloat = 520
+    private static let inspectorMinWidth: CGFloat = 290
+    private static let inspectorIdealWidth: CGFloat = 300
+    private static let inspectorMaxWidth: CGFloat = 360
 
     init(repo: GitRepo, repoSelectionToken: UInt64 = 0) {
         self.repo = repo
@@ -37,16 +43,24 @@ struct GitRepoWorkspaceView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
+        HoverableSplitView(
+            axis: .vertical,
+            primaryFraction: Self.graphInspectorSplitFraction,
+            configuration: HoverableSplitViewConfiguration(
+                primaryMinimumPaneLength: Self.graphMinWidth,
+                secondaryMinimumPaneLength: Self.inspectorMinWidth,
+                secondaryMaximumPaneLength: Self.inspectorMaxWidth
+            )
+        ) {
             graphColumn
-                .frame(minWidth: 220, idealWidth: 520, maxWidth: .infinity)
-
-            Rectangle()
-                .fill(Color.stxStroke)
-                .frame(width: 1)
-
+                .frame(minWidth: Self.graphMinWidth, idealWidth: Self.graphIdealWidth, maxWidth: .infinity)
+        } secondary: {
             GitCommitInspector(repo: repo, vm: vm, mode: $inspectorMode)
-                .frame(minWidth: 220, idealWidth: 300, maxWidth: 318)
+                .frame(
+                    minWidth: Self.inspectorMinWidth,
+                    idealWidth: Self.inspectorIdealWidth,
+                    maxWidth: Self.inspectorMaxWidth
+                )
         }
         .task(id: "\(repo.id)|\(vm.limit)") {
             await vm.loadGraph(repo: repo)

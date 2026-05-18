@@ -16,6 +16,8 @@ struct MainGitActivityView: View {
     #endif
 
     private static let allSelection = "all"
+    private static let repoColumnMinWidth: CGFloat = 140
+    private static let repoColumnIdealWidth: CGFloat = 196
 
     init() {
         previewModel = nil
@@ -72,7 +74,11 @@ struct MainGitActivityView: View {
                     isLoading: vm.isLoading,
                     onSelect: setSelection
                 )
-                .frame(width: 196)
+                .frame(
+                    minWidth: Self.repoColumnMinWidth,
+                    idealWidth: Self.repoColumnIdealWidth,
+                    maxWidth: Self.repoColumnIdealWidth
+                )
 
                 Rectangle()
                     .fill(Color.stxStroke)

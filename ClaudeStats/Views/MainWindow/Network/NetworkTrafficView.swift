@@ -20,20 +20,20 @@ struct NetworkTrafficView: View {
     }
 
     private var sideBySideLayout: some View {
-        HSplitView {
+        HoverableSplitView(axis: .vertical, primaryFraction: 0.64) {
             trafficTable
                 .frame(minWidth: 420, idealWidth: 720, maxWidth: .infinity, maxHeight: .infinity)
-
+        } secondary: {
             inspector(.vertical)
                 .frame(minWidth: 360, idealWidth: 430, maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
     private var stackedLayout: some View {
-        VSplitView {
+        HoverableSplitView(axis: .horizontal, primaryFraction: 0.46) {
             trafficTable
                 .frame(minHeight: 220, maxHeight: .infinity)
-
+        } secondary: {
             inspector(.horizontal)
                 .frame(minHeight: 280, idealHeight: 340, maxHeight: .infinity)
         }
@@ -214,6 +214,7 @@ private struct NetworkNativeTrafficTable: NSViewRepresentable {
         let scrollView = NSScrollView()
         scrollView.borderType = .noBorder
         scrollView.drawsBackground = false
+        scrollView.scrollerStyle = .overlay
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = true
         scrollView.autohidesScrollers = true
@@ -226,6 +227,8 @@ private struct NetworkNativeTrafficTable: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         context.coordinator.parent = self
         guard let tableView = scrollView.documentView as? NSTableView else { return }
+        scrollView.scrollerStyle = .overlay
+        scrollView.autohidesScrollers = true
         context.coordinator.tableView = tableView
         context.coordinator.applyHeaderLayout()
         tableView.reloadData()
@@ -595,16 +598,18 @@ private struct NetworkFlowInspector: View {
         Group {
             switch arrangement {
             case .vertical:
-                VSplitView {
+                HoverableSplitView(axis: .horizontal, primaryFraction: 0.48) {
                     payloadPane(.request)
                         .frame(minHeight: 170, idealHeight: 240, maxHeight: .infinity)
+                } secondary: {
                     payloadPane(.response)
                         .frame(minHeight: 170, idealHeight: 260, maxHeight: .infinity)
                 }
             case .horizontal:
-                HSplitView {
+                HoverableSplitView(axis: .vertical) {
                     payloadPane(.request)
                         .frame(minWidth: 260, idealWidth: 420, maxWidth: .infinity)
+                } secondary: {
                     payloadPane(.response)
                         .frame(minWidth: 260, idealWidth: 420, maxWidth: .infinity)
                 }
