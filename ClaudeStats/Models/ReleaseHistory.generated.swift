@@ -3,6 +3,30 @@
 extension ReleaseHistoryCatalog {
     static let generatedEntries: [ReleaseHistoryEntry] = [
         ReleaseHistoryEntry(
+            version: "1.4.9",
+            date: "May 18, 2026",
+            headline: "实现首次启动时自动设置开机自启的默认行为，仅在用户未手动修改过设置时生效",
+            changes: [
+                "新增了完整的悬浮面板服务状态展示体系：",
+                "创建状态模型与适配器，支持Claude和OpenAI服务状态解析",
+                "添加悬浮状态视图组件，支持状态展示与空状态、错误状态处理",
+                "扩展悬浮面板状态与视图，支持展开/折叠状态切换",
+                "新增从悬浮面板跳转主窗口指定页面的功能",
+            ]
+        ),
+        ReleaseHistoryEntry(
+            version: "1.4.8",
+            date: "May 18, 2026",
+            headline: "新增Atoll驱动的Mac动态岛功能，支持多屏幕、快捷开关与自定义模块",
+            changes: [
+                "添加设置页面与偏好设置支持，可配置显示模式、尺寸与启用模块",
+                "新增版本历史页面，可查看1.4.0以来的更新日志",
+                "添加Atoll子模块依赖与所需的权限配置",
+                "新增相关单元测试与UI预览代码",
+                "为git工作区卡片视图设置全局的leading对齐方式，统一卡片布局的对齐表现",
+            ]
+        ),
+        ReleaseHistoryEntry(
             version: "1.4.7",
             date: "May 18, 2026",
             headline: "Network debugging and settings polish.",
