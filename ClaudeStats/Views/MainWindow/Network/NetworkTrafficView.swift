@@ -189,7 +189,7 @@ private struct NetworkNativeTrafficTable: NSViewRepresentable {
         let tableView = NSTableView()
         tableView.delegate = context.coordinator
         tableView.dataSource = context.coordinator
-        tableView.headerView = NSTableHeaderView()
+        tableView.headerView = NetworkTrafficHeaderView()
         tableView.usesAlternatingRowBackgroundColors = true
         tableView.allowsMultipleSelection = false
         tableView.allowsColumnResizing = true
@@ -202,10 +202,7 @@ private struct NetworkNativeTrafficTable: NSViewRepresentable {
         for column in NetworkTrafficColumn.allCases {
             let tableColumn = NSTableColumn(identifier: column.identifier)
             tableColumn.title = column.title
-            let headerCell = NSTableHeaderCell(textCell: column.title)
-            headerCell.font = .networkTableSora(size: 13, weight: .semibold)
-            headerCell.textColor = .labelColor
-            headerCell.alignment = column.alignment
+            let headerCell = NetworkTrafficHeaderCell(title: column.title, alignment: column.alignment)
             tableColumn.headerCell = headerCell
             tableColumn.width = column.idealWidth
             tableColumn.minWidth = column.minWidth
@@ -230,6 +227,7 @@ private struct NetworkNativeTrafficTable: NSViewRepresentable {
         context.coordinator.parent = self
         guard let tableView = scrollView.documentView as? NSTableView else { return }
         context.coordinator.tableView = tableView
+        context.coordinator.applyHeaderLayout()
         tableView.reloadData()
         context.coordinator.applySelection()
     }
@@ -287,6 +285,14 @@ private struct NetworkNativeTrafficTable: NSViewRepresentable {
             tableView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
         }
 
+        func applyHeaderLayout() {
+            guard let headerView = tableView?.headerView else { return }
+            let targetHeight = NetworkTrafficTableMetrics.headerHeight
+            guard abs(headerView.frame.height - targetHeight) > 0.5 else { return }
+            headerView.frame.size.height = targetHeight
+            headerView.needsDisplay = true
+        }
+
         private func reusableCell(in tableView: NSTableView, for column: NetworkTrafficColumn) -> NSTableCellView {
             if let cell = tableView.makeView(withIdentifier: column.identifier, owner: self) as? NSTableCellView {
                 return cell
@@ -320,6 +326,77 @@ private struct NetworkNativeTrafficTable: NSViewRepresentable {
             textField.textColor = column.textColor(for: flow)
             textField.lineBreakMode = column == .url ? .byTruncatingMiddle : .byTruncatingTail
         }
+    }
+}
+
+private enum NetworkTrafficTableMetrics {
+    static let headerHeight: CGFloat = 30
+    static let headerHorizontalInset: CGFloat = 6
+    static let headerBaselineOffset: CGFloat = -0.5
+}
+
+private final class NetworkTrafficHeaderView: NSTableHeaderView {
+    init() {
+        super.init(frame: NSRect(x: 0, y: 0, width: 0, height: NetworkTrafficTableMetrics.headerHeight))
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        frame.size.height = NetworkTrafficTableMetrics.headerHeight
+    }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: NSView.noIntrinsicMetric, height: NetworkTrafficTableMetrics.headerHeight)
+    }
+
+    override func layout() {
+        super.layout()
+        if abs(frame.height - NetworkTrafficTableMetrics.headerHeight) > 0.5 {
+            frame.size.height = NetworkTrafficTableMetrics.headerHeight
+        }
+    }
+}
+
+private final class NetworkTrafficHeaderCell: NSTableHeaderCell {
+    init(title: String, alignment: NSTextAlignment) {
+        super.init(textCell: title)
+        configure(alignment: alignment)
+    }
+
+    required init(coder: NSCoder) {
+        super.init(coder: coder)
+        configure(alignment: alignment)
+    }
+
+    private func configure(alignment: NSTextAlignment) {
+        font = .networkTableSora(size: 13, weight: .semibold)
+        textColor = .labelColor
+        self.alignment = alignment
+        lineBreakMode = .byTruncatingTail
+        usesSingleLineMode = true
+    }
+
+    override func drawInterior(withFrame cellFrame: NSRect, in controlView: NSView) {
+        guard !stringValue.isEmpty else { return }
+        let resolvedFont = font ?? .networkTableSora(size: 13, weight: .semibold)
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.alignment = alignment
+        paragraphStyle.lineBreakMode = lineBreakMode
+
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: resolvedFont,
+            .foregroundColor: textColor ?? NSColor.labelColor,
+            .paragraphStyle: paragraphStyle,
+        ]
+        let attributedTitle = NSAttributedString(string: stringValue, attributes: attributes)
+        let textHeight = ceil(resolvedFont.ascender - resolvedFont.descender + resolvedFont.leading)
+        var textRect = cellFrame.insetBy(dx: NetworkTrafficTableMetrics.headerHorizontalInset, dy: 0)
+        textRect.origin.y = floor(cellFrame.midY - textHeight / 2 + NetworkTrafficTableMetrics.headerBaselineOffset)
+        textRect.size.height = textHeight
+        attributedTitle.draw(
+            with: textRect,
+            options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine]
+        )
     }
 }
 

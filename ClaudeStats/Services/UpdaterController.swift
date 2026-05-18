@@ -17,6 +17,7 @@ final class UpdaterController: NSObject {
 
     private var controller: SPUStandardUpdaterController?
     private var dockVisibilityAcquired = false
+    private var retainingGentleUpdateReminder = false
 
     private(set) var updateAvailable = false
     private(set) var availableUpdateVersion: String?
@@ -50,11 +51,27 @@ final class UpdaterController: NSObject {
 
     private func markUpdateAvailable(_ item: SUAppcastItem) {
         let version = item.displayVersionString.trimmingCharacters(in: .whitespacesAndNewlines)
-        setUpdateAvailability(true, version: version.isEmpty ? nil : version)
+        markUpdateAvailable(version: version.isEmpty ? nil : version)
+    }
+
+    func markUpdateAvailable(version: String?) {
+        setUpdateAvailability(true, version: version)
     }
 
     private func clearUpdateAvailability() {
+        retainingGentleUpdateReminder = false
         setUpdateAvailability(false, version: nil)
+    }
+
+    func keepUpdateAvailabilityAfterCurrentSession() {
+        retainingGentleUpdateReminder = true
+    }
+
+    func finishUpdateSession() {
+        if !retainingGentleUpdateReminder {
+            clearUpdateAvailability()
+        }
+        releaseDockVisibilityForUpdateUI()
     }
 
     private func setUpdateAvailability(_ available: Bool, version: String?) {
@@ -118,6 +135,11 @@ extension UpdaterController: SPUStandardUserDriverDelegate {
         state: SPUUserUpdateState
     ) {
         markUpdateAvailable(update)
+        if state.userInitiated || handleShowingUpdate {
+            retainingGentleUpdateReminder = false
+        } else {
+            retainingGentleUpdateReminder = true
+        }
         if handleShowingUpdate {
             acquireDockVisibilityForUpdateUI()
         }
@@ -128,7 +150,6 @@ extension UpdaterController: SPUStandardUserDriverDelegate {
     }
 
     func standardUserDriverWillFinishUpdateSession() {
-        clearUpdateAvailability()
-        releaseDockVisibilityForUpdateUI()
+        finishUpdateSession()
     }
 }
