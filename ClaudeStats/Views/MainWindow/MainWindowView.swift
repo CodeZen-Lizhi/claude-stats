@@ -56,6 +56,7 @@ struct MainWindowView: View {
     @SceneStorage("mainWindow.sidebarVisible") private var sidebarVisible: Bool = true
     @SceneStorage("mainWindow.mode") private var modeRaw: String = MainWindowMode.app.rawValue
     @SceneStorage("mainWindow.settingsSection") private var settingsSectionRaw: String = SettingsSection.general.rawValue
+    @SceneStorage("mainWindow.networkSection") private var networkSectionRaw: String = NetworkSection.traffic.rawValue
     @State private var page: MainPage = .dashboard
     /// When non-nil, the detail pane shows session detail instead of the page.
     /// Held here (not in the sidebar) because the detail view needs it too.
@@ -89,10 +90,21 @@ struct MainWindowView: View {
         SettingsSection(rawValue: settingsSectionRaw) ?? .general
     }
 
+    private var networkSection: NetworkSection {
+        NetworkSection(rawValue: networkSectionRaw) ?? .traffic
+    }
+
     private var settingsSectionBinding: Binding<SettingsSection> {
         Binding(
             get: { settingsSection },
             set: { settingsSectionRaw = $0.rawValue }
+        )
+    }
+
+    private var networkSectionBinding: Binding<NetworkSection> {
+        Binding(
+            get: { networkSection },
+            set: { networkSectionRaw = $0.rawValue }
         )
     }
 
@@ -110,14 +122,19 @@ struct MainWindowView: View {
                     selectedSessionID: $selectedSessionID,
                     sessionsExpanded: $sessionsExpanded,
                     availablePages: availablePages,
-                    onOpenSettings: openSettings
+                    onOpenSettings: openSettings,
+                    onOpenNetwork: openNetwork
                 )
             } settingsSidebar: {
                 SettingsSidebarColumn(section: settingsSectionBinding, onExit: closeSettings)
+            } networkSidebar: {
+                NetworkSidebarColumn(store: env.networkDebugger, section: networkSectionBinding, onExit: closeNetwork)
             } appDetail: {
                 detail
             } settingsDetail: {
                 SettingsDetailView(section: settingsSection)
+            } networkDetail: {
+                NetworkDetailView(section: networkSection)
             }
             .background {
                 Color.clear
@@ -224,7 +241,16 @@ struct MainWindowView: View {
         transition(to: .settings)
     }
 
+    private func openNetwork() {
+        selectedSessionID = nil
+        transition(to: .network)
+    }
+
     private func closeSettings() {
+        transition(to: .app)
+    }
+
+    private func closeNetwork() {
         transition(to: .app)
     }
 

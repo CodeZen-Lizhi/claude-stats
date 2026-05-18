@@ -21,6 +21,7 @@ struct SidebarColumn: View {
     @Binding var sessionsExpanded: Bool
     var availablePages: [MainPage]
     var onOpenSettings: () -> Void
+    var onOpenNetwork: () -> Void
 
     @Environment(AppEnvironment.self) private var env
     @State private var sessionsVM = SessionListViewModel()
@@ -42,6 +43,16 @@ struct SidebarColumn: View {
             navRow(.configurations)
             if env.preferences.gitTrackingEnabled { navRow(.git) }
             if env.preferences.systemMonitorEnabled { navRow(.system) }
+            SidebarRow(
+                title: "Network",
+                symbol: "network",
+                isSelected: false,
+                trailingSymbol: "chevron.right",
+                showsTrailingOnHover: true
+            ) {
+                clearSearchFocus()
+                onOpenNetwork()
+            }
             navRow(.terminal)
 
             sessionsSection
@@ -259,6 +270,8 @@ struct SidebarRow: View {
     let title: String
     let symbol: String
     let isSelected: Bool
+    var trailingSymbol: String?
+    var showsTrailingOnHover = false
     let action: () -> Void
     @State private var hovering = false
 
@@ -273,6 +286,13 @@ struct SidebarRow: View {
                     .font(.sora(13))
                     .foregroundStyle(isSelected ? .primary : Color.stxMuted)
                 Spacer(minLength: 0)
+                if let trailingSymbol {
+                    Image(systemName: trailingSymbol)
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(isSelected ? Color.stxAccent : Color.stxMuted)
+                        .opacity(showsTrailingOnHover ? (hovering ? 1 : 0) : 1)
+                        .frame(width: 12)
+                }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
@@ -434,7 +454,8 @@ private struct HeaderIconButton: View {
         selectedSessionID: $sessionID,
         sessionsExpanded: .constant(false),
         availablePages: [.dashboard, .configurations, .usage, .activity, .git],
-        onOpenSettings: {}
+        onOpenSettings: {},
+        onOpenNetwork: {}
     )
     .environment(AppEnvironment.preview())
     .frame(width: 240, height: 600)

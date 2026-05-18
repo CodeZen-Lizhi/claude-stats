@@ -29,6 +29,7 @@ final class AppEnvironment {
     let apiProviders: APIProviderSwitcherViewModel
     let cliEnvironment: CLIEnvironmentViewModel
     let systemMonitor: SystemMonitorViewModel
+    let networkDebugger: NetworkDebuggerStore
 
     init(
         pricing: ModelPricing,
@@ -37,7 +38,8 @@ final class AppEnvironment {
         store: SessionStore,
         terminalStore: EmbeddedTerminalStore = EmbeddedTerminalStore(),
         cliEnvironment: CLIEnvironmentViewModel = CLIEnvironmentViewModel(),
-        systemMonitor: SystemMonitorViewModel = SystemMonitorViewModel()
+        systemMonitor: SystemMonitorViewModel = SystemMonitorViewModel(),
+        networkDebugger: NetworkDebuggerStore = NetworkDebuggerStore()
     ) {
         self.pricing = pricing
         self.preferences = preferences
@@ -46,6 +48,7 @@ final class AppEnvironment {
         self.terminalStore = terminalStore
         self.cliEnvironment = cliEnvironment
         self.systemMonitor = systemMonitor
+        self.networkDebugger = networkDebugger
         self.dashboard = DashboardViewModel(pricing: pricing)
         self.gitActivity = GitActivityViewModel()
         self.claudeStatus = ClaudeStatusViewModel(preferences: preferences)

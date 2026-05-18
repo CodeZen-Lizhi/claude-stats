@@ -16,6 +16,18 @@ packages:
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
     from: "2.9.1"
+  SwiftNIO:
+    url: https://github.com/apple/swift-nio.git
+    from: "2.95.0"
+  SwiftNIOSSL:
+    url: https://github.com/apple/swift-nio-ssl
+    from: "2.36.0"
+  SwiftCertificates:
+    url: https://github.com/apple/swift-certificates.git
+    from: "1.18.0"
+  SwiftCrypto:
+    url: https://github.com/apple/swift-crypto
+    from: "4.2.0"
 
 settings:
   base:
@@ -85,6 +97,20 @@ targets:
     dependencies:
       - package: Sparkle
       - target: GhosttyEmbed
+      - package: SwiftNIO
+        product: NIOCore
+      - package: SwiftNIO
+        product: NIOHTTP1
+      - package: SwiftNIO
+        product: NIOPosix
+      - package: SwiftNIO
+        product: NIOWebSocket
+      - package: SwiftNIOSSL
+        product: NIOSSL
+      - package: SwiftCertificates
+        product: X509
+      - package: SwiftCrypto
+        product: Crypto
       - sdk: IOKit.framework
       - sdk: SystemConfiguration.framework
       - sdk: CoreWLAN.framework
