@@ -110,7 +110,7 @@
         },
         {
           "fill" : {
-            "solid" : "display-p3:0.00000,0.00000,0.00000,1.00000"
+            "solid" : "extended-srgb:1.00000,0.21961,0.23529,1.00000"
           },
           "glass" : true,
           "image-name" : "3.svg",
