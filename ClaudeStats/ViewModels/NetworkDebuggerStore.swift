@@ -17,9 +17,21 @@ final class NetworkDebuggerStore: @unchecked Sendable {
     var isSystemProxyWorking = false
     var isCertificateWorking = false
 
-    private let proxyService = NetworkProxyService()
-    private let systemProxyService = NetworkSystemProxyService()
+    private let proxyBackend: any NetworkProxyBackend
+    private let systemProxyService: any NetworkSystemProxyManaging
     private let certificateService = NetworkCertificateService()
+    private weak var preferences: Preferences?
+    private var autoEnabledSystemProxyForCurrentCapture = false
+
+    init(
+        preferences: Preferences? = nil,
+        proxyBackend: any NetworkProxyBackend = RockxyNetworkProxyBackend(),
+        systemProxyService: any NetworkSystemProxyManaging = NetworkSystemProxyService()
+    ) {
+        self.preferences = preferences
+        self.proxyBackend = proxyBackend
+        self.systemProxyService = systemProxyService
+    }
 
     var selectedFlow: NetworkFlow? {
         guard let selectedFlowID else { return flows.first }
@@ -45,6 +57,11 @@ final class NetworkDebuggerStore: @unchecked Sendable {
         return nil
     }
 
+    var autoEnableSystemProxyOnStart: Bool {
+        get { preferences?.networkAutoEnableSystemProxyOnStart ?? false }
+        set { preferences?.networkAutoEnableSystemProxyOnStart = newValue }
+    }
+
     var statusMessage: String {
         switch captureStatus {
         case .stopped: "Proxy stopped"
@@ -55,23 +72,36 @@ final class NetworkDebuggerStore: @unchecked Sendable {
     }
 
     func startCapture() {
-        guard !captureStatus.isListening else { return }
+        guard !captureStatus.isListening, captureStatus != .starting else { return }
         captureStatus = .starting
-        do {
-            let endpoint = try proxyService.start(preferredPorts: 9090...9099) { [weak self] event in
-                Task { @MainActor in
-                    self?.apply(event)
+        autoEnabledSystemProxyForCurrentCapture = false
+        Task { @MainActor in
+            do {
+                let endpoint = try await proxyBackend.start(preferredPorts: 9090...9099) { [weak self] event in
+                    Task { @MainActor in
+                        self?.apply(event)
+                    }
                 }
+                captureStatus = .listening(endpoint)
+                if preferences?.networkAutoEnableSystemProxyOnStart == true {
+                    enableSystemProxy(autoTriggered: true)
+                }
+            } catch {
+                captureStatus = .failed(error.localizedDescription)
             }
-            captureStatus = .listening(endpoint)
-        } catch {
-            captureStatus = .failed(error.localizedDescription)
         }
     }
 
     func stopCapture() {
-        proxyService.stop()
+        let shouldRestoreAutoProxy = autoEnabledSystemProxyForCurrentCapture
+        autoEnabledSystemProxyForCurrentCapture = false
+        Task { @concurrent in
+            await proxyBackend.stop()
+        }
         captureStatus = .stopped
+        if shouldRestoreAutoProxy {
+            disableSystemProxy()
+        }
     }
 
     func clearFlows() {
@@ -80,16 +110,24 @@ final class NetworkDebuggerStore: @unchecked Sendable {
     }
 
     func enableSystemProxy() {
+        enableSystemProxy(autoTriggered: false)
+    }
+
+    private func enableSystemProxy(autoTriggered: Bool) {
         guard let endpoint = listeningEndpoint else {
             captureStatus = .failed("Start the local proxy before enabling system proxy.")
             return
         }
+        guard !systemProxyStatus.isEnabled else { return }
         isSystemProxyWorking = true
         Task { @concurrent in
             do {
                 let status = try await systemProxyService.enable(endpoint: endpoint)
                 await MainActor.run {
                     systemProxyStatus = status
+                    if autoTriggered, status.isEnabled {
+                        autoEnabledSystemProxyForCurrentCapture = true
+                    }
                     isSystemProxyWorking = false
                 }
             } catch {

@@ -152,6 +152,24 @@ struct PreferencesTests {
         #expect(NetworkTrafficLayoutMode.sideBySide.resolved(width: 640, breakpoint: 1200) == .sideBySide)
     }
 
+    @Test("Network proxy auto-enable defaults to off")
+    func networkProxyAutoEnableDefault() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+
+        #expect(prefs.networkAutoEnableSystemProxyOnStart == false)
+    }
+
+    @Test("Network proxy auto-enable preference persists")
+    func networkProxyAutoEnablePersists() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+        prefs.networkAutoEnableSystemProxyOnStart = true
+
+        let reloaded = Preferences(defaults: defaults)
+        #expect(reloaded.networkAutoEnableSystemProxyOnStart == true)
+    }
+
     @Test("Terminal appearance defaults use full chrome and fluid background")
     func terminalAppearanceDefaults() {
         let defaults = makeDefaults()

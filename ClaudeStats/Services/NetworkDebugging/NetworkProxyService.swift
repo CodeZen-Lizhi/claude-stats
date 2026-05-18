@@ -9,10 +9,9 @@ enum NetworkProxyEvent: Sendable {
     case failed(String)
 }
 
-/// Compact first-pass proxy adapter inspired by Rockxy's SwiftNIO proxy module.
-/// This version keeps the API surface small for Claude Stats while the full
-/// helper/MITM path is staged behind the Network UI.
-final class NetworkProxyService: @unchecked Sendable {
+/// Legacy first-pass proxy kept as a narrow fallback while the default Network
+/// backend is served by Rockxy.
+final class LegacyNetworkProxyBackend: NetworkProxyBackend, @unchecked Sendable {
     typealias EventHandler = @Sendable (NetworkProxyEvent) -> Void
 
     private let queue = DispatchQueue(label: "com.claudestats.network-proxy")
@@ -22,8 +21,8 @@ final class NetworkProxyService: @unchecked Sendable {
     private var nextFlowNumber = 1
     private var activeConnections = Set<ObjectIdentifier>()
 
-    func start(preferredPorts: ClosedRange<UInt16>, eventHandler: @escaping EventHandler) throws -> NetworkProxyEndpoint {
-        stop()
+    func start(preferredPorts: ClosedRange<UInt16>, eventHandler: @escaping EventHandler) async throws -> NetworkProxyEndpoint {
+        stopSynchronously()
         self.eventHandler = eventHandler
 
         var lastError: Error?
@@ -40,7 +39,11 @@ final class NetworkProxyService: @unchecked Sendable {
         throw lastError ?? NetworkProxyError.bindFailed
     }
 
-    func stop() {
+    func stop() async {
+        stopSynchronously()
+    }
+
+    private func stopSynchronously() {
         queue.sync {
             listener?.cancel()
             listener = nil

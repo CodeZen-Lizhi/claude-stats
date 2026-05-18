@@ -39,6 +39,72 @@ settings:
     CURRENT_PROJECT_VERSION: "41"
 
 targets:
+  RockxyBackendEmbed:
+    type: framework
+    platform: macOS
+    sources:
+      - path: RockxyBackendEmbed
+      - path: ThirdParty/Rockxy/Shared/RockxyIdentity.swift
+      - path: ThirdParty/Rockxy/Rockxy/Core/Services/Infrastructure/AppNotifications.swift
+      - path: ThirdParty/Rockxy/Rockxy/Models/Network
+        excludes:
+          - SessionCodable.swift
+      - path: ThirdParty/Rockxy/Rockxy/Models/Rules
+      - path: ThirdParty/Rockxy/Rockxy/Models/Settings
+      - path: ThirdParty/Rockxy/Rockxy/Core/Detection
+      - path: ThirdParty/Rockxy/Rockxy/Core/Utilities
+        excludes:
+          - PreviewRenderer.swift
+          - RequestCopyFormatter.swift
+      - path: ThirdParty/Rockxy/Rockxy/Core/RuleEngine
+      - path: ThirdParty/Rockxy/Rockxy/Core/Certificate
+        excludes:
+          - CertificateMenuActionRouter.swift
+          - RootCADownloadServer.swift
+          - RootCADownloadSession.swift
+      - path: ThirdParty/Rockxy/Rockxy/Core/ProxyEngine
+        excludes:
+          - CharlesSSLImporter.swift
+          - HelperConnection.swift
+          - HelperManager.swift
+          - HelperManager+ForceRemove.swift
+          - HTTPToolkitImporter.swift
+          - ProxymanSSLImporter.swift
+          - SigningDiagnostics.swift
+    dependencies:
+      - package: SwiftNIO
+        product: NIOCore
+      - package: SwiftNIO
+        product: NIOHTTP1
+      - package: SwiftNIO
+        product: NIOPosix
+      - package: SwiftNIO
+        product: NIOWebSocket
+      - package: SwiftNIOSSL
+        product: NIOSSL
+      - package: SwiftCertificates
+        product: X509
+      - package: SwiftCrypto
+        product: Crypto
+      - sdk: AppKit.framework
+      - sdk: Security.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.claudestats.RockxyBackendEmbed
+        PRODUCT_NAME: RockxyBackendEmbed
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.0"
+        SWIFT_STRICT_CONCURRENCY: minimal
+        SWIFT_SUPPRESS_WARNINGS: YES
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+      configs:
+        ReleaseSigned:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "$(SIGN_IDENTITY)"
+          DEVELOPMENT_TEAM: "$(APPLE_TEAM_ID)"
+          ENABLE_HARDENED_RUNTIME: YES
+          OTHER_CODE_SIGN_FLAGS: "--timestamp"
+
   GhosttyEmbed:
     type: framework
     platform: macOS
@@ -96,21 +162,8 @@ targets:
         buildPhase: resources
     dependencies:
       - package: Sparkle
+      - target: RockxyBackendEmbed
       - target: GhosttyEmbed
-      - package: SwiftNIO
-        product: NIOCore
-      - package: SwiftNIO
-        product: NIOHTTP1
-      - package: SwiftNIO
-        product: NIOPosix
-      - package: SwiftNIO
-        product: NIOWebSocket
-      - package: SwiftNIOSSL
-        product: NIOSSL
-      - package: SwiftCertificates
-        product: X509
-      - package: SwiftCrypto
-        product: Crypto
       - sdk: IOKit.framework
       - sdk: SystemConfiguration.framework
       - sdk: CoreWLAN.framework
@@ -157,6 +210,7 @@ targets:
       - path: ClaudeStatsTests
     dependencies:
       - target: ClaudeStats
+      - target: RockxyBackendEmbed
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.claudestats.ClaudeStatsTests

@@ -122,6 +122,9 @@ final class Preferences {
             defaults.set(networkTrafficAutoBreakpoint, forKey: Keys.networkTrafficAutoBreakpoint)
         }
     }
+    var networkAutoEnableSystemProxyOnStart: Bool {
+        didSet { defaults.set(networkAutoEnableSystemProxyOnStart, forKey: Keys.networkAutoEnableSystemProxyOnStart) }
+    }
     var sessionsExpandedOnAppOpen: Bool {
         didSet { defaults.set(sessionsExpandedOnAppOpen, forKey: Keys.sessionsExpandedOnAppOpen) }
     }
@@ -352,6 +355,7 @@ final class Preferences {
         let storedNetworkTrafficAutoBreakpoint = (defaults.object(forKey: Keys.networkTrafficAutoBreakpoint) as? Double)
             ?? NetworkTrafficLayoutConstants.defaultAutoBreakpoint
         networkTrafficAutoBreakpoint = NetworkTrafficLayoutConstants.clampedAutoBreakpoint(storedNetworkTrafficAutoBreakpoint)
+        networkAutoEnableSystemProxyOnStart = (defaults.object(forKey: Keys.networkAutoEnableSystemProxyOnStart) as? Bool) ?? false
         sessionsExpandedOnAppOpen = (defaults.object(forKey: Keys.sessionsExpandedOnAppOpen) as? Bool) ?? false
         terminalChromeMode = TerminalChromeMode(rawValue: defaults.string(forKey: Keys.terminalChromeMode) ?? "") ?? .tabsAndStatus
         terminalBackgroundStyle = TerminalBackgroundStyle(rawValue: defaults.string(forKey: Keys.terminalBackgroundStyle) ?? "") ?? .fluidGradient
@@ -454,6 +458,7 @@ final class Preferences {
         static let detailPanelBoundaryFalloffEnabled = "detailPanelBoundaryFalloffEnabled"
         static let networkTrafficLayoutMode = "networkTrafficLayoutMode"
         static let networkTrafficAutoBreakpoint = "networkTrafficAutoBreakpoint"
+        static let networkAutoEnableSystemProxyOnStart = "networkAutoEnableSystemProxyOnStart"
         static let sessionsExpandedOnAppOpen = "sessionsExpandedOnAppOpen"
         static let terminalChromeMode = "terminalChromeMode"
         static let terminalBackgroundStyle = "terminalBackgroundStyle"

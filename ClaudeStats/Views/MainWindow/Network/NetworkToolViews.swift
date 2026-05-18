@@ -54,6 +54,12 @@ struct NetworkSetupView: View {
             }
             .font(.sora(11, weight: .medium))
 
+            Toggle(isOn: $store.autoEnableSystemProxyOnStart) {
+                Label("Auto-enable system proxy on start", systemImage: "bolt.horizontal")
+                    .font(.sora(11, weight: .medium))
+            }
+            .toggleStyle(.checkbox)
+
             if let error = store.systemProxyStatus.lastError, !error.isEmpty {
                 Text(error)
                     .font(.sora(11))

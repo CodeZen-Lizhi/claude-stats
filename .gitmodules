@@ -6,3 +6,7 @@
 	path = ThirdParty/Atoll
 	url = https://github.com/Ebullioscopic/Atoll.git
 	ignore = dirty
+[submodule "ThirdParty/Rockxy"]
+	path = ThirdParty/Rockxy
+	url = https://github.com/RockxyApp/Rockxy.git
+	ignore = dirty

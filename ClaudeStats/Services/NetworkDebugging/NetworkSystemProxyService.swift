@@ -1,6 +1,6 @@
 import Foundation
 
-struct NetworkSystemProxyService: Sendable {
+struct NetworkSystemProxyService: NetworkSystemProxyManaging, Sendable {
     func enable(endpoint: NetworkProxyEndpoint) async throws -> NetworkSystemProxyStatus {
         try await Task.detached(priority: .userInitiated) {
             let services = try Self.networkServices()
@@ -70,4 +70,3 @@ private enum NetworkSystemProxyError: LocalizedError {
         }
     }
 }
-

@@ -40,7 +40,7 @@ final class AppEnvironment {
         terminalStore: EmbeddedTerminalStore = EmbeddedTerminalStore(),
         cliEnvironment: CLIEnvironmentViewModel = CLIEnvironmentViewModel(),
         systemMonitor: SystemMonitorViewModel = SystemMonitorViewModel(),
-        networkDebugger: NetworkDebuggerStore = NetworkDebuggerStore()
+        networkDebugger: NetworkDebuggerStore? = nil
     ) {
         self.pricing = pricing
         self.preferences = preferences
@@ -49,7 +49,7 @@ final class AppEnvironment {
         self.terminalStore = terminalStore
         self.cliEnvironment = cliEnvironment
         self.systemMonitor = systemMonitor
-        self.networkDebugger = networkDebugger
+        self.networkDebugger = networkDebugger ?? NetworkDebuggerStore(preferences: preferences)
         self.dashboard = DashboardViewModel(pricing: pricing)
         self.gitActivity = GitActivityViewModel()
         self.claudeStatus = ClaudeStatusViewModel(preferences: preferences)
