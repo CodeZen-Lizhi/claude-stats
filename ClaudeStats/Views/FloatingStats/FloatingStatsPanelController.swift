@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import QuartzCore
 import SwiftUI
 
 @MainActor
@@ -29,6 +30,29 @@ final class FloatingStatsPanelController {
         }
     }
 
+    private enum FrameAnimationStyle {
+        case standard
+        case collapse
+
+        var duration: TimeInterval {
+            switch self {
+            case .standard:
+                0.18
+            case .collapse:
+                0.16
+            }
+        }
+
+        var timingFunction: CAMediaTimingFunction {
+            switch self {
+            case .standard:
+                CAMediaTimingFunction(controlPoints: 0.22, 1.0, 0.36, 1.0)
+            case .collapse:
+                CAMediaTimingFunction(controlPoints: 0.16, 1.0, 0.3, 1.0)
+            }
+        }
+    }
+
     private weak var environment: AppEnvironment?
     private weak var preferences: Preferences?
     private let state = FloatingStatsPanelState()
@@ -43,6 +67,7 @@ final class FloatingStatsPanelController {
     private var isApplyingFrame = false
     private var isStarted = false
     private var isHovering = false
+    private var requiresExitBeforeReexpand = false
 
     func start(environment: AppEnvironment) {
         guard !isStarted else { return }
@@ -150,7 +175,9 @@ final class FloatingStatsPanelController {
         frameTransitionID += 1
         isApplyingFrame = false
         isHovering = false
+        requiresExitBeforeReexpand = false
         state.isExpanded = false
+        state.showsExpandedContent = false
         state.isDocked = true
         setEdgeReleaseProgress(FloatingPanelDragMotion.dockedEdgeReleaseProgress, animated: false)
     }
@@ -158,43 +185,58 @@ final class FloatingStatsPanelController {
     private func setHovering(_ hovering: Bool) {
         guard !dragState.isDragging else { return }
         guard !isApplyingFrame else { return }
+        if requiresExitBeforeReexpand {
+            if hovering || isMouseInsidePanel() {
+                isHovering = false
+                return
+            }
+            requiresExitBeforeReexpand = false
+        }
         if !hovering, isMouseInsidePanel() {
             isHovering = true
             return
         }
         isHovering = hovering
         if hovering {
+            requiresExitBeforeReexpand = false
             collapseTask?.cancel()
             collapseTask = nil
             setExpanded(true, animated: true)
-        } else {
+        } else if state.isExpanded {
             scheduleCollapse()
+        } else {
+            collapseTask?.cancel()
+            collapseTask = nil
         }
     }
 
     private func scheduleCollapse() {
         collapseTask?.cancel()
-        collapseTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(450))
-            await MainActor.run {
-                guard let self, !self.isHovering, !self.dragState.isDragging else { return }
-                guard !self.isMouseInsidePanel() else {
-                    self.isHovering = true
-                    return
-                }
-                self.collapseCurrentPlacement(animated: true)
-            }
+        collapseTask = nil
+        guard !isHovering, !dragState.isDragging else { return }
+        guard !isMouseInsidePanel() else {
+            isHovering = true
+            return
         }
+        collapseCurrentPlacement(animated: true)
     }
 
     private func setExpanded(_ expanded: Bool, animated: Bool) {
-        guard state.isExpanded != expanded else { return }
-        if !expanded, !placement.isDocked {
+        if expanded {
+            guard !state.isExpanded else { return }
+            requiresExitBeforeReexpand = false
+            state.isExpanded = true
+            state.showsExpandedContent = true
+            applyStoredFrame(expanded: true, animated: animated, animationStyle: .standard)
+            return
+        }
+
+        guard state.isExpanded else { return }
+        if !placement.isDocked {
             dockDetachedPanel(animated: animated)
             return
         }
-        state.isExpanded = expanded
-        applyStoredFrame(animated: animated)
+        collapseDockedPanel(animated: animated)
     }
 
     private func dragBegan(at mouseLocation: CGPoint) {
@@ -203,6 +245,7 @@ final class FloatingStatsPanelController {
         collapseTask = nil
         frameTransitionID += 1
         isApplyingFrame = false
+        requiresExitBeforeReexpand = false
         switch placement {
         case .docked:
             setEdgeReleaseProgress(FloatingPanelDragMotion.dockedEdgeReleaseProgress, animated: false)
@@ -286,6 +329,7 @@ final class FloatingStatsPanelController {
             state.isDocked = false
             setEdgeReleaseProgress(FloatingPanelDragMotion.detachedEdgeReleaseProgress, animated: false)
             state.isExpanded = true
+            state.showsExpandedContent = true
             if !panel.frame.isApproximatelyEqual(to: detachedFrame) {
                 panel.setFrame(detachedFrame, display: true)
             }
@@ -312,33 +356,44 @@ final class FloatingStatsPanelController {
     }
 
     private func applyStoredFrame(animated: Bool) {
+        applyStoredFrame(expanded: state.isExpanded, animated: animated)
+    }
+
+    private func applyStoredFrame(
+        expanded: Bool,
+        animated: Bool,
+        animationStyle: FrameAnimationStyle = .standard,
+        completion: (@MainActor @Sendable () -> Void)? = nil
+    ) {
         guard let panel, let preferences else { return }
         guard !dragState.isDragging else { return }
         guard placement.isDocked else { return }
         let screen = bestScreen(for: panel.frame.center)
+        let edge = preferences.floatingTabEdge
         let anchor = FloatingPanelGeometry.clampedAnchor(
             preferences.floatingTabAnchor,
-            edge: preferences.floatingTabEdge,
-            size: FloatingPanelGeometry.size(edge: preferences.floatingTabEdge, expanded: state.isExpanded),
+            edge: edge,
+            size: FloatingPanelGeometry.size(edge: edge, expanded: expanded),
             in: screen.visibleFrame
         )
         if anchor != preferences.floatingTabAnchor {
             preferences.floatingTabAnchor = anchor
         }
         let frame = FloatingPanelGeometry.frame(
-            edge: preferences.floatingTabEdge,
+            edge: edge,
             anchor: anchor,
             in: screen.visibleFrame,
-            expanded: state.isExpanded
+            expanded: expanded
         )
 
-        state.edge = preferences.floatingTabEdge
+        state.edge = edge
         state.isDocked = true
         setEdgeReleaseProgress(FloatingPanelDragMotion.dockedEdgeReleaseProgress, animated: animated)
         if animated {
-            setPanelFrame(frame, animated: true)
+            setPanelFrame(frame, animated: true, animationStyle: animationStyle, completion: completion)
         } else {
             panel.setFrame(frame, display: true)
+            completion?()
         }
     }
 
@@ -363,6 +418,32 @@ final class FloatingStatsPanelController {
         }
     }
 
+    private func collapseDockedPanel(animated: Bool) {
+        hideExpandedContentForCollapse()
+        state.isExpanded = false
+        let finishCollapse: @MainActor @Sendable () -> Void = { [weak self] in
+            guard let self else { return }
+            self.updateHoverGateAfterDockedCollapse()
+        }
+
+        applyStoredFrame(expanded: false, animated: animated, animationStyle: .collapse, completion: finishCollapse)
+    }
+
+    private func hideExpandedContentForCollapse() {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            state.showsExpandedContent = false
+        }
+    }
+
+    private func updateHoverGateAfterDockedCollapse() {
+        collapseTask?.cancel()
+        collapseTask = nil
+        isHovering = false
+        requiresExitBeforeReexpand = isMouseInsidePanel()
+    }
+
     private func dockDetachedPanel(animated: Bool) {
         guard let panel, let preferences else { return }
         let screen = bestScreen(for: panel.frame.center)
@@ -373,9 +454,10 @@ final class FloatingStatsPanelController {
         placement = .docked
         state.isDocked = true
         state.isExpanded = false
+        state.showsExpandedContent = false
         setEdgeReleaseProgress(FloatingPanelDragMotion.dockedEdgeReleaseProgress, animated: animated)
         persistPlacement(edge: edge, anchor: anchor, preferences: preferences)
-        applyStoredFrame(animated: animated)
+        applyStoredFrame(expanded: false, animated: animated, animationStyle: .collapse)
     }
 
     private func applyCurrentPlacementAfterScreenChange(animated: Bool) {
@@ -424,10 +506,16 @@ final class FloatingStatsPanelController {
         }
     }
 
-    private func setPanelFrame(_ frame: CGRect, animated: Bool) {
+    private func setPanelFrame(
+        _ frame: CGRect,
+        animated: Bool,
+        animationStyle: FrameAnimationStyle = .standard,
+        completion: (@MainActor @Sendable () -> Void)? = nil
+    ) {
         guard let panel else { return }
         guard animated else {
             panel.setFrame(frame, display: true)
+            completion?()
             return
         }
 
@@ -435,24 +523,35 @@ final class FloatingStatsPanelController {
         let transitionID = frameTransitionID
         isApplyingFrame = true
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.18
+            context.duration = animationStyle.duration
+            context.timingFunction = animationStyle.timingFunction
             context.allowsImplicitAnimation = true
             panel.animator().setFrame(frame, display: true)
         } completionHandler: { [weak self] in
             Task { @MainActor [weak self] in
-                self?.finishFrameTransition(id: transitionID)
+                self?.finishFrameTransition(id: transitionID, completion: completion)
             }
         }
     }
 
-    private func finishFrameTransition(id: Int) {
+    private func finishFrameTransition(id: Int, completion: (@MainActor @Sendable () -> Void)? = nil) {
         guard id == frameTransitionID else { return }
         isApplyingFrame = false
+        completion?()
         refreshHoverStateAfterFrameChange()
     }
 
     private func refreshHoverStateAfterFrameChange() {
         guard !dragState.isDragging else { return }
+        if requiresExitBeforeReexpand {
+            if isMouseInsidePanel() {
+                isHovering = false
+                collapseTask?.cancel()
+                collapseTask = nil
+                return
+            }
+            requiresExitBeforeReexpand = false
+        }
         if isMouseInsidePanel() {
             isHovering = true
             collapseTask?.cancel()

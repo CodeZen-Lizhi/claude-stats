@@ -180,6 +180,10 @@ struct MainWindowView: View {
         .onReceive(NotificationCenter.default.publisher(for: .openSettingsInMainWindow)) { notification in
             openSettings(section: notification.object as? SettingsSection)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .selectMainWindowDestinationFromFloatingStats)) { notification in
+            guard let destination = notification.object as? FloatingStatsMainWindowDestination else { return }
+            openFloatingStatsDestination(destination)
+        }
     }
 
     // MARK: - Sidebar toggle
@@ -263,6 +267,18 @@ struct MainWindowView: View {
 
     private func closeNetwork() {
         transition(to: .app)
+    }
+
+    private func openFloatingStatsDestination(_ destination: FloatingStatsMainWindowDestination) {
+        selectedSessionID = nil
+
+        switch destination {
+        case .page(let nextPage):
+            page = nextPage
+            transition(to: .app)
+        case .network:
+            transition(to: .network)
+        }
     }
 
     private func transition(to nextMode: MainWindowMode) {

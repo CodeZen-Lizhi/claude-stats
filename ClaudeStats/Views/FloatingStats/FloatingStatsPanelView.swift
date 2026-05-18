@@ -11,37 +11,50 @@ struct FloatingStatsPanelView: View {
 
     var body: some View {
         let edge = state.edge
+        GeometryReader { proxy in
+            panelSurface(edge: edge, visibleSize: proxy.size)
+        }
+        .font(.sora(13))
+        .tint(.stxAccent)
+        .animation(.easeOut(duration: 0.16), value: state.edge)
+        .animation(.easeOut(duration: 0.14), value: state.edgeReleaseProgress)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Claude Stats floating tab")
+    }
+
+    private func panelSurface(edge: FloatingPanelEdge, visibleSize: CGSize) -> some View {
+        let currentSize = CGSize(
+            width: max(visibleSize.width, 1),
+            height: max(visibleSize.height, 1)
+        )
         let shape = FloatingTabShape(
             edge: edge,
             cornerRadius: state.isExpanded ? 18 : 24,
             edgeReleaseProgress: state.edgeReleaseProgress
         )
-        let size = FloatingPanelGeometry.size(edge: edge, expanded: state.isExpanded)
+        let collapsedSize = FloatingPanelGeometry.size(edge: edge, expanded: false)
 
-        ZStack {
-            if state.isExpanded {
+        return ZStack(alignment: edge.dockedContentAlignment) {
+            if state.showsExpandedContent {
                 expandedContent
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
             } else {
-                collapsedContent(edge: edge, size: size)
+                collapsedContent(edge: edge, size: collapsedSize)
+                    .frame(width: collapsedSize.width, height: collapsedSize.height)
                     .transition(.opacity)
             }
         }
-        .frame(width: size.width, height: size.height)
+        .animation(.easeOut(duration: 0.1), value: state.showsExpandedContent)
+        .animation(.easeOut(duration: 0.16), value: state.isExpanded)
+        .frame(width: currentSize.width, height: currentSize.height)
         .background {
             shape.fill(.regularMaterial)
         }
         .clipShape(shape)
         .overlay(shape.stroke(Color.stxStroke, lineWidth: 1))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: edge.dockedContentAlignment)
         .contentShape(Rectangle())
         .overlay(FloatingHoverTracker(onHoverChanged: onHoverChanged).accessibilityHidden(true))
-        .font(.sora(13))
-        .tint(.stxAccent)
-        .animation(.easeOut(duration: 0.16), value: state.isExpanded)
-        .animation(.easeOut(duration: 0.16), value: state.edge)
-        .animation(.easeOut(duration: 0.14), value: state.edgeReleaseProgress)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Claude Stats floating tab")
     }
 
     private func collapsedContent(edge: FloatingPanelEdge, size: CGSize) -> some View {
@@ -127,9 +140,13 @@ struct FloatingStatsPanelView: View {
                     .foregroundStyle(Color.stxMuted)
             }
 
+            if let statusContent = floatingStatusContent(for: provider) {
+                FloatingProviderStatusView(content: statusContent)
+            }
+
             Spacer(minLength: 0)
 
-            HStack(spacing: 8) {
+            HStack(spacing: 7) {
                 actionButton(symbol: env.store.isLoading ? "hourglass" : "arrow.clockwise", label: "Refresh") {
                     Task { await env.store.refresh() }
                 }
@@ -139,19 +156,45 @@ struct FloatingStatsPanelView: View {
                     NotificationCenter.default.post(name: .openMainWindowFromFloatingStats, object: nil)
                 }
 
+                actionButton(symbol: "arrow.triangle.branch", label: "Open Git") {
+                    NotificationCenter.default.post(
+                        name: .openMainWindowDestinationFromFloatingStats,
+                        object: FloatingStatsMainWindowDestination.page(.git)
+                    )
+                }
+
+                actionButton(symbol: "terminal", label: "Open Terminal") {
+                    NotificationCenter.default.post(
+                        name: .openMainWindowDestinationFromFloatingStats,
+                        object: FloatingStatsMainWindowDestination.page(.terminal)
+                    )
+                }
+
+                actionButton(symbol: "network", label: "Open Network") {
+                    NotificationCenter.default.post(
+                        name: .openMainWindowDestinationFromFloatingStats,
+                        object: FloatingStatsMainWindowDestination.network
+                    )
+                }
+
                 actionButton(symbol: "gearshape", label: "Open settings") {
                     NotificationCenter.default.post(name: .openSettingsFromFloatingStats, object: nil)
                 }
             }
         }
         .padding(14)
+        .task(id: provider) {
+            await refreshProviderStatusIfNeeded(provider: provider)
+        }
     }
 
     private func header(provider: ProviderKind, period: StatsPeriod) -> some View {
         HStack(spacing: 9) {
-            Image(systemName: provider.iconSystemName)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.stxAccent)
+            Image(provider.monochromeAssetName)
+                .resizable()
+                .renderingMode(.template)
+                .scaledToFit()
+                .foregroundStyle(providerLogoTint(for: provider))
                 .frame(width: 20, height: 20)
             VStack(alignment: .leading, spacing: 2) {
                 Text(provider.displayName)
@@ -171,6 +214,68 @@ struct FloatingStatsPanelView: View {
         }
         .contentShape(Rectangle())
         .accessibilityHint("Drag to move the floating tab")
+    }
+
+    private func providerLogoTint(for provider: ProviderKind) -> Color {
+        switch provider {
+        case .codex, .kimi:
+            Color.primary
+        case .claude, .gemini, .minimax:
+            provider.accentColor
+        }
+    }
+
+    private func floatingStatusContent(for provider: ProviderKind) -> FloatingProviderStatusContent? {
+        switch provider {
+        case .claude:
+            if let summary = ClaudeFloatingStatusAdapter.summary(from: env.claudeStatus) {
+                return .summary(summary)
+            }
+            return floatingStatusMessage(
+                isLoading: env.claudeStatus.isLoading,
+                primaryError: env.claudeStatus.lastError,
+                secondaryError: env.claudeStatus.uptimeLastError,
+                fallback: "CLAUDE STATUS UNAVAILABLE"
+            )
+        case .codex:
+            if let summary = OpenAIFloatingStatusAdapter.summary(from: env.openAIStatus) {
+                return .summary(summary)
+            }
+            return floatingStatusMessage(
+                isLoading: env.openAIStatus.isLoading,
+                primaryError: env.openAIStatus.lastError,
+                secondaryError: env.openAIStatus.uptimeLastError,
+                fallback: "OPENAI STATUS UNAVAILABLE"
+            )
+        case .gemini, .kimi, .minimax:
+            return nil
+        }
+    }
+
+    private func floatingStatusMessage(
+        isLoading: Bool,
+        primaryError: String?,
+        secondaryError: String?,
+        fallback: String
+    ) -> FloatingProviderStatusContent {
+        if isLoading {
+            return .message("CHECKING STATUS...")
+        }
+        if let error = primaryError ?? secondaryError {
+            return .message(error)
+        }
+        return .message(fallback)
+    }
+
+    private func refreshProviderStatusIfNeeded(provider: ProviderKind) async {
+        switch provider {
+        case .claude:
+            await env.claudeStatus.refreshIfNeeded()
+        case .codex:
+            await env.openAIStatus.refreshIfNeeded()
+        case .gemini, .kimi, .minimax:
+            return
+        }
     }
 
     private func metricBlock(title: String, value: String) -> some View {
@@ -214,6 +319,21 @@ struct FloatingStatsPanelView: View {
 
     private enum Metrics {
         static let collapsedContentPadding: CGFloat = 8
+    }
+}
+
+private extension FloatingPanelEdge {
+    var dockedContentAlignment: Alignment {
+        switch self {
+        case .left:
+            .leading
+        case .right:
+            .trailing
+        case .top:
+            .top
+        case .bottom:
+            .bottom
+        }
     }
 }
 
@@ -318,6 +438,7 @@ private struct FloatingTabShape: Shape {
                 let state = FloatingStatsPanelState()
                 state.edge = .right
                 state.isExpanded = true
+                state.showsExpandedContent = true
                 return state
             }(),
             onHoverChanged: { _ in },

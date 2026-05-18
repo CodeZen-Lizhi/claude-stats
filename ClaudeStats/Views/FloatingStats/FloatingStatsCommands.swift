@@ -1,8 +1,15 @@
 import AppKit
 import SwiftUI
 
+enum FloatingStatsMainWindowDestination: Sendable {
+    case page(MainPage)
+    case network
+}
+
 extension Notification.Name {
     static let openMainWindowFromFloatingStats = Notification.Name("ClaudeStats.openMainWindowFromFloatingStats")
+    static let openMainWindowDestinationFromFloatingStats = Notification.Name("ClaudeStats.openMainWindowDestinationFromFloatingStats")
+    static let selectMainWindowDestinationFromFloatingStats = Notification.Name("ClaudeStats.selectMainWindowDestinationFromFloatingStats")
     static let openSettingsFromFloatingStats = Notification.Name("ClaudeStats.openSettingsFromFloatingStats")
 }
 
@@ -15,15 +22,28 @@ struct FloatingStatsCommandBridge: View {
         Color.clear
             .frame(width: 0, height: 0)
             .onReceive(NotificationCenter.default.publisher(for: .openMainWindowFromFloatingStats)) { _ in
-                NSApp.activate(ignoringOtherApps: true)
-                openWindow(id: MainWindowView.windowID)
+                openMainWindow()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .openMainWindowDestinationFromFloatingStats)) { notification in
+                openMainWindow()
+                guard let destination = notification.object as? FloatingStatsMainWindowDestination else { return }
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(
+                        name: .selectMainWindowDestinationFromFloatingStats,
+                        object: destination
+                    )
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: .openSettingsFromFloatingStats)) { _ in
-                NSApp.activate(ignoringOtherApps: true)
-                openWindow(id: MainWindowView.windowID)
+                openMainWindow()
                 DispatchQueue.main.async {
                     NotificationCenter.default.post(name: .openSettingsInMainWindow, object: nil)
                 }
             }
+    }
+
+    private func openMainWindow() {
+        NSApp.activate(ignoringOtherApps: true)
+        openWindow(id: MainWindowView.windowID)
     }
 }
