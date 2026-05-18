@@ -1,7 +1,11 @@
+import AppKit
 import SwiftUI
 
 struct PlatformsSettingsView: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var shouldEnableClaudeStatusAlertsAfterSettings = false
+    @State private var shouldEnableOpenAIStatusAlertsAfterSettings = false
 
     var body: some View {
         @Bindable var prefs = env.preferences
@@ -25,10 +29,13 @@ struct PlatformsSettingsView: View {
             openAIStatusGroup(prefs: prefs)
         }
         .task {
-            await env.claudeStatus.refreshNotificationAuthorizationStatus()
-            await env.claudeStatus.refreshIfNeeded()
-            await env.openAIStatus.refreshNotificationAuthorizationStatus()
-            await env.openAIStatus.refreshIfNeeded()
+            await loadStatusSettings()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { @MainActor in
+                await refreshNotificationAuthorizationAfterActivation()
+            }
         }
     }
 
@@ -78,15 +85,7 @@ struct PlatformsSettingsView: View {
                     title: "Status alerts",
                     description: claudeStatusAlertsDescription
                 ) {
-                    Toggle("", isOn: Binding(
-                        get: { prefs.claudeStatusNotificationsEnabled },
-                        set: { enabled in
-                            Task { await env.claudeStatus.setNotificationsEnabled(enabled) }
-                        }
-                    ))
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .disabled(env.claudeStatus.isRequestingNotificationAuthorization)
+                    claudeStatusAlertsControl(prefs: prefs)
                 }
                 SettingRowDivider()
                 let components = Array(env.claudeStatus.availableComponents.enumerated())
@@ -99,12 +98,34 @@ struct PlatformsSettingsView: View {
         }
     }
 
+    private func claudeStatusAlertsControl(prefs: Preferences) -> some View {
+        HStack(spacing: 8) {
+            if env.claudeStatus.notificationPermissionDenied {
+                Button("Open Settings...") {
+                    shouldEnableClaudeStatusAlertsAfterSettings = true
+                    openNotificationSettings()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+
+            Toggle("", isOn: Binding(
+                get: { prefs.claudeStatusNotificationsEnabled },
+                set: { enabled in setClaudeStatusAlertsEnabled(enabled) }
+            ))
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .disabled(env.claudeStatus.isRequestingNotificationAuthorization)
+            .help(env.claudeStatus.notificationPermissionDenied ? "Open macOS Notifications settings to allow alerts." : "Enable Claude Status alerts.")
+        }
+    }
+
     private var claudeStatusAlertsDescription: String {
         if env.claudeStatus.isRequestingNotificationAuthorization {
             return "Waiting for macOS notification permission."
         }
         if env.claudeStatus.notificationPermissionDenied {
-            return "Notification permission is denied in macOS Settings."
+            return "Notification permission is denied in macOS Settings. Open Settings to allow alerts."
         }
         return "Send a macOS notification when any shown Claude component is not operational."
     }
@@ -146,15 +167,7 @@ struct PlatformsSettingsView: View {
                     title: "Status alerts",
                     description: openAIStatusAlertsDescription
                 ) {
-                    Toggle("", isOn: Binding(
-                        get: { prefs.openAIStatusNotificationsEnabled },
-                        set: { enabled in
-                            Task { await env.openAIStatus.setNotificationsEnabled(enabled) }
-                        }
-                    ))
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .disabled(env.openAIStatus.isRequestingNotificationAuthorization)
+                    openAIStatusAlertsControl(prefs: prefs)
                 }
                 SettingRowDivider()
                 let groups = Array(env.openAIStatus.availableGroups.enumerated())
@@ -167,12 +180,34 @@ struct PlatformsSettingsView: View {
         }
     }
 
+    private func openAIStatusAlertsControl(prefs: Preferences) -> some View {
+        HStack(spacing: 8) {
+            if env.openAIStatus.notificationPermissionDenied {
+                Button("Open Settings...") {
+                    shouldEnableOpenAIStatusAlertsAfterSettings = true
+                    openNotificationSettings()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+
+            Toggle("", isOn: Binding(
+                get: { prefs.openAIStatusNotificationsEnabled },
+                set: { enabled in setOpenAIStatusAlertsEnabled(enabled) }
+            ))
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .disabled(env.openAIStatus.isRequestingNotificationAuthorization)
+            .help(env.openAIStatus.notificationPermissionDenied ? "Open macOS Notifications settings to allow alerts." : "Enable OpenAI Status alerts.")
+        }
+    }
+
     private var openAIStatusAlertsDescription: String {
         if env.openAIStatus.isRequestingNotificationAuthorization {
             return "Waiting for macOS notification permission."
         }
         if env.openAIStatus.notificationPermissionDenied {
-            return "Notification permission is denied in macOS Settings."
+            return "Notification permission is denied in macOS Settings. Open Settings to allow alerts."
         }
         return "Send a macOS notification when any shown OpenAI product group is not operational."
     }
@@ -202,6 +237,94 @@ struct PlatformsSettingsView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
+    }
+
+    private func loadStatusSettings() async {
+        await env.claudeStatus.refreshNotificationAuthorizationStatus()
+        await env.claudeStatus.refreshIfNeeded()
+        await env.openAIStatus.refreshNotificationAuthorizationStatus()
+        await env.openAIStatus.refreshIfNeeded()
+    }
+
+    private func setClaudeStatusAlertsEnabled(_ enabled: Bool) {
+        if !enabled {
+            shouldEnableClaudeStatusAlertsAfterSettings = false
+            Task { @MainActor in
+                await env.claudeStatus.setNotificationsEnabled(false)
+            }
+            return
+        }
+
+        shouldEnableClaudeStatusAlertsAfterSettings = true
+        Task { @MainActor in
+            await env.claudeStatus.refreshNotificationAuthorizationStatus()
+
+            if env.claudeStatus.notificationPermissionDenied {
+                openNotificationSettings()
+                return
+            }
+
+            await env.claudeStatus.setNotificationsEnabled(true)
+            if env.claudeStatus.notificationAuthorization.canSendNotifications {
+                shouldEnableClaudeStatusAlertsAfterSettings = false
+            }
+        }
+    }
+
+    private func setOpenAIStatusAlertsEnabled(_ enabled: Bool) {
+        if !enabled {
+            shouldEnableOpenAIStatusAlertsAfterSettings = false
+            Task { @MainActor in
+                await env.openAIStatus.setNotificationsEnabled(false)
+            }
+            return
+        }
+
+        shouldEnableOpenAIStatusAlertsAfterSettings = true
+        Task { @MainActor in
+            await env.openAIStatus.refreshNotificationAuthorizationStatus()
+
+            if env.openAIStatus.notificationPermissionDenied {
+                openNotificationSettings()
+                return
+            }
+
+            await env.openAIStatus.setNotificationsEnabled(true)
+            if env.openAIStatus.notificationAuthorization.canSendNotifications {
+                shouldEnableOpenAIStatusAlertsAfterSettings = false
+            }
+        }
+    }
+
+    private func refreshNotificationAuthorizationAfterActivation() async {
+        await env.claudeStatus.refreshNotificationAuthorizationStatus()
+        await env.openAIStatus.refreshNotificationAuthorizationStatus()
+
+        if shouldEnableClaudeStatusAlertsAfterSettings,
+           env.claudeStatus.notificationAuthorization.canSendNotifications {
+            await env.claudeStatus.setNotificationsEnabled(true)
+            shouldEnableClaudeStatusAlertsAfterSettings = false
+        }
+
+        if shouldEnableOpenAIStatusAlertsAfterSettings,
+           env.openAIStatus.notificationAuthorization.canSendNotifications {
+            await env.openAIStatus.setNotificationsEnabled(true)
+            shouldEnableOpenAIStatusAlertsAfterSettings = false
+        }
+    }
+
+    private func openNotificationSettings() {
+        var candidateStrings: [String] = []
+        if let bundleID = Bundle.main.bundleIdentifier {
+            candidateStrings.append("x-apple.systempreferences:com.apple.preference.notifications?id=\(bundleID)")
+        }
+        candidateStrings.append("x-apple.systempreferences:com.apple.preference.notifications")
+        candidateStrings.append("x-apple.systempreferences:com.apple.Notifications-Settings.extension")
+
+        for candidate in candidateStrings {
+            guard let url = URL(string: candidate) else { continue }
+            if NSWorkspace.shared.open(url) { return }
+        }
     }
 }
 
