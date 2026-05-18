@@ -27,9 +27,13 @@
 	<key>NSHumanReadableCopyright</key>
 	<string></string>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>A program running in the embedded terminal may request AppleScript access.</string>
+	<string>A program running in the embedded terminal may request AppleScript access. Notch Island media controls may also use Apple Events for local music apps.</string>
+	<key>NSAppleMusicUsageDescription</key>
+	<string>Notch Island can read local Apple Music playback metadata when the media module is enabled.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Notch Island can capture local audio levels for visualizer modules when audio features are enabled.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>A program running in the embedded terminal may request Bluetooth access.</string>
+	<string>A program running in the embedded terminal may request Bluetooth access. Notch Island can show Bluetooth audio device status when enabled.</string>
 	<key>NSCalendarsUsageDescription</key>
 	<string>A program running in the embedded terminal may request calendar access.</string>
 	<key>NSCameraUsageDescription</key>
@@ -41,7 +45,7 @@
 	<key>NSLocationUsageDescription</key>
 	<string>A program running in the embedded terminal may request location access.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>A program running in the embedded terminal may request microphone access.</string>
+	<string>A program running in the embedded terminal may request microphone access. Notch Island can show microphone privacy indicators when enabled.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>A program running in the embedded terminal may request photo library access.</string>
 	<key>NSRemindersUsageDescription</key>
@@ -50,6 +54,8 @@
 	<string>A program running in the embedded terminal may request speech recognition access.</string>
 	<key>NSSystemAdministrationUsageDescription</key>
 	<string>A program running in the embedded terminal may request elevated privileges.</string>
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>Notch Island can use screen recording for recording indicators and screen assistant modules when enabled.</string>
 	<!--
 	  Sparkle auto-update. SUPublicEDKey is the EdDSA *public* key produced by
 	  Sparkle's `generate_keys` (the matching private key lives only in the

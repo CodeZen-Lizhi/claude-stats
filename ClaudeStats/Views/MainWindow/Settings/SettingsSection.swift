@@ -6,6 +6,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
     case general
     case features
     case menuBar
+    case notchIsland
     case platforms
     case tracking
     case leaderboards
@@ -21,6 +22,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
         case .general:   "General"
         case .features:  "Features"
         case .menuBar:   "Menu Bar"
+        case .notchIsland: "Notch Island"
         case .platforms: "Platforms"
         case .tracking:  "Tracking"
         case .leaderboards: "Leaderboards"
@@ -36,6 +38,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
         case .general:   "gearshape"
         case .features:  "switch.2"
         case .menuBar:   "menubar.rectangle"
+        case .notchIsland: "capsule.portrait.tophalf.filled"
         case .platforms: "square.stack.3d.up"
         case .tracking:  "waveform.path.ecg"
         case .leaderboards: "trophy"

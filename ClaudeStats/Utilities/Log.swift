@@ -11,4 +11,5 @@ enum Log {
     static let store = Logger(subsystem: subsystem, category: "store")
     static let git = Logger(subsystem: subsystem, category: "git")
     static let network = Logger(subsystem: subsystem, category: "network")
+    static let notch = Logger(subsystem: subsystem, category: "notch")
 }

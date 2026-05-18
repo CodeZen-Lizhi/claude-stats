@@ -15,6 +15,7 @@ final class AppEnvironment {
     let store: SessionStore
     let updater = UpdaterController()
     let floatingStatsPanel = FloatingStatsPanelController()
+    let notchIsland = NotchIslandController()
     let terminalStore: EmbeddedTerminalStore
     /// View models live in the environment so the Settings window and the
     /// individual pages can share state — and so the VMs persist across
@@ -90,6 +91,7 @@ final class AppEnvironment {
         applyAutoRefreshSetting()
         updater.start()
         floatingStatsPanel.start(environment: self)
+        notchIsland.start(environment: self)
     }
 
     func applyAutoRefreshSetting() {

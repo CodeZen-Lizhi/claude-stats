@@ -78,6 +78,34 @@ final class Preferences {
     var floatingTabAnchor: Double {
         didSet { defaults.set(floatingTabAnchor, forKey: Keys.floatingTabAnchor) }
     }
+    /// Camera-notch Dynamic Island surface adapted from Atoll. Off by default
+    /// so the existing menu-bar and floating-tab entry points remain unchanged.
+    var notchIslandEnabled: Bool {
+        didSet { defaults.set(notchIslandEnabled, forKey: Keys.notchIslandEnabled) }
+    }
+    var notchIslandDisplayMode: NotchIslandDisplayMode {
+        didSet { defaults.set(notchIslandDisplayMode.rawValue, forKey: Keys.notchIslandDisplayMode) }
+    }
+    var notchIslandSizePreset: NotchIslandSizePreset {
+        didSet { defaults.set(notchIslandSizePreset.rawValue, forKey: Keys.notchIslandSizePreset) }
+    }
+    var notchIslandHoverExpansionEnabled: Bool {
+        didSet { defaults.set(notchIslandHoverExpansionEnabled, forKey: Keys.notchIslandHoverExpansionEnabled) }
+    }
+    var notchIslandShortcutEnabled: Bool {
+        didSet { defaults.set(notchIslandShortcutEnabled, forKey: Keys.notchIslandShortcutEnabled) }
+    }
+    var notchIslandEnabledModules: Set<NotchIslandModule> {
+        didSet {
+            if notchIslandEnabledModules.isEmpty {
+                notchIslandEnabledModules = NotchIslandModule.defaultEnabled
+            }
+            defaults.set(
+                notchIslandEnabledModules.map(\.rawValue).sorted().joined(separator: ","),
+                forKey: Keys.notchIslandEnabledModules
+            )
+        }
+    }
     var detailPanelBoundaryFalloffEnabled: Bool {
         didSet { defaults.set(detailPanelBoundaryFalloffEnabled, forKey: Keys.detailPanelBoundaryFalloffEnabled) }
     }
@@ -308,6 +336,17 @@ final class Preferences {
         floatingTabEnabled = (defaults.object(forKey: Keys.floatingTabEnabled) as? Bool) ?? true
         floatingTabEdge = FloatingPanelEdge(rawValue: defaults.string(forKey: Keys.floatingTabEdge) ?? "") ?? .right
         floatingTabAnchor = (defaults.object(forKey: Keys.floatingTabAnchor) as? Double) ?? 0.5
+        notchIslandEnabled = defaults.bool(forKey: Keys.notchIslandEnabled)
+        notchIslandDisplayMode = NotchIslandDisplayMode(rawValue: defaults.string(forKey: Keys.notchIslandDisplayMode) ?? "") ?? .primaryDisplay
+        notchIslandSizePreset = NotchIslandSizePreset(rawValue: defaults.string(forKey: Keys.notchIslandSizePreset) ?? "") ?? .regular
+        notchIslandHoverExpansionEnabled = (defaults.object(forKey: Keys.notchIslandHoverExpansionEnabled) as? Bool) ?? true
+        notchIslandShortcutEnabled = (defaults.object(forKey: Keys.notchIslandShortcutEnabled) as? Bool) ?? true
+        let storedNotchModules = (defaults.string(forKey: Keys.notchIslandEnabledModules) ?? "")
+            .split(separator: ",")
+            .compactMap { NotchIslandModule(rawValue: String($0)) }
+        notchIslandEnabledModules = storedNotchModules.isEmpty
+            ? NotchIslandModule.defaultEnabled
+            : Set(storedNotchModules)
         detailPanelBoundaryFalloffEnabled = (defaults.object(forKey: Keys.detailPanelBoundaryFalloffEnabled) as? Bool) ?? true
         networkTrafficLayoutMode = NetworkTrafficLayoutMode(rawValue: defaults.string(forKey: Keys.networkTrafficLayoutMode) ?? "") ?? .automatic
         let storedNetworkTrafficAutoBreakpoint = (defaults.object(forKey: Keys.networkTrafficAutoBreakpoint) as? Double)
@@ -406,6 +445,12 @@ final class Preferences {
         static let floatingTabEnabled = "floatingTabEnabled"
         static let floatingTabEdge = "floatingTabEdge"
         static let floatingTabAnchor = "floatingTabAnchor"
+        static let notchIslandEnabled = "notchIslandEnabled"
+        static let notchIslandDisplayMode = "notchIslandDisplayMode"
+        static let notchIslandSizePreset = "notchIslandSizePreset"
+        static let notchIslandHoverExpansionEnabled = "notchIslandHoverExpansionEnabled"
+        static let notchIslandShortcutEnabled = "notchIslandShortcutEnabled"
+        static let notchIslandEnabledModules = "notchIslandEnabledModules"
         static let detailPanelBoundaryFalloffEnabled = "detailPanelBoundaryFalloffEnabled"
         static let networkTrafficLayoutMode = "networkTrafficLayoutMode"
         static let networkTrafficAutoBreakpoint = "networkTrafficAutoBreakpoint"

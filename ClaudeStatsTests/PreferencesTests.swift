@@ -38,6 +38,54 @@ struct PreferencesTests {
         #expect(prefs.floatingTabEdge == .right)
     }
 
+    @Test("Notch Island defaults are off with safe modules")
+    func notchIslandDefaults() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+
+        #expect(prefs.notchIslandEnabled == false)
+        #expect(prefs.notchIslandDisplayMode == .primaryDisplay)
+        #expect(prefs.notchIslandSizePreset == .regular)
+        #expect(prefs.notchIslandHoverExpansionEnabled == true)
+        #expect(prefs.notchIslandShortcutEnabled == true)
+        #expect(prefs.notchIslandEnabledModules == NotchIslandModule.defaultEnabled)
+    }
+
+    @Test("Notch Island preferences persist and invalid values fall back")
+    func notchIslandPersists() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+        prefs.notchIslandEnabled = true
+        prefs.notchIslandDisplayMode = .allDisplays
+        prefs.notchIslandSizePreset = .large
+        prefs.notchIslandHoverExpansionEnabled = false
+        prefs.notchIslandShortcutEnabled = false
+        prefs.notchIslandEnabledModules = [.media, .timer, .clipboard]
+
+        let reloaded = Preferences(defaults: defaults)
+        #expect(reloaded.notchIslandEnabled == true)
+        #expect(reloaded.notchIslandDisplayMode == .allDisplays)
+        #expect(reloaded.notchIslandSizePreset == .large)
+        #expect(reloaded.notchIslandHoverExpansionEnabled == false)
+        #expect(reloaded.notchIslandShortcutEnabled == false)
+        #expect(reloaded.notchIslandEnabledModules == [.media, .timer, .clipboard])
+
+        defaults.set("floating", forKey: "notchIslandDisplayMode")
+        defaults.set("massive", forKey: "notchIslandSizePreset")
+        let invalid = Preferences(defaults: defaults)
+        #expect(invalid.notchIslandDisplayMode == .primaryDisplay)
+        #expect(invalid.notchIslandSizePreset == .regular)
+    }
+
+    @Test("Notch Island empty module selection falls back to safe defaults")
+    func notchIslandEmptyModulesFallBack() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+        prefs.notchIslandEnabledModules = []
+
+        #expect(prefs.notchIslandEnabledModules == NotchIslandModule.defaultEnabled)
+    }
+
     @Test("Detail panel boundary falloff defaults to enabled")
     func detailPanelBoundaryFalloffDefault() {
         let defaults = makeDefaults()

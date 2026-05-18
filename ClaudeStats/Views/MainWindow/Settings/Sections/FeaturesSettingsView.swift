@@ -20,6 +20,7 @@ struct FeaturesSettingsView: View {
             githubCard(prefs: prefs)
             leaderboardsCard(prefs: prefs)
             floatingTabCard(prefs: prefs)
+            notchIslandCard(prefs: prefs)
         }
     }
 
@@ -106,6 +107,20 @@ struct FeaturesSettingsView: View {
         }
     }
 
+    private func notchIslandCard(prefs: Preferences) -> some View {
+        @Bindable var prefs = prefs
+        return FeatureControlCard(
+            title: "Notch Island",
+            symbol: "capsule.portrait.tophalf.filled",
+            description: "Adds an Atoll-backed Dynamic Island surface around the camera notch while keeping existing app entry points.",
+            status: prefs.notchIslandEnabled ? notchIslandStatus(prefs: prefs) : "Off",
+            isOn: $prefs.notchIslandEnabled,
+            onConfigure: { onSelectSection(.notchIsland) }
+        ) {
+            NotchIslandFeaturePreview()
+        }
+    }
+
     private var fullDiskAccessStatus: String {
         fullDiskAccessOK ? "Full Disk Access granted" : "Needs Full Disk Access"
     }
@@ -117,6 +132,10 @@ struct FeaturesSettingsView: View {
     private func systemMonitorStatus(prefs: Preferences) -> String {
         let count = prefs.systemMonitorVisibleModules.count
         return "\(prefs.systemMonitorRefreshRate.displayName) - \(count) modules"
+    }
+
+    private func notchIslandStatus(prefs: Preferences) -> String {
+        "\(prefs.notchIslandSizePreset.displayName) - \(prefs.notchIslandEnabledModules.count) modules"
     }
 
     private var githubStatus: String {
@@ -350,6 +369,47 @@ private struct FloatingTabFeaturePreview: View {
             }
             .frame(width: 92)
         }
+    }
+}
+
+private struct NotchIslandFeaturePreview: View {
+    var body: some View {
+        VStack(spacing: 14) {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.black)
+                .frame(width: 188, height: 34)
+                .overlay {
+                    HStack(spacing: 8) {
+                        Image(systemName: "cpu")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(Color.stxAccent)
+                        Text("Stats")
+                            .font(.sora(11, weight: .semibold))
+                            .foregroundStyle(.white)
+                        Spacer()
+                        Text("38%")
+                            .font(.sora(10, weight: .medium).monospacedDigit())
+                            .foregroundStyle(Color.white.opacity(0.7))
+                    }
+                    .padding(.horizontal, 12)
+                }
+
+            HStack(spacing: 8) {
+                ForEach([("Media", "music.note"), ("Timer", "timer"), ("Shelf", "tray")], id: \.0) { item in
+                    HStack(spacing: 5) {
+                        Image(systemName: item.1)
+                            .font(.system(size: 9, weight: .semibold))
+                        Text(item.0)
+                            .font(.sora(9, weight: .medium))
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(Color.primary.opacity(0.06), in: Capsule())
+                    .overlay(Capsule().strokeBorder(Color.stxStroke, lineWidth: 1))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

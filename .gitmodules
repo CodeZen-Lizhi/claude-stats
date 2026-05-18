@@ -2,3 +2,7 @@
 	path = ThirdParty/ghostty
 	url = https://github.com/ghostty-org/ghostty.git
 	ignore = dirty
+[submodule "ThirdParty/Atoll"]
+	path = ThirdParty/Atoll
+	url = https://github.com/Ebullioscopic/Atoll.git
+	ignore = dirty

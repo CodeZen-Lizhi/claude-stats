@@ -3,6 +3,7 @@ import AppKit
 
 struct AboutSettingsView: View {
     @Environment(AppEnvironment.self) private var env
+    var onShowReleaseHistory: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 28) {
@@ -23,6 +24,11 @@ struct AboutSettingsView: View {
                     SettingRow(title: "Version",
                                description: appVersionString) {
                         Button("Check for Updates…") { env.updater.checkForUpdates() }
+                    }
+                    SettingRowDivider()
+                    SettingRow(title: "Release History",
+                               description: "See what changed since 1.4.0") {
+                        Button("View…", action: onShowReleaseHistory)
                     }
                 }
                 .settingCard()
