@@ -1,0 +1,8 @@
+{
+  "headline": "App icon, status, and cost-estimation updates.",
+  "changes": [
+    "Added new app icon assets and configuration.",
+    "Added cost estimation mode and Claude status monitoring.",
+    "Added long-context pricing support and improved activity analysis structure."
+  ]
+}

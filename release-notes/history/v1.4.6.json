@@ -1,0 +1,8 @@
+{
+  "headline": "Leaderboard sync, caching, and status monitoring.",
+  "changes": [
+    "Added local leaderboard caching and sync support.",
+    "Added leaderboard history sync and display.",
+    "Added OpenAI and Codex service status monitoring."
+  ]
+}

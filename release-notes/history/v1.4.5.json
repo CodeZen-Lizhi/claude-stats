@@ -1,0 +1,8 @@
+{
+  "headline": "System monitor and richer leaderboard history.",
+  "changes": [
+    "Added the system monitor feature.",
+    "Added complete leaderboard history support.",
+    "Refined leaderboard layout and component structure."
+  ]
+}

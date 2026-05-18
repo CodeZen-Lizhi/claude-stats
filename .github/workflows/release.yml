@@ -203,6 +203,9 @@ jobs:
       - name: Bump version in project.yml
         run: bash scripts/bump-version.sh "${{ steps.version.outputs.version }}" "${{ steps.version.outputs.build }}"
 
+      - name: Generate in-app release history
+        run: python3 scripts/generate-release-history.py --tag "$GITHUB_REF_NAME"
+
       - name: Build GitTools runtime
         run: |
           bash scripts/build-gittools-runtime.sh "$RUNNER_TEMP/gittools-runtime"
@@ -270,13 +273,13 @@ jobs:
 
       - name: Commit version bump back to master
         run: |
-          if git diff --quiet -- project.yml; then
-            echo "project.yml unchanged — nothing to commit."
+          if git diff --quiet -- project.yml ClaudeStats/Models/ReleaseHistory.generated.swift; then
+            echo "project.yml and release history unchanged — nothing to commit."
             exit 0
           fi
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add project.yml
+          git add project.yml ClaudeStats/Models/ReleaseHistory.generated.swift
           git commit -m "chore(release): v${{ steps.version.outputs.version }} [skip ci]"
           git push origin HEAD:master
 

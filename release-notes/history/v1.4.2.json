@@ -1,0 +1,8 @@
+{
+  "headline": "CLI environment tools and provider switching.",
+  "changes": [
+    "Added CLI environment detection and cleanup.",
+    "Added API provider switching with configurable key storage.",
+    "Rebuilt the activity page around the new main-window activity view."
+  ]
+}

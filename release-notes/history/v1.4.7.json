@@ -1,0 +1,8 @@
+{
+  "headline": "Network debugging and settings polish.",
+  "changes": [
+    "Added the network debugging module.",
+    "Added adjustable network traffic layout controls.",
+    "Refined split-view behavior, updater state, and settings structure."
+  ]
+}

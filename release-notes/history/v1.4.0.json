@@ -1,0 +1,8 @@
+{
+  "headline": "Terminal, Git stats, and release-readiness improvements.",
+  "changes": [
+    "Added terminal support and Git language statistics.",
+    "Added Git stats scope preferences and refreshed Git controls.",
+    "Added the in-app update badge and cleaned up release pipeline dependencies."
+  ]
+}
