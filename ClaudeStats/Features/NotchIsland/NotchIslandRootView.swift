@@ -4,7 +4,8 @@ struct NotchIslandRootView: View {
     @Environment(AppEnvironment.self) private var env
 
     let runtime: NotchIslandRuntime
-    var onExpansionChanged: () -> Void
+    var onHoverChanged: (Bool) -> Void
+    var onCollapseRequested: () -> Void
 
     var body: some View {
         @Bindable var runtime = runtime
@@ -23,14 +24,10 @@ struct NotchIslandRootView: View {
         .background(.black, in: shape)
         .overlay(shape.stroke(Color.white.opacity(0.12), lineWidth: 1))
         .shadow(color: .black.opacity(runtime.isExpanded ? 0.34 : 0.18), radius: runtime.isExpanded ? 24 : 10, y: 12)
-        .contentShape(shape)
+        .contentShape(Rectangle())
         .onHover { hovering in
             guard env.preferences.notchIslandHoverExpansionEnabled else { return }
-            guard runtime.isExpanded != hovering else { return }
-            withAnimation(.easeOut(duration: 0.18)) {
-                runtime.isExpanded = hovering
-            }
-            onExpansionChanged()
+            onHoverChanged(hovering)
         }
         .font(.sora(12))
         .tint(.stxAccent)
@@ -111,10 +108,7 @@ struct NotchIslandRootView: View {
             }
             Spacer()
             Button {
-                withAnimation(.easeOut(duration: 0.16)) {
-                    runtime.isExpanded = false
-                }
-                onExpansionChanged()
+                onCollapseRequested()
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 11, weight: .bold))
@@ -373,13 +367,13 @@ private extension Color {
 #if DEBUG
 #Preview("Notch Island") {
     VStack(spacing: 24) {
-        NotchIslandRootView(runtime: NotchIslandRuntime(), onExpansionChanged: {})
+        NotchIslandRootView(runtime: NotchIslandRuntime(), onHoverChanged: { _ in }, onCollapseRequested: {})
             .frame(width: 246, height: 38)
         NotchIslandRootView(runtime: {
             let runtime = NotchIslandRuntime()
             runtime.isExpanded = true
             return runtime
-        }(), onExpansionChanged: {})
+        }(), onHoverChanged: { _ in }, onCollapseRequested: {})
         .frame(width: 640, height: 340)
     }
     .padding(40)

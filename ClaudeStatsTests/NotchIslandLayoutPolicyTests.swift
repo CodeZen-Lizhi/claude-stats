@@ -25,6 +25,7 @@ struct NotchIslandLayoutPolicyTests {
         #expect(expanded.maxY == compact.maxY)
         #expect(expanded.width > compact.width)
         #expect(expanded.height > compact.height)
+        #expect(expanded.contains(CGPoint(x: compact.midX, y: compact.midY)))
     }
 
     @Test("Sizes clamp to small displays")

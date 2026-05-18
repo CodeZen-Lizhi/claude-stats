@@ -13,6 +13,17 @@ final class NotchIslandController {
     private var lockObserver: NSObjectProtocol?
     private var unlockObserver: NSObjectProtocol?
     private let shortcutMonitor = NotchIslandShortcutMonitor()
+    private lazy var hoverCoordinator = NotchIslandHoverCoordinator(
+        mouseLocationProvider: {
+            NSEvent.mouseLocation
+        },
+        panelFramesProvider: { [weak self] in
+            self?.panels.values.map(\.frame) ?? []
+        },
+        setExpanded: { [weak self] expanded in
+            self?.setExpanded(expanded, animated: true)
+        }
+    )
     private var isStarted = false
     private var windowsHiddenForLock = false
 
@@ -40,6 +51,7 @@ final class NotchIslandController {
             DistributedNotificationCenter.default().removeObserver(unlockObserver)
         }
         shortcutMonitor.stop()
+        hoverCoordinator.cancelPendingCollapse()
         screenObserver = nil
         lockObserver = nil
         unlockObserver = nil
@@ -71,6 +83,7 @@ final class NotchIslandController {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
+                self?.hoverCoordinator.cancelPendingCollapse()
                 self?.syncWithPreferences(animated: true)
             }
         }
@@ -103,7 +116,11 @@ final class NotchIslandController {
         guard preferences.notchIslandEnabled else {
             closePanels()
             runtime.stopAll()
+            hoverCoordinator.cancelPendingCollapse()
             return
+        }
+        if !preferences.notchIslandHoverExpansionEnabled {
+            hoverCoordinator.cancelPendingCollapse()
         }
 
         runtime.configure(
@@ -150,8 +167,11 @@ final class NotchIslandController {
 
         let rootView = NotchIslandRootView(
             runtime: runtime,
-            onExpansionChanged: { [weak self] in
-                self?.updatePanelFrames(animated: true)
+            onHoverChanged: { [weak self] hovering in
+                self?.handleHoverChanged(hovering)
+            },
+            onCollapseRequested: { [weak self] in
+                self?.collapseIsland(animated: true)
             }
         )
         .environment(environment)
@@ -163,6 +183,28 @@ final class NotchIslandController {
         panel.contentView = hostingView
         panels[screen] = panel
         panel.orderFrontRegardless()
+    }
+
+    private func handleHoverChanged(_ hovering: Bool) {
+        guard preferences?.notchIslandHoverExpansionEnabled == true else { return }
+        hoverCoordinator.handleHoverChanged(hovering)
+    }
+
+    private func collapseIsland(animated: Bool) {
+        hoverCoordinator.cancelPendingCollapse()
+        setExpanded(false, animated: animated)
+    }
+
+    private func setExpanded(_ expanded: Bool, animated: Bool) {
+        guard runtime.isExpanded != expanded else { return }
+        if animated {
+            withAnimation(.easeOut(duration: 0.18)) {
+                runtime.isExpanded = expanded
+            }
+        } else {
+            runtime.isExpanded = expanded
+        }
+        updatePanelFrames(animated: animated)
     }
 
     private func updatePanelFrames(animated: Bool) {
@@ -204,6 +246,7 @@ final class NotchIslandController {
     }
 
     private func closePanels() {
+        hoverCoordinator.cancelPendingCollapse()
         for panel in panels.values {
             panel.orderOut(nil)
         }
@@ -214,6 +257,7 @@ final class NotchIslandController {
     private func hidePanelsForLock() {
         guard !windowsHiddenForLock else { return }
         windowsHiddenForLock = true
+        hoverCoordinator.cancelPendingCollapse()
         for panel in panels.values {
             panel.orderOut(nil)
         }
