@@ -1,6 +1,6 @@
 import Foundation
 
-enum LeaderboardMetric: String, CaseIterable, Sendable, Identifiable {
+enum LeaderboardMetric: String, CaseIterable, Sendable, Identifiable, Codable {
     case tokensWithCache
     case tokensWithoutCacheRead
     case activityMinutes
@@ -24,7 +24,7 @@ enum LeaderboardMetric: String, CaseIterable, Sendable, Identifiable {
     }
 }
 
-enum LeaderboardPeriod: String, CaseIterable, Sendable, Identifiable {
+enum LeaderboardPeriod: String, CaseIterable, Sendable, Identifiable, Codable {
     case day
     case week
     case month
@@ -42,7 +42,7 @@ enum LeaderboardPeriod: String, CaseIterable, Sendable, Identifiable {
     }
 }
 
-struct LeaderboardScore: Sendable, Hashable, Identifiable {
+struct LeaderboardScore: Sendable, Hashable, Identifiable, Codable {
     let id: String
     let userHash: String?
     let metric: LeaderboardMetric
@@ -52,10 +52,35 @@ struct LeaderboardScore: Sendable, Hashable, Identifiable {
     let rank: Int?
     let nickname: String
     let avatarSeed: String?
+    let historyStartMonthKey: String?
     let updatedAt: Date
+
+    init(id: String,
+         userHash: String?,
+         metric: LeaderboardMetric,
+         period: LeaderboardPeriod,
+         periodKey: String,
+         score: Int64,
+         rank: Int?,
+         nickname: String,
+         avatarSeed: String?,
+         historyStartMonthKey: String? = nil,
+         updatedAt: Date) {
+        self.id = id
+        self.userHash = userHash
+        self.metric = metric
+        self.period = period
+        self.periodKey = periodKey
+        self.score = score
+        self.rank = rank
+        self.nickname = nickname
+        self.avatarSeed = avatarSeed
+        self.historyStartMonthKey = historyStartMonthKey
+        self.updatedAt = updatedAt
+    }
 }
 
-struct LeaderboardScoreHistoryPoint: Sendable, Hashable, Identifiable {
+struct LeaderboardScoreHistoryPoint: Sendable, Hashable, Identifiable, Codable {
     let metric: LeaderboardMetric
     let period: LeaderboardPeriod
     let periodKey: String
@@ -97,7 +122,7 @@ enum LeaderboardSelectionResolver {
     }
 }
 
-struct LeaderboardSubmission: Sendable, Hashable {
+struct LeaderboardSubmission: Sendable, Hashable, Codable {
     let metric: LeaderboardMetric
     let period: LeaderboardPeriod
     let periodKey: String
@@ -111,7 +136,7 @@ struct LeaderboardSubmission: Sendable, Hashable {
     var id: String { "\(metric.rawValue)-\(period.rawValue)-\(periodKey)" }
 }
 
-struct LeaderboardHistorySubmission: Sendable, Hashable {
+struct LeaderboardHistorySubmission: Sendable, Hashable, Codable {
     let metric: LeaderboardMetric
     let bucketPeriod: LeaderboardPeriod
     let periodKey: String
@@ -124,7 +149,7 @@ struct LeaderboardHistorySubmission: Sendable, Hashable {
     var id: String { "\(metric.rawValue)-\(bucketPeriod.rawValue)-\(periodKey)" }
 }
 
-struct LeaderboardProfile: Sendable, Hashable, Identifiable {
+struct LeaderboardProfile: Sendable, Hashable, Identifiable, Codable {
     let userHash: String
     let nickname: String
     let avatarSeed: String?
@@ -134,7 +159,7 @@ struct LeaderboardProfile: Sendable, Hashable, Identifiable {
     var id: String { userHash }
 }
 
-struct LeaderboardProfileDraft: Sendable, Hashable {
+struct LeaderboardProfileDraft: Sendable, Hashable, Codable {
     let nickname: String
     let avatarSeed: String
     let historyStartMonthKey: String?
@@ -166,7 +191,7 @@ enum LeaderboardAvatarSeed {
     }
 }
 
-struct LeaderboardPeriodWindow: Sendable, Hashable {
+struct LeaderboardPeriodWindow: Sendable, Hashable, Codable {
     let period: LeaderboardPeriod
     let periodKey: String
     let startUTC: Date

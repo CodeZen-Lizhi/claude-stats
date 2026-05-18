@@ -13,6 +13,7 @@ final class SessionStore {
     /// Whether any provider's on-disk data directory exists — drives the
     /// "no Claude Code data found" empty state.
     private(set) var dataDirectoryExists: Bool
+    @ObservationIgnored var onRefresh: (() -> Void)?
 
     private let registry: ProviderRegistry
     private let pricing: ModelPricing
@@ -133,6 +134,7 @@ final class SessionStore {
         sessions = withStats.filter { $0.stats != nil }
         lastRefreshedAt = .now
         Log.store.notice("Refreshed: \(self.sessions.count) sessions visible, \(stale.count) re-parsed")
+        onRefresh?()
     }
 
     // MARK: Auto-refresh

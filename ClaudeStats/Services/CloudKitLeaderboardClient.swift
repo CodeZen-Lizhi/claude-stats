@@ -288,6 +288,7 @@ enum CloudKitLeaderboardRecordMapper {
             rank: rank,
             nickname: profile?.nickname ?? nickname,
             avatarSeed: profile?.avatarSeed,
+            historyStartMonthKey: profile?.historyStartMonthKey,
             updatedAt: updatedAt
         )
     }

@@ -73,11 +73,14 @@ final class AppEnvironment {
 
     /// Kick off the first scan and the periodic refresh. Call once at launch.
     func start() {
+        store.onRefresh = { [weak self] in
+            self?.leaderboards.scheduleSilentSyncAfterDataRefresh()
+        }
+        leaderboards.start()
         Task {
             await apiProviders.loadIfNeeded(keyStorageMode: preferences.apiProviderKeyStorageMode)
             await configurationProfiles.loadIfNeeded()
             await store.refresh()
-            leaderboards.start()
         }
         claudeStatus.start()
         openAIStatus.start()

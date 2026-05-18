@@ -53,40 +53,73 @@ final class LeaderboardSyncViewModel {
     private let preferences: Preferences
     private let store: SessionStore
     private let client: any LeaderboardCloudServicing
+    private let localStore: any LeaderboardLocalStoring
     private let builder: LeaderboardScoreBuilder
     private let refreshBeforeSync: Bool
+    private let scoreCacheTTL: TimeInterval
+    private let silentSyncDebounceInterval: TimeInterval
+    private let silentSyncMinimumInterval: TimeInterval
     private var syncTask: Task<Void, Never>?
+    private var silentSyncTask: Task<Void, Never>?
+    private var visibleScoreQuery: VisibleScoreQuery?
+    private var visibleHistoryQuery: VisibleHistoryQuery?
 
-    private static let syncInterval: TimeInterval = 24 * 60 * 60
+    private static let defaultScoreCacheTTL: TimeInterval = 60 * 60
+    private static let defaultSilentSyncDebounceInterval: TimeInterval = 10 * 60
+    private static let defaultSilentSyncMinimumInterval: TimeInterval = 30 * 60
+
+    private struct VisibleScoreQuery: Sendable {
+        let metric: LeaderboardMetric
+        let period: LeaderboardPeriod
+    }
+
+    private struct VisibleHistoryQuery: Sendable {
+        let userHash: String
+        let metric: LeaderboardMetric
+        let period: LeaderboardPeriod
+        let historyStartMonthKey: String?
+    }
 
     init(preferences: Preferences,
          store: SessionStore,
          client: any LeaderboardCloudServicing = CloudKitLeaderboardClient(),
+         localStore: any LeaderboardLocalStoring = LeaderboardLocalStore(),
          builder: LeaderboardScoreBuilder = LeaderboardScoreBuilder(),
-         refreshBeforeSync: Bool = true) {
+         refreshBeforeSync: Bool = true,
+         scoreCacheTTL: TimeInterval = LeaderboardSyncViewModel.defaultScoreCacheTTL,
+         silentSyncDebounceInterval: TimeInterval = LeaderboardSyncViewModel.defaultSilentSyncDebounceInterval,
+         silentSyncMinimumInterval: TimeInterval = LeaderboardSyncViewModel.defaultSilentSyncMinimumInterval) {
         self.preferences = preferences
         self.store = store
         self.client = client
+        self.localStore = localStore
         self.builder = builder
         self.refreshBeforeSync = refreshBeforeSync
+        self.scoreCacheTTL = scoreCacheTTL
+        self.silentSyncDebounceInterval = silentSyncDebounceInterval
+        self.silentSyncMinimumInterval = silentSyncMinimumInterval
+        let storedUserHash = preferences.leaderboardProfileUserHash.trimmingCharacters(in: .whitespacesAndNewlines)
+        currentUserHash = storedUserHash.isEmpty ? nil : storedUserHash
         syncStatus = preferences.leaderboardsEnabled ? .idle : .disabled
     }
 
     func start() {
         syncTask?.cancel()
         syncTask = Task { [weak self] in
-            await self?.syncIfDue(force: false)
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(Self.syncInterval))
-                guard !Task.isCancelled else { break }
-                await self?.syncIfDue(force: false)
-            }
+            await self?.syncSilentlyIfNeeded()
         }
     }
 
     func stop() {
         syncTask?.cancel()
         syncTask = nil
+        silentSyncTask?.cancel()
+        silentSyncTask = nil
+    }
+
+    func scheduleSilentSyncAfterDataRefresh() {
+        guard preferences.leaderboardsEnabled else { return }
+        scheduleSilentSync(after: silentSyncDebounceInterval)
     }
 
     func checkAccountStatus() async {
@@ -116,132 +149,58 @@ final class LeaderboardSyncViewModel {
     }
 
     func syncIfDue(force: Bool) async {
-        guard preferences.leaderboardsEnabled else {
-            syncStatus = .disabled
-            return
-        }
-        ensureLocalAvatarSeed()
-        let nickname = preferences.leaderboardNickname.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !nickname.isEmpty else {
-            syncStatus = .needsNickname
-            return
-        }
-        if !force, let last = preferences.leaderboardLastSyncedAt,
-           Date().timeIntervalSince(last) < Self.syncInterval {
-            await reconcileCurrentUserProfileIfPossible()
-            syncStatus = .synced(last)
-            return
-        }
-
-        syncStatus = .checkingAccount
-        accountState = await client.accountState()
-        guard accountState == .available else {
-            let reason = accountState.displayText
-            preferences.leaderboardLastSyncError = reason
-            syncStatus = .failed(reason)
-            return
-        }
-        do {
-            try await reconcileCurrentUserProfile()
-        } catch {
-            let reason = userFacingMessage(error)
-            preferences.leaderboardLastSyncError = reason
-            syncStatus = .failed(reason)
-            return
-        }
-
-        syncStatus = .syncing
-        if refreshBeforeSync {
-            await store.refresh()
-        }
-        let includeActivity = preferences.aiActivityAnalysisEnabled && ScreenTimeService.canRead()
-        let submissions = builder.submissions(
-            sessions: store.sessions,
-            nickname: nickname,
-            includeActivity: includeActivity,
-            now: .now
-        )
-        let historySubmissions = builder.historySubmissions(
-            sessions: store.sessions,
-            includeActivity: includeActivity,
-            now: .now
-        )
-        guard !submissions.isEmpty || !historySubmissions.isEmpty else {
-            let reason = "No leaderboard scores to submit yet."
-            preferences.leaderboardLastSyncError = reason
-            syncStatus = .failed(reason)
-            return
-        }
-
-        do {
-            let profile = try await client.submit(
-                submissions,
-                historySubmissions: historySubmissions,
-                profile: profileDraft(nickname: nickname)
-            )
-            remember(profile: profile)
-            let syncedAt = Date()
-            preferences.leaderboardLastSyncedAt = syncedAt
-            preferences.leaderboardLastSyncError = ""
-            preferences.leaderboardLastSubmittedPeriodKeys = submissions
-                .map { "\($0.period.rawValue):\($0.periodKey)" }
-                .uniqued()
-                .sorted()
-            syncStatus = .synced(syncedAt)
-        } catch let error as LeaderboardCloudError {
-            preferences.leaderboardLastSyncError = error.description
-            syncStatus = .failed(error.description)
-            Log.network.error("Leaderboard sync failed: \(error.description, privacy: .public)")
-        } catch {
-            let reason = error.localizedDescription
-            preferences.leaderboardLastSyncError = reason
-            syncStatus = .failed(reason)
-            Log.network.error("Leaderboard sync failed: \(reason, privacy: .public)")
-        }
+        await submitCurrentScores(force: force, showsStatus: true, refreshStoreBeforeSubmit: true)
     }
 
-    func loadScores(metric: LeaderboardMetric, period: LeaderboardPeriod, now: Date = .now) async {
+    func loadScores(metric: LeaderboardMetric,
+                    period: LeaderboardPeriod,
+                    now: Date = .now,
+                    forceRefresh: Bool = false) async {
+        guard preferences.leaderboardsEnabled else {
+            scores = []
+            lastLoadedPeriodKey = nil
+            scoreError = nil
+            scoreEmptyMessage = nil
+            return
+        }
+
+        visibleScoreQuery = VisibleScoreQuery(metric: metric, period: period)
         ensureLocalAvatarSeed()
-        await reconcileCurrentUserProfileIfPossible()
         let requestedWindow = LeaderboardPeriodCalculator.window(for: period, now: now)
+        let windows = scoreLookupWindows(for: period, now: now)
         lastLoadedPeriodKey = requestedWindow.periodKey
         scoreError = nil
         scoreEmptyMessage = nil
+
+        let cached = await cachedScores(metric: metric, period: period, windows: windows)
+        if let cached {
+            applyCachedScores(cached, requestedPeriod: period)
+        }
+        let shouldRefresh = forceRefresh || cached.map { !cacheIsFresh($0.savedAt) } ?? true
+        guard shouldRefresh else { return }
+
         isLoadingScores = true
         defer { isLoadingScores = false }
-
-        do {
-            for window in scoreLookupWindows(for: period, now: now) {
-                let fetched = try await client.fetchScores(
-                    metric: metric,
-                    period: period,
-                    periodKey: window.periodKey,
-                    limit: 100
-                )
-                if !fetched.isEmpty {
-                    scores = fetched
-                    lastLoadedPeriodKey = window.periodKey
-                    return
-                }
-            }
-            scores = []
-            lastLoadedPeriodKey = requestedWindow.periodKey
-            scoreEmptyMessage = emptyScoresMessage(for: period)
-        } catch let error as LeaderboardCloudError {
-            scores = []
-            scoreEmptyMessage = nil
-            scoreError = error.description
-        } catch {
-            scores = []
-            scoreEmptyMessage = nil
-            scoreError = error.localizedDescription
-        }
+        await fetchScoresFromCloud(
+            metric: metric,
+            period: period,
+            windows: windows,
+            requestedWindow: requestedWindow
+        )
     }
 
     func loadScoreHistory(userHash: String,
                           metric: LeaderboardMetric,
                           period: LeaderboardPeriod,
+                          historyStartMonthKey: String? = nil,
+                          forceRefresh: Bool = false,
                           now: Date = .now) async {
+        visibleHistoryQuery = VisibleHistoryQuery(
+            userHash: userHash,
+            metric: metric,
+            period: period,
+            historyStartMonthKey: historyStartMonthKey
+        )
         selectedUserHistoryError = nil
         if userHash == currentUserHash {
             let points = builder.historyPoints(
@@ -256,7 +215,11 @@ final class LeaderboardSyncViewModel {
             return
         }
 
-        let historyStart = await remoteHistoryStartDate(userHash: userHash, period: period)
+        let historyStart = await remoteHistoryStartDate(
+            userHash: userHash,
+            period: period,
+            preferredMonthKey: historyStartMonthKey
+        )
         if selectedUserHistoryError != nil {
             selectedUserHistory = []
             isLoadingSelectedUserHistory = false
@@ -270,6 +233,20 @@ final class LeaderboardSyncViewModel {
             return
         }
 
+        let cacheKey = LeaderboardHistoryCacheKey(
+            userHash: userHash,
+            metric: metric,
+            period: period,
+            windowKeys: windows.map(\.periodKey)
+        )
+        let cached = await localStore.readHistory(for: cacheKey)
+        if let cached {
+            selectedUserHistory = cached.points
+            selectedUserHistoryError = nil
+        }
+        let shouldRefresh = forceRefresh || cached.map { !cacheIsFresh($0.savedAt) } ?? true
+        guard shouldRefresh else { return }
+
         isLoadingSelectedUserHistory = true
         defer { isLoadingSelectedUserHistory = false }
 
@@ -282,14 +259,146 @@ final class LeaderboardSyncViewModel {
             )
             guard !Task.isCancelled else { return }
             selectedUserHistory = points
+            await localStore.writeHistory(points, for: cacheKey, savedAt: Date())
         } catch is CancellationError {
             return
         } catch let error as LeaderboardCloudError {
-            selectedUserHistory = []
-            selectedUserHistoryError = error.description
+            if cached == nil {
+                selectedUserHistory = []
+                selectedUserHistoryError = error.description
+            } else {
+                Log.network.error("Leaderboard history refresh failed: \(error.description, privacy: .public)")
+            }
         } catch {
-            selectedUserHistory = []
-            selectedUserHistoryError = error.localizedDescription
+            if cached == nil {
+                selectedUserHistory = []
+                selectedUserHistoryError = error.localizedDescription
+            } else {
+                Log.network.error("Leaderboard history refresh failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    private func syncSilentlyIfNeeded() async {
+        await submitCurrentScores(force: false, showsStatus: false, refreshStoreBeforeSubmit: false)
+    }
+
+    private func submitCurrentScores(force: Bool, showsStatus: Bool, refreshStoreBeforeSubmit: Bool) async {
+        guard preferences.leaderboardsEnabled else {
+            if showsStatus { syncStatus = .disabled }
+            return
+        }
+        ensureLocalAvatarSeed()
+        let nickname = preferences.leaderboardNickname.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !nickname.isEmpty else {
+            if showsStatus { syncStatus = .needsNickname }
+            return
+        }
+
+        if showsStatus {
+            syncStatus = .checkingAccount
+            accountState = await client.accountState()
+            guard accountState == .available else {
+                let reason = accountState.displayText
+                preferences.leaderboardLastSyncError = reason
+                syncStatus = .failed(reason)
+                return
+            }
+            do {
+                try await reconcileCurrentUserProfile()
+            } catch {
+                let reason = userFacingMessage(error)
+                preferences.leaderboardLastSyncError = reason
+                syncStatus = .failed(reason)
+                return
+            }
+        }
+
+        if showsStatus { syncStatus = .syncing }
+        if refreshBeforeSync && refreshStoreBeforeSubmit {
+            await store.refresh()
+        }
+        let now = Date()
+        let includeActivity = preferences.aiActivityAnalysisEnabled && ScreenTimeService.canRead()
+        let submissions = builder.submissions(
+            sessions: store.sessions,
+            nickname: nickname,
+            includeActivity: includeActivity,
+            now: now
+        )
+        let historySubmissions = builder.historySubmissions(
+            sessions: store.sessions,
+            includeActivity: includeActivity,
+            now: now
+        )
+        guard !submissions.isEmpty || !historySubmissions.isEmpty else {
+            let reason = "No leaderboard scores to submit yet."
+            if showsStatus {
+                preferences.leaderboardLastSyncError = reason
+                syncStatus = .failed(reason)
+            }
+            return
+        }
+        let draft = profileDraft(nickname: nickname)
+        let fingerprint = LeaderboardSyncFingerprint.make(
+            profile: draft,
+            submissions: submissions,
+            historySubmissions: historySubmissions
+        )
+        let syncState = await localStore.readSyncState()
+        if !force {
+            guard syncState.lastFingerprint != fingerprint else {
+                if showsStatus, let last = syncState.lastUploadedAt ?? preferences.leaderboardLastSyncedAt {
+                    syncStatus = .synced(last)
+                }
+                return
+            }
+            if let lastUploadedAt = syncState.lastUploadedAt,
+               now.timeIntervalSince(lastUploadedAt) < silentSyncMinimumInterval {
+                scheduleSilentSync(after: silentSyncMinimumInterval - now.timeIntervalSince(lastUploadedAt))
+                if showsStatus {
+                    syncStatus = .synced(lastUploadedAt)
+                }
+                return
+            }
+        }
+
+        do {
+            let profile = try await client.submit(
+                submissions,
+                historySubmissions: historySubmissions,
+                profile: draft
+            )
+            remember(profile: profile)
+            await localStore.writeProfile(profile, savedAt: now)
+            let submittedPeriodKeys = submissions
+                .map { "\($0.period.rawValue):\($0.periodKey)" }
+                .uniqued()
+                .sorted()
+            await localStore.writeSyncState(LeaderboardLocalSyncState(
+                lastFingerprint: fingerprint,
+                lastUploadedAt: now,
+                lastSubmittedPeriodKeys: submittedPeriodKeys
+            ))
+            let syncedAt = now
+            preferences.leaderboardLastSyncedAt = syncedAt
+            preferences.leaderboardLastSyncError = ""
+            preferences.leaderboardLastSubmittedPeriodKeys = submittedPeriodKeys
+            syncStatus = .synced(syncedAt)
+            await refreshVisibleLeaderboardAfterSync()
+        } catch let error as LeaderboardCloudError {
+            if showsStatus {
+                preferences.leaderboardLastSyncError = error.description
+                syncStatus = .failed(error.description)
+            }
+            Log.network.error("Leaderboard sync failed: \(error.description, privacy: .public)")
+        } catch {
+            let reason = error.localizedDescription
+            if showsStatus {
+                preferences.leaderboardLastSyncError = reason
+                syncStatus = .failed(reason)
+            }
+            Log.network.error("Leaderboard sync failed: \(reason, privacy: .public)")
         }
     }
 
@@ -318,6 +427,21 @@ final class LeaderboardSyncViewModel {
         await saveCurrentProfileIfPossible()
     }
 
+    private func scheduleSilentSync(after delay: TimeInterval) {
+        silentSyncTask?.cancel()
+        silentSyncTask = Task { [weak self] in
+            if delay > 0 {
+                try? await Task.sleep(for: .seconds(delay))
+            }
+            guard !Task.isCancelled else { return }
+            await self?.syncSilentlyIfNeeded()
+        }
+    }
+
+    private func cacheIsFresh(_ savedAt: Date) -> Bool {
+        Date().timeIntervalSince(savedAt) < scoreCacheTTL
+    }
+
     private func scoreLookupWindows(for period: LeaderboardPeriod, now: Date) -> [LeaderboardPeriodWindow] {
         guard period == .day else {
             return [LeaderboardPeriodCalculator.window(for: period, now: now)]
@@ -330,8 +454,111 @@ final class LeaderboardSyncViewModel {
         }
     }
 
-    private func remoteHistoryStartDate(userHash: String, period: LeaderboardPeriod) async -> Date? {
+    private func cachedScores(metric: LeaderboardMetric,
+                              period: LeaderboardPeriod,
+                              windows: [LeaderboardPeriodWindow]) async -> LeaderboardCachedScores? {
+        var firstEmptyCache: LeaderboardCachedScores?
+        for window in windows {
+            let key = LeaderboardScoresCacheKey(
+                metric: metric,
+                period: period,
+                periodKey: window.periodKey,
+                limit: 100
+            )
+            guard let cached = await localStore.readScores(for: key) else { continue }
+            if !cached.scores.isEmpty {
+                return cached
+            }
+            if firstEmptyCache == nil {
+                firstEmptyCache = cached
+            }
+        }
+        return firstEmptyCache
+    }
+
+    private func applyCachedScores(_ cached: LeaderboardCachedScores, requestedPeriod: LeaderboardPeriod) {
+        scores = cached.scores
+        lastLoadedPeriodKey = cached.key.periodKey
+        scoreError = nil
+        scoreEmptyMessage = cached.scores.isEmpty ? emptyScoresMessage(for: requestedPeriod) : nil
+    }
+
+    private func fetchScoresFromCloud(metric: LeaderboardMetric,
+                                      period: LeaderboardPeriod,
+                                      windows: [LeaderboardPeriodWindow],
+                                      requestedWindow: LeaderboardPeriodWindow) async {
+        let hadDisplayableScores = !scores.isEmpty
+        do {
+            for window in windows {
+                let fetched = try await client.fetchScores(
+                    metric: metric,
+                    period: period,
+                    periodKey: window.periodKey,
+                    limit: 100
+                )
+                let key = LeaderboardScoresCacheKey(
+                    metric: metric,
+                    period: period,
+                    periodKey: window.periodKey,
+                    limit: 100
+                )
+                await localStore.writeScores(fetched, for: key, savedAt: Date())
+                await cacheProfiles(from: fetched)
+                if !fetched.isEmpty {
+                    scores = fetched
+                    lastLoadedPeriodKey = window.periodKey
+                    scoreError = nil
+                    scoreEmptyMessage = nil
+                    return
+                }
+            }
+            scores = []
+            lastLoadedPeriodKey = requestedWindow.periodKey
+            scoreError = nil
+            scoreEmptyMessage = emptyScoresMessage(for: period)
+        } catch let error as LeaderboardCloudError {
+            handleScoreRefreshError(error.description, hadDisplayableScores: hadDisplayableScores)
+        } catch {
+            handleScoreRefreshError(error.localizedDescription, hadDisplayableScores: hadDisplayableScores)
+        }
+    }
+
+    private func handleScoreRefreshError(_ reason: String, hadDisplayableScores: Bool) {
+        scoreEmptyMessage = nil
+        if hadDisplayableScores {
+            Log.network.error("Leaderboard score refresh failed: \(reason, privacy: .public)")
+        } else {
+            scores = []
+            scoreError = reason
+        }
+    }
+
+    private func cacheProfiles(from scores: [LeaderboardScore]) async {
+        for score in scores {
+            guard let userHash = score.userHash else { continue }
+            await localStore.writeProfile(LeaderboardProfile(
+                userHash: userHash,
+                nickname: score.nickname,
+                avatarSeed: score.avatarSeed,
+                historyStartMonthKey: score.historyStartMonthKey,
+                updatedAt: score.updatedAt
+            ), savedAt: Date())
+        }
+    }
+
+    private func remoteHistoryStartDate(userHash: String,
+                                        period: LeaderboardPeriod,
+                                        preferredMonthKey: String?) async -> Date? {
         guard period == .allTime else { return nil }
+        if let preferredMonthKey,
+           let window = LeaderboardPeriodCalculator.window(for: .month, periodKey: preferredMonthKey) {
+            return window.startUTC
+        }
+        if let cached = await localStore.readProfile(userHash: userHash),
+           let monthKey = cached.profile.historyStartMonthKey,
+           let window = LeaderboardPeriodCalculator.window(for: .month, periodKey: monthKey) {
+            return window.startUTC
+        }
         do {
             guard let profile = try await client.fetchProfile(userHash: userHash),
                   let monthKey = profile.historyStartMonthKey,
@@ -339,6 +566,7 @@ final class LeaderboardSyncViewModel {
                 selectedUserHistoryError = "This user has not uploaded local history yet."
                 return nil
             }
+            await localStore.writeProfile(profile, savedAt: Date())
             return window.startUTC
         } catch let error as LeaderboardCloudError {
             selectedUserHistoryError = error.description
@@ -346,6 +574,21 @@ final class LeaderboardSyncViewModel {
         } catch {
             selectedUserHistoryError = error.localizedDescription
             return nil
+        }
+    }
+
+    private func refreshVisibleLeaderboardAfterSync() async {
+        if let query = visibleScoreQuery {
+            await loadScores(metric: query.metric, period: query.period, forceRefresh: true)
+        }
+        if let query = visibleHistoryQuery {
+            await loadScoreHistory(
+                userHash: query.userHash,
+                metric: query.metric,
+                period: query.period,
+                historyStartMonthKey: query.historyStartMonthKey,
+                forceRefresh: true
+            )
         }
     }
 
@@ -388,11 +631,13 @@ final class LeaderboardSyncViewModel {
         guard needsRemoteProfile else { return }
 
         preferences.leaderboardProfileUserHash = userHash
-        if let profile = try await client.fetchProfile(userHash: userHash),
-           let avatarSeed = profile.avatarSeed,
-           !avatarSeed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            preferences.leaderboardAvatarSeed = avatarSeed
-            return
+        if let profile = try await client.fetchProfile(userHash: userHash) {
+            await localStore.writeProfile(profile, savedAt: Date())
+            if let avatarSeed = profile.avatarSeed,
+               !avatarSeed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                preferences.leaderboardAvatarSeed = avatarSeed
+                return
+            }
         }
         preferences.leaderboardAvatarSeed = LeaderboardAvatarSeed.random()
     }
@@ -422,6 +667,7 @@ final class LeaderboardSyncViewModel {
         do {
             let profile = try await client.saveProfile(profileDraft(nickname: nickname))
             remember(profile: profile)
+            await localStore.writeProfile(profile, savedAt: Date())
             preferences.leaderboardLastSyncError = ""
             syncStatus = statusAfterAccountCheck()
         } catch {

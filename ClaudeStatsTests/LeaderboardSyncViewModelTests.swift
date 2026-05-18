@@ -31,18 +31,34 @@ struct LeaderboardSyncViewModelTests {
         }
     }
 
-    @Test("Daily sync is throttled unless forced")
-    func throttling() async {
+    @Test("Silent sync skips unchanged fingerprints unless forced")
+    func fingerprintSkipsUnchangedSilentSync() async {
         let fixture = makeFixture(enabled: true)
-        fixture.preferences.leaderboardLastSyncedAt = Date()
+
+        await fixture.viewModel.syncNow()
+        await fixture.client.clearSubmissions()
 
         await fixture.viewModel.syncIfDue(force: false)
         #expect(await fixture.client.submittedCount() == 0)
 
-        await fixture.viewModel.syncIfDue(force: true)
+        await fixture.viewModel.syncNow()
         #expect(await fixture.client.submittedCount() == 8)
         #expect(await fixture.client.submittedHistoryCount() > 0)
         #expect(fixture.preferences.leaderboardLastSubmittedPeriodKeys.contains("allTime:all"))
+    }
+
+    @Test("Silent sync respects the minimum upload interval")
+    func silentSyncMinimumInterval() async {
+        let fixture = makeFixture(enabled: true, silentSyncMinimumInterval: 1_800)
+        await fixture.localStore.writeSyncState(LeaderboardLocalSyncState(
+            lastFingerprint: "old",
+            lastUploadedAt: Date(),
+            lastSubmittedPeriodKeys: []
+        ))
+
+        await fixture.viewModel.syncIfDue(force: false)
+
+        #expect(await fixture.client.submittedCount() == 0)
     }
 
     @Test("Daily scores fall back to the most recent UTC day with results")
@@ -76,6 +92,87 @@ struct LeaderboardSyncViewModelTests {
         #expect(fixture.viewModel.scores.count == 1)
         #expect(fixture.viewModel.scoreEmptyMessage == nil)
         #expect(await fixture.client.fetchedPeriodKeys() == ["2026-05-16", "2026-05-15"])
+    }
+
+    @Test("Fresh cached scores render without hitting CloudKit")
+    func freshCachedScoresRenderWithoutCloudKit() async {
+        let fixture = makeFixture(enabled: true)
+        let now = dateUTC(2026, 5, 16, 8)
+        let periodKey = LeaderboardPeriodCalculator.window(for: .allTime, now: now).periodKey
+        let cached = [
+            score(id: "cached", userHash: "cachedhash", rank: 1, nickname: "Cached", value: 99, now: now),
+        ]
+        await fixture.localStore.writeScores(
+            cached,
+            for: LeaderboardScoresCacheKey(metric: .tokensWithCache, period: .allTime, periodKey: periodKey, limit: 100),
+            savedAt: Date()
+        )
+
+        await fixture.viewModel.loadScores(metric: .tokensWithCache, period: .allTime, now: now)
+
+        #expect(fixture.viewModel.scores == cached)
+        #expect(await fixture.client.fetchedPeriodKeys().isEmpty)
+    }
+
+    @Test("Stale cached scores stay visible while CloudKit refreshes")
+    func staleCachedScoresRefreshFromCloudKit() async {
+        let fixture = makeFixture(enabled: true)
+        let now = dateUTC(2026, 5, 16, 8)
+        let key = LeaderboardScoresCacheKey(metric: .tokensWithCache, period: .allTime, periodKey: "all", limit: 100)
+        await fixture.localStore.writeScores(
+            [score(id: "cached", userHash: "cachedhash", rank: 1, nickname: "Cached", value: 99, now: now)],
+            for: key,
+            savedAt: Date().addingTimeInterval(-7_200)
+        )
+        await fixture.client.setScores([
+            "all": [
+                score(id: "fresh", userHash: "freshhash", rank: 1, nickname: "Fresh", value: 200, now: now),
+            ],
+        ])
+
+        await fixture.viewModel.loadScores(metric: .tokensWithCache, period: .allTime, now: now)
+
+        #expect(fixture.viewModel.scores.first?.id == "fresh")
+        #expect(await fixture.client.fetchedPeriodKeys() == ["all"])
+    }
+
+    @Test("Force refresh bypasses a fresh score cache")
+    func forceRefreshBypassesFreshCache() async {
+        let fixture = makeFixture(enabled: true)
+        let now = dateUTC(2026, 5, 16, 8)
+        await fixture.localStore.writeScores(
+            [score(id: "cached", userHash: "cachedhash", rank: 1, nickname: "Cached", value: 99, now: now)],
+            for: LeaderboardScoresCacheKey(metric: .tokensWithCache, period: .allTime, periodKey: "all", limit: 100),
+            savedAt: Date()
+        )
+        await fixture.client.setScores([
+            "all": [
+                score(id: "fresh", userHash: "freshhash", rank: 1, nickname: "Fresh", value: 200, now: now),
+            ],
+        ])
+
+        await fixture.viewModel.loadScores(metric: .tokensWithCache, period: .allTime, now: now, forceRefresh: true)
+
+        #expect(fixture.viewModel.scores.first?.id == "fresh")
+        #expect(await fixture.client.fetchedPeriodKeys() == ["all"])
+    }
+
+    @Test("CloudKit score failure keeps cached scores visible")
+    func scoreFailureKeepsCachedScoresVisible() async {
+        let fixture = makeFixture(enabled: true)
+        let now = dateUTC(2026, 5, 16, 8)
+        let cached = [score(id: "cached", userHash: "cachedhash", rank: 1, nickname: "Cached", value: 99, now: now)]
+        await fixture.localStore.writeScores(
+            cached,
+            for: LeaderboardScoresCacheKey(metric: .tokensWithCache, period: .allTime, periodKey: "all", limit: 100),
+            savedAt: Date().addingTimeInterval(-7_200)
+        )
+        await fixture.client.setFetchScoresError(LeaderboardCloudError.cloudKit("Network unavailable."))
+
+        await fixture.viewModel.loadScores(metric: .tokensWithCache, period: .allTime, now: now)
+
+        #expect(fixture.viewModel.scores == cached)
+        #expect(fixture.viewModel.scoreError == nil)
     }
 
     @Test("Daily scores show a recent-days empty message when no fallback exists")
@@ -297,7 +394,11 @@ struct LeaderboardSyncViewModelTests {
         )?.userHash == "otherhash")
     }
 
-    private func makeFixture(enabled: Bool, sessions: [Session]? = nil) -> Fixture {
+    private func makeFixture(enabled: Bool,
+                             sessions: [Session]? = nil,
+                             scoreCacheTTL: TimeInterval = 3_600,
+                             silentSyncDebounceInterval: TimeInterval = 0,
+                             silentSyncMinimumInterval: TimeInterval = 0) -> Fixture {
         let suiteName = "com.claudestats.tests.leaderboards.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName) ?? .standard
         defaults.removePersistentDomain(forName: suiteName)
@@ -312,13 +413,18 @@ struct LeaderboardSyncViewModelTests {
             session("b", provider: .codex, at: now.addingTimeInterval(60), tokens: 200),
         ])
         let client = FakeLeaderboardClient()
+        let localStore = FakeLeaderboardLocalStore()
         let viewModel = LeaderboardSyncViewModel(
             preferences: preferences,
             store: store,
             client: client,
-            refreshBeforeSync: false
+            localStore: localStore,
+            refreshBeforeSync: false,
+            scoreCacheTTL: scoreCacheTTL,
+            silentSyncDebounceInterval: silentSyncDebounceInterval,
+            silentSyncMinimumInterval: silentSyncMinimumInterval
         )
-        return Fixture(preferences: preferences, viewModel: viewModel, client: client)
+        return Fixture(preferences: preferences, viewModel: viewModel, client: client, localStore: localStore)
     }
 
     private func session(_ id: String,
@@ -380,6 +486,7 @@ struct LeaderboardSyncViewModelTests {
         let preferences: Preferences
         let viewModel: LeaderboardSyncViewModel
         let client: FakeLeaderboardClient
+        let localStore: FakeLeaderboardLocalStore
     }
 }
 
@@ -394,6 +501,7 @@ private actor FakeLeaderboardClient: LeaderboardCloudServicing {
     private var historyByPeriodKey: [String: Int64] = [:]
     private var fetchedKeys: [String] = []
     private var fetchedHistoryKeys: [String] = []
+    private var fetchScoresError: LeaderboardCloudError?
 
     func setAccountState(_ state: LeaderboardCloudAccountState) {
         self.state = state
@@ -407,6 +515,12 @@ private actor FakeLeaderboardClient: LeaderboardCloudServicing {
         submittedHistory.count
     }
 
+    func clearSubmissions() {
+        submitted = []
+        submittedHistory = []
+        savedProfiles = []
+    }
+
     func savedProfileCount() -> Int {
         savedProfiles.count
     }
@@ -417,6 +531,10 @@ private actor FakeLeaderboardClient: LeaderboardCloudServicing {
 
     func setScores(_ scoresByPeriodKey: [String: [LeaderboardScore]]) {
         self.scoresByPeriodKey = scoresByPeriodKey
+    }
+
+    func setFetchScoresError(_ error: LeaderboardCloudError?) {
+        fetchScoresError = error
     }
 
     func setHistory(_ historyByPeriodKey: [String: Int64]) {
@@ -487,6 +605,9 @@ private actor FakeLeaderboardClient: LeaderboardCloudServicing {
                      period: LeaderboardPeriod,
                      periodKey: String,
                      limit: Int) async throws -> [LeaderboardScore] {
+        if let fetchScoresError {
+            throw fetchScoresError
+        }
         fetchedKeys.append(periodKey)
         return scoresByPeriodKey[periodKey] ?? []
     }
@@ -505,5 +626,45 @@ private actor FakeLeaderboardClient: LeaderboardCloudServicing {
                 updatedAt: nil
             )
         }
+    }
+}
+
+private actor FakeLeaderboardLocalStore: LeaderboardLocalStoring {
+    private var scoresByKey: [LeaderboardScoresCacheKey: LeaderboardCachedScores] = [:]
+    private var historyByKey: [LeaderboardHistoryCacheKey: LeaderboardCachedHistory] = [:]
+    private var profilesByHash: [String: LeaderboardCachedProfile] = [:]
+    private var syncState: LeaderboardLocalSyncState = .empty
+
+    func readScores(for key: LeaderboardScoresCacheKey) async -> LeaderboardCachedScores? {
+        scoresByKey[key]
+    }
+
+    func writeScores(_ scores: [LeaderboardScore], for key: LeaderboardScoresCacheKey, savedAt: Date) async {
+        scoresByKey[key] = LeaderboardCachedScores(key: key, savedAt: savedAt, scores: scores)
+    }
+
+    func readHistory(for key: LeaderboardHistoryCacheKey) async -> LeaderboardCachedHistory? {
+        historyByKey[key]
+    }
+
+    func writeHistory(_ points: [LeaderboardScoreHistoryPoint], for key: LeaderboardHistoryCacheKey, savedAt: Date) async {
+        historyByKey[key] = LeaderboardCachedHistory(key: key, savedAt: savedAt, points: points)
+    }
+
+    func readProfile(userHash: String) async -> LeaderboardCachedProfile? {
+        profilesByHash[userHash]
+    }
+
+    func writeProfile(_ profile: LeaderboardProfile, savedAt: Date) async {
+        let key = LeaderboardProfileCacheKey(userHash: profile.userHash)
+        profilesByHash[profile.userHash] = LeaderboardCachedProfile(key: key, savedAt: savedAt, profile: profile)
+    }
+
+    func readSyncState() async -> LeaderboardLocalSyncState {
+        syncState
+    }
+
+    func writeSyncState(_ state: LeaderboardLocalSyncState) async {
+        syncState = state
     }
 }

@@ -149,12 +149,11 @@ struct LeaderboardsView: View {
             isLoadingScores: env.leaderboards.isLoadingScores,
             isSyncBusy: isSyncBusy,
             onRefresh: {
-                Task { await env.leaderboards.loadScores(metric: metric, period: period) }
+                Task { await env.leaderboards.loadScores(metric: metric, period: period, forceRefresh: true) }
             },
             onSync: {
                 Task {
                     await env.leaderboards.syncNow()
-                    await env.leaderboards.loadScores(metric: metric, period: period)
                 }
             }
         )
@@ -238,7 +237,8 @@ struct LeaderboardsView: View {
         await env.leaderboards.loadScoreHistory(
             userHash: userHash,
             metric: metric,
-            period: period
+            period: period,
+            historyStartMonthKey: score.historyStartMonthKey
         )
     }
 }
