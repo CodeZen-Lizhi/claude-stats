@@ -6,6 +6,12 @@ enum NetworkProxyEvent: Sendable {
     case stopped
     case flowCreated(NetworkFlow)
     case flowUpdated(NetworkFlow)
+    case flowCompleted(NetworkFlow)
+    case webSocketMessageAppended(flowID: UUID, message: NetworkWebSocketMessage)
+    case interceptQueued(NetworkBreakpointItem)
+    case interceptResolved(UUID)
+    case replayCompleted(NetworkFlow)
+    case upstreamRouteChanged(String)
     case failed(String)
 }
 

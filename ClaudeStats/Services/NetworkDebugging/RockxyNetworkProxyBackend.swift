@@ -21,7 +21,8 @@ final class RockxyNetworkProxyBackend: NetworkProxyBackend, @unchecked Sendable 
             case .stopped:
                 eventHandler(.stopped)
             case .transaction(let transaction):
-                eventHandler(.flowCreated(Self.flow(from: transaction, bodyLimit: bodyLimit)))
+                let flow = Self.flow(from: transaction, bodyLimit: bodyLimit)
+                eventHandler(flow.state == .completed ? .flowCompleted(flow) : .flowCreated(flow))
             case .failed(let message):
                 eventHandler(.failed(message))
             }
@@ -119,6 +120,19 @@ final class RockxyNetworkProxyBackend: NetworkProxyBackend, @unchecked Sendable 
         )
     }
 
+    func resolveAllBreakpoints(decision: NetworkBreakpointDecision) async {
+        await backend.resolveAllBreakpoints(
+            decision: RockxyBreakpointDecisionSnapshot(rawValue: decision.rawValue) ?? .execute
+        )
+    }
+
+    func compose(_ draft: NetworkReplayDraft) async throws -> NetworkFlow {
+        var flow = try await replay(draft)
+        flow.operationSource = .compose
+        flow.isReplay = false
+        return flow
+    }
+
     func replay(_ draft: NetworkReplayDraft) async throws -> NetworkFlow {
         guard let url = URL(string: draft.url) else {
             throw NetworkReplayError.invalidURL
@@ -133,7 +147,64 @@ final class RockxyNetworkProxyBackend: NetworkProxyBackend, @unchecked Sendable 
         ))
         var flow = Self.flow(from: result.transaction, bodyLimit: bodyLimit)
         flow.isReplay = true
+        flow.operationSource = .replay
         return flow
+    }
+
+    func batchReplay(_ drafts: [NetworkReplayDraft], concurrencyLimit: Int) async -> [NetworkBatchReplayItemResult] {
+        let limitedConcurrency = max(1, min(concurrencyLimit, 8))
+        var iterator = drafts.enumerated().makeIterator()
+        let lock = NSLock()
+
+        return await withTaskGroup(of: NetworkBatchReplayItemResult.self) { group in
+            for _ in 0..<limitedConcurrency {
+                guard let next = lock.withLock({ iterator.next() }) else { break }
+                group.addTask { [self] in
+                    await replayResult(index: next.offset, draft: next.element)
+                }
+            }
+
+            var results: [NetworkBatchReplayItemResult] = []
+            for await result in group {
+                results.append(result)
+                if let next = lock.withLock({ iterator.next() }) {
+                    group.addTask { [self] in
+                        await replayResult(index: next.offset, draft: next.element)
+                    }
+                }
+            }
+            return results.sorted { $0.index < $1.index }
+        }
+    }
+
+    func forwardInterceptedFlow(id: UUID) async {
+        await resolveBreakpoint(id: id, decision: .execute)
+    }
+
+    func dropInterceptedFlow(id: UUID) async {
+        await resolveBreakpoint(id: id, decision: .abort)
+    }
+
+    func exportFlows(_ flows: [NetworkFlow], format: NetworkRequestExportFormat) async throws -> Data {
+        Data(NetworkRequestOperationService().export(flows, format: format).utf8)
+    }
+
+    func importRequest(_ text: String, format: NetworkRequestImportFormat) async throws -> NetworkReplayDraft {
+        try NetworkRequestOperationService().importRequest(text, format: format).draft
+    }
+
+    func sendWebSocketMessage(_ draft: NetworkWebSocketSendDraft) async throws -> NetworkWebSocketMessage {
+        throw NetworkReplayError.webSocketSendUnavailable
+    }
+
+    private func replayResult(index: Int, draft: NetworkReplayDraft) async -> NetworkBatchReplayItemResult {
+        do {
+            var flow = try await replay(draft)
+            flow.operationSource = .automate
+            return NetworkBatchReplayItemResult(index: index, flow: flow, errorMessage: nil)
+        } catch {
+            return NetworkBatchReplayItemResult(index: index, flow: nil, errorMessage: error.localizedDescription)
+        }
     }
 
     static func flow(from transaction: RockxyCapturedTransaction, bodyLimit: Int = 2 * 1024 * 1024) -> NetworkFlow {
@@ -267,11 +338,14 @@ final class RockxyNetworkProxyBackend: NetworkProxyBackend, @unchecked Sendable 
 
 private enum NetworkReplayError: LocalizedError {
     case invalidURL
+    case webSocketSendUnavailable
 
     var errorDescription: String? {
         switch self {
         case .invalidURL:
             "Replay URL is invalid."
+        case .webSocketSendUnavailable:
+            "WebSocket send is not available until Rockxy exposes the live upgraded channel."
         }
     }
 }

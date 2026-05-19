@@ -28,8 +28,13 @@ final class NetworkDebuggerStore: @unchecked Sendable {
     var selectedFlowID: UUID?
     var selectedRequestTab: NetworkInspectorTab = .header
     var selectedResponseTab: NetworkInspectorTab = .body
+    var selectedTrafficWorkspace: NetworkTrafficWorkspace = .httpTraffic
     var trafficSidebarLayer: NetworkTrafficSidebarLayer = .sections
     var trafficFilter = NetworkTrafficFilter()
+    var webSocketFilter = NetworkWebSocketMessageFilter()
+    var selectedWebSocketSessionID: UUID?
+    var selectedWebSocketMessageID: UUID?
+    var webSocketSendDraft = NetworkWebSocketSendDraft()
     var isSystemProxyWorking = false
     var isHelperWorking = false
     var isUpstreamProxyWorking = false
@@ -37,9 +42,15 @@ final class NetworkDebuggerStore: @unchecked Sendable {
     var isRulesWorking = false
     var isPluginsWorking = false
     var isReplayWorking = false
+    var isAutomateWorking = false
     var upstreamProxyConfirmation: NetworkUpstreamProxyConfirmation?
     var upstreamProxyTestResult: NetworkUpstreamProxyTestResult?
+    var upstreamRouteProbeResult: NetworkRouteProbeResult?
     var upstreamProxyStatusMessage: String?
+    var upstreamEnvironments: [NetworkUpstreamEnvironment] = [.default]
+    var selectedUpstreamEnvironmentID: UUID = NetworkUpstreamEnvironment.default.id
+    var selectedUpstreamProfileID: UUID?
+    var selectedUpstreamRouteRuleID: UUID?
     var rules: [NetworkRuleDraft] = []
     var selectedRuleID: UUID?
     var ruleMatchResult: NetworkRuleMatchSnapshot?
@@ -49,12 +60,20 @@ final class NetworkDebuggerStore: @unchecked Sendable {
     var breakpoints: [NetworkBreakpointItem] = []
     var selectedBreakpointID: UUID?
     var replayDraft: NetworkReplayDraft?
+    var replaySessions: [NetworkReplaySession] = []
+    var selectedReplaySessionID: UUID?
+    var importRequestText = ""
+    var importRequestFormat: NetworkRequestImportFormat = .curl
+    var automateDraft: NetworkAutomateDraft?
+    var automateResults: [NetworkAutomateRunResult] = []
     var manualUpstreamProxyPassword = ""
 
     private let proxyBackend: any NetworkProxyBackend
     private let systemProxyService: any NetworkSystemProxyManaging
     private let helperController: any NetworkHelperManaging
     private let certificateService = NetworkCertificateService()
+    private let requestOperationService = NetworkRequestOperationService()
+    private let upstreamEnvironmentStore = NetworkUpstreamEnvironmentStore()
     private weak var preferences: Preferences?
     private var autoEnabledSystemProxyForCurrentCapture = false
 
@@ -79,6 +98,70 @@ final class NetworkDebuggerStore: @unchecked Sendable {
         flows.filter { flow in
             matchesTrafficFilter(flow)
         }
+    }
+
+    var httpTrafficFlows: [NetworkFlow] {
+        filteredFlows.filter { $0.flowProtocol != .webSocket }
+    }
+
+    var webSocketSessions: [NetworkWebSocketSession] {
+        flows
+            .filter { $0.flowProtocol == .webSocket || !$0.webSocketFrames.isEmpty }
+            .map(Self.webSocketSession(from:))
+            .sorted { $0.lastActivityAt > $1.lastActivityAt }
+    }
+
+    var selectedWebSocketSession: NetworkWebSocketSession? {
+        guard let selectedWebSocketSessionID else { return webSocketSessions.first }
+        return webSocketSessions.first { $0.id == selectedWebSocketSessionID } ?? webSocketSessions.first
+    }
+
+    var selectedWebSocketMessage: NetworkWebSocketMessage? {
+        guard let session = selectedWebSocketSession else { return nil }
+        guard let selectedWebSocketMessageID else { return session.messages.first }
+        return session.messages.first { $0.id == selectedWebSocketMessageID } ?? session.messages.first
+    }
+
+    var filteredWebSocketMessages: [NetworkWebSocketMessage] {
+        guard let session = selectedWebSocketSession else { return [] }
+        return session.messages.filter { message in
+            if webSocketFilter.direction != .all {
+                if webSocketFilter.direction == .sent, message.direction != .sent { return false }
+                if webSocketFilter.direction == .received, message.direction != .received { return false }
+            }
+            if webSocketFilter.opcode != .all,
+               !message.opcode.localizedCaseInsensitiveContains(webSocketFilter.opcode.rawValue)
+            {
+                return false
+            }
+            let query = webSocketFilter.query.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !query.isEmpty else { return true }
+            return message.payloadText.localizedCaseInsensitiveContains(query)
+                || message.opcode.localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    var selectedReplaySession: NetworkReplaySession? {
+        guard let selectedReplaySessionID else { return replaySessions.first }
+        return replaySessions.first { $0.id == selectedReplaySessionID } ?? replaySessions.first
+    }
+
+    var selectedUpstreamEnvironment: NetworkUpstreamEnvironment {
+        upstreamEnvironments.first { $0.id == selectedUpstreamEnvironmentID } ?? upstreamEnvironments.first ?? .default
+    }
+
+    var selectedUpstreamProfile: NetworkUpstreamProfile? {
+        selectedUpstreamEnvironment.profiles.first { $0.id == selectedUpstreamProfileID }
+            ?? selectedUpstreamEnvironment.profiles.first { $0.id == selectedUpstreamEnvironment.selectedProfileID }
+            ?? selectedUpstreamEnvironment.profiles.first
+    }
+
+    var selectedUpstreamRouteRule: NetworkUpstreamRouteRule? {
+        guard let selectedUpstreamRouteRuleID else {
+            return selectedUpstreamEnvironment.routeRules.first
+        }
+        return selectedUpstreamEnvironment.routeRules.first { $0.id == selectedUpstreamRouteRuleID }
+            ?? selectedUpstreamEnvironment.routeRules.first
     }
 
     var selectedRule: NetworkRuleDraft? {
@@ -246,6 +329,8 @@ final class NetworkDebuggerStore: @unchecked Sendable {
     func clearFlows() {
         flows.removeAll()
         selectedFlowID = nil
+        selectedWebSocketSessionID = nil
+        selectedWebSocketMessageID = nil
     }
 
     func resetTrafficFilters() {
@@ -294,15 +379,52 @@ final class NetworkDebuggerStore: @unchecked Sendable {
         updateFlow(id: id) { $0.isSaved.toggle() }
     }
 
+    func setComment(for id: UUID, text: String) {
+        updateFlow(id: id) { $0.comment = text }
+    }
+
+    func deleteFlow(_ id: UUID) {
+        flows.removeAll { $0.id == id }
+        if selectedFlowID == id {
+            selectedFlowID = flows.first?.id
+        }
+    }
+
+    func copyFlow(_ flow: NetworkFlow, format: NetworkRequestExportFormat) {
+        requestOperationService.copyToPasteboard(requestOperationService.export(flow, format: format))
+    }
+
+    func exportVisibleFlows(format: NetworkRequestExportFormat) {
+        requestOperationService.copyToPasteboard(requestOperationService.export(filteredFlows, format: format))
+    }
+
+    func duplicateFlowToReplay(_ flow: NetworkFlow) {
+        prepareReplay(for: flow)
+    }
+
     func prepareReplay(for flow: NetworkFlow) {
-        replayDraft = NetworkReplayDraft(
-            sourceFlowID: flow.id,
-            method: flow.request.method,
-            url: flow.request.url,
-            headers: flow.request.headers,
-            bodyText: flow.request.body.text,
-            contentType: flow.request.body.contentType
-        )
+        let session = requestOperationService.replayDraft(from: flow)
+        upsertReplaySession(session)
+        replayDraft = session.draft
+        selectedTrafficWorkspace = .replay
+    }
+
+    func createComposeSession() {
+        let session = requestOperationService.composeSession()
+        upsertReplaySession(session)
+        replayDraft = session.draft
+        selectedTrafficWorkspace = .replay
+    }
+
+    func importRequestToReplay() {
+        do {
+            let session = try requestOperationService.importRequest(importRequestText, format: importRequestFormat)
+            upsertReplaySession(session)
+            replayDraft = session.draft
+            selectedTrafficWorkspace = .replay
+        } catch {
+            upstreamProxyStatusMessage = error.localizedDescription
+        }
     }
 
     func cancelReplay() {
@@ -315,13 +437,141 @@ final class NetworkDebuggerStore: @unchecked Sendable {
         Task { @MainActor in
             do {
                 let flow = try await proxyBackend.replay(draft)
-                flows.insert(flow, at: 0)
-                selectedFlowID = flow.id
+                insertCapturedFlow(flow)
+                appendReplayResult(flow, draftID: draft.id, errorMessage: nil)
                 replayDraft = nil
             } catch {
                 upstreamProxyStatusMessage = error.localizedDescription
+                appendReplayResult(nil, draftID: draft.id, errorMessage: error.localizedDescription)
             }
             isReplayWorking = false
+        }
+    }
+
+    func sendSelectedReplaySession() {
+        guard let session = selectedReplaySession else { return }
+        replayDraft = session.draft
+        performReplay()
+    }
+
+    func updateSelectedReplayDraft(_ transform: (inout NetworkReplayDraft) -> Void) {
+        guard let session = selectedReplaySession,
+              let index = replaySessions.firstIndex(where: { $0.id == session.id })
+        else { return }
+        transform(&replaySessions[index].draft)
+        replayDraft = replaySessions[index].draft
+    }
+
+    func sendFlowToAutomate(_ flow: NetworkFlow) {
+        automateDraft = NetworkAutomateDraft(baseDraft: requestOperationService.replayDraft(from: flow).draft)
+        automateResults = []
+        selectedTrafficWorkspace = .automate
+    }
+
+    func runAutomate() {
+        guard let draft = automateDraft else { return }
+        isAutomateWorking = true
+        automateResults = []
+        Task { @MainActor in
+            let started = Date()
+            let results = await proxyBackend.batchReplay(
+                draft.expandedDrafts,
+                concurrencyLimit: draft.concurrencyLimit
+            )
+            for result in results {
+                if var flow = result.flow {
+                    flow.operationSource = .automate
+                    flow.isReplay = true
+                    insertCapturedFlow(flow)
+                    automateResults.append(NetworkAutomateRunResult(
+                        requestIndex: result.index,
+                        flowID: flow.id,
+                        url: flow.request.url,
+                        statusCode: flow.response.statusCode,
+                        duration: flow.duration,
+                        responseBytes: flow.responseBytes,
+                        errorMessage: nil
+                    ))
+                } else {
+                    let expanded = draft.expandedDrafts
+                    automateResults.append(NetworkAutomateRunResult(
+                        requestIndex: result.index,
+                        flowID: nil,
+                        url: expanded.indices.contains(result.index) ? expanded[result.index].url : draft.baseDraft.url,
+                        statusCode: nil,
+                        duration: Date().timeIntervalSince(started),
+                        responseBytes: 0,
+                        errorMessage: result.errorMessage
+                    ))
+                }
+            }
+            isAutomateWorking = false
+        }
+    }
+
+    func refreshInterceptQueue() {
+        refreshBreakpoints()
+    }
+
+    func updateSelectedIntercept(_ transform: (inout NetworkBreakpointItem) -> Void) {
+        guard let selectedBreakpointID,
+              let index = breakpoints.firstIndex(where: { $0.id == selectedBreakpointID })
+        else { return }
+        transform(&breakpoints[index])
+        let item = breakpoints[index]
+        Task { @MainActor in
+            await proxyBackend.updateInterceptedFlow(item)
+        }
+    }
+
+    func forwardSelectedIntercept() {
+        guard let selectedBreakpointID else { return }
+        Task { @MainActor in
+            await proxyBackend.forwardInterceptedFlow(id: selectedBreakpointID)
+            refreshBreakpoints()
+        }
+    }
+
+    func dropSelectedIntercept() {
+        guard let selectedBreakpointID else { return }
+        Task { @MainActor in
+            await proxyBackend.dropInterceptedFlow(id: selectedBreakpointID)
+            refreshBreakpoints()
+        }
+    }
+
+    func forwardAllIntercepts() {
+        Task { @MainActor in
+            await proxyBackend.resolveAllBreakpoints(decision: .execute)
+            refreshBreakpoints()
+        }
+    }
+
+    func dropAllIntercepts() {
+        Task { @MainActor in
+            await proxyBackend.resolveAllBreakpoints(decision: .abort)
+            refreshBreakpoints()
+        }
+    }
+
+    func selectWebSocketSession(_ session: NetworkWebSocketSession) {
+        selectedWebSocketSessionID = session.id
+        selectedWebSocketMessageID = session.messages.first?.id
+        webSocketSendDraft.sessionID = session.id
+    }
+
+    func sendWebSocketMessage() {
+        guard let session = selectedWebSocketSession else { return }
+        webSocketSendDraft.sessionID = session.id
+        Task { @MainActor in
+            do {
+                let message = try await proxyBackend.sendWebSocketMessage(webSocketSendDraft)
+                appendWebSocketMessage(message, toFlowID: session.flowID)
+                selectedWebSocketMessageID = message.id
+                webSocketSendDraft.payloadText = ""
+            } catch {
+                upstreamProxyStatusMessage = error.localizedDescription
+            }
         }
     }
 
@@ -386,6 +636,16 @@ final class NetworkDebuggerStore: @unchecked Sendable {
     func createRule(kind: NetworkRuleActionKind = .block) {
         var rule = NetworkRuleDraft()
         rule.name = "New \(kind.title) Rule"
+        rule.action.kind = kind
+        rules.append(rule)
+        selectedRuleID = rule.id
+    }
+
+    func createRule(from flow: NetworkFlow, kind: NetworkRuleActionKind) {
+        var rule = NetworkRuleDraft()
+        rule.name = "\(kind.title) \(flow.domainDisplay)"
+        rule.urlPattern = ".*\(NSRegularExpression.escapedPattern(for: flow.domainDisplay)).*"
+        rule.method = NetworkRuleMatchMethod(rawValue: flow.methodDisplay) ?? .any
         rule.action.kind = kind
         rules.append(rule)
         selectedRuleID = rule.id
@@ -660,6 +920,7 @@ final class NetworkDebuggerStore: @unchecked Sendable {
 
     func testUpstreamProxy() {
         upstreamProxyTestResult = nil
+        upstreamRouteProbeResult = nil
         upstreamProxyStatusMessage = nil
         isUpstreamProxyWorking = true
         Task { @MainActor in
@@ -668,12 +929,18 @@ final class NetworkDebuggerStore: @unchecked Sendable {
                 let settings = try await resolvedUpstreamProxySettings(endpoint: endpoint)
                 let result = await proxyBackend.testUpstreamProxy(settings)
                 upstreamProxyTestResult = result
+                upstreamRouteProbeResult = Self.routeProbeResult(
+                    from: result,
+                    targetURL: "https://example.com/",
+                    profileID: selectedUpstreamProfile?.id
+                )
                 upstreamProxyStatusMessage = result.errorMessage ?? result.routeSummary
             } catch {
                 upstreamProxyTestResult = NetworkUpstreamProxyTestResult(
                     isReachable: false,
                     routeSummary: "Failed",
-                    errorMessage: error.localizedDescription
+                    errorMessage: error.localizedDescription,
+                    probeSteps: []
                 )
                 upstreamProxyStatusMessage = error.localizedDescription
             }
@@ -699,6 +966,166 @@ final class NetworkDebuggerStore: @unchecked Sendable {
             }
             isUpstreamProxyWorking = false
         }
+    }
+
+    func loadUpstreamEnvironments() {
+        Task { @MainActor in
+            let environments = await upstreamEnvironmentStore.load()
+            upstreamEnvironments = environments
+            selectedUpstreamEnvironmentID = environments.first(where: \.isDefault)?.id ?? environments.first?.id ?? NetworkUpstreamEnvironment.default.id
+            selectedUpstreamProfileID = selectedUpstreamEnvironment.selectedProfileID
+            selectedUpstreamRouteRuleID = selectedUpstreamEnvironment.routeRules.first?.id
+        }
+    }
+
+    func saveUpstreamEnvironments() {
+        Task { @MainActor in
+            do {
+                try await upstreamEnvironmentStore.save(upstreamEnvironments)
+                upstreamProxyStatusMessage = "Saved upstream environments"
+            } catch {
+                upstreamProxyStatusMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func createUpstreamEnvironment() {
+        var environment = NetworkUpstreamEnvironment.default
+        environment.id = UUID()
+        environment.name = "Environment \(upstreamEnvironments.count + 1)"
+        environment.isDefault = false
+        upstreamEnvironments.append(environment)
+        selectedUpstreamEnvironmentID = environment.id
+        selectedUpstreamProfileID = environment.selectedProfileID
+        saveUpstreamEnvironments()
+    }
+
+    func duplicateSelectedUpstreamEnvironment() {
+        var copy = selectedUpstreamEnvironment
+        copy.id = UUID()
+        copy.name += " Copy"
+        copy.isDefault = false
+        upstreamEnvironments.append(copy)
+        selectedUpstreamEnvironmentID = copy.id
+        selectedUpstreamProfileID = copy.selectedProfileID
+        saveUpstreamEnvironments()
+    }
+
+    func updateSelectedUpstreamEnvironmentName(_ name: String) {
+        var environment = selectedUpstreamEnvironment
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        environment.name = trimmed.isEmpty ? "Environment" : trimmed
+        replaceUpstreamEnvironment(environment)
+    }
+
+    func selectUpstreamProfile(_ id: UUID?) {
+        selectedUpstreamProfileID = id
+        guard let id else { return }
+        var environment = selectedUpstreamEnvironment
+        environment.selectedProfileID = id
+        replaceUpstreamEnvironment(environment)
+    }
+
+    func createManualUpstreamProfileFromCurrentFields() {
+        var environment = selectedUpstreamEnvironment
+        var settings = manualUpstreamProxySettings()
+        var profile = NetworkUpstreamProfile(
+            name: settings.isEnabled ? settings.summary : "Manual Profile",
+            settings: settings,
+            credentialRef: nil,
+            isAutoDetected: false
+        )
+        if settings.isEnabled,
+           !manualUpstreamProxyPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        {
+            do {
+                var credential = try upstreamEnvironmentStore.savePassword(manualUpstreamProxyPassword, for: profile.id)
+                credential.username = manualUpstreamProxyUsername
+                profile.credentialRef = credential
+                for index in settings.proxies.indices {
+                    settings.proxies[index].username = manualUpstreamProxyUsername.nilIfBlank
+                    settings.proxies[index].password = nil
+                }
+                profile.settings = settings
+                manualUpstreamProxyPassword = ""
+            } catch {
+                upstreamProxyStatusMessage = error.localizedDescription
+                return
+            }
+        }
+        environment.profiles.append(profile)
+        environment.selectedProfileID = profile.id
+        replaceUpstreamEnvironment(environment)
+        selectedUpstreamProfileID = profile.id
+        saveUpstreamEnvironments()
+    }
+
+    func saveDetectedSystemProxyAsProfile() {
+        guard let endpoint = listeningEndpoint else {
+            upstreamProxyStatusMessage = "Start capture before detecting a system proxy."
+            return
+        }
+        Task { @MainActor in
+            do {
+                guard let settings = try await systemProxyService.detectedUpstreamProxy(excluding: endpoint) else {
+                    upstreamProxyStatusMessage = "No existing system proxy detected."
+                    return
+                }
+                var environment = selectedUpstreamEnvironment
+                let profile = NetworkUpstreamProfile(
+                    name: "Detected \(settings.summary)",
+                    settings: settings,
+                    isAutoDetected: true
+                )
+                environment.profiles.append(profile)
+                environment.selectedProfileID = profile.id
+                replaceUpstreamEnvironment(environment)
+                selectedUpstreamProfileID = profile.id
+                try await upstreamEnvironmentStore.save(upstreamEnvironments)
+                upstreamProxyStatusMessage = "Saved detected route: \(settings.summary)"
+            } catch {
+                upstreamProxyStatusMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func createUpstreamRouteRule() {
+        var environment = selectedUpstreamEnvironment
+        var rule = NetworkUpstreamRouteRule()
+        rule.profileID = selectedUpstreamProfile?.id ?? environment.selectedProfileID
+        environment.routeRules.append(rule)
+        replaceUpstreamEnvironment(environment)
+        selectedUpstreamRouteRuleID = rule.id
+        saveUpstreamEnvironments()
+    }
+
+    func updateSelectedUpstreamRouteRule(_ transform: (inout NetworkUpstreamRouteRule) -> Void) {
+        guard let selectedUpstreamRouteRule else { return }
+        var environment = selectedUpstreamEnvironment
+        guard let index = environment.routeRules.firstIndex(where: { $0.id == selectedUpstreamRouteRule.id }) else { return }
+        transform(&environment.routeRules[index])
+        replaceUpstreamEnvironment(environment)
+    }
+
+    func deleteSelectedUpstreamRouteRule() {
+        guard let selectedUpstreamRouteRuleID else { return }
+        var environment = selectedUpstreamEnvironment
+        environment.routeRules.removeAll { $0.id == selectedUpstreamRouteRuleID }
+        replaceUpstreamEnvironment(environment)
+        self.selectedUpstreamRouteRuleID = environment.routeRules.first?.id
+        saveUpstreamEnvironments()
+    }
+
+    func moveSelectedUpstreamRouteRule(offset: Int) {
+        guard let selectedUpstreamRouteRuleID else { return }
+        var environment = selectedUpstreamEnvironment
+        guard let source = environment.routeRules.firstIndex(where: { $0.id == selectedUpstreamRouteRuleID }) else { return }
+        let destination = max(0, min(environment.routeRules.count - 1, source + offset))
+        guard source != destination else { return }
+        let rule = environment.routeRules.remove(at: source)
+        environment.routeRules.insert(rule, at: destination)
+        replaceUpstreamEnvironment(environment)
+        saveUpstreamEnvironments()
     }
 
     func generateRootCA() {
@@ -762,14 +1189,32 @@ final class NetworkDebuggerStore: @unchecked Sendable {
         case .stopped:
             if captureStatus.isListening { captureStatus = .stopped }
         case .flowCreated(let flow):
-            flows.insert(flow, at: 0)
-            selectedFlowID = selectedFlowID ?? flow.id
+            insertCapturedFlow(flow)
         case .flowUpdated(let flow):
             if let index = flows.firstIndex(where: { $0.id == flow.id }) {
                 flows[index] = flow
             } else {
-                flows.insert(flow, at: 0)
+                insertCapturedFlow(flow)
             }
+        case .flowCompleted(let flow):
+            insertCapturedFlow(flow)
+        case .webSocketMessageAppended(let flowID, let message):
+            appendWebSocketMessage(message, toFlowID: flowID)
+        case .interceptQueued(let item):
+            if !breakpoints.contains(where: { $0.id == item.id }) {
+                breakpoints.insert(item, at: 0)
+            }
+            selectedBreakpointID = selectedBreakpointID ?? item.id
+            selectedTrafficWorkspace = .intercept
+        case .interceptResolved(let id):
+            breakpoints.removeAll { $0.id == id }
+            if selectedBreakpointID == id {
+                selectedBreakpointID = breakpoints.first?.id
+            }
+        case .replayCompleted(let flow):
+            insertCapturedFlow(flow)
+        case .upstreamRouteChanged(let summary):
+            systemProxyStatus.upstreamProxySummary = summary
         case .failed(let message):
             captureStatus = .failed(message)
             Log.network.error("Network proxy failed: \(message, privacy: .public)")
@@ -819,6 +1264,61 @@ final class NetworkDebuggerStore: @unchecked Sendable {
     private func updateFlow(id: UUID, _ transform: (inout NetworkFlow) -> Void) {
         guard let index = flows.firstIndex(where: { $0.id == id }) else { return }
         transform(&flows[index])
+    }
+
+    private func insertCapturedFlow(_ flow: NetworkFlow) {
+        if let index = flows.firstIndex(where: { $0.id == flow.id }) {
+            flows[index] = flow
+        } else {
+            flows.insert(flow, at: 0)
+        }
+        if selectedFlowID == nil || flow.operationSource != .capture {
+            selectedFlowID = flow.id
+        }
+        if flow.flowProtocol == .webSocket, selectedWebSocketSessionID == nil {
+            selectedWebSocketSessionID = flow.id
+        }
+    }
+
+    private func upsertReplaySession(_ session: NetworkReplaySession) {
+        if let index = replaySessions.firstIndex(where: { $0.id == session.id }) {
+            replaySessions[index] = session
+        } else {
+            replaySessions.insert(session, at: 0)
+        }
+        selectedReplaySessionID = session.id
+    }
+
+    private func appendReplayResult(_ flow: NetworkFlow?, draftID: UUID, errorMessage: String?) {
+        guard let index = replaySessions.firstIndex(where: { $0.draft.id == draftID }) else { return }
+        let now = Date()
+        let result = NetworkReplayRunResult(
+            flowID: flow?.id ?? UUID(),
+            startedAt: flow?.createdAt ?? now,
+            completedAt: flow?.completedAt ?? now,
+            statusCode: flow?.response.statusCode,
+            duration: flow?.duration ?? 0,
+            responseBytes: flow?.responseBytes ?? 0,
+            errorMessage: errorMessage
+        )
+        replaySessions[index].results.insert(result, at: 0)
+        selectedReplaySessionID = replaySessions[index].id
+    }
+
+    private func appendWebSocketMessage(_ message: NetworkWebSocketMessage, toFlowID flowID: UUID) {
+        guard let index = flows.firstIndex(where: { $0.id == flowID }) else { return }
+        flows[index].webSocketFrames.append(NetworkWebSocketFrame(
+            id: message.id,
+            timestamp: message.timestamp,
+            direction: message.direction,
+            opcode: message.opcode,
+            payloadText: message.payloadText,
+            payloadBytes: message.payloadBytes,
+            isFinal: true,
+            isDropped: message.isDropped,
+            isEdited: message.isEdited,
+            isInjected: message.isInjected
+        ))
     }
 
     private func moveSelectedRule(offset: Int) {
@@ -888,11 +1388,26 @@ final class NetworkDebuggerStore: @unchecked Sendable {
         case .manual:
             return try await Self.loadPACScriptIfNeeded(manualUpstreamProxySettings())
         case .automatic:
+            if let profile = selectedUpstreamProfile, profile.settings.isEnabled {
+                return try await Self.loadPACScriptIfNeeded(materializedSettings(for: profile))
+            }
             guard let detected = try await systemProxyService.detectedUpstreamProxy(excluding: endpoint) else {
                 return .disabled
             }
             return try await Self.loadPACScriptIfNeeded(detected)
         }
+    }
+
+    private func materializedSettings(for profile: NetworkUpstreamProfile) throws -> NetworkUpstreamProxySettings {
+        var settings = profile.settings
+        guard let credentialRef = profile.credentialRef,
+              let password = try upstreamEnvironmentStore.password(for: credentialRef)
+        else { return settings }
+        for index in settings.proxies.indices {
+            settings.proxies[index].username = credentialRef.username.nilIfBlank ?? settings.proxies[index].username
+            settings.proxies[index].password = password
+        }
+        return settings
     }
 
     private func manualUpstreamProxySettings() -> NetworkUpstreamProxySettings {
@@ -969,6 +1484,76 @@ final class NetworkDebuggerStore: @unchecked Sendable {
             }.value
         }
         return settings
+    }
+
+    private func replaceUpstreamEnvironment(_ environment: NetworkUpstreamEnvironment) {
+        if let index = upstreamEnvironments.firstIndex(where: { $0.id == environment.id }) {
+            upstreamEnvironments[index] = environment
+        } else {
+            upstreamEnvironments.append(environment)
+        }
+    }
+
+    private static func routeProbeResult(
+        from result: NetworkUpstreamProxyTestResult,
+        targetURL: String,
+        profileID: UUID?
+    ) -> NetworkRouteProbeResult {
+        let fallbackSteps: [NetworkRouteProbeStep] = [
+            NetworkRouteProbeStep(
+                title: "Route resolution",
+                status: result.errorMessage == nil ? .success : .failure,
+                detail: result.routeSummary,
+                latencyMs: nil
+            ),
+            NetworkRouteProbeStep(
+                title: "Connectivity",
+                status: result.isReachable ? .success : .failure,
+                detail: result.errorMessage ?? "Route can be used by the proxy engine.",
+                latencyMs: nil
+            ),
+        ]
+        return NetworkRouteProbeResult(
+            profileID: profileID,
+            startedAt: .now,
+            targetURL: targetURL,
+            selectedRoute: result.routeSummary,
+            isReachable: result.isReachable,
+            steps: result.probeSteps.isEmpty ? fallbackSteps : result.probeSteps,
+            errorMessage: result.errorMessage
+        )
+    }
+
+    private static func webSocketSession(from flow: NetworkFlow) -> NetworkWebSocketSession {
+        let sessionID = flow.id
+        return NetworkWebSocketSession(
+            id: sessionID,
+            flowID: flow.id,
+            number: flow.number,
+            url: flow.request.url,
+            domain: flow.domainDisplay,
+            clientName: flow.clientName,
+            startedAt: flow.createdAt,
+            completedAt: flow.completedAt,
+            state: flow.state,
+            requestHeaders: flow.request.headers,
+            messages: flow.webSocketFrames.map { frame in
+                NetworkWebSocketMessage(
+                    id: frame.id,
+                    sessionID: sessionID,
+                    flowID: flow.id,
+                    timestamp: frame.timestamp,
+                    direction: frame.direction,
+                    opcode: frame.opcode,
+                    payloadText: frame.payloadText,
+                    payloadBytes: frame.payloadBytes,
+                    isFinal: frame.isFinal,
+                    isDropped: frame.isDropped,
+                    isEdited: frame.isEdited,
+                    isInjected: frame.isInjected
+                )
+            }
+        )
     }
 
     static func helperState(from snapshot: RockxyHelperSnapshot) -> NetworkHelperState {

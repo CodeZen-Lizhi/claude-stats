@@ -5,6 +5,7 @@ public actor RockxyProxyBackend {
 
     private var proxyServer: ProxyServer?
     private var eventHandler: EventHandler?
+    private var currentEndpoint: RockxyProxyEndpoint?
     let sequenceCounter = RockxySequenceCounter()
     let ruleEngine = RuleEngine()
     let ruleStore = RuleStore()
@@ -40,6 +41,7 @@ public actor RockxyProxyBackend {
             return
         }
         proxyServer = nil
+        currentEndpoint = nil
         await server.stop()
         eventHandler?(.stopped)
     }
@@ -47,7 +49,7 @@ public actor RockxyProxyBackend {
     public func updateUpstreamProxy(_ configuration: RockxyUpstreamProxyConfiguration) async {
         currentUpstreamProxy = configuration
         guard let server = proxyServer else { return }
-        await server.updateUpstreamProxy(configuration.internalConfiguration)
+        await server.updateUpstreamProxy(configuration.internalConfiguration(listenerEndpoint: currentEndpoint))
     }
 
     public func testUpstreamProxy(
@@ -57,7 +59,7 @@ public actor RockxyProxyBackend {
         scheme: String = "https"
     ) async -> RockxyUpstreamProxyTestResult {
         do {
-            let internalConfiguration = configuration.internalConfiguration
+            let internalConfiguration = configuration.internalConfiguration(listenerEndpoint: currentEndpoint)
             let routes = try UpstreamRouter(configuration: internalConfiguration)
                 .routes(for: targetHost, port: Int(targetPort), scheme: scheme)
             let summary = routes.map(\.summary).joined(separator: " -> ")
@@ -104,6 +106,7 @@ public actor RockxyProxyBackend {
         do {
             try await server.start()
             proxyServer = server
+            currentEndpoint = endpoint
             eventHandler(.started(endpoint))
             return endpoint
         } catch {
@@ -118,7 +121,7 @@ public actor RockxyProxyBackend {
 }
 
 private extension RockxyUpstreamProxyConfiguration {
-    var internalConfiguration: UpstreamProxyConfiguration {
+    func internalConfiguration(listenerEndpoint: RockxyProxyEndpoint?) -> UpstreamProxyConfiguration {
         UpstreamProxyConfiguration(
             isEnabled: isEnabled,
             proxies: proxies.map(\.internalServer),
@@ -126,8 +129,8 @@ private extension RockxyUpstreamProxyConfiguration {
             excludeHosts: excludeHosts,
             bypassLocalhost: bypassLocalhost,
             dnsOverSocks: dnsOverSocks,
-            listenerHost: "127.0.0.1",
-            listenerPort: 9_090
+            listenerHost: listenerEndpoint?.host ?? "127.0.0.1",
+            listenerPort: Int(listenerEndpoint?.port ?? 9_090)
         )
     }
 }

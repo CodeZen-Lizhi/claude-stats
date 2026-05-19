@@ -105,6 +105,10 @@ public extension RockxyProxyBackend {
         await BreakpointManager.shared.resolve(id: id, decision: decision.internalDecision)
     }
 
+    func resolveAllBreakpoints(decision: RockxyBreakpointDecisionSnapshot) async {
+        await BreakpointManager.shared.resolveAll(decision: decision.internalDecision)
+    }
+
     func updateBreakpoint(_ snapshot: RockxyBreakpointItemSnapshot) async {
         await BreakpointManager.shared.updateDraft(id: snapshot.id) { draft in
             draft.method = snapshot.method

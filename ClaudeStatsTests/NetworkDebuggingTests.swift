@@ -419,6 +419,209 @@ struct NetworkDebuggingTests {
         #expect(store.filteredFlows.map(\.id) == [secondID])
     }
 
+    @Test("Request operation service exports cURL HAR and imports cURL")
+    func requestOperationServiceExportsAndImports() throws {
+        let service = NetworkRequestOperationService()
+        let flow = makeFlow(
+            number: 9,
+            clientName: "curl",
+            method: "POST",
+            url: "https://api.example.test/messages?debug=1",
+            protocol: .https,
+            statusCode: 201
+        )
+
+        let curl = service.export(flow, format: .curl)
+        let har = service.export(flow, format: .har)
+        let imported = try service.importRequest(
+            "curl -X PATCH -H 'Content-Type: application/json' --data-raw '{\"ok\":true}' https://api.example.test/v1",
+            format: .curl
+        )
+
+        #expect(curl.contains("curl -X 'POST'"))
+        #expect(har.contains("\"version\" : \"1.2\""))
+        #expect(imported.draft.method == "PATCH")
+        #expect(imported.draft.url == "https://api.example.test/v1")
+        #expect(imported.draft.contentType == "application/json")
+        #expect(imported.draft.bodyText == "{\"ok\":true}")
+    }
+
+    @Test("Store builds WebSocket sessions and filters messages")
+    func webSocketSessionsAndFilters() {
+        let flowID = UUID()
+        let sentID = UUID()
+        let receivedID = UUID()
+        var flow = makeFlow(
+            id: flowID,
+            number: 4,
+            clientName: "Chrome",
+            method: "GET",
+            url: "wss://stream.example.test/socket",
+            protocol: .webSocket,
+            statusCode: nil,
+            state: .active
+        )
+        flow.webSocketFrames = [
+            NetworkWebSocketFrame(
+                id: sentID,
+                timestamp: Date(timeIntervalSince1970: 1_700_000_010),
+                direction: .sent,
+                opcode: "text",
+                payloadText: #"{"type":"subscribe"}"#,
+                payloadBytes: 20,
+                isFinal: true
+            ),
+            NetworkWebSocketFrame(
+                id: receivedID,
+                timestamp: Date(timeIntervalSince1970: 1_700_000_011),
+                direction: .received,
+                opcode: "binary",
+                payloadText: "payload",
+                payloadBytes: 7,
+                isFinal: true
+            ),
+        ]
+        let store = NetworkDebuggerStore(
+            preferences: Preferences(defaults: makeDefaults()),
+            proxyBackend: FakeNetworkProxyBackend(),
+            systemProxyService: FakeSystemProxyService()
+        )
+        store.flows = [flow]
+        store.selectWebSocketSession(try! #require(store.webSocketSessions.first))
+
+        #expect(store.webSocketSessions.first?.sentCount == 1)
+        #expect(store.webSocketSessions.first?.receivedCount == 1)
+
+        store.webSocketFilter.direction = .received
+        #expect(store.filteredWebSocketMessages.map(\.id) == [receivedID])
+
+        store.webSocketFilter.direction = .all
+        store.webSocketFilter.opcode = .text
+        #expect(store.filteredWebSocketMessages.map(\.id) == [sentID])
+
+        store.webSocketFilter.opcode = .all
+        store.webSocketFilter.query = "subscribe"
+        #expect(store.filteredWebSocketMessages.map(\.id) == [sentID])
+    }
+
+    @Test("Replay and automate insert tagged flow results")
+    func replayAndAutomateInsertTaggedFlows() async throws {
+        let backend = FakeNetworkProxyBackend()
+        let store = NetworkDebuggerStore(
+            preferences: Preferences(defaults: makeDefaults()),
+            proxyBackend: backend,
+            systemProxyService: FakeSystemProxyService()
+        )
+        let flow = makeFlow(
+            number: 8,
+            clientName: "curl",
+            method: "GET",
+            url: "https://api.example.test/{{value}}",
+            protocol: .https,
+            statusCode: 200
+        )
+
+        store.prepareReplay(for: flow)
+        #expect(store.selectedTrafficWorkspace == .replay)
+        store.performReplay()
+        try await waitFor { !store.isReplayWorking && !store.flows.isEmpty }
+        #expect(store.flows.first?.operationSource == .replay)
+        #expect(store.replaySessions.first?.results.count == 1)
+
+        store.sendFlowToAutomate(flow)
+        store.automateDraft?.variables = [NetworkAutomateVariable(name: "value", valuesText: "a\nb")]
+        store.runAutomate()
+        try await waitFor { !store.isAutomateWorking && store.automateResults.count == 2 }
+        #expect(store.automateResults.map(\.statusCode) == [200, 200])
+        #expect(store.flows.prefix(2).allSatisfy { $0.operationSource == .automate })
+    }
+
+    @Test("Upstream environments create manual and detected profiles")
+    func upstreamEnvironmentsCreateProfiles() async throws {
+        let detected = NetworkUpstreamProxySettings(
+            isEnabled: true,
+            proxies: [NetworkUpstreamProxyServerSettings(proto: .socks5, host: "127.0.0.1", port: 6_153)],
+            includeHosts: [],
+            excludeHosts: [],
+            bypassLocalhost: true,
+            dnsOverSocks: true
+        )
+        let preferences = Preferences(defaults: makeDefaults())
+        let store = NetworkDebuggerStore(
+            preferences: preferences,
+            proxyBackend: FakeNetworkProxyBackend(),
+            systemProxyService: FakeSystemProxyService(detectedUpstream: detected)
+        )
+        store.manualUpstreamProxyHost = "127.0.0.1"
+        store.manualUpstreamProxyPortText = "6152"
+        store.createManualUpstreamProfileFromCurrentFields()
+
+        #expect(store.selectedUpstreamEnvironment.profiles.contains { $0.summary == "HTTP 127.0.0.1:6152" })
+
+        store.captureStatus = .listening(FakeNetworkProxyBackend.defaultEndpoint)
+        store.saveDetectedSystemProxyAsProfile()
+        try await waitFor { store.selectedUpstreamEnvironment.profiles.contains { $0.summary == "SOCKS5 127.0.0.1:6153" } }
+    }
+
+    @Test("Upstream route rules can be edited and reordered")
+    func upstreamRouteRulesCanBeEditedAndReordered() {
+        let preferences = Preferences(defaults: makeDefaults())
+        let store = NetworkDebuggerStore(
+            preferences: preferences,
+            proxyBackend: FakeNetworkProxyBackend(),
+            systemProxyService: FakeSystemProxyService()
+        )
+
+        store.createUpstreamRouteRule()
+        store.updateSelectedUpstreamRouteRule {
+            $0.hostPattern = "*.internal.test"
+            $0.scheme = .https
+            $0.bypassLocalhost = false
+        }
+        store.createUpstreamRouteRule()
+        let firstRuleID = try! #require(store.selectedUpstreamEnvironment.routeRules.first?.id)
+        store.moveSelectedUpstreamRouteRule(offset: -1)
+
+        #expect(store.selectedUpstreamEnvironment.routeRules.count == 2)
+        #expect(store.selectedUpstreamEnvironment.routeRules.first?.id != firstRuleID)
+        #expect(store.selectedUpstreamEnvironment.routeRules.last?.hostPattern == "*.internal.test")
+        #expect(store.selectedUpstreamEnvironment.routeRules.last?.scheme == .https)
+        #expect(store.selectedUpstreamEnvironment.routeRules.last?.bypassLocalhost == false)
+
+        store.deleteSelectedUpstreamRouteRule()
+        #expect(store.selectedUpstreamEnvironment.routeRules.count == 1)
+    }
+
+    @Test("Flow operations add comments prefill rules and delete flows")
+    func flowOperationsCommentPrefillRulesAndDelete() {
+        let store = NetworkDebuggerStore(
+            preferences: Preferences(defaults: makeDefaults()),
+            proxyBackend: FakeNetworkProxyBackend(),
+            systemProxyService: FakeSystemProxyService()
+        )
+        let flow = makeFlow(
+            number: 42,
+            clientName: "curl",
+            method: "POST",
+            url: "https://api.example.test/v1/messages",
+            protocol: .https,
+            statusCode: 201
+        )
+        store.flows = [flow]
+
+        store.setComment(for: flow.id, text: "needs replay")
+        store.createRule(from: flow, kind: .breakpoint)
+
+        #expect(store.flows.first?.comment == "needs replay")
+        #expect(store.selectedRule?.action.kind == .breakpoint)
+        #expect(store.selectedRule?.method == .post)
+        #expect(store.selectedRule?.urlPattern.contains("api\\.example\\.test") == true)
+
+        store.deleteFlow(flow.id)
+        #expect(store.flows.isEmpty)
+        #expect(store.selectedFlowID == nil)
+    }
+
     @Test("Helper snapshot maps to network helper state")
     func helperSnapshotMapsToNetworkHelperState() {
         let snapshot = makeHelperSnapshot(
@@ -711,6 +914,7 @@ private actor FakeNetworkProxyBackend: NetworkProxyBackend {
     private(set) var startCallCount = 0
     private(set) var stopCallCount = 0
     private(set) var upstreamConfigurations: [NetworkUpstreamProxySettings] = []
+    private(set) var replayedDrafts: [NetworkReplayDraft] = []
 
     init(
         endpoint: NetworkProxyEndpoint = FakeNetworkProxyBackend.defaultEndpoint,
@@ -746,6 +950,59 @@ private actor FakeNetworkProxyBackend: NetworkProxyBackend {
             routeSummary: configuration.summary,
             errorMessage: nil
         )
+    }
+
+    func replay(_ draft: NetworkReplayDraft) async throws -> NetworkFlow {
+        replayedDrafts.append(draft)
+        var flow = NetworkFlow(
+            id: UUID(),
+            number: replayedDrafts.count,
+            createdAt: Date(timeIntervalSince1970: 1_700_010_000 + TimeInterval(replayedDrafts.count)),
+            completedAt: Date(timeIntervalSince1970: 1_700_010_000 + TimeInterval(replayedDrafts.count) + 0.12),
+            clientName: "Replay",
+            flowProtocol: .https,
+            state: .completed,
+            request: NetworkRequestCapture(
+                method: draft.method,
+                url: draft.url,
+                httpVersion: "HTTP/1.1",
+                headers: draft.headers,
+                body: NetworkBody(
+                    bytes: draft.bodyText.utf8.count,
+                    text: draft.bodyText,
+                    isTruncated: false,
+                    contentType: draft.contentType
+                )
+            ),
+            response: NetworkResponseCapture(
+                statusCode: 200,
+                reason: "OK",
+                headers: [NetworkHeaderPair(name: "Content-Type", value: "text/plain")],
+                body: NetworkBody(bytes: 2, text: "OK", isTruncated: false, contentType: "text/plain")
+            ),
+            requestBytes: draft.bodyText.utf8.count,
+            responseBytes: 2,
+            isSSLIntercepted: true,
+            isEdited: false,
+            errorDescription: nil
+        )
+        flow.operationSource = .replay
+        flow.isReplay = true
+        return flow
+    }
+
+    func batchReplay(_ drafts: [NetworkReplayDraft], concurrencyLimit _: Int) async -> [NetworkBatchReplayItemResult] {
+        var results: [NetworkBatchReplayItemResult] = []
+        for (index, draft) in drafts.enumerated() {
+            do {
+                var flow = try await replay(draft)
+                flow.operationSource = .automate
+                results.append(NetworkBatchReplayItemResult(index: index, flow: flow, errorMessage: nil))
+            } catch {
+                results.append(NetworkBatchReplayItemResult(index: index, flow: nil, errorMessage: error.localizedDescription))
+            }
+        }
+        return results
     }
 }
 

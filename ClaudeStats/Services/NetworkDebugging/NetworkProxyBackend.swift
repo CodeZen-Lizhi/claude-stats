@@ -46,7 +46,25 @@ protocol NetworkProxyBackend: Sendable {
 
     func resolveBreakpoint(id: UUID, decision: NetworkBreakpointDecision) async
 
+    func resolveAllBreakpoints(decision: NetworkBreakpointDecision) async
+
+    func compose(_ draft: NetworkReplayDraft) async throws -> NetworkFlow
+
     func replay(_ draft: NetworkReplayDraft) async throws -> NetworkFlow
+
+    func batchReplay(_ drafts: [NetworkReplayDraft], concurrencyLimit: Int) async -> [NetworkBatchReplayItemResult]
+
+    func updateInterceptedFlow(_ item: NetworkBreakpointItem) async
+
+    func forwardInterceptedFlow(id: UUID) async
+
+    func dropInterceptedFlow(id: UUID) async
+
+    func exportFlows(_ flows: [NetworkFlow], format: NetworkRequestExportFormat) async throws -> Data
+
+    func importRequest(_ text: String, format: NetworkRequestImportFormat) async throws -> NetworkReplayDraft
+
+    func sendWebSocketMessage(_ draft: NetworkWebSocketSendDraft) async throws -> NetworkWebSocketMessage
 }
 
 extension NetworkProxyBackend {
@@ -94,18 +112,66 @@ extension NetworkProxyBackend {
 
     func resolveBreakpoint(id: UUID, decision: NetworkBreakpointDecision) async {}
 
+    func resolveAllBreakpoints(decision: NetworkBreakpointDecision) async {}
+
+    func compose(_ draft: NetworkReplayDraft) async throws -> NetworkFlow {
+        var flow = try await replay(draft)
+        flow.operationSource = .compose
+        return flow
+    }
+
     func replay(_ draft: NetworkReplayDraft) async throws -> NetworkFlow {
         throw NetworkProxyBackendDefaultError.unsupportedReplay
+    }
+
+    func batchReplay(_ drafts: [NetworkReplayDraft], concurrencyLimit _: Int) async -> [NetworkBatchReplayItemResult] {
+        var results: [NetworkBatchReplayItemResult] = []
+        for (index, draft) in drafts.enumerated() {
+            do {
+                results.append(NetworkBatchReplayItemResult(index: index, flow: try await replay(draft), errorMessage: nil))
+            } catch {
+                results.append(NetworkBatchReplayItemResult(index: index, flow: nil, errorMessage: error.localizedDescription))
+            }
+        }
+        return results
+    }
+
+    func updateInterceptedFlow(_ item: NetworkBreakpointItem) async {
+        await updateBreakpoint(item)
+    }
+
+    func forwardInterceptedFlow(id: UUID) async {
+        await resolveBreakpoint(id: id, decision: .execute)
+    }
+
+    func dropInterceptedFlow(id: UUID) async {
+        await resolveBreakpoint(id: id, decision: .abort)
+    }
+
+    func exportFlows(_ flows: [NetworkFlow], format: NetworkRequestExportFormat) async throws -> Data {
+        let text = NetworkRequestOperationService().export(flows, format: format)
+        return Data(text.utf8)
+    }
+
+    func importRequest(_ text: String, format: NetworkRequestImportFormat) async throws -> NetworkReplayDraft {
+        try NetworkRequestOperationService().importRequest(text, format: format).draft
+    }
+
+    func sendWebSocketMessage(_ draft: NetworkWebSocketSendDraft) async throws -> NetworkWebSocketMessage {
+        throw NetworkProxyBackendDefaultError.unsupportedWebSocketSend
     }
 }
 
 private enum NetworkProxyBackendDefaultError: LocalizedError {
     case unsupportedReplay
+    case unsupportedWebSocketSend
 
     var errorDescription: String? {
         switch self {
         case .unsupportedReplay:
             "Replay is not available for this backend."
+        case .unsupportedWebSocketSend:
+            "Sending WebSocket messages is not available for this backend."
         }
     }
 }

@@ -199,22 +199,45 @@ struct HoverableSplitViewConfiguration: @unchecked Sendable {
     }
 
     func dividerPositionRange(for length: CGFloat) -> ClosedRange<CGFloat>? {
-        guard length > 0 else { return nil }
+        guard length.isFinite, length > 0 else { return nil }
 
-        let primaryMinimum = primaryMinimumPaneLength ?? minimumPaneLength
-        let secondaryMinimum = secondaryMinimumPaneLength ?? minimumPaneLength
-        var minimumPosition = primaryMinimum
-        var maximumPosition = length - secondaryMinimum
+        let primaryMinimum = sanitizedPaneLength(primaryMinimumPaneLength ?? minimumPaneLength) ?? 0
+        let secondaryMinimum = sanitizedPaneLength(secondaryMinimumPaneLength ?? minimumPaneLength) ?? 0
+        let combinedMinimum = primaryMinimum + secondaryMinimum
+        let minimumScale = combinedMinimum > length && combinedMinimum > 0
+            ? length / combinedMinimum
+            : 1
 
-        if let primaryMaximumPaneLength {
-            maximumPosition = min(maximumPosition, primaryMaximumPaneLength)
+        let effectivePrimaryMinimum = primaryMinimum * minimumScale
+        let effectiveSecondaryMinimum = secondaryMinimum * minimumScale
+        var minimumPosition = effectivePrimaryMinimum
+        var maximumPosition = length - effectiveSecondaryMinimum
+
+        if let primaryMaximum = sanitizedPaneLength(primaryMaximumPaneLength) {
+            maximumPosition = min(maximumPosition, primaryMaximum)
         }
-        if let secondaryMaximumPaneLength {
-            minimumPosition = max(minimumPosition, length - secondaryMaximumPaneLength)
+        if let secondaryMaximum = sanitizedPaneLength(secondaryMaximumPaneLength) {
+            minimumPosition = max(minimumPosition, length - secondaryMaximum)
         }
 
-        guard maximumPosition >= minimumPosition else { return nil }
+        minimumPosition = clampedPosition(minimumPosition, length: length)
+        maximumPosition = clampedPosition(maximumPosition, length: length)
+
+        guard maximumPosition >= minimumPosition else {
+            let fallbackPosition = clampedPosition((minimumPosition + maximumPosition) / 2, length: length)
+            return fallbackPosition...fallbackPosition
+        }
+
         return minimumPosition...maximumPosition
+    }
+
+    private func sanitizedPaneLength(_ value: CGFloat?) -> CGFloat? {
+        guard let value, value.isFinite else { return nil }
+        return max(0, value)
+    }
+
+    private func clampedPosition(_ value: CGFloat, length: CGFloat) -> CGFloat {
+        min(max(value, 0), length)
     }
 }
 

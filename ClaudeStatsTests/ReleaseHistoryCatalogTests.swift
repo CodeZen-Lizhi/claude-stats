@@ -8,7 +8,7 @@ struct ReleaseHistoryCatalogTests {
         let entries = ReleaseHistoryCatalog.entries
 
         #expect(!entries.isEmpty)
-        #expect(entries.first?.version == "1.5.3")
+        #expect(entries.first?.version == "1.5.4")
         #expect(entries.last?.version.contains("1.4.0") == true)
         #expect(Set(entries.map(\.id)).count == entries.count)
         #expect(entries.allSatisfy { entry in

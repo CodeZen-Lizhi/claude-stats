@@ -6,40 +6,80 @@ struct NetworkTrafficView: View {
     @Bindable var preferences: Preferences
 
     var body: some View {
-        GeometryReader { proxy in
-            switch preferences.networkTrafficLayoutMode.resolved(
-                width: Double(proxy.size.width),
-                breakpoint: preferences.networkTrafficAutoBreakpoint
-            ) {
-            case .sideBySide:
-                sideBySideLayout
-            case .stacked:
-                stackedLayout
-            }
+        VStack(spacing: 0) {
+            NetworkTrafficWorkspaceBar(store: store)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+            StxRule()
+            workspaceContent
         }
-        .sheet(item: $store.replayDraft) { _ in
-            NetworkReplayEditor(store: store)
-                .frame(width: 720, height: 560)
+    }
+
+    @ViewBuilder
+    private var workspaceContent: some View {
+        switch store.selectedTrafficWorkspace {
+        case .httpTraffic:
+            GeometryReader { proxy in
+                switch preferences.networkTrafficLayoutMode.resolved(
+                    width: Double(proxy.size.width),
+                    breakpoint: preferences.networkTrafficAutoBreakpoint
+                ) {
+                case .sideBySide:
+                    sideBySideLayout
+                case .stacked:
+                    stackedLayout
+                }
+            }
+        case .webSocket:
+            NetworkWebSocketWorkspace(store: store)
+        case .replay:
+            NetworkReplayWorkspace(store: store)
+        case .intercept:
+            NetworkInterceptWorkspace(store: store)
+        case .automate:
+            NetworkAutomateWorkspace(store: store)
         }
     }
 
     private var sideBySideLayout: some View {
-        HoverableSplitView(axis: .vertical, primaryFraction: 0.64) {
+        HoverableSplitView(
+            axis: .vertical,
+            primaryFraction: 0.64,
+            configuration: NetworkTrafficPaneMetrics.sideBySideSplitConfiguration
+        ) {
             trafficTable
-                .frame(minWidth: 420, idealWidth: 720, maxWidth: .infinity, maxHeight: .infinity)
+                .frame(
+                    minWidth: NetworkTrafficPaneMetrics.tableMinWidth,
+                    idealWidth: 720,
+                    maxWidth: .infinity,
+                    maxHeight: .infinity
+                )
         } secondary: {
             inspector(.vertical)
-                .frame(minWidth: 360, idealWidth: 430, maxWidth: .infinity, maxHeight: .infinity)
+                .frame(
+                    minWidth: NetworkTrafficPaneMetrics.inspectorMinWidth,
+                    idealWidth: 430,
+                    maxWidth: .infinity,
+                    maxHeight: .infinity
+                )
         }
     }
 
     private var stackedLayout: some View {
-        HoverableSplitView(axis: .horizontal, primaryFraction: 0.46) {
+        HoverableSplitView(
+            axis: .horizontal,
+            primaryFraction: 0.46,
+            configuration: NetworkTrafficPaneMetrics.stackedSplitConfiguration
+        ) {
             trafficTable
-                .frame(minHeight: 220, maxHeight: .infinity)
+                .frame(minHeight: NetworkTrafficPaneMetrics.tableMinHeight, maxHeight: .infinity)
         } secondary: {
             inspector(.horizontal)
-                .frame(minHeight: 280, idealHeight: 340, maxHeight: .infinity)
+                .frame(
+                    minHeight: NetworkTrafficPaneMetrics.inspectorMinHeight,
+                    idealHeight: 340,
+                    maxHeight: .infinity
+                )
         }
     }
 
@@ -56,6 +96,83 @@ struct NetworkTrafficView: View {
 private enum NetworkInspectorPaneArrangement {
     case vertical
     case horizontal
+}
+
+private enum NetworkTrafficPaneMetrics {
+    static let tableMinWidth: CGFloat = 420
+    static let inspectorMinWidth: CGFloat = 360
+    static let tableMinHeight: CGFloat = 220
+    static let inspectorMinHeight: CGFloat = 280
+    static let requestPayloadMinHeight: CGFloat = 170
+    static let responsePayloadMinHeight: CGFloat = 170
+    static let payloadMinWidth: CGFloat = 260
+
+    static let sideBySideSplitConfiguration = HoverableSplitViewConfiguration(
+        primaryMinimumPaneLength: tableMinWidth,
+        secondaryMinimumPaneLength: inspectorMinWidth
+    )
+    static let stackedSplitConfiguration = HoverableSplitViewConfiguration(
+        primaryMinimumPaneLength: tableMinHeight,
+        secondaryMinimumPaneLength: inspectorMinHeight
+    )
+    static let verticalInspectorSplitConfiguration = HoverableSplitViewConfiguration(
+        primaryMinimumPaneLength: requestPayloadMinHeight,
+        secondaryMinimumPaneLength: responsePayloadMinHeight
+    )
+    static let horizontalInspectorSplitConfiguration = HoverableSplitViewConfiguration(
+        primaryMinimumPaneLength: payloadMinWidth,
+        secondaryMinimumPaneLength: payloadMinWidth
+    )
+}
+
+private struct NetworkTrafficWorkspaceBar: View {
+    @Bindable var store: NetworkDebuggerStore
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(NetworkTrafficWorkspace.allCases) { workspace in
+                Button {
+                    store.selectedTrafficWorkspace = workspace
+                    if workspace == .intercept {
+                        store.refreshInterceptQueue()
+                    }
+                } label: {
+                    Label(workspace.title, systemImage: workspace.symbol)
+                        .font(.sora(11, weight: store.selectedTrafficWorkspace == workspace ? .semibold : .medium))
+                        .foregroundStyle(store.selectedTrafficWorkspace == workspace ? Color.stxAccent : Color.stxMuted)
+                        .lineLimit(1)
+                        .padding(.horizontal, 10)
+                        .frame(height: 28)
+                        .background {
+                            if store.selectedTrafficWorkspace == workspace {
+                                RoundedRectangle(cornerRadius: 7)
+                                    .fill(Color.stxAccent.opacity(0.13))
+                            }
+                        }
+                }
+                .buttonStyle(.plain)
+                .help(workspace.title)
+            }
+
+            Spacer(minLength: 8)
+
+            if store.selectedTrafficWorkspace == .replay {
+                Button {
+                    store.createComposeSession()
+                } label: {
+                    Label("Compose", systemImage: "plus")
+                }
+                .controlSize(.small)
+            } else if store.selectedTrafficWorkspace == .automate, let flow = store.selectedFlow {
+                Button {
+                    store.sendFlowToAutomate(flow)
+                } label: {
+                    Label("Use Selected", systemImage: "paperplane")
+                }
+                .controlSize(.small)
+            }
+        }
+    }
 }
 
 struct NetworkTrafficLayoutControls: View {
@@ -159,12 +276,12 @@ private struct NetworkTrafficTable: View {
     var body: some View {
         ZStack {
             NetworkNativeTrafficTable(
-                flows: store.filteredFlows,
+                flows: store.httpTrafficFlows,
                 selectedFlowID: selectedFlowID
             )
             .background(Color.primary.opacity(0.025))
 
-            if store.filteredFlows.isEmpty {
+            if store.httpTrafficFlows.isEmpty {
                 NetworkInlineEmptyState(store.flows.isEmpty ? "Start capture to see traffic." : "No matching traffic.")
                     .padding(.top, 24)
                     .allowsHitTesting(false)
@@ -609,20 +726,43 @@ private struct NetworkFlowInspector: View {
         Group {
             switch arrangement {
             case .vertical:
-                HoverableSplitView(axis: .horizontal, primaryFraction: 0.48) {
+                HoverableSplitView(
+                    axis: .horizontal,
+                    primaryFraction: 0.48,
+                    configuration: NetworkTrafficPaneMetrics.verticalInspectorSplitConfiguration
+                ) {
                     payloadPane(.request)
-                        .frame(minHeight: 170, idealHeight: 240, maxHeight: .infinity)
+                        .frame(
+                            minHeight: NetworkTrafficPaneMetrics.requestPayloadMinHeight,
+                            idealHeight: 240,
+                            maxHeight: .infinity
+                        )
                 } secondary: {
                     payloadPane(.response)
-                        .frame(minHeight: 170, idealHeight: 260, maxHeight: .infinity)
+                        .frame(
+                            minHeight: NetworkTrafficPaneMetrics.responsePayloadMinHeight,
+                            idealHeight: 260,
+                            maxHeight: .infinity
+                        )
                 }
             case .horizontal:
-                HoverableSplitView(axis: .vertical) {
+                HoverableSplitView(
+                    axis: .vertical,
+                    configuration: NetworkTrafficPaneMetrics.horizontalInspectorSplitConfiguration
+                ) {
                     payloadPane(.request)
-                        .frame(minWidth: 260, idealWidth: 420, maxWidth: .infinity)
+                        .frame(
+                            minWidth: NetworkTrafficPaneMetrics.payloadMinWidth,
+                            idealWidth: 420,
+                            maxWidth: .infinity
+                        )
                 } secondary: {
                     payloadPane(.response)
-                        .frame(minWidth: 260, idealWidth: 420, maxWidth: .infinity)
+                        .frame(
+                            minWidth: NetworkTrafficPaneMetrics.payloadMinWidth,
+                            idealWidth: 420,
+                            maxWidth: .infinity
+                        )
                 }
             }
         }
@@ -683,13 +823,47 @@ private struct NetworkPayloadPane: View {
                         copy(content(for: flow))
                     }
                     Menu {
-                        Button("Copy URL") { copy(flow.request.url) }
+                        Button("Copy URL") {
+                            copy(flow.request.url)
+                        }
                         Button("Copy Headers") {
                             copy(flow.request.headers.map { "\($0.name): \($0.value)" }.joined(separator: "\n"))
                         }
-                        Button("Copy Body") { copy(flow.request.body.text) }
-                        Button("Copy as cURL") { copy(curl(for: flow)) }
-                        Button("Export HAR") { copy(har(for: flow)) }
+                        Button("Copy Body") {
+                            copy(flow.request.body.text)
+                        }
+                        Divider()
+                        Button("Copy as cURL") {
+                            store.copyFlow(flow, format: .curl)
+                        }
+                        Button("Export HAR") {
+                            store.copyFlow(flow, format: .har)
+                        }
+                        Button("Export Raw Request") {
+                            store.copyFlow(flow, format: .rawRequest)
+                        }
+                        Button("Export Raw Response") {
+                            store.copyFlow(flow, format: .rawResponse)
+                        }
+                        Divider()
+                        Button("Duplicate to Replay") {
+                            store.duplicateFlowToReplay(flow)
+                        }
+                        Button("Send to Automate") {
+                            store.sendFlowToAutomate(flow)
+                        }
+                        Button("Create Block Rule") {
+                            store.createRule(from: flow, kind: .block)
+                            store.selectedSection = .rules
+                        }
+                        Button("Create Breakpoint") {
+                            store.createRule(from: flow, kind: .breakpoint)
+                            store.selectedSection = .rules
+                        }
+                        Divider()
+                        Button("Delete Flow", role: .destructive) {
+                            store.deleteFlow(flow.id)
+                        }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                             .font(.system(size: 12, weight: .medium))
@@ -753,6 +927,11 @@ private struct NetworkPayloadPane: View {
             .padding(12)
 
             StxRule()
+
+            if selectedTab.wrappedValue == .overview, side == .request {
+                commentEditor(for: flow)
+                StxRule()
+            }
 
             payloadContentView(flow)
 
@@ -834,6 +1013,21 @@ private struct NetworkPayloadPane: View {
         }
     }
 
+    private func commentEditor(for flow: NetworkFlow) -> some View {
+        HStack(spacing: 8) {
+            Label("Comment", systemImage: "text.bubble")
+                .font(.sora(10, weight: .semibold))
+                .foregroundStyle(Color.stxMuted)
+            TextField("Add a note for this flow", text: Binding {
+                store.flows.first { $0.id == flow.id }?.comment ?? ""
+            } set: { value in
+                store.setComment(for: flow.id, text: value)
+            })
+            .textFieldStyle(.roundedBorder)
+        }
+        .padding(12)
+    }
+
     @ViewBuilder
     private func payloadContentView(_ flow: NetworkFlow) -> some View {
         if selectedTab.wrappedValue == .preview,
@@ -889,6 +1083,8 @@ private struct NetworkPayloadPane: View {
             "Domain: \(flow.domainDisplay)",
             "Upstream: \(flow.upstreamProxy.summary)",
             "Rule: \(flow.matchedRuleName ?? "-")",
+            "Source: \(flow.operationSource.rawValue)",
+            "Comment: \(flow.comment.isEmpty ? "-" : flow.comment)",
             "Duration: \(duration(flow))",
             "Request: \(bytes(flow.requestBytes))",
             "Response: \(bytes(flow.responseBytes))",

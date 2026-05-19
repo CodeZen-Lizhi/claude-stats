@@ -323,6 +323,7 @@ struct NetworkUpstreamProxyTestResult: Sendable, Equatable {
     var isReachable: Bool
     var routeSummary: String
     var errorMessage: String?
+    var probeSteps: [NetworkRouteProbeStep] = []
 }
 
 struct NetworkFlowUpstreamProxy: Sendable, Hashable {
@@ -422,6 +423,9 @@ struct NetworkWebSocketFrame: Identifiable, Sendable, Hashable {
     var payloadText: String
     var payloadBytes: Int
     var isFinal: Bool
+    var isDropped: Bool = false
+    var isEdited: Bool = false
+    var isInjected: Bool = false
 }
 
 struct NetworkFlowTiming: Sendable, Hashable {
@@ -453,6 +457,8 @@ struct NetworkFlow: Identifiable, Sendable, Hashable {
     var isPinned: Bool = false
     var isSaved: Bool = false
     var isReplay: Bool = false
+    var comment: String = ""
+    var operationSource: NetworkFlowOperationSource = .capture
 
     var duration: TimeInterval {
         (completedAt ?? Date()).timeIntervalSince(createdAt)

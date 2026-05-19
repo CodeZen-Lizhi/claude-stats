@@ -14,6 +14,7 @@ struct NetworkProxyView: View {
         }
         .task {
             store.refreshPassiveHelperStatus()
+            store.loadUpstreamEnvironments()
         }
         .alert(item: $store.upstreamProxyConfirmation) { confirmation in
             Alert(
@@ -196,9 +197,15 @@ struct NetworkUpstreamView: View {
             NetworkInfoGrid(items: [
                 NetworkInfoItem(title: "Mode", value: store.upstreamProxyMode.title, symbol: "point.3.connected.trianglepath.dotted"),
                 NetworkInfoItem(title: "Route", value: routeSummary, symbol: "arrow.triangle.branch"),
+                NetworkInfoItem(title: "Environment", value: store.selectedUpstreamEnvironment.name, symbol: "rectangle.3.group"),
+                NetworkInfoItem(title: "Profile", value: store.selectedUpstreamProfile?.name ?? "Direct", symbol: "person.crop.rectangle.stack"),
                 NetworkInfoItem(title: "Localhost", value: localhostBypassText, symbol: "location.slash"),
                 NetworkInfoItem(title: "SOCKS DNS", value: socksDNSText, symbol: "network.badge.shield.half.filled"),
             ])
+
+            environmentControls
+
+            StxRule()
 
             modeControls
 
@@ -237,8 +244,278 @@ struct NetworkUpstreamView: View {
                     symbol: store.upstreamProxyTestResult?.isReachable == false ? "exclamationmark.triangle" : "info.circle"
                 )
             }
+
+            if let probe = store.upstreamRouteProbeResult {
+                routeProbePanel(probe)
+            }
         }
         .mainWindowPanel()
+    }
+
+    private var environmentControls: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Text("Environment")
+                    .font(.sora(12, weight: .semibold))
+                Picker("Environment", selection: Binding {
+                    store.selectedUpstreamEnvironmentID
+                } set: { value in
+                    store.selectedUpstreamEnvironmentID = value
+                    store.selectedUpstreamProfileID = store.selectedUpstreamEnvironment.selectedProfileID
+                    store.selectedUpstreamRouteRuleID = store.selectedUpstreamEnvironment.routeRules.first?.id
+                }) {
+                    ForEach(store.upstreamEnvironments) { environment in
+                        Text(environment.name).tag(environment.id)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 190)
+                Picker("Profile", selection: Binding {
+                    store.selectedUpstreamProfileID ?? store.selectedUpstreamEnvironment.selectedProfileID
+                } set: { value in
+                    store.selectUpstreamProfile(value)
+                }) {
+                    ForEach(store.selectedUpstreamEnvironment.profiles) { profile in
+                        Text(profile.name).tag(Optional(profile.id))
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 210)
+                Spacer()
+                Button {
+                    store.createUpstreamEnvironment()
+                } label: {
+                    Label("New Env", systemImage: "plus")
+                }
+                Button {
+                    store.duplicateSelectedUpstreamEnvironment()
+                } label: {
+                    Label("Duplicate", systemImage: "doc.on.doc")
+                }
+            }
+
+            HStack(alignment: .top, spacing: 12) {
+                upstreamProfileList
+                    .frame(minWidth: 230, idealWidth: 260)
+                upstreamRouteRules
+                    .frame(maxWidth: .infinity)
+            }
+
+            HStack(spacing: 10) {
+                TextField("Environment name", text: Binding {
+                    store.selectedUpstreamEnvironment.name
+                } set: { value in
+                    store.updateSelectedUpstreamEnvironmentName(value)
+                })
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 190)
+
+                Button {
+                    store.createManualUpstreamProfileFromCurrentFields()
+                } label: {
+                    Label("Save Manual as Profile", systemImage: "square.and.arrow.down")
+                }
+                Button {
+                    store.saveDetectedSystemProxyAsProfile()
+                } label: {
+                    Label("Save Detected System Proxy", systemImage: "wand.and.stars")
+                }
+                Spacer()
+                Button {
+                    store.saveUpstreamEnvironments()
+                } label: {
+                    Label("Save Environments", systemImage: "checkmark.circle")
+                }
+            }
+            .font(.sora(11, weight: .medium))
+        }
+    }
+
+    private var upstreamProfileList: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Profiles")
+                .font(.sora(10, weight: .semibold))
+                .foregroundStyle(Color.stxMuted)
+            ForEach(store.selectedUpstreamEnvironment.profiles) { profile in
+                Button {
+                    store.selectUpstreamProfile(profile.id)
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: profile.settings.isEnabled ? "arrow.triangle.branch" : "arrow.forward")
+                            .foregroundStyle(profile.settings.isEnabled ? Color.stxAccent : Color.stxMuted)
+                            .frame(width: 16)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(profile.name)
+                                .font(.sora(11, weight: .semibold))
+                                .lineLimit(1)
+                            Text(profile.summary)
+                                .font(.sora(9))
+                                .foregroundStyle(Color.stxMuted)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        Spacer()
+                        if profile.credentialRef?.hasSecretReference == true {
+                            Image(systemName: "key.fill")
+                                .font(.system(size: 10))
+                                .foregroundStyle(Color.stxMuted)
+                        }
+                        if profile.isAutoDetected {
+                            Image(systemName: "wand.and.stars")
+                                .font(.system(size: 10))
+                                .foregroundStyle(Color.stxMuted)
+                        }
+                    }
+                    .padding(8)
+                    .background {
+                        if store.selectedUpstreamProfile?.id == profile.id {
+                            RoundedRectangle(cornerRadius: 7).fill(Color.primary.opacity(0.09))
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(10)
+        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var upstreamRouteRules: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Route Rules")
+                    .font(.sora(10, weight: .semibold))
+                    .foregroundStyle(Color.stxMuted)
+                Spacer()
+                Text("First match wins")
+                    .font(.sora(9))
+                    .foregroundStyle(Color.stxMuted)
+                Button {
+                    store.moveSelectedUpstreamRouteRule(offset: -1)
+                } label: {
+                    Image(systemName: "chevron.up")
+                }
+                .buttonStyle(.plain)
+                .disabled(store.selectedUpstreamRouteRule == nil)
+                Button {
+                    store.moveSelectedUpstreamRouteRule(offset: 1)
+                } label: {
+                    Image(systemName: "chevron.down")
+                }
+                .buttonStyle(.plain)
+                .disabled(store.selectedUpstreamRouteRule == nil)
+                Button {
+                    store.createUpstreamRouteRule()
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .buttonStyle(.plain)
+                Button {
+                    store.deleteSelectedUpstreamRouteRule()
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.plain)
+                .disabled(store.selectedUpstreamRouteRule == nil)
+            }
+            let rules = store.selectedUpstreamEnvironment.routeRules
+            if rules.isEmpty {
+                Text("No route rules. The selected profile is used for all outbound requests before falling back to auto-detected system proxy.")
+                    .font(.sora(11))
+                    .foregroundStyle(Color.stxMuted)
+                    .frame(maxWidth: .infinity, minHeight: 68, alignment: .leading)
+            } else {
+                ForEach(rules) { rule in
+                    Button {
+                        store.selectedUpstreamRouteRuleID = rule.id
+                    } label: {
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(rule.isEnabled ? Color.green : Color.stxMuted.opacity(0.4))
+                                .frame(width: 7, height: 7)
+                            Text(rule.title)
+                                .font(.sora(11, weight: .medium))
+                            Spacer()
+                            Text(routeRuleProfileName(rule))
+                                .font(.sora(9))
+                                .foregroundStyle(Color.stxMuted)
+                                .lineLimit(1)
+                            Text(rule.bypassLocalhost ? "Bypass localhost" : "Route localhost")
+                                .font(.sora(9))
+                                .foregroundStyle(Color.stxMuted)
+                        }
+                        .padding(8)
+                        .background {
+                            RoundedRectangle(cornerRadius: 7)
+                                .fill(store.selectedUpstreamRouteRule?.id == rule.id ? Color.primary.opacity(0.09) : Color.primary.opacity(0.035))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+                upstreamRouteRuleEditor
+            }
+        }
+        .padding(10)
+        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var upstreamRouteRuleEditor: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            StxRule()
+            HStack(spacing: 8) {
+                Toggle("Enabled", isOn: routeRuleBinding(\.isEnabled))
+                    .toggleStyle(.checkbox)
+                Picker("Scheme", selection: routeRuleBinding(\.scheme)) {
+                    ForEach(NetworkUpstreamRouteMatchScheme.allCases) { scheme in
+                        Text(scheme.rawValue.uppercased()).tag(scheme)
+                    }
+                }
+                .frame(width: 128)
+                TextField("Host/domain pattern", text: routeRuleBinding(\.hostPattern))
+                    .textFieldStyle(.roundedBorder)
+            }
+            HStack(spacing: 8) {
+                Picker("Profile", selection: routeRuleProfileBinding) {
+                    Text("Selected profile").tag(Optional<UUID>.none)
+                    ForEach(store.selectedUpstreamEnvironment.profiles) { profile in
+                        Text(profile.name).tag(Optional(profile.id))
+                    }
+                }
+                .frame(minWidth: 180)
+                Toggle("Bypass localhost", isOn: routeRuleBinding(\.bypassLocalhost))
+                    .toggleStyle(.checkbox)
+                Spacer()
+            }
+            Text("Route rules are stored with the environment and describe outbound routing intent. The selected profile remains the active fallback route for Rockxy.")
+                .font(.sora(9))
+                .foregroundStyle(Color.stxMuted)
+        }
+        .font(.sora(11))
+    }
+
+    private func routeRuleBinding<Value>(_ keyPath: WritableKeyPath<NetworkUpstreamRouteRule, Value>) -> Binding<Value> {
+        Binding {
+            store.selectedUpstreamRouteRule?[keyPath: keyPath] ?? NetworkUpstreamRouteRule()[keyPath: keyPath]
+        } set: { value in
+            store.updateSelectedUpstreamRouteRule {
+                $0[keyPath: keyPath] = value
+            }
+        }
+    }
+
+    private var routeRuleProfileBinding: Binding<UUID?> {
+        Binding {
+            store.selectedUpstreamRouteRule?.profileID
+        } set: { value in
+            store.updateSelectedUpstreamRouteRule {
+                $0.profileID = value
+            }
+        }
+    }
+
+    private func routeRuleProfileName(_ rule: NetworkUpstreamRouteRule) -> String {
+        guard let profileID = rule.profileID else { return "Selected profile" }
+        return store.selectedUpstreamEnvironment.profiles.first { $0.id == profileID }?.name ?? "Missing profile"
     }
 
     @ViewBuilder
@@ -321,6 +598,64 @@ struct NetworkUpstreamView: View {
             .font(.sora(11, weight: .medium))
         }
         .font(.sora(11))
+    }
+
+    private func routeProbePanel(_ probe: NetworkRouteProbeResult) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("Route Diagnostics", systemImage: probe.isReachable ? "checkmark.seal" : "exclamationmark.triangle")
+                    .font(.sora(12, weight: .semibold))
+                    .foregroundStyle(probe.isReachable ? Color.green : Color.red)
+                Spacer()
+                Text(probe.selectedRoute)
+                    .font(.sora(10))
+                    .foregroundStyle(Color.stxMuted)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            ForEach(probe.steps) { step in
+                HStack(spacing: 9) {
+                    Image(systemName: probeStepSymbol(step.status))
+                        .foregroundStyle(probeStepColor(step.status))
+                        .frame(width: 16)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(step.title)
+                            .font(.sora(11, weight: .semibold))
+                        Text(step.detail)
+                            .font(.sora(9))
+                            .foregroundStyle(Color.stxMuted)
+                            .lineLimit(2)
+                    }
+                    Spacer()
+                    if let latency = step.latencyMs {
+                        Text("\(Int(latency.rounded())) ms")
+                            .font(.sora(9).monospacedDigit())
+                            .foregroundStyle(Color.stxMuted)
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func probeStepSymbol(_ status: NetworkRouteProbeStepStatus) -> String {
+        switch status {
+        case .pending: "clock"
+        case .success: "checkmark.circle.fill"
+        case .warning: "exclamationmark.circle.fill"
+        case .failure: "xmark.circle.fill"
+        case .skipped: "minus.circle"
+        }
+    }
+
+    private func probeStepColor(_ status: NetworkRouteProbeStepStatus) -> Color {
+        switch status {
+        case .pending, .skipped: Color.stxMuted
+        case .success: .green
+        case .warning: .yellow
+        case .failure: .red
+        }
     }
 
     private var upstreamBadgeText: String {

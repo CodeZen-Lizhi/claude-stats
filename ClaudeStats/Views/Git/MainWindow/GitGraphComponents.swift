@@ -72,25 +72,6 @@ struct GitGraphRowView: View {
     }
 }
 
-private struct TrailingFadeMask: View {
-    let width: CGFloat
-
-    var body: some View {
-        HStack(spacing: 0) {
-            Rectangle()
-            LinearGradient(
-                stops: [
-                    .init(color: .black, location: 0),
-                    .init(color: .clear, location: 1)
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            .frame(width: width)
-        }
-    }
-}
-
 private struct GitGraphRailView: View {
     let row: GraphLayout.Row
     let laneSpacing: CGFloat
