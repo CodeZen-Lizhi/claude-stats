@@ -374,38 +374,30 @@ private struct FloatingTabFeaturePreview: View {
 
 private struct NotchIslandFeaturePreview: View {
     var body: some View {
-        VStack(spacing: 14) {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.black)
-                .frame(width: 188, height: 34)
-                .overlay {
-                    HStack(spacing: 8) {
-                        Image(systemName: "cpu")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(Color.stxAccent)
-                        Text("Stats")
-                            .font(.sora(11, weight: .semibold))
-                            .foregroundStyle(.white)
-                        Spacer()
-                        Text("38%")
-                            .font(.sora(10, weight: .medium).monospacedDigit())
-                            .foregroundStyle(Color.white.opacity(0.7))
-                    }
-                    .padding(.horizontal, 12)
-                }
+        VStack(spacing: 12) {
+            UnevenRoundedRectangle(
+                topLeadingRadius: 6,
+                bottomLeadingRadius: 14,
+                bottomTrailingRadius: 14,
+                topTrailingRadius: 6,
+                style: .continuous
+            )
+            .fill(Color.black)
+            .frame(width: 188, height: 34)
+            .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
 
-            HStack(spacing: 8) {
-                ForEach([("Media", "music.note"), ("Timer", "timer"), ("Shelf", "tray")], id: \.0) { item in
-                    HStack(spacing: 5) {
-                        Image(systemName: item.1)
-                            .font(.system(size: 9, weight: .semibold))
-                        Text(item.0)
-                            .font(.sora(9, weight: .medium))
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-                    .background(Color.primary.opacity(0.06), in: Capsule())
-                    .overlay(Capsule().strokeBorder(Color.stxStroke, lineWidth: 1))
+            HStack(spacing: 24) {
+                ForEach(["house.fill", "tray.fill", "timer", "chart.xyaxis.line"], id: \.self) { symbol in
+                    Image(systemName: symbol)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(symbol == "house.fill" ? Color.primary : Color.stxMuted)
+                        .frame(width: 26, height: 26)
+                        .background {
+                            if symbol == "house.fill" {
+                                Capsule()
+                                    .fill(Color.primary.opacity(0.12))
+                            }
+                        }
                 }
             }
         }

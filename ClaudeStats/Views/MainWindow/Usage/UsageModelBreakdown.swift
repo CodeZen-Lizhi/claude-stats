@@ -93,14 +93,17 @@ private struct UsageModelRow: View {
                 Spacer(minLength: 12)
                 Text(Format.tokens(totalTokens))
                     .font(.sora(12, weight: .semibold).monospacedDigit())
+                    .stxNumericValueTransition(value: Format.tokens(totalTokens))
                     .foregroundStyle(.primary)
                     .frame(minWidth: 72, alignment: .trailing)
                 Text(Format.cost(model.estimatedCost(for: costEstimationMode)))
                     .font(.sora(12).monospacedDigit())
+                    .stxNumericValueTransition(value: Format.cost(model.estimatedCost(for: costEstimationMode)))
                     .foregroundStyle(Color.stxMuted)
                     .frame(minWidth: 70, alignment: .trailing)
                 Text(Format.percent(share))
                     .font(.sora(12, weight: .semibold).monospacedDigit())
+                    .stxNumericValueTransition(value: Format.percent(share))
                     .foregroundStyle(.primary)
                     .frame(minWidth: 50, alignment: .trailing)
             }
@@ -167,6 +170,7 @@ struct UsageTokenCompositionPanel: View {
                 Spacer()
                 Text(cacheHitRate.map(Format.percent) ?? "--")
                     .font(.sora(12, weight: .semibold).monospacedDigit())
+                    .stxNumericValueTransition(value: cacheHitRate.map(Format.percent) ?? "--")
                     .foregroundStyle(.primary)
                     .help("Cache hit rate")
             }
@@ -186,6 +190,7 @@ struct UsageTokenCompositionPanel: View {
                         Spacer(minLength: 8)
                         Text(Format.tokens(part.value))
                             .font(.sora(11).monospacedDigit())
+                            .stxNumericValueTransition(value: Format.tokens(part.value))
                             .foregroundStyle(Color.stxMuted)
                             .frame(minWidth: 70, alignment: .trailing)
                     }

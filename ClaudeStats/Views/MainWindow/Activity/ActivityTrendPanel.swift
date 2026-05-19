@@ -112,6 +112,7 @@ struct ActivityDailyBreakdownPanel: View {
                 Spacer()
                 Text("\(activeDayCount) active days")
                     .font(.sora(10))
+                    .stxNumericValueTransition(value: activeDayCount)
                     .foregroundStyle(Color.stxMuted)
                     .lineLimit(1)
             }
@@ -192,6 +193,7 @@ private struct ActivityDailyBreakdownRow: View {
 
                 Text(Format.percent(day.assistedRatio))
                     .font(.sora(12, weight: .semibold).monospacedDigit())
+                    .stxNumericValueTransition(value: Format.percent(day.assistedRatio))
                     .foregroundStyle(.primary)
                     .frame(width: 44, alignment: .trailing)
 
@@ -199,21 +201,25 @@ private struct ActivityDailyBreakdownRow: View {
 
                 Text(Format.duration(day.codingSurfaceSeconds))
                     .font(.sora(11).monospacedDigit())
+                    .stxNumericValueTransition(value: Format.duration(day.codingSurfaceSeconds))
                     .foregroundStyle(Color.stxMuted)
                     .frame(minWidth: 62, alignment: .trailing)
 
                 Text(Format.duration(day.overlapSeconds))
                     .font(.sora(11).monospacedDigit())
+                    .stxNumericValueTransition(value: Format.duration(day.overlapSeconds))
                     .foregroundStyle(Color.stxMuted)
                     .frame(minWidth: 62, alignment: .trailing)
 
                 Text(Format.duration(day.cliHostSeconds))
                     .font(.sora(11).monospacedDigit())
+                    .stxNumericValueTransition(value: Format.duration(day.cliHostSeconds))
                     .foregroundStyle(Color.stxMuted)
                     .frame(minWidth: 62, alignment: .trailing)
 
                 Text(Format.duration(day.cliAIOverlapSeconds))
                     .font(.sora(11).monospacedDigit())
+                    .stxNumericValueTransition(value: Format.duration(day.cliAIOverlapSeconds))
                     .foregroundStyle(Color.stxMuted)
                     .frame(minWidth: 62, alignment: .trailing)
             }

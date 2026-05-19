@@ -92,10 +92,17 @@ final class AppEnvironment {
         applyAutoRefreshSetting()
         updater.start()
         floatingStatsPanel.start(environment: self)
-        notchIsland.start(environment: self)
+        if !Self.isRunningUnitTests {
+            notchIsland.start(environment: self)
+        }
     }
 
     func applyAutoRefreshSetting() {
         store.startAutoRefresh(every: TimeInterval(preferences.autoRefreshMinutes) * 60)
+    }
+
+    private static var isRunningUnitTests: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+            || NSClassFromString("XCTestCase") != nil
     }
 }

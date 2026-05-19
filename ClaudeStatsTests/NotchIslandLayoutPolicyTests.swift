@@ -40,4 +40,21 @@ struct NotchIslandLayoutPolicyTests {
         #expect(expanded.maxX <= small.maxX - NotchIslandLayoutPolicy.horizontalMargin)
         #expect(expanded.maxY == small.maxY)
     }
+
+    @Test("Dynamic Island canvas adds Atoll shadow inset and top offset")
+    func dynamicIslandCanvasAddsAtollInsets() {
+        let standard = AtollNotchGeometry.panelCanvasSize(
+            for: .regular,
+            in: screen,
+            dynamicIslandMode: false
+        )
+        let dynamic = AtollNotchGeometry.panelCanvasSize(
+            for: .regular,
+            in: screen,
+            dynamicIslandMode: true
+        )
+
+        #expect(dynamic.width == standard.width + AtollNotchGeometry.dynamicIslandShadowInset * 2)
+        #expect(dynamic.height == standard.height + AtollNotchGeometry.dynamicIslandTopOffset)
+    }
 }

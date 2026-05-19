@@ -186,6 +186,7 @@ private struct LeaderboardPodiumCompactRow: View {
             VStack(alignment: .trailing, spacing: 5) {
                 Text(LeaderboardFormat.score(score.score, metric: score.metric))
                     .font(.sora(fallbackRank == 1 ? 14 : 12, weight: .semibold).monospacedDigit())
+                    .stxNumericValueTransition(value: LeaderboardFormat.score(score.score, metric: score.metric))
                     .foregroundStyle(fallbackRank == 1 ? Color.stxAccent : .primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.65)
@@ -238,6 +239,7 @@ private struct LeaderboardPodiumCompactRow: View {
     private func rankBadge(_ rank: Int) -> some View {
         Text("#\(rank)")
             .font(.sora(13, weight: .semibold).monospacedDigit())
+            .stxNumericValueTransition(value: rank)
             .foregroundStyle(rank == 1 ? Color.stxAccent : Color.stxMuted)
             .frame(width: 36, alignment: .leading)
     }
@@ -268,6 +270,7 @@ private struct LeaderboardScoreRow: View {
             HStack(spacing: 10) {
                 Text("#\(score.rank ?? 0)")
                     .font(.sora(11, weight: .semibold).monospacedDigit())
+                    .stxNumericValueTransition(value: score.rank ?? 0)
                     .foregroundStyle(isCurrentUser || isSelected ? Color.stxAccent : Color.stxMuted)
                     .frame(width: 38, alignment: .leading)
                 BeamAvatarView(seed: LeaderboardFormat.avatarSeed(for: score), size: 28)
@@ -293,6 +296,7 @@ private struct LeaderboardScoreRow: View {
                 VStack(alignment: .trailing, spacing: 5) {
                     Text(formattedScore)
                         .font(.sora(12, weight: .semibold).monospacedDigit())
+                        .stxNumericValueTransition(value: formattedScore)
                         .lineLimit(1)
                         .minimumScaleFactor(0.65)
                     LeaderboardScoreBar(fraction: fraction, active: isCurrentUser || isSelected)

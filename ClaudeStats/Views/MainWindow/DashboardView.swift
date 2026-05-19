@@ -168,8 +168,8 @@ struct DashboardView: View {
             GridRow {
                 StatCard(label: "Current streak", value: "\(s.currentStreak)d")
                 StatCard(label: "Longest streak", value: "\(s.longestStreak)d")
-                StatCard(label: "Peak hour", value: peakHourLabel(s.peakHour))
-                StatCard(label: "Favorite model", value: favoriteModelLabel(s.favoriteModel))
+                StatCard(label: "Peak hour", value: peakHourLabel(s.peakHour), animatesNumericValue: false)
+                StatCard(label: "Favorite model", value: favoriteModelLabel(s.favoriteModel), animatesNumericValue: false)
             }
         }
     }
@@ -247,6 +247,7 @@ struct DashboardView: View {
                     .foregroundStyle(Color.stxMuted)
                 Text("\(Format.percent(overlap.jaccard)) aligned")
                     .font(.sora(13, weight: .semibold))
+                    .stxNumericValueTransition(value: Format.percent(overlap.jaccard))
                     .help(pearsonHelp(for: overlap))
                 Spacer()
                 Text(overlapBreakdown(overlap))

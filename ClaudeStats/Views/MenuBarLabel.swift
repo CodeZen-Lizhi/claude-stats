@@ -8,10 +8,12 @@ struct MenuBarLabel: View {
     var body: some View {
         let prefs = env.preferences
         let summary = env.store.summary(for: prefs.menuBarPeriod, provider: prefs.selectedProvider)
+        let value = valueText(summary: summary, metric: prefs.menuBarMetric)
         HStack(spacing: 4) {
             Image(systemName: "chart.bar.xaxis")
-            Text(valueText(summary: summary, metric: prefs.menuBarMetric))
+            Text(value)
                 .monospacedDigit()
+                .stxNumericValueTransition(value: value)
         }
         .accessibilityLabel("\(prefs.selectedProvider.shortName) Stats — \(prefs.menuBarPeriod.displayName)")
     }

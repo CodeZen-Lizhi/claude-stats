@@ -151,6 +151,7 @@ struct GitActivityView: View {
             Text(value)
                 .font(.sora(13, weight: .semibold).monospacedDigit())
                 .foregroundStyle(.primary)
+                .stxNumericValueTransition(value: value)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
                 .layoutPriority(1)

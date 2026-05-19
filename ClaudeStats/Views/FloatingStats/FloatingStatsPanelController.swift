@@ -37,9 +37,9 @@ final class FloatingStatsPanelController {
         var duration: TimeInterval {
             switch self {
             case .standard:
-                0.18
+                FloatingStatsContentAnimation.panelExpandDuration
             case .collapse:
-                0.16
+                FloatingStatsContentAnimation.panelCollapseDuration
             }
         }
 
@@ -64,6 +64,8 @@ final class FloatingStatsPanelController {
     private var screenObserver: NSObjectProtocol?
     private var suppressPreferenceSync = false
     private var frameTransitionID = 0
+    private var contentTransitionID = 0
+    private var contentTransitionTask: Task<Void, Never>?
     private var isApplyingFrame = false
     private var isStarted = false
     private var isHovering = false
@@ -168,6 +170,7 @@ final class FloatingStatsPanelController {
     private func closePanel() {
         collapseTask?.cancel()
         collapseTask = nil
+        cancelContentTransition()
         panel?.orderOut(nil)
         panel = nil
         placement = .docked
@@ -177,7 +180,8 @@ final class FloatingStatsPanelController {
         isHovering = false
         requiresExitBeforeReexpand = false
         state.isExpanded = false
-        state.showsExpandedContent = false
+        state.expandedContentPhase = .hidden
+        state.showsCollapsedContent = true
         state.isDocked = true
         setEdgeReleaseProgress(FloatingPanelDragMotion.dockedEdgeReleaseProgress, animated: false)
     }
@@ -223,10 +227,13 @@ final class FloatingStatsPanelController {
 
     private func setExpanded(_ expanded: Bool, animated: Bool) {
         if expanded {
-            guard !state.isExpanded else { return }
             requiresExitBeforeReexpand = false
+            guard !state.isExpanded else {
+                restoreExpandedContent(animated: animated)
+                return
+            }
             state.isExpanded = true
-            state.showsExpandedContent = true
+            prepareExpandedContentForReveal(animated: animated)
             applyStoredFrame(expanded: true, animated: animated, animationStyle: .standard)
             return
         }
@@ -239,10 +246,65 @@ final class FloatingStatsPanelController {
         collapseDockedPanel(animated: animated)
     }
 
+    private func prepareExpandedContentForReveal(animated: Bool) {
+        cancelContentTransition()
+        state.showsCollapsedContent = false
+
+        guard animated else {
+            state.expandedContentPhase = .visible
+            return
+        }
+
+        state.expandedContentPhase = .waitingToReveal
+        contentTransitionID += 1
+        let transitionID = contentTransitionID
+        contentTransitionTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(
+                nanoseconds: FloatingStatsContentAnimation.nanoseconds(for: FloatingStatsContentAnimation.revealInitialDelay)
+            )
+            guard let self, !Task.isCancelled, self.contentTransitionID == transitionID else { return }
+            self.state.expandedContentPhase = .revealing
+
+            try? await Task.sleep(
+                nanoseconds: FloatingStatsContentAnimation.nanoseconds(for: FloatingStatsContentAnimation.totalRevealDuration)
+            )
+            guard !Task.isCancelled, self.contentTransitionID == transitionID else { return }
+            self.state.expandedContentPhase = .visible
+            self.contentTransitionTask = nil
+        }
+    }
+
+    private func restoreExpandedContent(animated: Bool) {
+        guard state.isExpanded else { return }
+        cancelContentTransition()
+        state.showsCollapsedContent = false
+        switch state.expandedContentPhase {
+        case .hidden, .waitingToReveal:
+            prepareExpandedContentForReveal(animated: animated)
+        case .revealing, .visible:
+            break
+        case .hiding:
+            if animated {
+                withAnimation(.easeOut(duration: FloatingStatsContentAnimation.collapseFadeDuration)) {
+                    state.expandedContentPhase = .visible
+                }
+            } else {
+                state.expandedContentPhase = .visible
+            }
+        }
+    }
+
+    private func cancelContentTransition() {
+        contentTransitionTask?.cancel()
+        contentTransitionTask = nil
+        contentTransitionID += 1
+    }
+
     private func dragBegan(at mouseLocation: CGPoint) {
         guard let panel else { return }
         collapseTask?.cancel()
         collapseTask = nil
+        restoreExpandedContent(animated: false)
         frameTransitionID += 1
         isApplyingFrame = false
         requiresExitBeforeReexpand = false
@@ -329,7 +391,8 @@ final class FloatingStatsPanelController {
             state.isDocked = false
             setEdgeReleaseProgress(FloatingPanelDragMotion.detachedEdgeReleaseProgress, animated: false)
             state.isExpanded = true
-            state.showsExpandedContent = true
+            state.showsCollapsedContent = false
+            state.expandedContentPhase = .visible
             if !panel.frame.isApproximatelyEqual(to: detachedFrame) {
                 panel.setFrame(detachedFrame, display: true)
             }
@@ -419,21 +482,53 @@ final class FloatingStatsPanelController {
     }
 
     private func collapseDockedPanel(animated: Bool) {
-        hideExpandedContentForCollapse()
-        state.isExpanded = false
         let finishCollapse: @MainActor @Sendable () -> Void = { [weak self] in
             guard let self else { return }
+            self.showCollapsedContentForCollapsedFrame()
             self.updateHoverGateAfterDockedCollapse()
         }
 
-        applyStoredFrame(expanded: false, animated: animated, animationStyle: .collapse, completion: finishCollapse)
+        hideExpandedContentBeforePanelCollapse(animated: animated) { [weak self] in
+            guard let self else { return }
+            self.state.expandedContentPhase = .hidden
+            self.state.showsCollapsedContent = false
+            self.state.isExpanded = false
+            self.applyStoredFrame(expanded: false, animated: animated, animationStyle: .collapse, completion: finishCollapse)
+        }
     }
 
-    private func hideExpandedContentForCollapse() {
+    private func hideExpandedContentBeforePanelCollapse(
+        animated: Bool,
+        completion: @escaping @MainActor @Sendable () -> Void
+    ) {
+        cancelContentTransition()
+        guard animated, state.expandedContentPhase.mountsExpandedContent else {
+            completion()
+            return
+        }
+
+        contentTransitionID += 1
+        let transitionID = contentTransitionID
+        withAnimation(.easeOut(duration: FloatingStatsContentAnimation.collapseFadeDuration)) {
+            state.expandedContentPhase = .hiding
+        }
+
+        contentTransitionTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(
+                nanoseconds: FloatingStatsContentAnimation.nanoseconds(for: FloatingStatsContentAnimation.collapseFadeDuration)
+            )
+            guard let self, !Task.isCancelled, self.contentTransitionID == transitionID else { return }
+            self.contentTransitionTask = nil
+            completion()
+        }
+    }
+
+    private func showCollapsedContentForCollapsedFrame() {
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction) {
-            state.showsExpandedContent = false
+            state.expandedContentPhase = .hidden
+            state.showsCollapsedContent = true
         }
     }
 
@@ -454,10 +549,13 @@ final class FloatingStatsPanelController {
         placement = .docked
         state.isDocked = true
         state.isExpanded = false
-        state.showsExpandedContent = false
+        state.expandedContentPhase = .hidden
+        state.showsCollapsedContent = false
         setEdgeReleaseProgress(FloatingPanelDragMotion.dockedEdgeReleaseProgress, animated: animated)
         persistPlacement(edge: edge, anchor: anchor, preferences: preferences)
-        applyStoredFrame(expanded: false, animated: animated, animationStyle: .collapse)
+        applyStoredFrame(expanded: false, animated: animated, animationStyle: .collapse) { [weak self] in
+            self?.showCollapsedContentForCollapsedFrame()
+        }
     }
 
     private func applyCurrentPlacementAfterScreenChange(animated: Bool) {

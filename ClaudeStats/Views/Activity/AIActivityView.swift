@@ -264,6 +264,7 @@ struct AIActivityView: View {
             Text(value)
                 .font(.sora(13, weight: .semibold).monospacedDigit())
                 .foregroundStyle(.primary)
+                .stxNumericValueTransition(value: value)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
                 .layoutPriority(1)
@@ -464,6 +465,7 @@ struct AIActivityView: View {
                         Spacer(minLength: 8)
                         Text(Format.duration(part.2))
                             .font(.sora(10).monospacedDigit())
+                            .stxNumericValueTransition(value: Format.duration(part.2))
                             .foregroundStyle(Color.stxMuted)
                     }
                 }

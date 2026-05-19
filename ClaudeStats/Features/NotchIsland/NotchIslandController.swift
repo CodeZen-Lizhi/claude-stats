@@ -1,31 +1,24 @@
 import AppKit
+import AtollEmbed
 import Observation
 import SwiftUI
 
 @MainActor
 final class NotchIslandController {
-    let runtime = NotchIslandRuntime()
-
     private weak var environment: AppEnvironment?
     private weak var preferences: Preferences?
-    private var panels: [NSScreen: NotchIslandPanel] = [:]
+    private var panels: [NSScreen: NSPanel] = [:]
+    private var bridges: [NSScreen: AtollIslandRuntimeBridge] = [:]
     private var screenObserver: NSObjectProtocol?
     private var lockObserver: NSObjectProtocol?
     private var unlockObserver: NSObjectProtocol?
     private let shortcutMonitor = NotchIslandShortcutMonitor()
-    private lazy var hoverCoordinator = NotchIslandHoverCoordinator(
-        mouseLocationProvider: {
-            NSEvent.mouseLocation
-        },
-        panelFramesProvider: { [weak self] in
-            self?.panels.values.map(\.frame) ?? []
-        },
-        setExpanded: { [weak self] expanded in
-            self?.setExpanded(expanded, animated: true)
-        }
-    )
     private var isStarted = false
     private var windowsHiddenForLock = false
+
+    #if DEBUG
+    var activePanelCountForTesting: Int { panels.count }
+    #endif
 
     func start(environment: AppEnvironment) {
         guard !isStarted else { return }
@@ -35,12 +28,11 @@ final class NotchIslandController {
         observePreferences()
         observeScreenChanges()
         observeLockState()
-        syncWithPreferences(animated: false)
+        syncWithPreferences()
     }
 
     func stop() {
         closePanels()
-        runtime.stopAll()
         if let screenObserver {
             NotificationCenter.default.removeObserver(screenObserver)
         }
@@ -51,7 +43,6 @@ final class NotchIslandController {
             DistributedNotificationCenter.default().removeObserver(unlockObserver)
         }
         shortcutMonitor.stop()
-        hoverCoordinator.cancelPendingCollapse()
         screenObserver = nil
         lockObserver = nil
         unlockObserver = nil
@@ -70,7 +61,7 @@ final class NotchIslandController {
             _ = preferences.systemMonitorRefreshRate
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
-                self?.syncWithPreferences(animated: true)
+                self?.syncWithPreferences()
                 self?.observePreferences()
             }
         }
@@ -83,8 +74,8 @@ final class NotchIslandController {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.hoverCoordinator.cancelPendingCollapse()
-                self?.syncWithPreferences(animated: true)
+                self?.closePanels()
+                self?.syncWithPreferences()
             }
         }
     }
@@ -110,122 +101,60 @@ final class NotchIslandController {
         }
     }
 
-    private func syncWithPreferences(animated: Bool) {
+    private func syncWithPreferences() {
         guard let environment, let preferences else { return }
         syncShortcutMonitor()
         guard preferences.notchIslandEnabled else {
             closePanels()
-            runtime.stopAll()
-            hoverCoordinator.cancelPendingCollapse()
             return
         }
-        if !preferences.notchIslandHoverExpansionEnabled {
-            hoverCoordinator.cancelPendingCollapse()
-        }
-
-        runtime.configure(
-            enabledModules: preferences.notchIslandEnabledModules,
-            statsRefreshRate: preferences.systemMonitorRefreshRate
-        )
 
         let targetScreens = screens(for: preferences.notchIslandDisplayMode)
         let targetSet = Set(targetScreens)
         let staleScreens = panels.keys.filter { !targetSet.contains($0) }
         for screen in staleScreens {
-            panels[screen]?.orderOut(nil)
+            bridges[screen]?.stop()
+            bridges.removeValue(forKey: screen)
+            panels[screen]?.close()
             panels.removeValue(forKey: screen)
         }
 
         for screen in targetScreens {
             ensurePanel(on: screen, environment: environment)
         }
-        updatePanelFrames(animated: animated)
+        let configuration = atollConfiguration(for: preferences)
+        for bridge in bridges.values {
+            bridge.update(configuration: configuration)
+            bridge.refreshWindowFrame(animated: false, force: true)
+        }
     }
 
     private func ensurePanel(on screen: NSScreen, environment: AppEnvironment) {
         guard panels[screen] == nil, let preferences else { return }
-        let frame = NotchIslandLayoutPolicy.frame(
-            in: screen.frame,
-            preset: preferences.notchIslandSizePreset,
-            expanded: runtime.isExpanded
-        )
-        let panel = NotchIslandPanel(
-            contentRect: frame,
-            styleMask: [.borderless, .nonactivatingPanel, .hudWindow],
-            backing: .buffered,
-            defer: false
-        )
-        panel.isReleasedWhenClosed = false
-        panel.hidesOnDeactivate = false
-        panel.level = .statusBar
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = false
-        panel.title = "Claude Stats Notch Island"
-        panel.acceptsMouseMovedEvents = true
+        let configuration = atollConfiguration(for: preferences)
+        let frame = AtollIslandSizing.frame(for: screen, configuration: configuration)
+        let panel = AtollIslandWindowFactory.makeWindow(frame: frame)
 
-        let rootView = NotchIslandRootView(
-            runtime: runtime,
-            onHoverChanged: { [weak self] hovering in
-                self?.handleHoverChanged(hovering)
-            },
-            onCollapseRequested: { [weak self] in
-                self?.collapseIsland(animated: true)
+        let bridge = AtollIslandRuntimeBridge(
+            screenName: screen.localizedName,
+            configuration: configuration,
+            settingsOpener: {
+                NotificationCenter.default.post(name: .openSettingsInMainWindow, object: SettingsSection.notchIsland)
             }
         )
-        .environment(environment)
+        bridge.attach(window: panel, screen: screen)
 
-        let hostingView = NSHostingView(rootView: rootView)
+        let rootView = AtollIslandHostView(bridge: bridge)
+            .environment(environment)
+
+        let hostingView = NotchIslandHostingView(rootView: rootView)
         hostingView.wantsLayer = true
         hostingView.layer?.isOpaque = false
         hostingView.layer?.backgroundColor = NSColor.clear.cgColor
         panel.contentView = hostingView
         panels[screen] = panel
+        bridges[screen] = bridge
         panel.orderFrontRegardless()
-    }
-
-    private func handleHoverChanged(_ hovering: Bool) {
-        guard preferences?.notchIslandHoverExpansionEnabled == true else { return }
-        hoverCoordinator.handleHoverChanged(hovering)
-    }
-
-    private func collapseIsland(animated: Bool) {
-        hoverCoordinator.cancelPendingCollapse()
-        setExpanded(false, animated: animated)
-    }
-
-    private func setExpanded(_ expanded: Bool, animated: Bool) {
-        guard runtime.isExpanded != expanded else { return }
-        if animated {
-            withAnimation(.easeOut(duration: 0.18)) {
-                runtime.isExpanded = expanded
-            }
-        } else {
-            runtime.isExpanded = expanded
-        }
-        updatePanelFrames(animated: animated)
-    }
-
-    private func updatePanelFrames(animated: Bool) {
-        guard let preferences else { return }
-        for (screen, panel) in panels {
-            let frame = NotchIslandLayoutPolicy.frame(
-                in: screen.frame,
-                preset: preferences.notchIslandSizePreset,
-                expanded: runtime.isExpanded
-            )
-            guard panel.frame != frame else { continue }
-            if animated {
-                NSAnimationContext.runAnimationGroup { context in
-                    context.duration = 0.18
-                    context.allowsImplicitAnimation = true
-                    panel.animator().setFrame(frame, display: true)
-                }
-            } else {
-                panel.setFrame(frame, display: true)
-            }
-        }
     }
 
     private func syncShortcutMonitor() {
@@ -235,21 +164,26 @@ final class NotchIslandController {
         }
         guard !shortcutMonitor.isRunning else { return }
         shortcutMonitor.start { [weak self] in
-            self?.toggleIslandVisibility()
+            self?.toggleIslandOpen()
         }
     }
 
-    private func toggleIslandVisibility() {
-        guard let preferences else { return }
-        preferences.notchIslandEnabled.toggle()
-        syncWithPreferences(animated: true)
+    private func toggleIslandOpen() {
+        let mouse = NSEvent.mouseLocation
+        let bridge = bridges.first { screen, _ in
+            screen.frame.contains(mouse)
+        }?.value ?? bridges.values.first
+        bridge?.toggleOpen()
     }
 
     private func closePanels() {
-        hoverCoordinator.cancelPendingCollapse()
-        for panel in panels.values {
-            panel.orderOut(nil)
+        for bridge in bridges.values {
+            bridge.stop()
         }
+        for panel in panels.values {
+            panel.close()
+        }
+        bridges.removeAll()
         panels.removeAll()
         windowsHiddenForLock = false
     }
@@ -257,7 +191,6 @@ final class NotchIslandController {
     private func hidePanelsForLock() {
         guard !windowsHiddenForLock else { return }
         windowsHiddenForLock = true
-        hoverCoordinator.cancelPendingCollapse()
         for panel in panels.values {
             panel.orderOut(nil)
         }
@@ -266,10 +199,10 @@ final class NotchIslandController {
     private func restorePanelsAfterLock() {
         guard windowsHiddenForLock else { return }
         windowsHiddenForLock = false
-        for panel in panels.values {
+        for (screen, panel) in panels {
+            bridges[screen]?.refreshWindowFrame(animated: false, force: true)
             panel.orderFrontRegardless()
         }
-        updatePanelFrames(animated: false)
     }
 
     private func screens(for mode: NotchIslandDisplayMode) -> [NSScreen] {
@@ -285,9 +218,55 @@ final class NotchIslandController {
             return screens
         }
     }
+
+    private func atollConfiguration(for preferences: Preferences) -> AtollIslandConfiguration {
+        AtollIslandConfiguration(
+            enabledFeatures: Set(preferences.notchIslandEnabledModules.map(\.atollFeature)),
+            openNotchWidth: AtollNotchGeometry.openWidth(for: preferences.notchIslandSizePreset),
+            openOnHover: preferences.notchIslandHoverExpansionEnabled,
+            showOnAllDisplays: preferences.notchIslandDisplayMode == .allDisplays,
+            statsUpdateInterval: atollStatsUpdateInterval(for: preferences.systemMonitorRefreshRate)
+        )
+    }
+
+    private func atollStatsUpdateInterval(for refreshRate: SystemMonitorRefreshRate) -> TimeInterval {
+        switch refreshRate {
+        case .off: 3
+        case .oneSecond: 1
+        case .threeSeconds: 3
+        case .tenSeconds: 10
+        case .thirtySeconds: 30
+        }
+    }
 }
 
-private final class NotchIslandPanel: NSPanel {
-    override var canBecomeKey: Bool { false }
-    override var canBecomeMain: Bool { false }
+private extension NotchIslandModule {
+    var atollFeature: AtollIslandFeature {
+        switch self {
+        case .media: .media
+        case .stats: .stats
+        case .timer: .timer
+        case .clipboard: .clipboard
+        case .colorPicker: .colorPicker
+        case .calendar: .calendar
+        case .shelf: .shelf
+        case .privacy: .privacy
+        case .recording: .recording
+        case .focus: .focus
+        case .battery: .battery
+        case .bluetooth: .bluetooth
+        case .downloads: .downloads
+        case .osd: .osd
+        case .lockScreenWidgets: .lockScreenWidgets
+        case .extensionBridge: .extensionBridge
+        case .screenAssistant: .screenAssistant
+        case .terminal: .terminal
+        }
+    }
+}
+
+private final class NotchIslandHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
 }

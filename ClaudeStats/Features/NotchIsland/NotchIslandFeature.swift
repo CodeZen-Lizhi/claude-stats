@@ -1,14 +1,5 @@
 import Foundation
 
-@MainActor
-protocol NotchIslandFeature {
-    var module: NotchIslandModule { get }
-    var permissionState: NotchIslandPermissionState { get }
-
-    func start(runtime: NotchIslandRuntime)
-    func stop(runtime: NotchIslandRuntime)
-}
-
 struct NotchIslandFeatureDescriptor: Identifiable, Sendable {
     var module: NotchIslandModule
     var permissionState: NotchIslandPermissionState

@@ -54,7 +54,7 @@ struct NotchIslandSettingsView: View {
                     SettingRowDivider()
 
                     SettingRow(title: "Shortcut bridge",
-                               description: "Toggle the island with Command-Option-N.") {
+                               description: "Open or close the island with Command-Option-N.") {
                         Toggle("", isOn: $prefs.notchIslandShortcutEnabled)
                             .labelsHidden()
                     }

@@ -97,7 +97,7 @@ struct LeaderboardOverviewPanel: View {
             LeaderboardSummaryCard(label: "Entries", value: scores.isEmpty ? "--" : "\(scores.count)")
             LeaderboardSummaryCard(label: "Top score", value: topScore > 0 ? LeaderboardFormat.score(topScore, metric: metric) : "--")
             LeaderboardSummaryCard(label: "Your rank", value: yourRankLabel)
-            LeaderboardSummaryCard(label: "Sync", value: syncStatusText)
+            LeaderboardSummaryCard(label: "Sync", value: syncStatusText, animatesNumericValue: false)
         }
     }
 
@@ -113,6 +113,7 @@ struct LeaderboardOverviewPanel: View {
 private struct LeaderboardSummaryCard: View {
     let label: String
     let value: String
+    var animatesNumericValue = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -122,6 +123,7 @@ private struct LeaderboardSummaryCard: View {
                 .foregroundStyle(Color.stxMuted)
             Text(value)
                 .font(.sora(14, weight: .semibold).monospacedDigit())
+                .modifier(NumericValueTransitionIfEnabled(enabled: animatesNumericValue, value: value))
                 .lineLimit(1)
                 .minimumScaleFactor(0.58)
                 .frame(height: 19, alignment: .leading)

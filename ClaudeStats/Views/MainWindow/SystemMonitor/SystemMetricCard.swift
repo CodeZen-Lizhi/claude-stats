@@ -5,12 +5,14 @@ struct SystemMetricLegend: Identifiable {
     var label: String
     var value: String
     var color: Color
+    var animatesValue: Bool
 
-    init(_ label: String, value: String, color: Color) {
+    init(_ label: String, value: String, color: Color, animatesValue: Bool = true) {
         self.id = label
         self.label = label
         self.value = value
         self.color = color
+        self.animatesValue = animatesValue
     }
 }
 
@@ -18,6 +20,7 @@ struct SystemMetricCard<Content: View>: View {
     let title: String
     let symbol: String
     let value: String
+    var valueAnimatesNumeric = true
     var caption: String
     var legends: [SystemMetricLegend]
     @ViewBuilder var content: () -> Content
@@ -66,6 +69,7 @@ struct SystemMetricCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(value)
                 .font(.sora(28, weight: .semibold).monospacedDigit())
+                .modifier(NumericValueTransitionIfEnabled(enabled: valueAnimatesNumeric, value: value))
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
             Text(caption)
@@ -94,6 +98,7 @@ struct SystemMetricCard<Content: View>: View {
                             .lineLimit(1)
                         Text(legend.value)
                             .font(.sora(10, weight: .medium).monospacedDigit())
+                            .modifier(NumericValueTransitionIfEnabled(enabled: legend.animatesValue, value: legend.value))
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                     }

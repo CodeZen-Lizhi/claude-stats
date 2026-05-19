@@ -118,6 +118,7 @@ struct UsageView: View {
             Text(value)
                 .font(.sora(13, weight: .semibold).monospacedDigit())
                 .foregroundStyle(.primary)
+                .stxNumericValueTransition(value: value)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
                 .layoutPriority(1)
@@ -468,9 +469,11 @@ struct UsageView: View {
                             Spacer(minLength: 8)
                             Text(Format.tokens(model.usage.total(includingCacheRead: includeCache)))
                                 .font(.sora(10).monospacedDigit())
+                                .stxNumericValueTransition(value: Format.tokens(model.usage.total(includingCacheRead: includeCache)))
                                 .foregroundStyle(.primary)
                             Text(Format.cost(model.estimatedCost(for: costMode)))
                                 .font(.sora(10).monospacedDigit())
+                                .stxNumericValueTransition(value: Format.cost(model.estimatedCost(for: costMode)))
                                 .foregroundStyle(Color.stxMuted)
                         }
                         GeometryReader { geo in

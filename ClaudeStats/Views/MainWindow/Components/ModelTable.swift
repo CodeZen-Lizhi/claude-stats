@@ -45,10 +45,12 @@ struct ModelTable: View {
             Spacer(minLength: 12)
             Text("\(Format.tokens(usage.usage.inputTokens)) in · \(Format.tokens(usage.usage.outputTokens)) out")
                 .font(.sora(11).monospacedDigit())
+                .stxNumericValueTransition(value: "\(Format.tokens(usage.usage.inputTokens)) in · \(Format.tokens(usage.usage.outputTokens)) out")
                 .foregroundStyle(Color.stxMuted)
                 .lineLimit(1)
             Text(Format.percent(share))
                 .font(.sora(12, weight: .semibold).monospacedDigit())
+                .stxNumericValueTransition(value: Format.percent(share))
                 .foregroundStyle(.primary)
                 .frame(minWidth: 52, alignment: .trailing)
         }

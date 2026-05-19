@@ -35,16 +35,19 @@ struct FloatingStatsPanelView: View {
         let collapsedSize = FloatingPanelGeometry.size(edge: edge, expanded: false)
 
         return ZStack(alignment: edge.dockedContentAlignment) {
-            if state.showsExpandedContent {
+            if state.expandedContentPhase.mountsExpandedContent {
                 expandedContent
-                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
-            } else {
+                    .opacity(state.expandedContentPhase.expandedContentOpacity)
+                    .animation(.easeOut(duration: FloatingStatsContentAnimation.collapseFadeDuration), value: state.expandedContentPhase)
+            }
+
+            if state.showsCollapsedContent {
                 collapsedContent(edge: edge, size: collapsedSize)
                     .frame(width: collapsedSize.width, height: collapsedSize.height)
                     .transition(.opacity)
             }
         }
-        .animation(.easeOut(duration: 0.1), value: state.showsExpandedContent)
+        .animation(.easeOut(duration: 0.1), value: state.showsCollapsedContent)
         .animation(.easeOut(duration: 0.16), value: state.isExpanded)
         .frame(width: currentSize.width, height: currentSize.height)
         .background {
@@ -117,74 +120,119 @@ struct FloatingStatsPanelView: View {
         let summary = env.store.summary(for: prefs.menuBarPeriod, provider: provider)
 
         return VStack(alignment: .leading, spacing: 10) {
-            header(provider: provider, period: prefs.menuBarPeriod)
-                .overlay(dragHandle)
-
-            StxRule()
-
-            HStack(alignment: .top, spacing: 10) {
-                metricBlock(title: "TOKENS", value: Format.tokens(summary.totalTokens(includingCacheRead: prefs.menuBarIncludesCache)))
-                metricBlock(title: "COST", value: Format.cost(summary.totalCost(for: prefs.costEstimationMode)))
-                metricBlock(title: "SESSIONS", value: "\(summary.sessionCount)")
+            animatedExpandedSection(.header) {
+                header(provider: provider, period: prefs.menuBarPeriod)
+                    .overlay(dragHandle)
             }
 
-            if let refreshed = env.store.lastRefreshedAt {
-                Text("UPDATED \(Format.relativeDate(refreshed).uppercased())")
-                    .font(.sora(9, weight: .medium))
-                    .tracking(0.7)
-                    .foregroundStyle(Color.stxMuted)
-            } else {
-                Text(env.store.isLoading ? "SCANNING..." : "NOT UPDATED YET")
-                    .font(.sora(9, weight: .medium))
-                    .tracking(0.7)
-                    .foregroundStyle(Color.stxMuted)
+            animatedExpandedSection(.rule) {
+                StxRule()
             }
 
-            if let statusContent = floatingStatusContent(for: provider) {
-                FloatingProviderStatusView(content: statusContent)
+            animatedExpandedSection(.metrics) {
+                HStack(alignment: .top, spacing: 10) {
+                    metricBlock(title: "TOKENS", value: Format.tokens(summary.totalTokens(includingCacheRead: prefs.menuBarIncludesCache)))
+                    metricBlock(title: "COST", value: Format.cost(summary.totalCost(for: prefs.costEstimationMode)))
+                    metricBlock(title: "SESSIONS", value: "\(summary.sessionCount)")
+                }
+            }
+
+            animatedExpandedSection(.status) {
+                updatedStatusSection(provider: provider)
             }
 
             Spacer(minLength: 0)
 
-            HStack(spacing: 7) {
-                actionButton(symbol: env.store.isLoading ? "hourglass" : "arrow.clockwise", label: "Refresh") {
-                    Task { await env.store.refresh() }
-                }
-                .disabled(env.store.isLoading)
-
-                actionButton(symbol: "macwindow", label: "Open main window") {
-                    NotificationCenter.default.post(name: .openMainWindowFromFloatingStats, object: nil)
-                }
-
-                actionButton(symbol: "arrow.triangle.branch", label: "Open Git") {
-                    NotificationCenter.default.post(
-                        name: .openMainWindowDestinationFromFloatingStats,
-                        object: FloatingStatsMainWindowDestination.page(.git)
-                    )
-                }
-
-                actionButton(symbol: "terminal", label: "Open Terminal") {
-                    NotificationCenter.default.post(
-                        name: .openMainWindowDestinationFromFloatingStats,
-                        object: FloatingStatsMainWindowDestination.page(.terminal)
-                    )
-                }
-
-                actionButton(symbol: "network", label: "Open Network") {
-                    NotificationCenter.default.post(
-                        name: .openMainWindowDestinationFromFloatingStats,
-                        object: FloatingStatsMainWindowDestination.network
-                    )
-                }
-
-                actionButton(symbol: "gearshape", label: "Open settings") {
-                    NotificationCenter.default.post(name: .openSettingsFromFloatingStats, object: nil)
-                }
+            animatedExpandedSection(.actions) {
+                actionButtons
             }
         }
         .padding(14)
         .task(id: provider) {
             await refreshProviderStatusIfNeeded(provider: provider)
+        }
+    }
+
+    private func animatedExpandedSection<Content: View>(
+        _ section: FloatingStatsContentSection,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .contentTransition(.opacity)
+            .opacity(state.expandedContentPhase.showsSectionContent ? 1 : 0)
+            .animation(expandedSectionAnimation(for: section), value: state.expandedContentPhase)
+    }
+
+    private func expandedSectionAnimation(for section: FloatingStatsContentSection) -> Animation {
+        switch state.expandedContentPhase {
+        case .revealing:
+            FloatingStatsContentAnimation.revealAnimation(for: section)
+        case .hiding:
+            .easeOut(duration: FloatingStatsContentAnimation.collapseFadeDuration)
+        case .hidden, .waitingToReveal, .visible:
+            .easeOut(duration: FloatingStatsContentAnimation.sectionFadeDuration)
+        }
+    }
+
+    private func updatedStatusSection(provider: ProviderKind) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            updatedText
+            if let statusContent = floatingStatusContent(for: provider) {
+                FloatingProviderStatusView(content: statusContent)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var updatedText: some View {
+        if let refreshed = env.store.lastRefreshedAt {
+            Text("UPDATED \(Format.relativeDate(refreshed).uppercased())")
+                .font(.sora(9, weight: .medium))
+                .tracking(0.7)
+                .foregroundStyle(Color.stxMuted)
+        } else {
+            Text(env.store.isLoading ? "SCANNING..." : "NOT UPDATED YET")
+                .font(.sora(9, weight: .medium))
+                .tracking(0.7)
+                .foregroundStyle(Color.stxMuted)
+        }
+    }
+
+    private var actionButtons: some View {
+        HStack(spacing: 7) {
+            FloatingStatsActionButton(symbol: env.store.isLoading ? "hourglass" : "arrow.clockwise", label: "Refresh") {
+                Task { await env.store.refresh() }
+            }
+            .disabled(env.store.isLoading)
+
+            FloatingStatsActionButton(symbol: "macwindow", label: "Open main window") {
+                NotificationCenter.default.post(name: .openMainWindowFromFloatingStats, object: nil)
+            }
+
+            FloatingStatsActionButton(symbol: "arrow.triangle.branch", label: "Open Git") {
+                NotificationCenter.default.post(
+                    name: .openMainWindowDestinationFromFloatingStats,
+                    object: FloatingStatsMainWindowDestination.page(.git)
+                )
+            }
+
+            FloatingStatsActionButton(symbol: "terminal", label: "Open Terminal") {
+                NotificationCenter.default.post(
+                    name: .openMainWindowDestinationFromFloatingStats,
+                    object: FloatingStatsMainWindowDestination.page(.terminal)
+                )
+            }
+
+            FloatingStatsActionButton(symbol: "network", label: "Open Network") {
+                NotificationCenter.default.post(
+                    name: .openMainWindowDestinationFromFloatingStats,
+                    object: FloatingStatsMainWindowDestination.network
+                )
+            }
+
+            FloatingStatsActionButton(symbol: "gearshape", label: "Open settings") {
+                NotificationCenter.default.post(name: .openSettingsFromFloatingStats, object: nil)
+            }
         }
     }
 
@@ -287,25 +335,12 @@ struct FloatingStatsPanelView: View {
             Text(value)
                 .font(.sora(15, weight: .semibold))
                 .monospacedDigit()
+                .stxNumericValueTransition(value: value)
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
                 .foregroundStyle(.primary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func actionButton(symbol: String, label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 12, weight: .semibold))
-                .frame(width: 32, height: 28)
-                .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.stxStroke, lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(.primary)
-        .help(label)
-        .accessibilityLabel(label)
     }
 
     private var dragHandle: some View {
@@ -438,7 +473,8 @@ private struct FloatingTabShape: Shape {
                 let state = FloatingStatsPanelState()
                 state.edge = .right
                 state.isExpanded = true
-                state.showsExpandedContent = true
+                state.expandedContentPhase = .visible
+                state.showsCollapsedContent = false
                 return state
             }(),
             onHoverChanged: { _ in },

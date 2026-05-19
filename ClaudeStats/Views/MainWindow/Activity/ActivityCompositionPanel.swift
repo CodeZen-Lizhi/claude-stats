@@ -26,6 +26,7 @@ struct ActivityCompositionPanel: View {
                 Spacer()
                 Text(split.totalSeconds > 0 ? Format.duration(split.totalSeconds) : "--")
                     .font(.sora(12, weight: .semibold).monospacedDigit())
+                    .stxNumericValueTransition(value: split.totalSeconds > 0 ? Format.duration(split.totalSeconds) : "--")
                     .foregroundStyle(.primary)
                     .help("Total split time")
             }
@@ -83,6 +84,7 @@ struct ActivityCompositionPanel: View {
                     Spacer(minLength: 8)
                     Text(Format.duration(part.seconds))
                         .font(.sora(11).monospacedDigit())
+                        .stxNumericValueTransition(value: Format.duration(part.seconds))
                         .foregroundStyle(Color.stxMuted)
                         .frame(minWidth: 72, alignment: .trailing)
                 }

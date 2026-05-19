@@ -204,6 +204,7 @@ private struct LeaderboardDetailMetricCell: View {
                 .foregroundStyle(Color.stxMuted)
             Text(metric.value)
                 .font(.sora(17, weight: .semibold).monospacedDigit())
+                .stxNumericValueTransition(value: metric.value)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
         }

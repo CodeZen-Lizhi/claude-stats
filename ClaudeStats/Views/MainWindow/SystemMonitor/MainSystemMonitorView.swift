@@ -228,9 +228,10 @@ struct MainSystemMonitorView: View {
             title: "Thermal",
             symbol: SystemMonitorModule.thermal.symbol,
             value: thermal.state.displayName,
+            valueAnimatesNumeric: false,
             caption: "macOS thermal pressure",
             legends: [
-                SystemMetricLegend("State", value: thermal.state.displayName, color: thermalColor(thermal.state)),
+                SystemMetricLegend("State", value: thermal.state.displayName, color: thermalColor(thermal.state), animatesValue: false),
             ]
         ) {
             SystemTimelineChart(bars: historyBars { sample in

@@ -6,7 +6,8 @@ import Observation
 final class FloatingStatsPanelState {
     var edge: FloatingPanelEdge = .right
     var isExpanded = false
-    var showsExpandedContent = false
+    var expandedContentPhase: FloatingStatsExpandedContentPhase = .hidden
+    var showsCollapsedContent = true
     var isDocked = true
     var edgeReleaseProgress: CGFloat = FloatingPanelDragMotion.dockedEdgeReleaseProgress
 }

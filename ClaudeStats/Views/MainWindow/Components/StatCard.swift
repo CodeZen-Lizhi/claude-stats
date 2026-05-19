@@ -6,6 +6,7 @@ import SwiftUI
 struct StatCard: View {
     let label: String
     let value: String
+    var animatesNumericValue = true
 
     private static let valueLineHeight: CGFloat = 25
 
@@ -18,7 +19,7 @@ struct StatCard: View {
             Text(value)
                 .font(.sora(20, weight: .semibold).monospacedDigit())
                 .foregroundStyle(.primary)
-                .contentTransition(.numericText())
+                .modifier(NumericValueTransitionIfEnabled(enabled: animatesNumericValue, value: value))
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
                 .frame(height: Self.valueLineHeight, alignment: .leading)
