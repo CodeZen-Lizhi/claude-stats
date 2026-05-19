@@ -46,29 +46,7 @@ struct LeaderboardDailyPeriodControl: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
-            Button {
-                withAnimation(.easeOut(duration: 0.18)) {
-                    period = .day
-                }
-            } label: {
-                Text("Daily")
-                    .font(.sora(11, weight: .medium))
-                    .foregroundStyle(isSelected ? .primary : Color.stxMuted)
-                    .lineLimit(1)
-                    .padding(.horizontal, 10)
-                    .frame(height: 30)
-                    .leaderboardSelectedSegment(isSelected)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .leaderboardSegmentedBackground()
-            .help("Show one UTC day")
-            .accessibilityLabel("Daily")
-            .accessibilityAddTraits(isSelected ? .isSelected : [])
-
-            dayStepper
-        }
+        dayStepper
         .fixedSize(horizontal: true, vertical: false)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Daily leaderboard date")
@@ -80,12 +58,24 @@ struct LeaderboardDailyPeriodControl: View {
                 stepDay(-1)
             }
 
-            Text(LeaderboardDailyDateNavigator.label(for: selectedDate))
-                .font(.sora(11, weight: .medium).monospacedDigit())
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .frame(minWidth: 70)
-                .accessibilityLabel("Selected UTC day")
+            Button {
+                withAnimation(.easeOut(duration: 0.18)) {
+                    period = .day
+                }
+            } label: {
+                Text(LeaderboardDailyDateNavigator.label(for: selectedDate))
+                    .font(.sora(11, weight: .medium).monospacedDigit())
+                    .foregroundStyle(isSelected ? .primary : Color.stxMuted)
+                    .lineLimit(1)
+                    .frame(minWidth: 70)
+                    .frame(height: 30)
+                    .leaderboardSelectedSegment(isSelected)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Show selected UTC day")
+            .accessibilityLabel("Selected UTC day")
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
 
             stepButton(systemName: "chevron.right", disabled: !canStepForward, help: "Next UTC day") {
                 stepDay(1)
@@ -106,7 +96,7 @@ struct LeaderboardDailyPeriodControl: View {
             Image(systemName: systemName)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(disabled ? Color.stxMuted.opacity(0.35) : Color.stxMuted)
-                .frame(width: 24, height: 22)
+                .frame(width: 24, height: 30)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

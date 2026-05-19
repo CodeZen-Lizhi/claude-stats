@@ -144,6 +144,7 @@ struct UsageView: View {
         let snapshot = UsageTrendChartSnapshot(
             series: series,
             rangeID: rangeID,
+            transitionScopeID: env.preferences.selectedProvider.rawValue,
             style: style,
             useLog: useLog,
             stackByType: stackByType,

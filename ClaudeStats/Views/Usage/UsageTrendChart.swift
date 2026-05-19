@@ -13,6 +13,7 @@ struct UsageTrendChartSnapshot {
     let viewport: STXDateChartViewport
     let renderFamilyID: String
     let viewportID: String
+    let transitionScopeID: String
     let stageID: String
     let dataID: Int
     let isHourly: Bool
@@ -20,11 +21,12 @@ struct UsageTrendChartSnapshot {
     let useLog: Bool
     let stackByType: Bool
     let isEmpty: Bool
-    var updateID: String { "\(stageID)|\(viewportID)|\(dataID)" }
+    var updateID: String { "\(transitionScopeID)|\(stageID)|\(viewportID)|\(dataID)" }
 
     init(
         series: TrendSeries,
         rangeID: String,
+        transitionScopeID: String = "default",
         style: TrendChartStyle,
         useLog: Bool,
         stackByType: Bool,
@@ -52,6 +54,7 @@ struct UsageTrendChartSnapshot {
         self.useLog = useLog
         self.stackByType = stackByType
         self.isEmpty = isEmpty
+        self.transitionScopeID = transitionScopeID
 
         let renderFamilyID = [
             isHourly ? "hour" : "day",
@@ -393,9 +396,10 @@ struct UsageTrendChartView<Legend: View>: View {
         let isSameDataStage = previous.renderFamilyID == snapshot.renderFamilyID
             && !previous.isEmpty
             && !snapshot.isEmpty
+        let isScopeChange = previous.transitionScopeID != snapshot.transitionScopeID
         let isShrinkingTimeAxis = snapshot.viewport.xDuration < previous.viewport.xDuration - 0.5
 
-        if isSameDataStage && isShrinkingTimeAxis {
+        if isScopeChange || (isSameDataStage && isShrinkingTimeAxis) {
             withAnimation(UsageTrendMotion.chartCrossfade) {
                 chartStageNonce += 1
                 displayedSnapshot = snapshot
