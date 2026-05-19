@@ -3,8 +3,6 @@ import Foundation
 enum NetworkSection: String, CaseIterable, Identifiable, Sendable, Hashable {
     case traffic
     case proxy
-    case helper
-    case upstream
     case certificates
     case rules
 
@@ -12,7 +10,7 @@ enum NetworkSection: String, CaseIterable, Identifiable, Sendable, Hashable {
 
     init(storedRawValue: String) {
         switch storedRawValue {
-        case "setup":
+        case "setup", "helper", "upstream":
             self = .proxy
         default:
             self = NetworkSection(rawValue: storedRawValue) ?? .traffic
@@ -23,8 +21,6 @@ enum NetworkSection: String, CaseIterable, Identifiable, Sendable, Hashable {
         switch self {
         case .traffic: "Traffic"
         case .proxy: "Proxy"
-        case .helper: "Helper"
-        case .upstream: "Upstream"
         case .certificates: "Certificates"
         case .rules: "Rules"
         }
@@ -34,8 +30,6 @@ enum NetworkSection: String, CaseIterable, Identifiable, Sendable, Hashable {
         switch self {
         case .traffic: "list.bullet.rectangle"
         case .proxy: "network"
-        case .helper: "wrench.and.screwdriver"
-        case .upstream: "arrow.triangle.branch"
         case .certificates: "checkmark.shield"
         case .rules: "slider.horizontal.3"
         }
@@ -935,18 +929,34 @@ enum NetworkHelperAction: String, Sendable, Equatable {
 }
 
 struct NetworkHelperState: Sendable, Equatable {
+    var statusID: String
     var statusMessage: String
     var detailMessage: String?
     var action: NetworkHelperAction?
     var isReachable: Bool
     var canUsePrivilegedHelper: Bool
+    var registrationStatus: String
+    var installedVersion: String?
+    var installedBuild: Int?
+    var installedProtocolVersion: Int?
+    var bundledVersion: String
+    var bundledBuild: Int
+    var expectedProtocolVersion: Int
 
     static let empty = NetworkHelperState(
+        statusID: "unknown",
         statusMessage: "Checking helper...",
         detailMessage: nil,
         action: nil,
         isReachable: false,
-        canUsePrivilegedHelper: false
+        canUsePrivilegedHelper: false,
+        registrationStatus: "Unknown",
+        installedVersion: nil,
+        installedBuild: nil,
+        installedProtocolVersion: nil,
+        bundledVersion: "Unknown",
+        bundledBuild: 0,
+        expectedProtocolVersion: 0
     )
 }
 

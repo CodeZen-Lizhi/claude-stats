@@ -11,20 +11,33 @@ struct NetworkSidebarColumn: View {
     @State private var methodsExpanded = false
     @State private var statusesExpanded = false
     @State private var protocolsExpanded = false
+    @State private var trafficFiltersHover = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Color.clear.frame(height: 44)
-
-            if store.trafficSidebarLayer == .filters {
-                filtersSidebar
-            } else {
-                sectionsSidebar
-            }
-
-            Spacer(minLength: 0)
+            sidebarDeck
         }
         .padding(.bottom, 10)
+    }
+
+    private var sidebarDeck: some View {
+        HStack(alignment: .top, spacing: 0) {
+            sectionsSidebar
+                .frame(width: Self.sidebarWidth, alignment: .topLeading)
+                .allowsHitTesting(store.trafficSidebarLayer == .sections)
+                .accessibilityHidden(store.trafficSidebarLayer != .sections)
+            filtersSidebar
+                .frame(width: Self.sidebarWidth, alignment: .topLeading)
+                .allowsHitTesting(store.trafficSidebarLayer == .filters)
+                .accessibilityHidden(store.trafficSidebarLayer != .filters)
+        }
+        .frame(width: Self.sidebarWidth * 2, alignment: .leading)
+        .offset(x: store.trafficSidebarLayer == .filters ? -Self.sidebarWidth : 0)
+        .frame(width: Self.sidebarWidth, alignment: .topLeading)
+        .frame(maxHeight: .infinity, alignment: .topLeading)
+        .clipped()
+        .animation(MainWindowMotion.modeSwitchAnimation, value: store.trafficSidebarLayer)
     }
 
     private var sectionsSidebar: some View {
@@ -56,7 +69,9 @@ struct NetworkSidebarColumn: View {
             SidebarRow(title: "Back",
                        symbol: "chevron.left",
                        isSelected: false) {
-                store.trafficSidebarLayer = .sections
+                withAnimation(MainWindowMotion.modeSwitchAnimation) {
+                    store.trafficSidebarLayer = .sections
+                }
             }
 
             filterField
@@ -184,7 +199,7 @@ struct NetworkSidebarColumn: View {
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 10)
-                .padding(.vertical, 7)
+                .frame(height: Self.trafficChipHeight)
                 .background {
                     if section == .traffic {
                         RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.10))
@@ -196,16 +211,24 @@ struct NetworkSidebarColumn: View {
 
             Button {
                 section = .traffic
-                store.trafficSidebarLayer = .filters
+                withAnimation(MainWindowMotion.modeSwitchAnimation) {
+                    store.trafficSidebarLayer = .filters
+                }
             } label: {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(Color.stxMuted)
-                    .frame(width: 26, height: 26)
-                    .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 6))
+                    .foregroundStyle(trafficFiltersHover ? Color.stxAccent : Color.stxMuted)
+                    .frame(width: Self.trafficChipHeight, height: Self.trafficChipHeight)
+                    .background(trafficFiltersHover ? Color.stxAccent.opacity(0.16) : Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 6))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 6)
+                            .strokeBorder(trafficFiltersHover ? Color.stxAccent.opacity(0.38) : Color.clear, lineWidth: 1)
+                    }
             }
             .buttonStyle(.plain)
             .help("Open traffic filters")
+            .onHover { trafficFiltersHover = $0 }
+            .animation(.easeOut(duration: 0.12), value: trafficFiltersHover)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 1)
@@ -355,6 +378,11 @@ struct NetworkSidebarColumn: View {
         .buttonStyle(.plain)
         .padding(.horizontal, 8)
     }
+}
+
+private extension NetworkSidebarColumn {
+    static let sidebarWidth = MainWindowMotion.networkSidebarWidth
+    static let trafficChipHeight: CGFloat = 32
 }
 
 #if DEBUG

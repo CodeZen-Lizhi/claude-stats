@@ -6,75 +6,12 @@ struct NetworkProxyView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            statusCard
+            localProxyCard
+            systemProxyCard
+            NetworkHelperView(store: store)
+            NetworkUpstreamView(store: store)
             commandsCard
         }
-    }
-
-    private var statusCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Label("Local Proxy", systemImage: "network")
-                    .font(.sora(14, weight: .semibold))
-                Spacer()
-                Text(store.statusMessage)
-                    .font(.sora(11))
-                    .foregroundStyle(Color.stxMuted)
-            }
-
-            HStack(spacing: 10) {
-                Button {
-                    store.startCapture()
-                } label: {
-                    Label("Start", systemImage: "play.fill")
-                }
-                .disabled(store.captureStatus.isListening)
-
-                Button {
-                    store.stopCapture()
-                } label: {
-                    Label("Stop", systemImage: "stop.fill")
-                }
-                .disabled(!store.captureStatus.isListening)
-
-                Spacer()
-
-                Button {
-                    store.enableSystemProxy()
-                } label: {
-                    Label("Enable System Proxy", systemImage: "switch.2")
-                }
-                .disabled(!store.captureStatus.isListening || store.systemProxyStatus.isEnabled || store.isSystemProxyWorking)
-
-                Button {
-                    store.disableSystemProxy()
-                } label: {
-                    Label("Restore", systemImage: "arrow.uturn.backward")
-                }
-                .disabled(!store.systemProxyStatus.isEnabled || store.isSystemProxyWorking)
-            }
-            .font(.sora(11, weight: .medium))
-
-            Toggle(isOn: $store.autoEnableSystemProxyOnStart) {
-                Label("Auto-enable system proxy on start", systemImage: "bolt.horizontal")
-                    .font(.sora(11, weight: .medium))
-            }
-            .toggleStyle(.checkbox)
-
-            if let error = store.systemProxyStatus.lastError, !error.isEmpty {
-                Text(error)
-                    .font(.sora(11))
-                    .foregroundStyle(.red)
-                    .textSelection(.enabled)
-            }
-
-            if store.systemProxyStatus.isEnabled {
-                Text("Managed services: \(store.systemProxyStatus.managedServices.joined(separator: ", "))")
-                    .font(.sora(11))
-                    .foregroundStyle(Color.stxMuted)
-            }
-        }
-        .mainWindowPanel()
         .task {
             store.refreshPassiveHelperStatus()
         }
@@ -90,6 +27,106 @@ struct NetworkProxyView: View {
                 }
             )
         }
+    }
+
+    private var localProxyCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Label("Local Proxy", systemImage: "network")
+                    .font(.sora(14, weight: .semibold))
+                NetworkStatusBadge(
+                    text: store.statusMessage,
+                    symbol: store.captureStatus.isListening ? "dot.radiowaves.left.and.right" : "circle",
+                    tint: store.captureStatus.isListening ? .green : Color.stxMuted
+                )
+                Spacer()
+            }
+
+            NetworkInfoGrid(items: [
+                NetworkInfoItem(title: "Listen", value: endpoint, symbol: "point.3.connected.trianglepath.dotted"),
+                NetworkInfoItem(title: "Captured", value: "\(store.flows.count)", symbol: "list.bullet.rectangle"),
+                NetworkInfoItem(title: "Visible", value: "\(store.filteredFlows.count)", symbol: "line.3.horizontal.decrease.circle"),
+                NetworkInfoItem(title: "Selected", value: store.selectedFlow?.domainDisplay ?? "None", symbol: "scope"),
+            ])
+
+            HStack(spacing: 10) {
+                Button {
+                    store.startCapture()
+                } label: {
+                    Label("Start Capture", systemImage: "play.fill")
+                }
+                .disabled(store.captureStatus.isListening)
+
+                Button {
+                    store.stopCapture()
+                } label: {
+                    Label("Stop", systemImage: "stop.fill")
+                }
+                .disabled(!store.captureStatus.isListening)
+
+                Button {
+                    store.clearFlows()
+                } label: {
+                    Label("Clear", systemImage: "trash")
+                }
+                .disabled(store.flows.isEmpty)
+
+                Spacer()
+            }
+            .font(.sora(11, weight: .medium))
+        }
+        .mainWindowPanel()
+    }
+
+    private var systemProxyCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Label("System Proxy", systemImage: "switch.2")
+                    .font(.sora(14, weight: .semibold))
+                NetworkStatusBadge(
+                    text: store.systemProxyStatus.isEnabled ? "Enabled" : "Idle",
+                    symbol: store.systemProxyStatus.isEnabled ? "checkmark.circle.fill" : "circle",
+                    tint: store.systemProxyStatus.isEnabled ? .green : Color.stxMuted
+                )
+                Spacer()
+            }
+
+            HStack(alignment: .center, spacing: 12) {
+                Toggle(isOn: $store.autoEnableSystemProxyOnStart) {
+                    Label("Auto-enable on start", systemImage: "bolt.horizontal")
+                        .font(.sora(11, weight: .medium))
+                }
+                .toggleStyle(.checkbox)
+
+                Spacer()
+
+                Button {
+                    store.enableSystemProxy()
+                } label: {
+                    Label("Enable", systemImage: "switch.2")
+                }
+                .disabled(!store.captureStatus.isListening || store.systemProxyStatus.isEnabled || store.isSystemProxyWorking)
+
+                Button {
+                    store.disableSystemProxy()
+                } label: {
+                    Label("Restore", systemImage: "arrow.uturn.backward")
+                }
+                .disabled(!store.systemProxyStatus.isEnabled || store.isSystemProxyWorking)
+            }
+            .font(.sora(11, weight: .medium))
+
+            NetworkInfoGrid(items: [
+                NetworkInfoItem(title: "Managed", value: managedServicesText, symbol: "network"),
+                NetworkInfoItem(title: "Upstream", value: store.systemProxyStatus.upstreamProxySummary ?? "Direct", symbol: "arrow.triangle.branch"),
+                NetworkInfoItem(title: "Restore Scope", value: store.systemProxyStatus.isEnabled ? "This session" : "None", symbol: "arrow.uturn.backward.circle"),
+            ])
+
+            if let error = store.systemProxyStatus.lastError, !error.isEmpty {
+                NetworkInlineMessage(text: error, tint: .red, symbol: "exclamationmark.triangle")
+            }
+        }
+        .mainWindowPanel()
     }
 
     private var commandsCard: some View {
@@ -114,6 +151,12 @@ struct NetworkProxyView: View {
         store.listeningEndpoint?.displayName ?? "127.0.0.1:9090"
     }
 
+    private var managedServicesText: String {
+        store.systemProxyStatus.managedServices.isEmpty
+            ? "None"
+            : store.systemProxyStatus.managedServices.joined(separator: ", ")
+    }
+
     private func command(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 12, design: .monospaced))
@@ -128,82 +171,104 @@ struct NetworkUpstreamView: View {
     @Bindable var store: NetworkDebuggerStore
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
                 Label("Upstream Proxy", systemImage: "arrow.triangle.branch")
                     .font(.sora(14, weight: .semibold))
+                NetworkStatusBadge(
+                    text: upstreamBadgeText,
+                    symbol: upstreamBadgeSymbol,
+                    tint: upstreamBadgeTint
+                )
+
+                Spacer()
 
                 Picker("", selection: $store.upstreamProxyMode) {
-                    Text("Auto").tag(NetworkUpstreamProxyMode.automatic)
-                    Text("Manual").tag(NetworkUpstreamProxyMode.manual)
-                    Text("Off").tag(NetworkUpstreamProxyMode.off)
+                    ForEach(NetworkUpstreamProxyMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
                 }
                 .labelsHidden()
                 .pickerStyle(.segmented)
                 .frame(width: 210)
+            }
 
+            NetworkInfoGrid(items: [
+                NetworkInfoItem(title: "Mode", value: store.upstreamProxyMode.title, symbol: "point.3.connected.trianglepath.dotted"),
+                NetworkInfoItem(title: "Route", value: routeSummary, symbol: "arrow.triangle.branch"),
+                NetworkInfoItem(title: "Localhost", value: localhostBypassText, symbol: "location.slash"),
+                NetworkInfoItem(title: "SOCKS DNS", value: socksDNSText, symbol: "network.badge.shield.half.filled"),
+            ])
+
+            modeControls
+
+            if store.upstreamProxyMode == .manual {
+                StxRule()
+                manualUpstreamProxyFields
+            }
+
+            StxRule()
+
+            routeScopeFields
+
+            HStack(spacing: 10) {
                 Spacer()
+
+                Button {
+                    store.applyCurrentUpstreamProxy()
+                } label: {
+                    Label("Apply Route", systemImage: "arrow.triangle.2.circlepath")
+                }
+                .disabled(store.isUpstreamProxyWorking)
 
                 Button {
                     store.testUpstreamProxy()
                 } label: {
                     Label("Test", systemImage: "checkmark.circle")
                 }
-                .font(.sora(10, weight: .medium))
+                .disabled(store.isUpstreamProxyWorking)
             }
-
-            Text("Route Rockxy through Surge or another external proxy before requests go to the internet.")
-                .font(.sora(12))
-                .foregroundStyle(Color.stxMuted)
-
-            if store.upstreamProxyMode == .automatic {
-                Toggle(isOn: $store.askBeforeChainingExistingSystemProxy) {
-                    Text("Ask before chaining existing system proxy")
-                        .font(.sora(10, weight: .medium))
-                }
-                .toggleStyle(.checkbox)
-            }
-
-            if store.upstreamProxyMode == .manual {
-                manualUpstreamProxyFields
-            }
+            .font(.sora(11, weight: .medium))
 
             if let message = store.upstreamProxyStatusMessage, !message.isEmpty {
-                Text(message)
-                    .font(.sora(10))
-                    .foregroundStyle(store.upstreamProxyTestResult?.isReachable == false ? .red : Color.stxMuted)
-                    .lineLimit(2)
-            } else if let summary = store.systemProxyStatus.upstreamProxySummary {
-                Text("Active upstream: \(summary)")
-                    .font(.sora(10))
-                    .foregroundStyle(Color.stxMuted)
-                    .lineLimit(1)
+                NetworkInlineMessage(
+                    text: message,
+                    tint: store.upstreamProxyTestResult?.isReachable == false ? .red : Color.stxMuted,
+                    symbol: store.upstreamProxyTestResult?.isReachable == false ? "exclamationmark.triangle" : "info.circle"
+                )
             }
         }
         .mainWindowPanel()
-        .alert(item: $store.upstreamProxyConfirmation) { confirmation in
-            Alert(
-                title: Text("Chain Existing System Proxy?"),
-                message: Text("Route Rockxy through \(confirmation.summary) before enabling the system proxy."),
-                primaryButton: .default(Text("Chain")) {
-                    store.confirmUpstreamProxyChaining()
-                },
-                secondaryButton: .cancel {
-                    store.cancelUpstreamProxyChaining()
-                }
-            )
+    }
+
+    @ViewBuilder
+    private var modeControls: some View {
+        switch store.upstreamProxyMode {
+        case .automatic:
+            Toggle(isOn: $store.askBeforeChainingExistingSystemProxy) {
+                Label("Ask before chaining existing system proxy", systemImage: "questionmark.bubble")
+                    .font(.sora(11, weight: .medium))
+            }
+            .toggleStyle(.checkbox)
+        case .manual:
+            EmptyView()
+        case .off:
+            NetworkInlineMessage(text: "Direct outbound route selected.", tint: Color.stxMuted, symbol: "arrow.forward")
         }
     }
 
     private var manualUpstreamProxyFields: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Manual Route")
+                .font(.sora(12, weight: .semibold))
+                .foregroundStyle(.primary)
+
             HStack(spacing: 8) {
-                Picker("", selection: $store.manualUpstreamProxyProtocol) {
+                Picker("Protocol", selection: $store.manualUpstreamProxyProtocol) {
                     ForEach(NetworkUpstreamProxyProtocol.allCases) { proto in
                         Text(proto.title).tag(proto)
                     }
                 }
-                .labelsHidden()
                 .frame(width: 110)
 
                 if store.manualUpstreamProxyProtocol == .pac {
@@ -226,24 +291,86 @@ struct NetworkUpstreamView: View {
                         .textFieldStyle(.roundedBorder)
                 }
             }
+        }
+        .font(.sora(11))
+    }
+
+    private var routeScopeFields: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Route Scope")
+                .font(.sora(12, weight: .semibold))
+                .foregroundStyle(.primary)
 
             HStack(spacing: 8) {
                 TextField("Include hosts", text: $store.manualUpstreamProxyIncludeHosts)
                     .textFieldStyle(.roundedBorder)
+                    .disabled(store.upstreamProxyMode != .manual)
                 TextField("Exclude hosts", text: $store.manualUpstreamProxyExcludeHosts)
                     .textFieldStyle(.roundedBorder)
+                    .disabled(store.upstreamProxyMode != .manual)
             }
 
             HStack(spacing: 16) {
                 Toggle("Bypass localhost", isOn: $store.manualUpstreamBypassLocalhost)
                     .toggleStyle(.checkbox)
+                    .disabled(store.upstreamProxyMode != .manual)
                 Toggle("DNS over SOCKS", isOn: $store.manualUpstreamDNSOverSOCKS)
                     .toggleStyle(.checkbox)
-                    .disabled(store.manualUpstreamProxyProtocol != .socks5)
+                    .disabled(store.upstreamProxyMode != .manual || store.manualUpstreamProxyProtocol != .socks5)
             }
-            .font(.sora(10, weight: .medium))
+            .font(.sora(11, weight: .medium))
         }
-        .font(.sora(10))
+        .font(.sora(11))
+    }
+
+    private var upstreamBadgeText: String {
+        if store.upstreamProxyTestResult?.isReachable == true { return "Reachable" }
+        if store.upstreamProxyTestResult?.isReachable == false { return "Failed" }
+        if store.systemProxyStatus.upstreamProxySummary != nil { return "Chained" }
+        return store.upstreamProxyMode == .off ? "Direct" : "Ready"
+    }
+
+    private var upstreamBadgeSymbol: String {
+        if store.upstreamProxyTestResult?.isReachable == false { return "exclamationmark.triangle.fill" }
+        if store.upstreamProxyMode == .off { return "arrow.forward.circle" }
+        return "arrow.triangle.branch"
+    }
+
+    private var upstreamBadgeTint: Color {
+        if store.upstreamProxyTestResult?.isReachable == true { return .green }
+        if store.upstreamProxyTestResult?.isReachable == false { return .red }
+        return store.systemProxyStatus.upstreamProxySummary != nil ? .green : Color.stxMuted
+    }
+
+    private var routeSummary: String {
+        if let summary = store.systemProxyStatus.upstreamProxySummary { return summary }
+        switch store.upstreamProxyMode {
+        case .automatic:
+            return "Auto detect"
+        case .manual:
+            return manualRouteSummary
+        case .off:
+            return "Direct"
+        }
+    }
+
+    private var manualRouteSummary: String {
+        switch store.manualUpstreamProxyProtocol {
+        case .pac:
+            let pac = store.manualUpstreamProxyPACURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            return pac.isEmpty ? "PAC not configured" : "PAC \(pac)"
+        case .http, .https, .socks5:
+            let host = store.manualUpstreamProxyHost.trimmingCharacters(in: .whitespacesAndNewlines)
+            return host.isEmpty ? "\(store.manualUpstreamProxyProtocol.title) not configured" : "\(store.manualUpstreamProxyProtocol.title) \(host):\(store.manualUpstreamProxyPortText)"
+        }
+    }
+
+    private var localhostBypassText: String {
+        store.manualUpstreamBypassLocalhost ? "Bypass" : "Route"
+    }
+
+    private var socksDNSText: String {
+        store.manualUpstreamProxyProtocol == .socks5 && store.manualUpstreamDNSOverSOCKS ? "Remote" : "Local"
     }
 }
 
@@ -252,9 +379,14 @@ struct NetworkHelperView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
+            HStack(spacing: 10) {
                 Label("Privileged Helper", systemImage: "wrench.and.screwdriver")
                     .font(.sora(14, weight: .semibold))
+                NetworkStatusBadge(
+                    text: helperBadgeText,
+                    symbol: store.helperState.canUsePrivilegedHelper ? "checkmark.seal.fill" : "wrench.and.screwdriver",
+                    tint: store.helperState.canUsePrivilegedHelper ? .green : Color.stxMuted
+                )
                 Spacer()
                 Button {
                     store.refreshHelperStatus()
@@ -265,45 +397,160 @@ struct NetworkHelperView: View {
                 .disabled(store.isHelperWorking)
             }
 
-            Text("The signed helper installs certificates and changes system proxy settings when the build identity allows it.")
-                .font(.sora(12))
-                .foregroundStyle(Color.stxMuted)
-
-            helperStatusRow
-        }
-        .mainWindowPanel()
-        .task {
-            store.refreshPassiveHelperStatus()
-        }
-    }
-
-    private var helperStatusRow: some View {
-        HStack(spacing: 8) {
-            Label(store.helperState.statusMessage, systemImage: store.helperState.canUsePrivilegedHelper ? "checkmark.seal" : "wrench.and.screwdriver")
-                .font(.sora(11, weight: .medium))
-                .foregroundStyle(store.helperState.canUsePrivilegedHelper ? .green : Color.stxMuted)
-                .lineLimit(1)
+            NetworkInfoGrid(items: helperInfoItems)
 
             if let detail = store.helperState.detailMessage, !detail.isEmpty {
-                Text(detail)
-                    .font(.sora(10))
-                    .foregroundStyle(Color.stxMuted)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                NetworkInlineMessage(text: detail, tint: .red, symbol: "exclamationmark.triangle")
             }
 
+            helperActions
+        }
+        .mainWindowPanel()
+    }
+
+    private var helperActions: some View {
+        HStack(spacing: 10) {
             Spacer()
 
             if let action = store.helperState.action {
                 Button {
-                    store.performHelperAction()
+                    store.performHelperAction(action)
                 } label: {
-                    Text(action.title)
+                    Label(action.title, systemImage: helperActionSymbol(action))
                 }
-                .font(.sora(10, weight: .medium))
                 .disabled(store.isHelperWorking)
             }
+
+            Button {
+                store.performHelperAction(.reinstall)
+            } label: {
+                Label("Reinstall", systemImage: "arrow.clockwise.circle")
+            }
+            .disabled(!canRunPrivilegedHelperAction || store.helperState.installedVersion == nil || store.isHelperWorking)
+
+            Button {
+                store.performHelperAction(.openSettings)
+            } label: {
+                Label("Open Settings", systemImage: "gear")
+            }
+            .disabled(!canRunPrivilegedHelperAction || store.isHelperWorking)
         }
+        .font(.sora(11, weight: .medium))
+    }
+
+    private var helperInfoItems: [NetworkInfoItem] {
+        [
+            NetworkInfoItem(title: "Status", value: store.helperState.statusMessage, symbol: "checklist"),
+            NetworkInfoItem(title: "Registration", value: store.helperState.registrationStatus, symbol: "list.bullet.clipboard"),
+            NetworkInfoItem(title: "Reachable", value: store.helperState.isReachable ? "Yes" : "No", symbol: "antenna.radiowaves.left.and.right"),
+            NetworkInfoItem(title: "Bundled", value: bundledHelperText, symbol: "shippingbox"),
+            NetworkInfoItem(title: "Installed", value: installedHelperText, symbol: "externaldrive.badge.checkmark"),
+            NetworkInfoItem(title: "Protocol", value: helperProtocolText, symbol: "point.3.connected.trianglepath.dotted"),
+        ]
+    }
+
+    private var helperBadgeText: String {
+        if store.helperState.canUsePrivilegedHelper { return "Ready" }
+        if store.helperState.statusID == "disabledForUnsignedBuild" { return "Embedded" }
+        return "Limited"
+    }
+
+    private var bundledHelperText: String {
+        "\(store.helperState.bundledVersion) (\(store.helperState.bundledBuild))"
+    }
+
+    private var installedHelperText: String {
+        guard let version = store.helperState.installedVersion else { return "Not installed" }
+        if let build = store.helperState.installedBuild {
+            return "\(version) (\(build))"
+        }
+        return version
+    }
+
+    private var helperProtocolText: String {
+        let installed = store.helperState.installedProtocolVersion.map(String.init) ?? "-"
+        return "\(installed) / \(store.helperState.expectedProtocolVersion)"
+    }
+
+    private var canRunPrivilegedHelperAction: Bool {
+        store.helperState.statusID != "disabledForUnsignedBuild"
+    }
+
+    private func helperActionSymbol(_ action: NetworkHelperAction) -> String {
+        switch action {
+        case .install: "square.and.arrow.down"
+        case .check: "arrow.clockwise"
+        case .update: "arrow.down.circle"
+        case .retry: "arrow.clockwise.circle"
+        case .reinstall: "arrow.triangle.2.circlepath"
+        case .openSettings: "gear"
+        }
+    }
+}
+
+private struct NetworkStatusBadge: View {
+    var text: String
+    var symbol: String
+    var tint: Color
+
+    var body: some View {
+        Label(text, systemImage: symbol)
+            .font(.sora(10, weight: .semibold))
+            .foregroundStyle(tint)
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(tint.opacity(0.12), in: Capsule())
+    }
+}
+
+private struct NetworkInfoItem: Hashable {
+    var title: String
+    var value: String
+    var symbol: String
+}
+
+private struct NetworkInfoGrid: View {
+    var items: [NetworkInfoItem]
+    private let columns = [
+        GridItem(.adaptive(minimum: 170), spacing: 10, alignment: .topLeading),
+    ]
+
+    var body: some View {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
+            ForEach(items, id: \.self) { item in
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: item.symbol)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.stxMuted)
+                        .frame(width: 16)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.title.uppercased())
+                            .font(.sora(9, weight: .semibold))
+                            .foregroundStyle(Color.stxMuted)
+                        Text(item.value)
+                            .font(.sora(11, weight: .medium))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct NetworkInlineMessage: View {
+    var text: String
+    var tint: Color
+    var symbol: String
+
+    var body: some View {
+        Label(text, systemImage: symbol)
+            .font(.sora(11))
+            .foregroundStyle(tint)
+            .lineLimit(2)
+            .textSelection(.enabled)
     }
 }
 

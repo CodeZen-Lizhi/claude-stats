@@ -6,15 +6,15 @@ import Testing
 @Suite("Network Debugging")
 @MainActor
 struct NetworkDebuggingTests {
-    @Test("Network sections migrate legacy setup and expose six primary entries")
+    @Test("Network sections migrate legacy setup and expose merged primary entries")
     func networkSectionsMigrateLegacySetup() {
         #expect(NetworkSection(storedRawValue: "setup") == .proxy)
+        #expect(NetworkSection(storedRawValue: "helper") == .proxy)
+        #expect(NetworkSection(storedRawValue: "upstream") == .proxy)
         #expect(NetworkSection(storedRawValue: "missing") == .traffic)
         #expect(NetworkSection.allCases.map(\.title) == [
             "Traffic",
             "Proxy",
-            "Helper",
-            "Upstream",
             "Certificates",
             "Rules",
         ])
@@ -437,6 +437,10 @@ struct NetworkDebuggingTests {
         #expect(state.action == .retry)
         #expect(state.isReachable == false)
         #expect(state.canUsePrivilegedHelper == false)
+        #expect(state.registrationStatus == "registered")
+        #expect(state.installedVersion == "0.7.0")
+        #expect(state.bundledVersion == "0.7.1")
+        #expect(state.expectedProtocolVersion == 1)
     }
 
     @Test("Registered helper snapshot maps to check action")

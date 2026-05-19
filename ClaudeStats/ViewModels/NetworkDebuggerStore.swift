@@ -32,6 +32,7 @@ final class NetworkDebuggerStore: @unchecked Sendable {
     var trafficFilter = NetworkTrafficFilter()
     var isSystemProxyWorking = false
     var isHelperWorking = false
+    var isUpstreamProxyWorking = false
     var isCertificateWorking = false
     var isRulesWorking = false
     var isPluginsWorking = false
@@ -342,6 +343,10 @@ final class NetworkDebuggerStore: @unchecked Sendable {
 
     func performHelperAction() {
         guard let action = helperState.action else { return }
+        performHelperAction(action)
+    }
+
+    func performHelperAction(_ action: NetworkHelperAction) {
         isHelperWorking = true
         Task { @MainActor in
             do {
@@ -656,6 +661,7 @@ final class NetworkDebuggerStore: @unchecked Sendable {
     func testUpstreamProxy() {
         upstreamProxyTestResult = nil
         upstreamProxyStatusMessage = nil
+        isUpstreamProxyWorking = true
         Task { @MainActor in
             do {
                 let endpoint = listeningEndpoint ?? NetworkProxyEndpoint(host: "127.0.0.1", port: 9_090)
@@ -671,6 +677,27 @@ final class NetworkDebuggerStore: @unchecked Sendable {
                 )
                 upstreamProxyStatusMessage = error.localizedDescription
             }
+            isUpstreamProxyWorking = false
+        }
+    }
+
+    func applyCurrentUpstreamProxy() {
+        upstreamProxyTestResult = nil
+        upstreamProxyStatusMessage = nil
+        isUpstreamProxyWorking = true
+        Task { @MainActor in
+            do {
+                let endpoint = listeningEndpoint ?? NetworkProxyEndpoint(host: "127.0.0.1", port: 9_090)
+                let settings = try await resolvedUpstreamProxySettings(endpoint: endpoint)
+                await proxyBackend.updateUpstreamProxy(settings)
+                systemProxyStatus.upstreamProxySummary = settings.isEnabled ? settings.summary : nil
+                upstreamProxyStatusMessage = settings.isEnabled
+                    ? "Applied upstream: \(settings.summary)"
+                    : "Upstream disabled. Rockxy will connect directly."
+            } catch {
+                upstreamProxyStatusMessage = error.localizedDescription
+            }
+            isUpstreamProxyWorking = false
         }
     }
 
@@ -946,11 +973,19 @@ final class NetworkDebuggerStore: @unchecked Sendable {
 
     static func helperState(from snapshot: RockxyHelperSnapshot) -> NetworkHelperState {
         NetworkHelperState(
+            statusID: snapshot.status.rawValue,
             statusMessage: snapshot.statusMessage,
             detailMessage: snapshot.lastErrorMessage,
             action: snapshot.action.map(NetworkHelperAction.init),
             isReachable: snapshot.isReachable,
-            canUsePrivilegedHelper: snapshot.canUsePrivilegedHelper
+            canUsePrivilegedHelper: snapshot.canUsePrivilegedHelper,
+            registrationStatus: snapshot.registrationStatus,
+            installedVersion: snapshot.installedVersion,
+            installedBuild: snapshot.installedBuild,
+            installedProtocolVersion: snapshot.installedProtocolVersion,
+            bundledVersion: snapshot.bundledVersion,
+            bundledBuild: snapshot.bundledBuild,
+            expectedProtocolVersion: snapshot.expectedProtocolVersion
         )
     }
 }
