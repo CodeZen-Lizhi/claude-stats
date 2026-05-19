@@ -3,6 +3,18 @@
 extension ReleaseHistoryCatalog {
     static let generatedEntries: [ReleaseHistoryEntry] = [
         ReleaseHistoryEntry(
+            version: "1.5.5",
+            date: "May 20, 2026",
+            headline: "This commit adds a full suite of network debugging features:",
+            changes: [
+                "New network proxy event types and breakpoint management APIs",
+                "Network body store for persisting request/response data",
+                "Upstream environment and credential management with Keychain support",
+                "Full request/response export/import support (cURL, HAR, raw formats)",
+                "Replay, batch automate and WebSocket debugging workflows",
+            ]
+        ),
+        ReleaseHistoryEntry(
             version: "1.5.4",
             date: "May 19, 2026",
             headline: "本次提交完成了多项核心功能更新：",
