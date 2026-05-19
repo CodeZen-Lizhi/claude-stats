@@ -6,17 +6,6 @@ struct NotchIslandSettingsSidebar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Notch Island")
-                    .font(.sora(18, weight: .semibold))
-                Text("\(enabledModules.count) modules active")
-                    .font(.sora(11, weight: .medium))
-                    .foregroundStyle(Color.stxMuted)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 22)
-            .padding(.bottom, 14)
-
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     ForEach(NotchIslandSettingsTab.grouped, id: \.group) { section in

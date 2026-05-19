@@ -14,28 +14,45 @@ struct NotchIslandSettingsView: View {
     var body: some View {
         @Bindable var prefs = env.preferences
 
-        HStack(spacing: 0) {
-            NotchIslandSettingsSidebar(
-                selection: selectedTabBinding,
-                enabledModules: prefs.notchIslandEnabledModules
-            )
-            .frame(width: 232)
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Notch Island")
+                .font(.sora(28, weight: .semibold))
+                .padding(.bottom, 18)
 
             Rectangle()
                 .fill(Color.stxStroke)
-                .frame(width: 1)
+                .frame(height: 1)
 
-            NotchIslandSettingsDetailPane(
-                tab: selectedTab,
-                preferences: prefs,
-                isFeatureEnabled: prefs.notchIslandEnabled,
-                refreshToken: settingsRefreshToken,
-                onSelectSection: onSelectSection,
-                onSettingChanged: noteSettingChanged
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            HStack(spacing: 0) {
+                NotchIslandSettingsSidebar(
+                    selection: selectedTabBinding,
+                    enabledModules: prefs.notchIslandEnabledModules
+                )
+                .frame(width: 232)
+                .frame(maxHeight: .infinity, alignment: .top)
+
+                Rectangle()
+                    .fill(Color.stxStroke)
+                    .frame(width: 1)
+
+                NotchIslandSettingsDetailPane(
+                    tab: selectedTab,
+                    preferences: prefs,
+                    isFeatureEnabled: prefs.notchIslandEnabled,
+                    refreshToken: settingsRefreshToken,
+                    onSelectSection: onSelectSection,
+                    onSettingChanged: noteSettingChanged
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .padding(.top, 20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: 980, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(.horizontal, 20)
+        .padding(.top, 52)
+        .padding(.bottom, 28)
         .onChange(of: selectedTabRaw) { _, _ in
             noteSettingChanged()
         }

@@ -13,8 +13,6 @@ struct NotchIslandSettingsDetailPane: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 14) {
-                header
-
                 if !isFeatureEnabled {
                     FeatureDisabledNotice(
                         featureName: "Notch Island",
@@ -31,7 +29,6 @@ struct NotchIslandSettingsDetailPane: View {
                 )
             }
             .padding(.horizontal, 22)
-            .padding(.top, 22)
             .padding(.bottom, 18)
 
             Rectangle()
@@ -71,30 +68,6 @@ struct NotchIslandSettingsDetailPane: View {
             }
             .disabled(!isFeatureEnabled)
             .opacity(isFeatureEnabled ? 1 : 0.58)
-        }
-    }
-
-    private var header: some View {
-        HStack(alignment: .top, spacing: 14) {
-            Image(systemName: tab.symbol)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(Color.white)
-                .frame(width: 38, height: 38)
-                .background(Color.stxAccent, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(tab.title)
-                    .font(.sora(25, weight: .semibold))
-                    .lineLimit(1)
-
-                Text(tab.subtitle)
-                    .font(.sora(11))
-                    .foregroundStyle(Color.stxMuted)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: 0)
         }
     }
 
