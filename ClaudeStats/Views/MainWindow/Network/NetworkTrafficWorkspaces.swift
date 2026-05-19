@@ -622,10 +622,10 @@ struct NetworkInterceptWorkspace: View {
             configuration: NetworkWorkspacePaneMetrics.interceptOuterSplitConfiguration
         ) {
             queueList
-                .frame(minWidth: NetworkWorkspacePaneMetrics.interceptQueueMinWidth, maxWidth: .infinity)
+                .frame(minWidth: 0, idealWidth: 320, maxWidth: .infinity)
         } secondary: {
             editor
-                .frame(minWidth: NetworkWorkspacePaneMetrics.interceptEditorMinWidth, maxWidth: .infinity)
+                .frame(minWidth: 0, idealWidth: 520, maxWidth: .infinity)
         }
         .task {
             store.refreshInterceptQueue()
@@ -634,21 +634,20 @@ struct NetworkInterceptWorkspace: View {
 
     private var queueList: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
+            HStack(spacing: 8) {
                 workspaceHeader("Intercept Queue", symbol: "pause.circle")
-                Spacer()
-                Button {
-                    store.forwardAllIntercepts()
-                } label: {
-                    Label("Forward All", systemImage: "play.fill")
-                }
-                .disabled(store.breakpoints.isEmpty)
-                Button {
-                    store.dropAllIntercepts()
-                } label: {
-                    Label("Drop All", systemImage: "xmark")
-                }
-                .disabled(store.breakpoints.isEmpty)
+                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                workspaceAdaptiveActionPair(
+                    maxWidth: 260,
+                    firstTitle: "Forward All",
+                    firstSymbol: "play.fill",
+                    firstDisabled: store.breakpoints.isEmpty,
+                    firstAction: { store.forwardAllIntercepts() },
+                    secondTitle: "Drop All",
+                    secondSymbol: "xmark",
+                    secondDisabled: store.breakpoints.isEmpty,
+                    secondAction: { store.dropAllIntercepts() }
+                )
             }
             .padding(.trailing, 12)
             StxRule()
@@ -697,21 +696,20 @@ struct NetworkInterceptWorkspace: View {
 
     private var editor: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
+            HStack(spacing: 8) {
                 workspaceHeader("Intercept Editor", symbol: "square.and.pencil")
-                Spacer()
-                Button {
-                    store.forwardSelectedIntercept()
-                } label: {
-                    Label("Forward", systemImage: "play.fill")
-                }
-                .disabled(store.selectedBreakpointID == nil)
-                Button {
-                    store.dropSelectedIntercept()
-                } label: {
-                    Label("Drop", systemImage: "xmark")
-                }
-                .disabled(store.selectedBreakpointID == nil)
+                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                workspaceAdaptiveActionPair(
+                    maxWidth: 180,
+                    firstTitle: "Forward",
+                    firstSymbol: "play.fill",
+                    firstDisabled: store.selectedBreakpointID == nil,
+                    firstAction: { store.forwardSelectedIntercept() },
+                    secondTitle: "Drop",
+                    secondSymbol: "xmark",
+                    secondDisabled: store.selectedBreakpointID == nil,
+                    secondAction: { store.dropSelectedIntercept() }
+                )
             }
             .padding(.trailing, 14)
             StxRule()
@@ -784,10 +782,10 @@ struct NetworkAutomateWorkspace: View {
             configuration: NetworkWorkspacePaneMetrics.automateOuterSplitConfiguration
         ) {
             editor
-                .frame(minWidth: NetworkWorkspacePaneMetrics.automateEditorMinWidth, maxWidth: .infinity)
+                .frame(minWidth: 0, idealWidth: 460, maxWidth: .infinity)
         } secondary: {
             results
-                .frame(minWidth: NetworkWorkspacePaneMetrics.automateResultsMinWidth, maxWidth: .infinity)
+                .frame(minWidth: 0, idealWidth: 360, maxWidth: .infinity)
         }
         .task {
             if store.automateDraft == nil, let flow = store.selectedFlow {
@@ -797,11 +795,11 @@ struct NetworkAutomateWorkspace: View {
     }
 
     private var editor: some View {
-        FadingScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    workspaceHeader("Automate", symbol: "slider.horizontal.below.rectangle")
-                    Spacer()
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                workspaceHeader("Automate", symbol: "slider.horizontal.below.rectangle")
+                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                workspaceActionStrip(maxWidth: 92) {
                     Button {
                         store.runAutomate()
                     } label: {
@@ -809,35 +807,41 @@ struct NetworkAutomateWorkspace: View {
                     }
                     .disabled(store.automateDraft == nil || store.isAutomateWorking)
                 }
-
-                if store.automateDraft != nil {
-                    HStack {
-                        TextField("Method", text: automateBinding(\.baseDraft.method))
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 96)
-                        TextField("URL", text: automateBinding(\.baseDraft.url))
-                            .textFieldStyle(.roundedBorder)
-                    }
-                    Text("Use {{value}} in URL, headers, or body. Each line below creates one request.")
-                        .font(.sora(10))
-                        .foregroundStyle(Color.stxMuted)
-                    TextEditor(text: firstVariableValuesBinding)
-                        .font(.system(size: 11, design: .monospaced))
-                        .scrollContentBackground(.hidden)
-                        .frame(height: 120)
-                        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
-                    Stepper("Concurrency: \(store.automateDraft?.concurrencyLimit ?? 1)", value: concurrencyBinding, in: 1...8)
-                        .font(.sora(11))
-                    TextEditor(text: automateBinding(\.baseDraft.bodyText))
-                        .font(.system(size: 11, design: .monospaced))
-                        .scrollContentBackground(.hidden)
-                        .frame(minHeight: 160)
-                        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
-                } else {
-                    NetworkWorkspaceEmptyState("Select a flow and send it to Automate.")
-                }
             }
-            .padding(14)
+            .padding(.trailing, 14)
+            StxRule()
+
+            FadingScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    if store.automateDraft != nil {
+                        HStack {
+                            TextField("Method", text: automateBinding(\.baseDraft.method))
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 96)
+                            TextField("URL", text: automateBinding(\.baseDraft.url))
+                                .textFieldStyle(.roundedBorder)
+                        }
+                        Text("Use {{value}} in URL, headers, or body. Each line below creates one request.")
+                            .font(.sora(10))
+                            .foregroundStyle(Color.stxMuted)
+                        TextEditor(text: firstVariableValuesBinding)
+                            .font(.system(size: 11, design: .monospaced))
+                            .scrollContentBackground(.hidden)
+                            .frame(height: 120)
+                            .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
+                        Stepper("Concurrency: \(store.automateDraft?.concurrencyLimit ?? 1)", value: concurrencyBinding, in: 1...8)
+                            .font(.sora(11))
+                        TextEditor(text: automateBinding(\.baseDraft.bodyText))
+                            .font(.system(size: 11, design: .monospaced))
+                            .scrollContentBackground(.hidden)
+                            .frame(minHeight: 160)
+                            .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
+                    } else {
+                        NetworkWorkspaceEmptyState("Select a flow and send it to Automate.")
+                    }
+                }
+                .padding(14)
+            }
         }
         .background(Color.primary.opacity(0.025))
     }
@@ -967,6 +971,91 @@ private func workspaceHeader(_ title: String, symbol: String) -> some View {
     }
     .frame(minHeight: 34)
     .padding(.horizontal, 12)
+}
+
+@MainActor
+private func workspaceActionStrip<Content: View>(
+    fadeWidth: CGFloat = 28,
+    maxWidth: CGFloat,
+    @ViewBuilder content: () -> Content
+) -> some View {
+    FadingLine(fadeWidth: fadeWidth) {
+        HStack(spacing: 8) {
+            content()
+        }
+    }
+    .frame(minWidth: 0, idealWidth: maxWidth, maxWidth: maxWidth, alignment: .leading)
+}
+
+@MainActor
+private func workspaceAdaptiveActionPair(
+    maxWidth: CGFloat,
+    firstTitle: String,
+    firstSymbol: String,
+    firstDisabled: Bool,
+    firstAction: @escaping () -> Void,
+    secondTitle: String,
+    secondSymbol: String,
+    secondDisabled: Bool,
+    secondAction: @escaping () -> Void
+) -> some View {
+    ViewThatFits(in: .horizontal) {
+        HStack(spacing: 8) {
+            workspaceAdaptiveActionButton(
+                title: firstTitle,
+                symbol: firstSymbol,
+                showsTitle: true,
+                isDisabled: firstDisabled,
+                action: firstAction
+            )
+            workspaceAdaptiveActionButton(
+                title: secondTitle,
+                symbol: secondSymbol,
+                showsTitle: true,
+                isDisabled: secondDisabled,
+                action: secondAction
+            )
+        }
+
+        HStack(spacing: 8) {
+            workspaceAdaptiveActionButton(
+                title: firstTitle,
+                symbol: firstSymbol,
+                showsTitle: false,
+                isDisabled: firstDisabled,
+                action: firstAction
+            )
+            workspaceAdaptiveActionButton(
+                title: secondTitle,
+                symbol: secondSymbol,
+                showsTitle: false,
+                isDisabled: secondDisabled,
+                action: secondAction
+            )
+        }
+    }
+    .frame(minWidth: 0, idealWidth: maxWidth, maxWidth: maxWidth, alignment: .trailing)
+}
+
+@MainActor
+private func workspaceAdaptiveActionButton(
+    title: String,
+    symbol: String,
+    showsTitle: Bool,
+    isDisabled: Bool,
+    action: @escaping () -> Void
+) -> some View {
+    Button(action: action) {
+        if showsTitle {
+            Label(title, systemImage: symbol)
+        } else {
+            Image(systemName: symbol)
+                .frame(width: 18)
+        }
+    }
+    .disabled(isDisabled)
+    .help(title)
+    .accessibilityLabel(Text(title))
 }
 
 @MainActor

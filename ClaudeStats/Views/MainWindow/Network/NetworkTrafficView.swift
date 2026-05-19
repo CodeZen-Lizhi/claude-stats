@@ -66,26 +66,28 @@ struct NetworkTrafficView: View {
     }
 
     private var stackedLayout: some View {
-        HoverableSplitView(
-            axis: .horizontal,
-            primaryFraction: 0.46,
-            configuration: NetworkTrafficPaneMetrics.stackedSplitConfiguration
-        ) {
-            trafficTable
-                .frame(minHeight: NetworkTrafficPaneMetrics.tableMinHeight, maxHeight: .infinity)
-        } secondary: {
-            inspector(.horizontal)
-                .frame(
-                    minHeight: NetworkTrafficPaneMetrics.inspectorMinHeight,
-                    idealHeight: 340,
-                    maxHeight: .infinity
-                )
+        GeometryReader { proxy in
+            HoverableSplitView(
+                axis: .horizontal,
+                primaryFraction: 0.46,
+                configuration: NetworkTrafficPaneMetrics.stackedSplitConfiguration(for: proxy.size.height)
+            ) {
+                trafficTable
+                    .frame(minHeight: 0, maxHeight: .infinity)
+            } secondary: {
+                inspector(.horizontal)
+                    .frame(
+                        minHeight: 0,
+                        idealHeight: 340,
+                        maxHeight: .infinity
+                    )
+            }
         }
     }
 
     private var trafficTable: some View {
         NetworkTrafficTable(store: store)
-        .frame(minHeight: 190, maxHeight: .infinity)
+            .frame(maxHeight: .infinity)
     }
 
     private func inspector(_ arrangement: NetworkInspectorPaneArrangement) -> some View {
@@ -103,6 +105,7 @@ private enum NetworkTrafficPaneMetrics {
     static let inspectorMinWidth: CGFloat = 360
     static let tableMinHeight: CGFloat = 220
     static let inspectorMinHeight: CGFloat = 280
+    static let tableHeaderSafeMinHeight: CGFloat = 72
     static let requestPayloadMinHeight: CGFloat = 170
     static let responsePayloadMinHeight: CGFloat = 170
     static let payloadMinWidth: CGFloat = 260
@@ -115,6 +118,28 @@ private enum NetworkTrafficPaneMetrics {
         primaryMinimumPaneLength: tableMinHeight,
         secondaryMinimumPaneLength: inspectorMinHeight
     )
+    static func stackedSplitConfiguration(for availableHeight: CGFloat) -> HoverableSplitViewConfiguration {
+        guard availableHeight.isFinite, availableHeight > 0 else {
+            return stackedSplitConfiguration
+        }
+
+        if availableHeight <= tableHeaderSafeMinHeight {
+            return HoverableSplitViewConfiguration(
+                primaryMinimumPaneLength: availableHeight,
+                secondaryMinimumPaneLength: 0
+            )
+        }
+
+        let desiredTableExtra = max(tableMinHeight - tableHeaderSafeMinHeight, 0)
+        let desiredFlexibleHeight = desiredTableExtra + inspectorMinHeight
+        let availableFlexibleHeight = availableHeight - tableHeaderSafeMinHeight
+        let scale = min(availableFlexibleHeight / desiredFlexibleHeight, 1)
+
+        return HoverableSplitViewConfiguration(
+            primaryMinimumPaneLength: tableHeaderSafeMinHeight + desiredTableExtra * scale,
+            secondaryMinimumPaneLength: inspectorMinHeight * scale
+        )
+    }
     static let verticalInspectorSplitConfiguration = HoverableSplitViewConfiguration(
         primaryMinimumPaneLength: requestPayloadMinHeight,
         secondaryMinimumPaneLength: responsePayloadMinHeight
@@ -479,6 +504,12 @@ private final class NetworkTrafficHeaderView: NSTableHeaderView {
             frame.size.height = NetworkTrafficTableMetrics.headerHeight
         }
     }
+
+    override func headerRect(ofColumn column: Int) -> NSRect {
+        var rect = super.headerRect(ofColumn: column)
+        rect.size.height = NetworkTrafficTableMetrics.headerHeight
+        return rect
+    }
 }
 
 private final class NetworkTrafficHeaderCell: NSTableHeaderCell {
@@ -515,7 +546,10 @@ private final class NetworkTrafficHeaderCell: NSTableHeaderCell {
         let attributedTitle = NSAttributedString(string: stringValue, attributes: attributes)
         let textHeight = ceil(resolvedFont.ascender - resolvedFont.descender + resolvedFont.leading)
         var textRect = cellFrame.insetBy(dx: NetworkTrafficTableMetrics.headerHorizontalInset, dy: 0)
-        textRect.origin.y = floor(cellFrame.midY - textHeight / 2 + NetworkTrafficTableMetrics.headerBaselineOffset)
+        textRect.origin.y = max(
+            cellFrame.minY + 2,
+            floor(cellFrame.midY - textHeight / 2 + NetworkTrafficTableMetrics.headerBaselineOffset)
+        )
         textRect.size.height = textHeight
         attributedTitle.draw(
             with: textRect,
