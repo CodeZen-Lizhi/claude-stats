@@ -14,7 +14,9 @@ enum RockxyTransactionMapper {
             isWebSocket: transaction.webSocketConnection != nil,
             sourcePort: transaction.sourcePort,
             clientApp: transaction.clientApp,
-            matchedRuleName: transaction.matchedRuleName
+            matchedRuleName: transaction.matchedRuleName,
+            upstreamProxySummary: transaction.upstreamProxySummary,
+            upstreamProxyKind: transaction.upstreamProxyKind
         )
     }
 

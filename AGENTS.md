@@ -164,6 +164,40 @@ if the Xcode project needs regeneration, then run `bash scripts/run-tests.sh` an
 `bash scripts/run-debug.sh`. For release/signing-related changes, also verify the
 built app with `codesign --verify --deep --strict`.
 
+## Rockxy integration
+
+`ThirdParty/Rockxy` is a maintained fork submodule, not a throwaway dirty checkout.
+Its fork remote is `https://github.com/1pitaph/Rockxy.git`, the original project
+remote is named `upstream`, and Claude Stats integration work lives on
+`integration/claude-stats`.
+
+Keep Rockxy source changes inside the Rockxy fork. Commit and push them from inside
+`ThirdParty/Rockxy`, then return to the main repo and commit only the updated
+submodule pointer plus Claude Stats integration files. Do not add `ignore = dirty`
+for Rockxy in `.gitmodules`; a dirty Rockxy checkout should be visible because it
+means the main app depends on uncommitted submodule code.
+
+Typical Rockxy edit flow:
+
+```bash
+git -C ThirdParty/Rockxy checkout integration/claude-stats
+# edit Rockxy files
+git -C ThirdParty/Rockxy commit -am "Describe Rockxy change"
+git -C ThirdParty/Rockxy push origin integration/claude-stats
+git add ThirdParty/Rockxy
+```
+
+When pulling new upstream Rockxy changes, merge them into the integration branch
+instead of replacing the branch:
+
+```bash
+git -C ThirdParty/Rockxy fetch upstream
+git -C ThirdParty/Rockxy checkout integration/claude-stats
+git -C ThirdParty/Rockxy merge upstream/main
+git -C ThirdParty/Rockxy push origin integration/claude-stats
+git add ThirdParty/Rockxy
+```
+
 ## Provider code organization
 
 Today there is one provider (Codex). Provider-specific behaviour lives under

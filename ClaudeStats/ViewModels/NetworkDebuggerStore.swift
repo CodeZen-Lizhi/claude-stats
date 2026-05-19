@@ -32,6 +32,10 @@ final class NetworkDebuggerStore: @unchecked Sendable {
     var isSystemProxyWorking = false
     var isHelperWorking = false
     var isCertificateWorking = false
+    var upstreamProxyConfirmation: NetworkUpstreamProxyConfirmation?
+    var upstreamProxyTestResult: NetworkUpstreamProxyTestResult?
+    var upstreamProxyStatusMessage: String?
+    var manualUpstreamProxyPassword = ""
 
     private let proxyBackend: any NetworkProxyBackend
     private let systemProxyService: any NetworkSystemProxyManaging
@@ -79,6 +83,64 @@ final class NetworkDebuggerStore: @unchecked Sendable {
     var autoEnableSystemProxyOnStart: Bool {
         get { preferences?.networkAutoEnableSystemProxyOnStart ?? false }
         set { preferences?.networkAutoEnableSystemProxyOnStart = newValue }
+    }
+
+    var upstreamProxyMode: NetworkUpstreamProxyMode {
+        get { preferences?.networkUpstreamProxyMode ?? .automatic }
+        set { preferences?.networkUpstreamProxyMode = newValue }
+    }
+
+    var askBeforeChainingExistingSystemProxy: Bool {
+        get { preferences?.networkAskBeforeChainingExistingSystemProxy ?? false }
+        set { preferences?.networkAskBeforeChainingExistingSystemProxy = newValue }
+    }
+
+    var manualUpstreamProxyProtocol: NetworkUpstreamProxyProtocol {
+        get { preferences?.networkManualUpstreamProxyProtocol ?? .http }
+        set { preferences?.networkManualUpstreamProxyProtocol = newValue }
+    }
+
+    var manualUpstreamProxyHost: String {
+        get { preferences?.networkManualUpstreamProxyHost ?? "" }
+        set { preferences?.networkManualUpstreamProxyHost = newValue }
+    }
+
+    var manualUpstreamProxyPortText: String {
+        get { "\(preferences?.networkManualUpstreamProxyPort ?? 6_152)" }
+        set {
+            let filtered = newValue.filter(\.isNumber)
+            preferences?.networkManualUpstreamProxyPort = min(max(Int(filtered) ?? 0, 0), 65_535)
+        }
+    }
+
+    var manualUpstreamProxyPACURL: String {
+        get { preferences?.networkManualUpstreamProxyPACURL ?? "" }
+        set { preferences?.networkManualUpstreamProxyPACURL = newValue }
+    }
+
+    var manualUpstreamProxyUsername: String {
+        get { preferences?.networkManualUpstreamProxyUsername ?? "" }
+        set { preferences?.networkManualUpstreamProxyUsername = newValue }
+    }
+
+    var manualUpstreamProxyIncludeHosts: String {
+        get { preferences?.networkManualUpstreamProxyIncludeHosts ?? "" }
+        set { preferences?.networkManualUpstreamProxyIncludeHosts = newValue }
+    }
+
+    var manualUpstreamProxyExcludeHosts: String {
+        get { preferences?.networkManualUpstreamProxyExcludeHosts ?? "" }
+        set { preferences?.networkManualUpstreamProxyExcludeHosts = newValue }
+    }
+
+    var manualUpstreamBypassLocalhost: Bool {
+        get { preferences?.networkManualUpstreamBypassLocalhost ?? true }
+        set { preferences?.networkManualUpstreamBypassLocalhost = newValue }
+    }
+
+    var manualUpstreamDNSOverSOCKS: Bool {
+        get { preferences?.networkManualUpstreamDNSOverSOCKS ?? true }
+        set { preferences?.networkManualUpstreamDNSOverSOCKS = newValue }
     }
 
     var statusMessage: String {
@@ -184,21 +246,25 @@ final class NetworkDebuggerStore: @unchecked Sendable {
         }
         guard !systemProxyStatus.isEnabled else { return }
         isSystemProxyWorking = true
-        Task { @concurrent in
+        Task { @MainActor in
             do {
-                let status = try await systemProxyService.enable(endpoint: endpoint)
-                await MainActor.run {
-                    systemProxyStatus = status
-                    if autoTriggered, status.isEnabled {
-                        autoEnabledSystemProxyForCurrentCapture = true
-                    }
+                let handoff = try await upstreamProxySettingsBeforeSystemProxy(
+                    endpoint: endpoint,
+                    autoTriggered: autoTriggered
+                )
+                if let confirmation = handoff.confirmation {
+                    upstreamProxyConfirmation = confirmation
                     isSystemProxyWorking = false
+                    return
                 }
+                try await applyUpstreamAndEnableSystemProxy(
+                    endpoint: endpoint,
+                    autoTriggered: autoTriggered,
+                    settings: handoff.settings
+                )
             } catch {
-                await MainActor.run {
-                    systemProxyStatus.lastError = error.localizedDescription
-                    isSystemProxyWorking = false
-                }
+                systemProxyStatus.lastError = error.localizedDescription
+                isSystemProxyWorking = false
             }
         }
     }
@@ -218,6 +284,51 @@ final class NetworkDebuggerStore: @unchecked Sendable {
                     systemProxyStatus.lastError = error.localizedDescription
                     isSystemProxyWorking = false
                 }
+            }
+        }
+    }
+
+    func confirmUpstreamProxyChaining() {
+        guard let confirmation = upstreamProxyConfirmation else { return }
+        upstreamProxyConfirmation = nil
+        isSystemProxyWorking = true
+        Task { @MainActor in
+            do {
+                try await applyUpstreamAndEnableSystemProxy(
+                    endpoint: confirmation.endpoint,
+                    autoTriggered: confirmation.autoTriggered,
+                    settings: confirmation.settings
+                )
+            } catch {
+                systemProxyStatus.lastError = error.localizedDescription
+                isSystemProxyWorking = false
+            }
+        }
+    }
+
+    func cancelUpstreamProxyChaining() {
+        upstreamProxyConfirmation = nil
+        upstreamProxyStatusMessage = "Existing system proxy was left unchanged."
+        isSystemProxyWorking = false
+    }
+
+    func testUpstreamProxy() {
+        upstreamProxyTestResult = nil
+        upstreamProxyStatusMessage = nil
+        Task { @MainActor in
+            do {
+                let endpoint = listeningEndpoint ?? NetworkProxyEndpoint(host: "127.0.0.1", port: 9_090)
+                let settings = try await resolvedUpstreamProxySettings(endpoint: endpoint)
+                let result = await proxyBackend.testUpstreamProxy(settings)
+                upstreamProxyTestResult = result
+                upstreamProxyStatusMessage = result.errorMessage ?? result.routeSummary
+            } catch {
+                upstreamProxyTestResult = NetworkUpstreamProxyTestResult(
+                    isReachable: false,
+                    routeSummary: "Failed",
+                    errorMessage: error.localizedDescription
+                )
+                upstreamProxyStatusMessage = error.localizedDescription
             }
         }
     }
@@ -297,6 +408,135 @@ final class NetworkDebuggerStore: @unchecked Sendable {
         }
     }
 
+    private func upstreamProxySettingsBeforeSystemProxy(
+        endpoint: NetworkProxyEndpoint,
+        autoTriggered: Bool
+    ) async throws -> (settings: NetworkUpstreamProxySettings, confirmation: NetworkUpstreamProxyConfirmation?) {
+        let settings = try await resolvedUpstreamProxySettings(endpoint: endpoint)
+        if upstreamProxyMode == .automatic,
+           askBeforeChainingExistingSystemProxy,
+           settings.isEnabled
+        {
+            return (
+                settings,
+                NetworkUpstreamProxyConfirmation(
+                    endpoint: endpoint,
+                    autoTriggered: autoTriggered,
+                    settings: settings
+                )
+            )
+        }
+        return (settings, nil)
+    }
+
+    private func applyUpstreamAndEnableSystemProxy(
+        endpoint: NetworkProxyEndpoint,
+        autoTriggered: Bool,
+        settings: NetworkUpstreamProxySettings
+    ) async throws {
+        await proxyBackend.updateUpstreamProxy(settings)
+        var status = try await systemProxyService.enable(endpoint: endpoint)
+        status.upstreamProxySummary = settings.isEnabled ? settings.summary : nil
+        systemProxyStatus = status
+        upstreamProxyStatusMessage = settings.isEnabled
+            ? "Chaining through \(settings.summary)"
+            : "No upstream proxy detected"
+        if autoTriggered, status.isEnabled {
+            autoEnabledSystemProxyForCurrentCapture = true
+        }
+        isSystemProxyWorking = false
+    }
+
+    private func resolvedUpstreamProxySettings(endpoint: NetworkProxyEndpoint) async throws -> NetworkUpstreamProxySettings {
+        switch upstreamProxyMode {
+        case .off:
+            return .disabled
+        case .manual:
+            return try await Self.loadPACScriptIfNeeded(manualUpstreamProxySettings())
+        case .automatic:
+            guard let detected = try await systemProxyService.detectedUpstreamProxy(excluding: endpoint) else {
+                return .disabled
+            }
+            return try await Self.loadPACScriptIfNeeded(detected)
+        }
+    }
+
+    private func manualUpstreamProxySettings() -> NetworkUpstreamProxySettings {
+        let proto = manualUpstreamProxyProtocol
+        let includeHosts = Self.hostPatternList(from: manualUpstreamProxyIncludeHosts)
+        let excludeHosts = Self.hostPatternList(from: manualUpstreamProxyExcludeHosts)
+        let portValue = preferences?.networkManualUpstreamProxyPort ?? 0
+        let port = UInt16(exactly: portValue)
+        let trimmedHost = manualUpstreamProxyHost.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedPACURL = manualUpstreamProxyPACURL.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if proto == .pac {
+            guard let url = URL(string: trimmedPACURL), !trimmedPACURL.isEmpty else {
+                return .disabled
+            }
+            return NetworkUpstreamProxySettings(
+                isEnabled: true,
+                proxies: [
+                    NetworkUpstreamProxyServerSettings(
+                        proto: .pac,
+                        host: "",
+                        port: 0,
+                        pacURL: url
+                    ),
+                ],
+                includeHosts: includeHosts,
+                excludeHosts: excludeHosts,
+                bypassLocalhost: manualUpstreamBypassLocalhost,
+                dnsOverSocks: manualUpstreamDNSOverSOCKS
+            )
+        }
+
+        guard !trimmedHost.isEmpty, let port else {
+            return .disabled
+        }
+
+        return NetworkUpstreamProxySettings(
+            isEnabled: true,
+            proxies: [
+                NetworkUpstreamProxyServerSettings(
+                    proto: proto,
+                    host: trimmedHost,
+                    port: port,
+                    username: manualUpstreamProxyUsername.nilIfBlank,
+                    password: manualUpstreamProxyPassword.nilIfBlank
+                ),
+            ],
+            includeHosts: includeHosts,
+            excludeHosts: excludeHosts,
+            bypassLocalhost: manualUpstreamBypassLocalhost,
+            dnsOverSocks: manualUpstreamDNSOverSOCKS
+        )
+    }
+
+    private static func hostPatternList(from text: String) -> [String] {
+        text
+            .split { $0 == "," || $0 == "\n" || $0 == " " || $0 == "\t" }
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private static func loadPACScriptIfNeeded(_ settings: NetworkUpstreamProxySettings) async throws -> NetworkUpstreamProxySettings {
+        var settings = settings
+        for index in settings.proxies.indices where settings.proxies[index].proto == .pac {
+            guard settings.proxies[index].pacScript?.isEmpty != false,
+                  let url = settings.proxies[index].pacURL
+            else { continue }
+            settings.proxies[index].pacScript = try await Task.detached(priority: .utility) {
+                if url.isFileURL {
+                    return try String(contentsOf: url, encoding: .utf8)
+                }
+                let data = try Data(contentsOf: url)
+                return String(data: data, encoding: .utf8) ?? ""
+            }.value
+        }
+        return settings
+    }
+
     static func helperState(from snapshot: RockxyHelperSnapshot) -> NetworkHelperState {
         NetworkHelperState(
             statusMessage: snapshot.statusMessage,
@@ -324,5 +564,12 @@ private extension NetworkHelperAction {
         case .openSettings:
             self = .openSettings
         }
+    }
+}
+
+private extension String {
+    var nilIfBlank: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }

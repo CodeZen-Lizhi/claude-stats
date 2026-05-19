@@ -10,6 +10,93 @@ public struct RockxyProxyEndpoint: Sendable, Hashable {
     }
 }
 
+public enum RockxyUpstreamProxyKind: String, CaseIterable, Sendable, Hashable, Codable {
+    case http
+    case https
+    case socks5
+    case pac
+
+    public var displayName: String {
+        switch self {
+        case .http:
+            "HTTP"
+        case .https:
+            "HTTPS"
+        case .socks5:
+            "SOCKS5"
+        case .pac:
+            "PAC"
+        }
+    }
+}
+
+public struct RockxyUpstreamProxyServer: Sendable, Hashable, Codable {
+    public var kind: RockxyUpstreamProxyKind
+    public var host: String
+    public var port: UInt16
+    public var username: String?
+    public var password: String?
+    public var pacScript: String?
+    public var pacURL: URL?
+
+    public init(
+        kind: RockxyUpstreamProxyKind,
+        host: String,
+        port: UInt16,
+        username: String? = nil,
+        password: String? = nil,
+        pacScript: String? = nil,
+        pacURL: URL? = nil
+    ) {
+        self.kind = kind
+        self.host = host
+        self.port = port
+        self.username = username
+        self.password = password
+        self.pacScript = pacScript
+        self.pacURL = pacURL
+    }
+}
+
+public struct RockxyUpstreamProxyConfiguration: Sendable, Hashable, Codable {
+    public var isEnabled: Bool
+    public var proxies: [RockxyUpstreamProxyServer]
+    public var includeHosts: [String]
+    public var excludeHosts: [String]
+    public var bypassLocalhost: Bool
+    public var dnsOverSocks: Bool
+
+    public init(
+        isEnabled: Bool,
+        proxies: [RockxyUpstreamProxyServer],
+        includeHosts: [String] = [],
+        excludeHosts: [String] = [],
+        bypassLocalhost: Bool = true,
+        dnsOverSocks: Bool = true
+    ) {
+        self.isEnabled = isEnabled
+        self.proxies = proxies
+        self.includeHosts = includeHosts
+        self.excludeHosts = excludeHosts
+        self.bypassLocalhost = bypassLocalhost
+        self.dnsOverSocks = dnsOverSocks
+    }
+
+    public static let disabled = RockxyUpstreamProxyConfiguration(isEnabled: false, proxies: [])
+}
+
+public struct RockxyUpstreamProxyTestResult: Sendable, Hashable {
+    public let isReachable: Bool
+    public let routeSummary: String
+    public let errorMessage: String?
+
+    public init(isReachable: Bool, routeSummary: String, errorMessage: String?) {
+        self.isReachable = isReachable
+        self.routeSummary = routeSummary
+        self.errorMessage = errorMessage
+    }
+}
+
 public enum RockxyProxyBackendEvent: Sendable {
     case started(RockxyProxyEndpoint)
     case stopped
@@ -98,6 +185,8 @@ public struct RockxyCapturedTransaction: Identifiable, Sendable, Hashable {
     public let sourcePort: UInt16?
     public let clientApp: String?
     public let matchedRuleName: String?
+    public let upstreamProxySummary: String?
+    public let upstreamProxyKind: String?
 
     public init(
         id: UUID,
@@ -111,7 +200,9 @@ public struct RockxyCapturedTransaction: Identifiable, Sendable, Hashable {
         isWebSocket: Bool,
         sourcePort: UInt16?,
         clientApp: String?,
-        matchedRuleName: String?
+        matchedRuleName: String?,
+        upstreamProxySummary: String? = nil,
+        upstreamProxyKind: String? = nil
     ) {
         self.id = id
         self.sequenceNumber = sequenceNumber
@@ -125,6 +216,8 @@ public struct RockxyCapturedTransaction: Identifiable, Sendable, Hashable {
         self.sourcePort = sourcePort
         self.clientApp = clientApp
         self.matchedRuleName = matchedRuleName
+        self.upstreamProxySummary = upstreamProxySummary
+        self.upstreamProxyKind = upstreamProxyKind
     }
 }
 

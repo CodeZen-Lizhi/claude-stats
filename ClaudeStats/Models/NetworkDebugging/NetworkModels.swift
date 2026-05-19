@@ -135,6 +135,103 @@ enum NetworkFlowState: String, Sendable {
     case failed
 }
 
+enum NetworkUpstreamProxyMode: String, CaseIterable, Identifiable, Sendable {
+    case automatic
+    case manual
+    case off
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .automatic:
+            "Auto"
+        case .manual:
+            "Manual"
+        case .off:
+            "Off"
+        }
+    }
+}
+
+enum NetworkUpstreamProxyProtocol: String, CaseIterable, Identifiable, Sendable, Codable {
+    case http
+    case https
+    case socks5
+    case pac
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .http:
+            "HTTP"
+        case .https:
+            "HTTPS"
+        case .socks5:
+            "SOCKS5"
+        case .pac:
+            "PAC"
+        }
+    }
+}
+
+struct NetworkUpstreamProxyServerSettings: Sendable, Hashable, Codable {
+    var proto: NetworkUpstreamProxyProtocol
+    var host: String
+    var port: UInt16
+    var username: String?
+    var password: String?
+    var pacURL: URL?
+    var pacScript: String?
+
+    var displayName: String {
+        switch proto {
+        case .pac:
+            pacURL?.absoluteString ?? "PAC"
+        default:
+            "\(proto.title) \(host):\(port)"
+        }
+    }
+}
+
+struct NetworkUpstreamProxySettings: Sendable, Hashable, Codable {
+    var isEnabled: Bool
+    var proxies: [NetworkUpstreamProxyServerSettings]
+    var includeHosts: [String]
+    var excludeHosts: [String]
+    var bypassLocalhost: Bool
+    var dnsOverSocks: Bool
+
+    static let disabled = NetworkUpstreamProxySettings(
+        isEnabled: false,
+        proxies: [],
+        includeHosts: [],
+        excludeHosts: [],
+        bypassLocalhost: true,
+        dnsOverSocks: true
+    )
+
+    var summary: String {
+        guard isEnabled, let first = proxies.first else { return "Direct" }
+        if proxies.count == 1 { return first.displayName }
+        return "\(first.displayName) + \(proxies.count - 1)"
+    }
+}
+
+struct NetworkUpstreamProxyTestResult: Sendable, Equatable {
+    var isReachable: Bool
+    var routeSummary: String
+    var errorMessage: String?
+}
+
+struct NetworkFlowUpstreamProxy: Sendable, Hashable {
+    var kind: String
+    var summary: String
+
+    static let direct = NetworkFlowUpstreamProxy(kind: "Direct", summary: "Direct")
+}
+
 struct NetworkHeaderPair: Identifiable, Sendable, Hashable {
     let id: String
     var name: String
@@ -197,6 +294,7 @@ struct NetworkFlow: Identifiable, Sendable, Hashable {
     var isSSLIntercepted: Bool
     var isEdited: Bool
     var errorDescription: String?
+    var upstreamProxy: NetworkFlowUpstreamProxy = .direct
 
     var duration: TimeInterval {
         (completedAt ?? Date()).timeIntervalSince(createdAt)
@@ -296,8 +394,139 @@ struct NetworkSystemProxyStatus: Sendable, Equatable {
     var isEnabled: Bool
     var managedServices: [String]
     var lastError: String?
+    var upstreamProxySummary: String? = nil
 
     static let idle = NetworkSystemProxyStatus(isEnabled: false, managedServices: [], lastError: nil)
+}
+
+struct NetworkProxyComponentSnapshot: Sendable, Equatable {
+    var isEnabled: Bool
+    var server: String
+    var port: UInt16?
+    var authenticated: Bool
+}
+
+struct NetworkServiceProxySnapshot: Sendable, Equatable {
+    var serviceName: String
+    var web: NetworkProxyComponentSnapshot
+    var secureWeb: NetworkProxyComponentSnapshot
+    var socks: NetworkProxyComponentSnapshot
+    var autoProxyURL: String?
+    var autoProxyEnabled: Bool
+    var bypassDomains: [String]
+}
+
+struct NetworkSystemProxySnapshot: Sendable, Equatable {
+    var services: [NetworkServiceProxySnapshot]
+
+    var serviceNames: [String] {
+        services.map(\.serviceName)
+    }
+
+    func upstreamProxy(excluding endpoint: NetworkProxyEndpoint) -> NetworkUpstreamProxySettings? {
+        for service in services {
+            if service.autoProxyEnabled,
+               let urlString = service.autoProxyURL,
+               let url = URL(string: urlString)
+            {
+                return NetworkUpstreamProxySettings(
+                    isEnabled: true,
+                    proxies: [
+                        NetworkUpstreamProxyServerSettings(
+                            proto: .pac,
+                            host: "",
+                            port: 0,
+                            pacURL: url
+                        ),
+                    ],
+                    includeHosts: [],
+                    excludeHosts: service.bypassDomains,
+                    bypassLocalhost: true,
+                    dnsOverSocks: true
+                )
+            }
+
+            if let socks = service.socks.enabledServer(excluding: endpoint) {
+                return NetworkUpstreamProxySettings(
+                    isEnabled: true,
+                    proxies: [
+                        NetworkUpstreamProxyServerSettings(
+                            proto: .socks5,
+                            host: socks.server,
+                            port: socks.port
+                        ),
+                    ],
+                    includeHosts: [],
+                    excludeHosts: service.bypassDomains,
+                    bypassLocalhost: true,
+                    dnsOverSocks: true
+                )
+            }
+
+            if let web = service.web.enabledServer(excluding: endpoint) {
+                return NetworkUpstreamProxySettings(
+                    isEnabled: true,
+                    proxies: [
+                        NetworkUpstreamProxyServerSettings(
+                            proto: .http,
+                            host: web.server,
+                            port: web.port
+                        ),
+                    ],
+                    includeHosts: [],
+                    excludeHosts: service.bypassDomains,
+                    bypassLocalhost: true,
+                    dnsOverSocks: true
+                )
+            }
+
+            if let secureWeb = service.secureWeb.enabledServer(excluding: endpoint) {
+                return NetworkUpstreamProxySettings(
+                    isEnabled: true,
+                    proxies: [
+                        NetworkUpstreamProxyServerSettings(
+                            proto: .http,
+                            host: secureWeb.server,
+                            port: secureWeb.port
+                        ),
+                    ],
+                    includeHosts: [],
+                    excludeHosts: service.bypassDomains,
+                    bypassLocalhost: true,
+                    dnsOverSocks: true
+                )
+            }
+        }
+        return nil
+    }
+}
+
+struct NetworkUpstreamProxyConfirmation: Identifiable, Sendable, Equatable {
+    let id = UUID()
+    var endpoint: NetworkProxyEndpoint
+    var autoTriggered: Bool
+    var settings: NetworkUpstreamProxySettings
+
+    var summary: String { settings.summary }
+}
+
+private extension NetworkProxyComponentSnapshot {
+    func enabledServer(excluding endpoint: NetworkProxyEndpoint) -> (server: String, port: UInt16)? {
+        guard isEnabled,
+              let port,
+              !server.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return nil }
+        let normalizedServer = server.trimmingCharacters(in: CharacterSet(charactersIn: "[]")).lowercased()
+        let normalizedEndpoint = endpoint.host.trimmingCharacters(in: CharacterSet(charactersIn: "[]")).lowercased()
+        let sameHost = normalizedServer == normalizedEndpoint
+            || (Self.isLocalhost(normalizedServer) && Self.isLocalhost(normalizedEndpoint))
+        guard !(sameHost && port == endpoint.port) else { return nil }
+        return (server, port)
+    }
+
+    static func isLocalhost(_ host: String) -> Bool {
+        host == "localhost" || host == "::1" || host == "127.0.0.1" || host.hasPrefix("127.")
+    }
 }
 
 enum NetworkHelperAction: String, Sendable, Equatable {

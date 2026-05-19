@@ -60,6 +60,8 @@ struct NetworkSetupView: View {
             }
             .toggleStyle(.checkbox)
 
+            upstreamProxySettings
+
             helperStatusRow
 
             if let error = store.systemProxyStatus.lastError, !error.isEmpty {
@@ -79,6 +81,121 @@ struct NetworkSetupView: View {
         .task {
             store.refreshPassiveHelperStatus()
         }
+        .alert(item: $store.upstreamProxyConfirmation) { confirmation in
+            Alert(
+                title: Text("Chain Existing System Proxy?"),
+                message: Text("Route Rockxy through \(confirmation.summary) before enabling the system proxy."),
+                primaryButton: .default(Text("Chain")) {
+                    store.confirmUpstreamProxyChaining()
+                },
+                secondaryButton: .cancel {
+                    store.cancelUpstreamProxyChaining()
+                }
+            )
+        }
+    }
+
+    private var upstreamProxySettings: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Label("Upstream Proxy", systemImage: "arrow.triangle.branch")
+                    .font(.sora(11, weight: .semibold))
+
+                Picker("", selection: $store.upstreamProxyMode) {
+                    Text("Auto").tag(NetworkUpstreamProxyMode.automatic)
+                    Text("Manual").tag(NetworkUpstreamProxyMode.manual)
+                    Text("Off").tag(NetworkUpstreamProxyMode.off)
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .frame(width: 210)
+
+                Spacer()
+
+                Button {
+                    store.testUpstreamProxy()
+                } label: {
+                    Label("Test", systemImage: "checkmark.circle")
+                }
+                .font(.sora(10, weight: .medium))
+            }
+
+            if store.upstreamProxyMode == .automatic {
+                Toggle(isOn: $store.askBeforeChainingExistingSystemProxy) {
+                    Text("Ask before chaining existing system proxy")
+                        .font(.sora(10, weight: .medium))
+                }
+                .toggleStyle(.checkbox)
+            }
+
+            if store.upstreamProxyMode == .manual {
+                manualUpstreamProxyFields
+            }
+
+            if let message = store.upstreamProxyStatusMessage, !message.isEmpty {
+                Text(message)
+                    .font(.sora(10))
+                    .foregroundStyle(store.upstreamProxyTestResult?.isReachable == false ? .red : Color.stxMuted)
+                    .lineLimit(2)
+            } else if let summary = store.systemProxyStatus.upstreamProxySummary {
+                Text("Active upstream: \(summary)")
+                    .font(.sora(10))
+                    .foregroundStyle(Color.stxMuted)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private var manualUpstreamProxyFields: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Picker("", selection: $store.manualUpstreamProxyProtocol) {
+                    ForEach(NetworkUpstreamProxyProtocol.allCases) { proto in
+                        Text(proto.title).tag(proto)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 110)
+
+                if store.manualUpstreamProxyProtocol == .pac {
+                    TextField("PAC URL", text: $store.manualUpstreamProxyPACURL)
+                        .textFieldStyle(.roundedBorder)
+                } else {
+                    TextField("Host", text: $store.manualUpstreamProxyHost)
+                        .textFieldStyle(.roundedBorder)
+                    TextField("Port", text: $store.manualUpstreamProxyPortText)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 72)
+                }
+            }
+
+            if store.manualUpstreamProxyProtocol != .pac {
+                HStack(spacing: 8) {
+                    TextField("Username", text: $store.manualUpstreamProxyUsername)
+                        .textFieldStyle(.roundedBorder)
+                    SecureField("Password", text: $store.manualUpstreamProxyPassword)
+                        .textFieldStyle(.roundedBorder)
+                }
+            }
+
+            HStack(spacing: 8) {
+                TextField("Include hosts", text: $store.manualUpstreamProxyIncludeHosts)
+                    .textFieldStyle(.roundedBorder)
+                TextField("Exclude hosts", text: $store.manualUpstreamProxyExcludeHosts)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            HStack(spacing: 16) {
+                Toggle("Bypass localhost", isOn: $store.manualUpstreamBypassLocalhost)
+                    .toggleStyle(.checkbox)
+                Toggle("DNS over SOCKS", isOn: $store.manualUpstreamDNSOverSOCKS)
+                    .toggleStyle(.checkbox)
+                    .disabled(store.manualUpstreamProxyProtocol != .socks5)
+            }
+            .font(.sora(10, weight: .medium))
+        }
+        .font(.sora(10))
     }
 
     private var helperStatusRow: some View {

@@ -39,7 +39,9 @@ struct NetworkDebuggingTests {
             isWebSocket: false,
             sourcePort: 52_000,
             clientApp: "curl",
-            matchedRuleName: "rewrite-host"
+            matchedRuleName: "rewrite-host",
+            upstreamProxySummary: "HTTP 127.0.0.1:6152",
+            upstreamProxyKind: "HTTP"
         )
 
         let flow = RockxyNetworkProxyBackend.flow(from: transaction, bodyLimit: 4)
@@ -61,6 +63,8 @@ struct NetworkDebuggingTests {
         #expect(flow.isSSLIntercepted == true)
         #expect(flow.isEdited == true)
         #expect(flow.errorDescription == nil)
+        #expect(flow.upstreamProxy.kind == "HTTP")
+        #expect(flow.upstreamProxy.summary == "HTTP 127.0.0.1:6152")
     }
 
     @Test("Rockxy tunnel websocket and blocked states map safely")
@@ -181,6 +185,112 @@ struct NetworkDebuggingTests {
 
         #expect(await systemProxy.enabledEndpoints.isEmpty)
         #expect(await systemProxy.disabledServices.isEmpty)
+    }
+
+    @Test("Auto chain uses existing system proxy as Rockxy upstream")
+    func autoChainUsesExistingSystemProxyAsUpstream() async throws {
+        let defaults = makeDefaults()
+        let preferences = Preferences(defaults: defaults)
+        preferences.networkAutoEnableSystemProxyOnStart = true
+
+        let backend = FakeNetworkProxyBackend()
+        let systemProxy = FakeSystemProxyService(
+            detectedUpstream: NetworkUpstreamProxySettings(
+                isEnabled: true,
+                proxies: [
+                    NetworkUpstreamProxyServerSettings(
+                        proto: .http,
+                        host: "127.0.0.1",
+                        port: 6_152
+                    ),
+                ],
+                includeHosts: [],
+                excludeHosts: ["localhost"],
+                bypassLocalhost: true,
+                dnsOverSocks: true
+            )
+        )
+        let store = NetworkDebuggerStore(
+            preferences: preferences,
+            proxyBackend: backend,
+            systemProxyService: systemProxy
+        )
+
+        store.startCapture()
+        try await waitFor { store.systemProxyStatus.isEnabled && !store.isSystemProxyWorking }
+
+        let upstreams = await backend.upstreamConfigurations
+        #expect(upstreams.last?.summary == "HTTP 127.0.0.1:6152")
+        #expect(store.systemProxyStatus.upstreamProxySummary == "HTTP 127.0.0.1:6152")
+    }
+
+    @Test("Ask before chain defers system proxy enable")
+    func askBeforeChainDefersSystemProxyEnable() async throws {
+        let defaults = makeDefaults()
+        let preferences = Preferences(defaults: defaults)
+        preferences.networkAskBeforeChainingExistingSystemProxy = true
+
+        let backend = FakeNetworkProxyBackend()
+        let systemProxy = FakeSystemProxyService(
+            detectedUpstream: NetworkUpstreamProxySettings(
+                isEnabled: true,
+                proxies: [
+                    NetworkUpstreamProxyServerSettings(
+                        proto: .socks5,
+                        host: "127.0.0.1",
+                        port: 6_153
+                    ),
+                ],
+                includeHosts: [],
+                excludeHosts: [],
+                bypassLocalhost: true,
+                dnsOverSocks: true
+            )
+        )
+        let store = NetworkDebuggerStore(
+            preferences: preferences,
+            proxyBackend: backend,
+            systemProxyService: systemProxy
+        )
+
+        store.startCapture()
+        try await waitFor { store.captureStatus.isListening }
+        store.enableSystemProxy()
+        try await waitFor { store.upstreamProxyConfirmation != nil && !store.isSystemProxyWorking }
+
+        #expect(await systemProxy.enabledEndpoints.isEmpty)
+
+        store.confirmUpstreamProxyChaining()
+        try await waitFor { store.systemProxyStatus.isEnabled && !store.isSystemProxyWorking }
+
+        #expect(await backend.upstreamConfigurations.last?.summary == "SOCKS5 127.0.0.1:6153")
+        #expect(await systemProxy.enabledEndpoints == [FakeNetworkProxyBackend.defaultEndpoint])
+    }
+
+    @Test("System proxy snapshot prefers PAC SOCKS then HTTP upstream")
+    func systemProxySnapshotBuildsUpstreamCandidate() {
+        let endpoint = FakeNetworkProxyBackend.defaultEndpoint
+        let snapshot = NetworkSystemProxySnapshot(services: [
+            NetworkServiceProxySnapshot(
+                serviceName: "Wi-Fi",
+                web: NetworkProxyComponentSnapshot(
+                    isEnabled: true,
+                    server: "127.0.0.1",
+                    port: 6_152,
+                    authenticated: false
+                ),
+                secureWeb: NetworkProxyComponentSnapshot(isEnabled: false, server: "", port: nil, authenticated: false),
+                socks: NetworkProxyComponentSnapshot(isEnabled: false, server: "", port: nil, authenticated: false),
+                autoProxyURL: nil,
+                autoProxyEnabled: false,
+                bypassDomains: ["*.local"]
+            ),
+        ])
+
+        let settings = snapshot.upstreamProxy(excluding: endpoint)
+
+        #expect(settings?.summary == "HTTP 127.0.0.1:6152")
+        #expect(settings?.excludeHosts == ["*.local"])
     }
 
     @Test("Helper snapshot maps to network helper state")
@@ -432,6 +542,7 @@ private actor FakeNetworkProxyBackend: NetworkProxyBackend {
     private let startError: FakeProxyError?
     private(set) var startCallCount = 0
     private(set) var stopCallCount = 0
+    private(set) var upstreamConfigurations: [NetworkUpstreamProxySettings] = []
 
     init(
         endpoint: NetworkProxyEndpoint = FakeNetworkProxyBackend.defaultEndpoint,
@@ -456,11 +567,32 @@ private actor FakeNetworkProxyBackend: NetworkProxyBackend {
     func stop() async {
         stopCallCount += 1
     }
+
+    func updateUpstreamProxy(_ configuration: NetworkUpstreamProxySettings) async {
+        upstreamConfigurations.append(configuration)
+    }
+
+    func testUpstreamProxy(_ configuration: NetworkUpstreamProxySettings) async -> NetworkUpstreamProxyTestResult {
+        NetworkUpstreamProxyTestResult(
+            isReachable: true,
+            routeSummary: configuration.summary,
+            errorMessage: nil
+        )
+    }
 }
 
 private actor FakeSystemProxyService: NetworkSystemProxyManaging {
     private(set) var enabledEndpoints: [NetworkProxyEndpoint] = []
     private(set) var disabledServices: [[String]] = []
+    private let detectedUpstream: NetworkUpstreamProxySettings?
+
+    init(detectedUpstream: NetworkUpstreamProxySettings? = nil) {
+        self.detectedUpstream = detectedUpstream
+    }
+
+    func detectedUpstreamProxy(excluding _: NetworkProxyEndpoint) async throws -> NetworkUpstreamProxySettings? {
+        detectedUpstream
+    }
 
     func enable(endpoint: NetworkProxyEndpoint) async throws -> NetworkSystemProxyStatus {
         enabledEndpoints.append(endpoint)

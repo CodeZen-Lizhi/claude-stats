@@ -33,6 +33,19 @@ final class RockxyNetworkProxyBackend: NetworkProxyBackend, @unchecked Sendable 
         await backend.stop()
     }
 
+    func updateUpstreamProxy(_ configuration: NetworkUpstreamProxySettings) async {
+        await backend.updateUpstreamProxy(configuration.rockxyConfiguration)
+    }
+
+    func testUpstreamProxy(_ configuration: NetworkUpstreamProxySettings) async -> NetworkUpstreamProxyTestResult {
+        let result = await backend.testUpstreamProxy(configuration.rockxyConfiguration)
+        return NetworkUpstreamProxyTestResult(
+            isReachable: result.isReachable,
+            routeSummary: result.routeSummary,
+            errorMessage: result.errorMessage
+        )
+    }
+
     static func flow(from transaction: RockxyCapturedTransaction, bodyLimit: Int = 2 * 1024 * 1024) -> NetworkFlow {
         let requestBody = body(from: transaction.request.body, contentType: transaction.request.contentType, isTruncated: false, limit: bodyLimit)
         let response = transaction.response.map { response in
@@ -69,7 +82,11 @@ final class RockxyNetworkProxyBackend: NetworkProxyBackend, @unchecked Sendable 
             responseBytes: transaction.response?.body?.count ?? 0,
             isSSLIntercepted: isSSLIntercepted(transaction),
             isEdited: transaction.matchedRuleName != nil,
-            errorDescription: errorDescription(for: transaction)
+            errorDescription: errorDescription(for: transaction),
+            upstreamProxy: NetworkFlowUpstreamProxy(
+                kind: transaction.upstreamProxyKind ?? "Direct",
+                summary: transaction.upstreamProxySummary ?? "Direct"
+            )
         )
     }
 
@@ -135,5 +152,47 @@ final class RockxyNetworkProxyBackend: NetworkProxyBackend, @unchecked Sendable 
             isTruncated: isTruncated || data.count > limit,
             contentType: contentType
         )
+    }
+}
+
+private extension NetworkUpstreamProxySettings {
+    var rockxyConfiguration: RockxyUpstreamProxyConfiguration {
+        RockxyUpstreamProxyConfiguration(
+            isEnabled: isEnabled,
+            proxies: proxies.map(\.rockxyServer),
+            includeHosts: includeHosts,
+            excludeHosts: excludeHosts,
+            bypassLocalhost: bypassLocalhost,
+            dnsOverSocks: dnsOverSocks
+        )
+    }
+}
+
+private extension NetworkUpstreamProxyServerSettings {
+    var rockxyServer: RockxyUpstreamProxyServer {
+        RockxyUpstreamProxyServer(
+            kind: proto.rockxyKind,
+            host: host,
+            port: port,
+            username: username,
+            password: password,
+            pacScript: pacScript,
+            pacURL: pacURL
+        )
+    }
+}
+
+private extension NetworkUpstreamProxyProtocol {
+    var rockxyKind: RockxyUpstreamProxyKind {
+        switch self {
+        case .http:
+            .http
+        case .https:
+            .https
+        case .socks5:
+            .socks5
+        case .pac:
+            .pac
+        }
     }
 }

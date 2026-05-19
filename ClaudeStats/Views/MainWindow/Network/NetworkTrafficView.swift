@@ -408,6 +408,7 @@ private enum NetworkTrafficColumn: String, CaseIterable {
     case number
     case url
     case client
+    case upstream
     case method
     case status
     case time
@@ -433,6 +434,7 @@ private enum NetworkTrafficColumn: String, CaseIterable {
         case .number: "#"
         case .url: "URL"
         case .client: "Client"
+        case .upstream: "Upstream"
         case .method: "Method"
         case .status: "Status"
         case .time: "Time"
@@ -451,6 +453,7 @@ private enum NetworkTrafficColumn: String, CaseIterable {
         case .number: 42
         case .url: 260
         case .client: 120
+        case .upstream: 96
         case .method: 72
         case .status: 70
         case .time: 102
@@ -469,6 +472,7 @@ private enum NetworkTrafficColumn: String, CaseIterable {
         case .number: 50
         case .url: 430
         case .client: 155
+        case .upstream: 128
         case .method: 86
         case .status: 82
         case .time: 116
@@ -485,6 +489,7 @@ private enum NetworkTrafficColumn: String, CaseIterable {
         switch self {
         case .url: 920
         case .client: 260
+        case .upstream: 180
         case .time: 150
         case .duration, .request, .response: 150
         case .method, .status: 120
@@ -504,7 +509,7 @@ private enum NetworkTrafficColumn: String, CaseIterable {
 
     var alignment: NSTextAlignment {
         switch self {
-        case .url, .client:
+        case .url, .client, .upstream:
             .left
         default:
             .center
@@ -521,6 +526,8 @@ private enum NetworkTrafficColumn: String, CaseIterable {
             flow.urlDisplay
         case .client:
             flow.clientName
+        case .upstream:
+            flow.upstreamProxy.kind
         case .method:
             flow.request.method
         case .status:
@@ -563,7 +570,7 @@ private enum NetworkTrafficColumn: String, CaseIterable {
             }
         case .status:
             statusColor(for: flow)
-        case .ssl, .edited, .tools:
+        case .ssl, .edited, .tools, .upstream:
             .secondaryLabelColor
         default:
             .labelColor
@@ -648,6 +655,12 @@ private struct NetworkPayloadPane: View {
 
             if let flow = store.selectedFlow {
                 headerBadge(flow)
+                if side == .request {
+                    Text(flow.upstreamProxy.summary)
+                        .font(.sora(10, weight: .medium))
+                        .foregroundStyle(Color.stxMuted)
+                        .lineLimit(1)
+                }
                 Text("#\(flow.number)")
                     .font(.sora(10).monospacedDigit())
                     .foregroundStyle(Color.stxMuted)
