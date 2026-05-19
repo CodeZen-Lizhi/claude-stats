@@ -46,9 +46,17 @@ struct NetworkDetailView: View {
         switch section {
         case .traffic:
             NetworkTrafficView(store: env.networkDebugger, preferences: env.preferences)
-        case .setup:
+        case .proxy:
             NetworkToolScroll {
-                NetworkSetupView(store: env.networkDebugger)
+                NetworkProxyView(store: env.networkDebugger)
+            }
+        case .helper:
+            NetworkToolScroll {
+                NetworkHelperView(store: env.networkDebugger)
+            }
+        case .upstream:
+            NetworkToolScroll {
+                NetworkUpstreamView(store: env.networkDebugger)
             }
         case .certificates:
             NetworkToolScroll {
@@ -56,7 +64,7 @@ struct NetworkDetailView: View {
             }
         case .rules:
             NetworkToolScroll {
-                NetworkRulesView()
+                NetworkRulesView(store: env.networkDebugger)
             }
         }
     }
@@ -83,7 +91,9 @@ private extension NetworkSection {
     var detailTitle: String {
         switch self {
         case .traffic: "Network traffic"
-        case .setup: "Proxy setup"
+        case .proxy: "Proxy"
+        case .helper: "Helper"
+        case .upstream: "Upstream proxy"
         case .certificates: "Certificates"
         case .rules: "Rules"
         }
@@ -93,8 +103,12 @@ private extension NetworkSection {
         switch self {
         case .traffic:
             "Capture local HTTP traffic and inspect requests, responses, timing, and payloads."
-        case .setup:
+        case .proxy:
             "Configure the local proxy endpoint and system proxy handoff."
+        case .helper:
+            "Install, verify, and recover the privileged helper used by signed builds."
+        case .upstream:
+            "Chain Rockxy through Surge, PAC, SOCKS, or another external proxy."
         case .certificates:
             "Manage the debugging root CA, trust status, and HTTPS inspection allowlist."
         case .rules:

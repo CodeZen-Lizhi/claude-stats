@@ -91,7 +91,7 @@ struct MainWindowView: View {
     }
 
     private var networkSection: NetworkSection {
-        NetworkSection(rawValue: networkSectionRaw) ?? .traffic
+        NetworkSection(storedRawValue: networkSectionRaw)
     }
 
     private var settingsSectionBinding: Binding<SettingsSection> {

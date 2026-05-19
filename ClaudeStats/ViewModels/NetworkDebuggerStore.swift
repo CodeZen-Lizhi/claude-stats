@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 import RockxyBackendEmbed
@@ -25,16 +26,28 @@ final class NetworkDebuggerStore: @unchecked Sendable {
     var certificateState: NetworkCertificateState = .empty
     var flows: [NetworkFlow] = []
     var selectedFlowID: UUID?
-    var searchText = ""
     var selectedRequestTab: NetworkInspectorTab = .header
     var selectedResponseTab: NetworkInspectorTab = .body
-    var selectedProtocol: NetworkFlowProtocol?
+    var trafficSidebarLayer: NetworkTrafficSidebarLayer = .sections
+    var trafficFilter = NetworkTrafficFilter()
     var isSystemProxyWorking = false
     var isHelperWorking = false
     var isCertificateWorking = false
+    var isRulesWorking = false
+    var isPluginsWorking = false
+    var isReplayWorking = false
     var upstreamProxyConfirmation: NetworkUpstreamProxyConfirmation?
     var upstreamProxyTestResult: NetworkUpstreamProxyTestResult?
     var upstreamProxyStatusMessage: String?
+    var rules: [NetworkRuleDraft] = []
+    var selectedRuleID: UUID?
+    var ruleMatchResult: NetworkRuleMatchSnapshot?
+    var ruleStatusMessage: String?
+    var plugins: [NetworkPluginItem] = []
+    var pluginStatusMessage: String?
+    var breakpoints: [NetworkBreakpointItem] = []
+    var selectedBreakpointID: UUID?
+    var replayDraft: NetworkReplayDraft?
     var manualUpstreamProxyPassword = ""
 
     private let proxyBackend: any NetworkProxyBackend
@@ -63,16 +76,44 @@ final class NetworkDebuggerStore: @unchecked Sendable {
 
     var filteredFlows: [NetworkFlow] {
         flows.filter { flow in
-            let matchesProtocol = selectedProtocol == nil || flow.flowProtocol == selectedProtocol
-            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !query.isEmpty else { return matchesProtocol }
-            return matchesProtocol && (
-                flow.request.url.localizedCaseInsensitiveContains(query)
-                || flow.request.method.localizedCaseInsensitiveContains(query)
-                || flow.clientName.localizedCaseInsensitiveContains(query)
-                || flow.statusDisplay.localizedCaseInsensitiveContains(query)
-            )
+            matchesTrafficFilter(flow)
         }
+    }
+
+    var selectedRule: NetworkRuleDraft? {
+        guard let selectedRuleID else { return rules.first }
+        return rules.first { $0.id == selectedRuleID } ?? rules.first
+    }
+
+    var trafficApps: [NetworkTrafficFilterGroup] {
+        groupedFilters(
+            flows.map { $0.clientName.isEmpty ? "Unknown" : $0.clientName },
+            symbol: "app"
+        )
+    }
+
+    var trafficDomains: [NetworkTrafficFilterGroup] {
+        groupedFilters(flows.map(\.domainDisplay), symbol: "globe")
+    }
+
+    var trafficMethods: [NetworkTrafficFilterGroup] {
+        groupedFilters(flows.map(\.methodDisplay), symbol: "arrow.right.circle")
+    }
+
+    var pinnedTrafficCount: Int {
+        flows.filter(\.isPinned).count
+    }
+
+    var savedTrafficCount: Int {
+        flows.filter(\.isSaved).count
+    }
+
+    func statusCount(for status: NetworkTrafficStatusFilter) -> Int {
+        flows.filter(status.matches).count
+    }
+
+    func protocolCount(for proto: NetworkFlowProtocol) -> Int {
+        flows.filter { $0.flowProtocol == proto }.count
     }
 
     var listeningEndpoint: NetworkProxyEndpoint? {
@@ -83,6 +124,22 @@ final class NetworkDebuggerStore: @unchecked Sendable {
     var autoEnableSystemProxyOnStart: Bool {
         get { preferences?.networkAutoEnableSystemProxyOnStart ?? false }
         set { preferences?.networkAutoEnableSystemProxyOnStart = newValue }
+    }
+
+    var searchText: String {
+        get { trafficFilter.query }
+        set { trafficFilter.query = newValue }
+    }
+
+    var selectedProtocol: NetworkFlowProtocol? {
+        get { trafficFilter.protocols.count == 1 ? trafficFilter.protocols.first : nil }
+        set {
+            if let newValue {
+                trafficFilter.protocols = [newValue]
+            } else {
+                trafficFilter.protocols = []
+            }
+        }
     }
 
     var upstreamProxyMode: NetworkUpstreamProxyMode {
@@ -190,6 +247,83 @@ final class NetworkDebuggerStore: @unchecked Sendable {
         selectedFlowID = nil
     }
 
+    func resetTrafficFilters() {
+        trafficFilter = NetworkTrafficFilter()
+    }
+
+    func togglePinnedFilter() {
+        trafficFilter.pinnedOnly.toggle()
+        if trafficFilter.pinnedOnly {
+            trafficFilter.savedOnly = false
+        }
+    }
+
+    func toggleSavedFilter() {
+        trafficFilter.savedOnly.toggle()
+        if trafficFilter.savedOnly {
+            trafficFilter.pinnedOnly = false
+        }
+    }
+
+    func toggleAppFilter(_ app: String) {
+        toggle(app, in: &trafficFilter.apps)
+    }
+
+    func toggleDomainFilter(_ domain: String) {
+        toggle(domain, in: &trafficFilter.domains)
+    }
+
+    func toggleMethodFilter(_ method: String) {
+        toggle(method, in: &trafficFilter.methods)
+    }
+
+    func toggleStatusFilter(_ status: NetworkTrafficStatusFilter) {
+        toggle(status, in: &trafficFilter.statuses)
+    }
+
+    func toggleProtocolFilter(_ proto: NetworkFlowProtocol) {
+        toggle(proto, in: &trafficFilter.protocols)
+    }
+
+    func togglePinned(for id: UUID) {
+        updateFlow(id: id) { $0.isPinned.toggle() }
+    }
+
+    func toggleSaved(for id: UUID) {
+        updateFlow(id: id) { $0.isSaved.toggle() }
+    }
+
+    func prepareReplay(for flow: NetworkFlow) {
+        replayDraft = NetworkReplayDraft(
+            sourceFlowID: flow.id,
+            method: flow.request.method,
+            url: flow.request.url,
+            headers: flow.request.headers,
+            bodyText: flow.request.body.text,
+            contentType: flow.request.body.contentType
+        )
+    }
+
+    func cancelReplay() {
+        replayDraft = nil
+    }
+
+    func performReplay() {
+        guard let draft = replayDraft else { return }
+        isReplayWorking = true
+        Task { @MainActor in
+            do {
+                let flow = try await proxyBackend.replay(draft)
+                flows.insert(flow, at: 0)
+                selectedFlowID = flow.id
+                replayDraft = nil
+            } catch {
+                upstreamProxyStatusMessage = error.localizedDescription
+            }
+            isReplayWorking = false
+        }
+    }
+
     func refreshHelperStatus() {
         isHelperWorking = true
         Task { @MainActor in
@@ -232,6 +366,213 @@ final class NetworkDebuggerStore: @unchecked Sendable {
                 helperState.detailMessage = error.localizedDescription
             }
             isHelperWorking = false
+        }
+    }
+
+    func refreshRules() {
+        isRulesWorking = true
+        Task { @MainActor in
+            rules = await proxyBackend.rules()
+            selectedRuleID = selectedRuleID ?? rules.first?.id
+            isRulesWorking = false
+        }
+    }
+
+    func createRule(kind: NetworkRuleActionKind = .block) {
+        var rule = NetworkRuleDraft()
+        rule.name = "New \(kind.title) Rule"
+        rule.action.kind = kind
+        rules.append(rule)
+        selectedRuleID = rule.id
+    }
+
+    func updateSelectedRule(_ transform: (inout NetworkRuleDraft) -> Void) {
+        guard let rule = selectedRule, let index = rules.firstIndex(where: { $0.id == rule.id }) else { return }
+        transform(&rules[index])
+    }
+
+    func saveSelectedRule() {
+        guard let rule = selectedRule else { return }
+        isRulesWorking = true
+        Task { @MainActor in
+            do {
+                try await proxyBackend.saveRule(rule)
+                rules = await proxyBackend.rules()
+                selectedRuleID = rule.id
+                ruleStatusMessage = "Saved \(rule.name)"
+            } catch {
+                ruleStatusMessage = error.localizedDescription
+            }
+            isRulesWorking = false
+        }
+    }
+
+    func duplicateSelectedRule() {
+        guard var rule = selectedRule else { return }
+        rule.id = UUID()
+        rule.name += " Copy"
+        rule.isEnabled = false
+        rules.append(rule)
+        selectedRuleID = rule.id
+    }
+
+    func deleteSelectedRule() {
+        guard let rule = selectedRule else { return }
+        isRulesWorking = true
+        Task { @MainActor in
+            do {
+                try await proxyBackend.deleteRule(id: rule.id)
+                rules.removeAll { $0.id == rule.id }
+                selectedRuleID = rules.first?.id
+                ruleStatusMessage = "Deleted \(rule.name)"
+            } catch {
+                ruleStatusMessage = error.localizedDescription
+            }
+            isRulesWorking = false
+        }
+    }
+
+    func setRuleEnabled(_ rule: NetworkRuleDraft, enabled: Bool) {
+        if let index = rules.firstIndex(where: { $0.id == rule.id }) {
+            rules[index].isEnabled = enabled
+        }
+        Task { @MainActor in
+            do {
+                try await proxyBackend.setRuleEnabled(id: rule.id, enabled: enabled)
+            } catch {
+                ruleStatusMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func moveSelectedRuleUp() {
+        moveSelectedRule(offset: -1)
+    }
+
+    func moveSelectedRuleDown() {
+        moveSelectedRule(offset: 1)
+    }
+
+    func testSelectedRuleAgainstSelectedFlow() {
+        guard let rule = selectedRule else { return }
+        let flow = selectedFlow
+        let url = flow.flatMap { URL(string: $0.request.url) } ?? URL(string: "https://example.com/")!
+        let method = flow?.request.method ?? "GET"
+        let headers = flow?.request.headers ?? []
+        Task { @MainActor in
+            ruleMatchResult = await proxyBackend.testRule(rule, sampleURL: url, method: method, headers: headers)
+        }
+    }
+
+    func exportRulesToPasteboard() {
+        Task { @MainActor in
+            do {
+                let data = try await proxyBackend.exportRulesData()
+                if let text = String(data: data, encoding: .utf8) {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(text, forType: .string)
+                    ruleStatusMessage = "Rules copied to clipboard"
+                }
+            } catch {
+                ruleStatusMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func importRulesFromPasteboard() {
+        guard let text = NSPasteboard.general.string(forType: .string),
+              let data = text.data(using: .utf8)
+        else {
+            ruleStatusMessage = "Clipboard does not contain rule JSON."
+            return
+        }
+        Task { @MainActor in
+            do {
+                try await proxyBackend.importRulesData(data)
+                rules = await proxyBackend.rules()
+                ruleStatusMessage = "Imported \(rules.count) rules"
+            } catch {
+                ruleStatusMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func refreshPlugins() {
+        isPluginsWorking = true
+        Task { @MainActor in
+            plugins = await proxyBackend.plugins()
+            isPluginsWorking = false
+        }
+    }
+
+    func installPlugin(at path: String) {
+        isPluginsWorking = true
+        Task { @MainActor in
+            do {
+                try await proxyBackend.installPlugin(at: path)
+                plugins = await proxyBackend.plugins()
+                pluginStatusMessage = "Installed plugin"
+            } catch {
+                pluginStatusMessage = error.localizedDescription
+            }
+            isPluginsWorking = false
+        }
+    }
+
+    func setPluginEnabled(_ plugin: NetworkPluginItem, enabled: Bool) {
+        Task { @MainActor in
+            do {
+                try await proxyBackend.setPluginEnabled(id: plugin.id, enabled: enabled)
+                plugins = await proxyBackend.plugins()
+            } catch {
+                pluginStatusMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func reloadPlugin(_ plugin: NetworkPluginItem) {
+        Task { @MainActor in
+            do {
+                try await proxyBackend.reloadPlugin(id: plugin.id)
+                plugins = await proxyBackend.plugins()
+            } catch {
+                pluginStatusMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func deletePlugin(_ plugin: NetworkPluginItem) {
+        Task { @MainActor in
+            do {
+                try await proxyBackend.deletePlugin(id: plugin.id)
+                plugins = await proxyBackend.plugins()
+            } catch {
+                pluginStatusMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func refreshBreakpoints() {
+        Task { @MainActor in
+            breakpoints = await proxyBackend.breakpoints()
+            selectedBreakpointID = selectedBreakpointID ?? breakpoints.first?.id
+        }
+    }
+
+    func updateBreakpoint(_ item: NetworkBreakpointItem) {
+        if let index = breakpoints.firstIndex(where: { $0.id == item.id }) {
+            breakpoints[index] = item
+        }
+        Task { @MainActor in
+            await proxyBackend.updateBreakpoint(item)
+        }
+    }
+
+    func resolveBreakpoint(_ item: NetworkBreakpointItem, decision: NetworkBreakpointDecision) {
+        Task { @MainActor in
+            await proxyBackend.resolveBreakpoint(id: item.id, decision: decision)
+            breakpoints = await proxyBackend.breakpoints()
+            selectedBreakpointID = breakpoints.first?.id
         }
     }
 
@@ -405,6 +746,72 @@ final class NetworkDebuggerStore: @unchecked Sendable {
         case .failed(let message):
             captureStatus = .failed(message)
             Log.network.error("Network proxy failed: \(message, privacy: .public)")
+        }
+    }
+
+    private func matchesTrafficFilter(_ flow: NetworkFlow) -> Bool {
+        if trafficFilter.pinnedOnly, !flow.isPinned { return false }
+        if trafficFilter.savedOnly, !flow.isSaved { return false }
+        if !trafficFilter.protocols.isEmpty, !trafficFilter.protocols.contains(flow.flowProtocol) { return false }
+        if !trafficFilter.apps.isEmpty, !trafficFilter.apps.contains(flow.clientName.isEmpty ? "Unknown" : flow.clientName) { return false }
+        if !trafficFilter.domains.isEmpty, !trafficFilter.domains.contains(flow.domainDisplay) { return false }
+        if !trafficFilter.methods.isEmpty, !trafficFilter.methods.contains(flow.methodDisplay) { return false }
+        if !trafficFilter.statuses.isEmpty, !trafficFilter.statuses.contains(where: { $0.matches(flow) }) { return false }
+
+        let query = trafficFilter.query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return true }
+        return flow.request.url.localizedCaseInsensitiveContains(query)
+            || flow.request.method.localizedCaseInsensitiveContains(query)
+            || flow.clientName.localizedCaseInsensitiveContains(query)
+            || flow.statusDisplay.localizedCaseInsensitiveContains(query)
+            || flow.domainDisplay.localizedCaseInsensitiveContains(query)
+            || (flow.matchedRuleName?.localizedCaseInsensitiveContains(query) ?? false)
+    }
+
+    private func groupedFilters(_ values: [String], symbol: String) -> [NetworkTrafficFilterGroup] {
+        let counts = Dictionary(grouping: values.filter { !$0.isEmpty }, by: { $0 })
+            .mapValues(\.count)
+        return counts
+            .map { NetworkTrafficFilterGroup(id: $0.key, title: $0.key, symbol: symbol, count: $0.value) }
+            .sorted {
+                if $0.count == $1.count {
+                    return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+                }
+                return $0.count > $1.count
+            }
+    }
+
+    private func toggle<T: Hashable>(_ value: T, in set: inout Set<T>) {
+        if set.contains(value) {
+            set.remove(value)
+        } else {
+            set.insert(value)
+        }
+    }
+
+    private func updateFlow(id: UUID, _ transform: (inout NetworkFlow) -> Void) {
+        guard let index = flows.firstIndex(where: { $0.id == id }) else { return }
+        transform(&flows[index])
+    }
+
+    private func moveSelectedRule(offset: Int) {
+        guard let selectedRuleID,
+              let source = rules.firstIndex(where: { $0.id == selectedRuleID })
+        else { return }
+        let destination = max(0, min(rules.count - 1, source + offset))
+        guard source != destination else { return }
+        let rule = rules.remove(at: source)
+        rules.insert(rule, at: destination)
+        for index in rules.indices {
+            rules[index].priority = index
+        }
+        Task { @MainActor in
+            let nextID = destination + 1 < rules.count ? rules[destination + 1].id : nil
+            do {
+                try await proxyBackend.moveRule(id: selectedRuleID, before: nextID)
+            } catch {
+                ruleStatusMessage = error.localizedDescription
+            }
         }
     }
 

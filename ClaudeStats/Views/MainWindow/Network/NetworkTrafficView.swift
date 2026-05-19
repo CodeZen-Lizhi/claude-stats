@@ -17,6 +17,10 @@ struct NetworkTrafficView: View {
                 stackedLayout
             }
         }
+        .sheet(item: $store.replayDraft) { _ in
+            NetworkReplayEditor(store: store)
+                .frame(width: 720, height: 560)
+        }
     }
 
     private var sideBySideLayout: some View {
@@ -664,10 +668,50 @@ private struct NetworkPayloadPane: View {
                 Text("#\(flow.number)")
                     .font(.sora(10).monospacedDigit())
                     .foregroundStyle(Color.stxMuted)
+                if side == .request {
+                    actionButton(flow.isPinned ? "pin.slash" : "pin") {
+                        store.togglePinned(for: flow.id)
+                    }
+                    actionButton(flow.isSaved ? "tray.and.arrow.up.fill" : "tray.and.arrow.down") {
+                        store.toggleSaved(for: flow.id)
+                    }
+                    actionButton("arrow.clockwise") {
+                        store.prepareReplay(for: flow)
+                    }
+                    .disabled(flow.request.body.isTruncated)
+                    actionButton("doc.on.doc") {
+                        copy(content(for: flow))
+                    }
+                    Menu {
+                        Button("Copy URL") { copy(flow.request.url) }
+                        Button("Copy Headers") {
+                            copy(flow.request.headers.map { "\($0.name): \($0.value)" }.joined(separator: "\n"))
+                        }
+                        Button("Copy Body") { copy(flow.request.body.text) }
+                        Button("Copy as cURL") { copy(curl(for: flow)) }
+                        Button("Export HAR") { copy(har(for: flow)) }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Color.stxMuted)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .frame(width: 22, height: 22)
+                }
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
+    }
+
+    private func actionButton(_ systemName: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Color.stxMuted)
+                .frame(width: 20, height: 20)
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -710,12 +754,7 @@ private struct NetworkPayloadPane: View {
 
             StxRule()
 
-            Text(content(for: flow))
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(Color.primary.opacity(0.84))
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12)
+            payloadContentView(flow)
 
             if payloadBody(for: flow).isTruncated {
                 StxRule()
@@ -770,16 +809,57 @@ private struct NetworkPayloadPane: View {
 
     private func content(for flow: NetworkFlow) -> String {
         switch selectedTab.wrappedValue {
+        case .overview:
+            return overview(for: flow)
         case .header:
             return headers(for: flow).map { "\($0.name): \($0.value)" }.joined(separator: "\n").nonEmpty(or: "No headers")
         case .query:
             return queryString(for: flow).nonEmpty(or: "No query parameters")
+        case .cookies:
+            return cookies(for: flow).nonEmpty(or: "No cookies")
+        case .form:
+            return formBody(for: flow).nonEmpty(or: "No form body")
         case .body:
             return payloadBody(for: flow).text.nonEmpty(or: "No body")
+        case .preview:
+            return previewText(for: flow)
         case .raw:
             return raw(for: flow)
         case .json:
             return prettyJSON(payloadBody(for: flow).text).nonEmpty(or: "No JSON body")
+        case .webSocket:
+            return webSocketFrames(for: flow).nonEmpty(or: "No WebSocket frames")
+        case .timing:
+            return timing(for: flow)
+        }
+    }
+
+    @ViewBuilder
+    private func payloadContentView(_ flow: NetworkFlow) -> some View {
+        if selectedTab.wrappedValue == .preview,
+           let data = payloadBody(for: flow).data,
+           let contentType = payloadBody(for: flow).contentType?.lowercased(),
+           contentType.hasPrefix("image/"),
+           let image = NSImage(data: data)
+        {
+            VStack(alignment: .leading, spacing: 10) {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: 260, alignment: .leading)
+                Text(previewText(for: flow))
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(Color.primary.opacity(0.84))
+                    .textSelection(.enabled)
+            }
+            .padding(12)
+        } else {
+            Text(content(for: flow))
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(Color.primary.opacity(0.84))
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
         }
     }
 
@@ -797,6 +877,82 @@ private struct NetworkPayloadPane: View {
               let items = components.queryItems,
               !items.isEmpty else { return "" }
         return items.map { "\($0.name): \($0.value ?? "")" }.joined(separator: "\n")
+    }
+
+    private func overview(for flow: NetworkFlow) -> String {
+        [
+            "URL: \(flow.request.url)",
+            "Method: \(flow.request.method)",
+            "Status: \(flow.statusDisplay)",
+            "Protocol: \(flow.flowProtocol.rawValue)",
+            "Client: \(flow.clientName)",
+            "Domain: \(flow.domainDisplay)",
+            "Upstream: \(flow.upstreamProxy.summary)",
+            "Rule: \(flow.matchedRuleName ?? "-")",
+            "Duration: \(duration(flow))",
+            "Request: \(bytes(flow.requestBytes))",
+            "Response: \(bytes(flow.responseBytes))",
+        ].joined(separator: "\n")
+    }
+
+    private func cookies(for flow: NetworkFlow) -> String {
+        let relevantHeaders = side == .request
+            ? flow.request.headers.filter { $0.name.caseInsensitiveCompare("Cookie") == .orderedSame }
+            : flow.response.headers.filter { $0.name.caseInsensitiveCompare("Set-Cookie") == .orderedSame }
+        return relevantHeaders
+            .flatMap { header in
+                header.value.split(separator: side == .request ? ";" : ",").map {
+                    String($0).trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+            }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+    }
+
+    private func formBody(for flow: NetworkFlow) -> String {
+        let body = payloadBody(for: flow)
+        let contentType = body.contentType?.lowercased() ?? ""
+        guard contentType.contains("application/x-www-form-urlencoded") else {
+            return ""
+        }
+        var components = URLComponents()
+        components.percentEncodedQuery = body.text
+        return (components.queryItems ?? [])
+            .map { "\($0.name): \($0.value ?? "")" }
+            .joined(separator: "\n")
+    }
+
+    private func previewText(for flow: NetworkFlow) -> String {
+        let body = payloadBody(for: flow)
+        let type = body.contentType ?? "unknown"
+        if body.bytes == 0 { return "No preview" }
+        if type.lowercased().contains("json") {
+            return prettyJSON(body.text).nonEmpty(or: body.text)
+        }
+        if type.lowercased().hasPrefix("image/") {
+            return "\(type), \(bytes(body.bytes))"
+        }
+        if body.text.hasPrefix("<") {
+            return body.text
+        }
+        if body.data != nil, body.text.hasPrefix("<\(body.bytes) binary") {
+            return hexDump(body.data ?? Data())
+        }
+        return body.text
+    }
+
+    private func webSocketFrames(for flow: NetworkFlow) -> String {
+        flow.webSocketFrames.map { frame in
+            "[\(frame.timestamp.formatted(date: .omitted, time: .standard))] \(frame.direction.title) \(frame.opcode) \(bytes(frame.payloadBytes))\n\(frame.payloadText)"
+        }.joined(separator: "\n\n")
+    }
+
+    private func timing(for flow: NetworkFlow) -> String {
+        [
+            "Started: \(flow.createdAt.formatted(date: .abbreviated, time: .standard))",
+            "Completed: \(flow.completedAt?.formatted(date: .abbreviated, time: .standard) ?? "-")",
+            "Duration: \(duration(flow))",
+        ].joined(separator: "\n")
     }
 
     private func raw(for flow: NetworkFlow) -> String {
@@ -839,6 +995,183 @@ private struct NetworkPayloadPane: View {
             return ""
         }
         return output
+    }
+
+    private func hexDump(_ data: Data) -> String {
+        data.prefix(512).enumerated().map { offset, byte in
+            let separator = (offset + 1) % 16 == 0 ? "\n" : " "
+            return String(format: "%02X%@", byte, separator)
+        }.joined()
+    }
+
+    private func copy(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    private func curl(for flow: NetworkFlow) -> String {
+        var parts = ["curl", "-X", shellQuote(flow.request.method), shellQuote(flow.request.url)]
+        for header in flow.request.headers {
+            parts += ["-H", shellQuote("\(header.name): \(header.value)")]
+        }
+        if !flow.request.body.text.isEmpty {
+            parts += ["--data-raw", shellQuote(flow.request.body.text)]
+        }
+        return parts.joined(separator: " ")
+    }
+
+    private func har(for flow: NetworkFlow) -> String {
+        let object: [String: Any] = [
+            "log": [
+                "version": "1.2",
+                "creator": ["name": "Claude Stats", "version": "1.0"],
+                "entries": [[
+                    "startedDateTime": ISO8601DateFormatter().string(from: flow.createdAt),
+                    "time": flow.duration * 1_000,
+                    "request": [
+                        "method": flow.request.method,
+                        "url": flow.request.url,
+                        "httpVersion": flow.request.httpVersion,
+                        "headers": flow.request.headers.map { ["name": $0.name, "value": $0.value] },
+                        "queryString": [],
+                        "headersSize": -1,
+                        "bodySize": flow.requestBytes,
+                    ],
+                    "response": [
+                        "status": flow.response.statusCode ?? 0,
+                        "statusText": flow.response.reason,
+                        "httpVersion": "HTTP/1.1",
+                        "headers": flow.response.headers.map { ["name": $0.name, "value": $0.value] },
+                        "content": [
+                            "size": flow.responseBytes,
+                            "mimeType": flow.response.body.contentType ?? "",
+                            "text": flow.response.body.text,
+                        ],
+                        "redirectURL": "",
+                        "headersSize": -1,
+                        "bodySize": flow.responseBytes,
+                    ],
+                ]],
+            ],
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]),
+              let text = String(data: data, encoding: .utf8)
+        else { return "{}" }
+        return text
+    }
+
+    private func shellQuote(_ text: String) -> String {
+        "'\(text.replacingOccurrences(of: "'", with: "'\\''"))'"
+    }
+}
+
+private struct NetworkReplayEditor: View {
+    @Bindable var store: NetworkDebuggerStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("Edit and Resend", systemImage: "arrow.clockwise")
+                    .font(.sora(15, weight: .semibold))
+                Spacer()
+                Button("Cancel") {
+                    store.cancelReplay()
+                }
+                Button("Send") {
+                    store.performReplay()
+                }
+                .keyboardShortcut(.return, modifiers: [.command])
+                .disabled(store.isReplayWorking)
+            }
+
+            if store.replayDraft != nil {
+                HStack(spacing: 8) {
+                    TextField("Method", text: replayBinding(\.method))
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 96)
+                    TextField("URL", text: replayBinding(\.url))
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                Text("HEADERS")
+                    .font(.sora(10, weight: .semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(Color.stxMuted)
+
+                FadingScrollView {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(store.replayDraft?.headers ?? []) { header in
+                            HStack(spacing: 8) {
+                                TextField("Name", text: headerBinding(header.id, \.name))
+                                    .textFieldStyle(.roundedBorder)
+                                TextField("Value", text: headerBinding(header.id, \.value))
+                                    .textFieldStyle(.roundedBorder)
+                                Button {
+                                    removeHeader(header.id)
+                                } label: {
+                                    Image(systemName: "minus.circle")
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        Button {
+                            addHeader()
+                        } label: {
+                            Label("Add Header", systemImage: "plus.circle")
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+                .frame(height: 150)
+
+                Text("BODY")
+                    .font(.sora(10, weight: .semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(Color.stxMuted)
+
+                TextEditor(text: replayBinding(\.bodyText))
+                    .font(.system(size: 11, design: .monospaced))
+                    .scrollContentBackground(.hidden)
+                    .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
+            }
+        }
+        .padding(18)
+    }
+
+    private func replayBinding<Value>(_ keyPath: WritableKeyPath<NetworkReplayDraft, Value>) -> Binding<Value> {
+        Binding {
+            store.replayDraft?[keyPath: keyPath] ?? NetworkReplayDraft(
+                sourceFlowID: UUID(),
+                method: "GET",
+                url: "",
+                headers: [],
+                bodyText: "",
+                contentType: nil
+            )[keyPath: keyPath]
+        } set: { value in
+            guard store.replayDraft != nil else { return }
+            store.replayDraft?[keyPath: keyPath] = value
+        }
+    }
+
+    private func headerBinding(
+        _ id: String,
+        _ keyPath: WritableKeyPath<NetworkHeaderPair, String>
+    ) -> Binding<String> {
+        Binding {
+            store.replayDraft?.headers.first { $0.id == id }?[keyPath: keyPath] ?? ""
+        } set: { value in
+            guard let index = store.replayDraft?.headers.firstIndex(where: { $0.id == id }) else { return }
+            store.replayDraft?.headers[index][keyPath: keyPath] = value
+        }
+    }
+
+    private func addHeader() {
+        store.replayDraft?.headers.append(NetworkHeaderPair(name: "Header", value: ""))
+    }
+
+    private func removeHeader(_ id: String) {
+        store.replayDraft?.headers.removeAll { $0.id == id }
     }
 }
 

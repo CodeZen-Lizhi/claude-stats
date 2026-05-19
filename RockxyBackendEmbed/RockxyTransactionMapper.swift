@@ -15,8 +15,11 @@ enum RockxyTransactionMapper {
             sourcePort: transaction.sourcePort,
             clientApp: transaction.clientApp,
             matchedRuleName: transaction.matchedRuleName,
+            matchedRuleActionSummary: transaction.matchedRuleActionSummary,
+            matchedRulePattern: transaction.matchedRulePattern,
             upstreamProxySummary: transaction.upstreamProxySummary,
-            upstreamProxyKind: transaction.upstreamProxyKind
+            upstreamProxyKind: transaction.upstreamProxyKind,
+            webSocketFrames: transaction.webSocketConnection?.frames.map(capturedFrame(from:)) ?? []
         )
     }
 
@@ -54,6 +57,28 @@ enum RockxyTransactionMapper {
             .failed
         case .blocked:
             .blocked
+        }
+    }
+
+    private static func capturedFrame(from frame: WebSocketFrameData) -> RockxyWebSocketFrameSnapshot {
+        RockxyWebSocketFrameSnapshot(
+            id: frame.id,
+            timestamp: frame.timestamp,
+            direction: frame.direction == .sent ? .sent : .received,
+            opcode: opcodeName(frame.opcode),
+            payload: frame.payload,
+            isFinal: frame.isFinal
+        )
+    }
+
+    private static func opcodeName(_ opcode: FrameOpcode) -> String {
+        switch opcode {
+        case .continuation: "Continuation"
+        case .text: "Text"
+        case .binary: "Binary"
+        case .connectionClose: "Close"
+        case .ping: "Ping"
+        case .pong: "Pong"
         }
     }
 }

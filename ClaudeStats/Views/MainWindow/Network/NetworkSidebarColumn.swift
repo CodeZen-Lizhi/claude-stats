@@ -5,10 +5,30 @@ struct NetworkSidebarColumn: View {
     @Binding var section: NetworkSection
     var onExit: () -> Void
 
+    @State private var favoritesExpanded = true
+    @State private var appsExpanded = true
+    @State private var domainsExpanded = true
+    @State private var methodsExpanded = false
+    @State private var statusesExpanded = false
+    @State private var protocolsExpanded = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Color.clear.frame(height: 44)
 
+            if store.trafficSidebarLayer == .filters {
+                filtersSidebar
+            } else {
+                sectionsSidebar
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.bottom, 10)
+    }
+
+    private var sectionsSidebar: some View {
+        VStack(alignment: .leading, spacing: 0) {
             SidebarRow(title: "Back to App",
                        symbol: "chevron.left",
                        isSelected: false,
@@ -17,20 +37,178 @@ struct NetworkSidebarColumn: View {
             captureControls
                 .padding(.horizontal, 8)
                 .padding(.top, 10)
+                .padding(.bottom, 10)
 
-            sectionHeader("NETWORK")
+            trafficSplitRow
 
-            ForEach(NetworkSection.allCases) { item in
+            ForEach(NetworkSection.allCases.filter { $0 != .traffic }) { item in
                 SidebarRow(title: item.title,
                            symbol: item.symbol,
                            isSelected: section == item) {
                     section = item
                 }
             }
-
-            Spacer(minLength: 0)
         }
-        .padding(.bottom, 10)
+    }
+
+    private var filtersSidebar: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SidebarRow(title: "Back",
+                       symbol: "chevron.left",
+                       isSelected: false) {
+                store.trafficSidebarLayer = .sections
+            }
+
+            filterField
+                .padding(.horizontal, 12)
+                .padding(.top, 10)
+                .padding(.bottom, 8)
+
+            if !store.trafficFilter.isEmpty {
+                Button {
+                    store.resetTrafficFilters()
+                } label: {
+                    Label("Clear Filters", systemImage: "xmark.circle")
+                        .font(.sora(11, weight: .medium))
+                        .foregroundStyle(Color.stxMuted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 8)
+            }
+
+            FadingScrollView {
+                VStack(alignment: .leading, spacing: 6) {
+                    filterGroup(title: "Favorites", isExpanded: $favoritesExpanded) {
+                        filterLeaf(
+                            title: "Pinned",
+                            symbol: "pin.fill",
+                            count: store.pinnedTrafficCount,
+                            selected: store.trafficFilter.pinnedOnly,
+                            action: store.togglePinnedFilter
+                        )
+                        filterLeaf(
+                            title: "Saved",
+                            symbol: "tray.and.arrow.down",
+                            count: store.savedTrafficCount,
+                            selected: store.trafficFilter.savedOnly,
+                            action: store.toggleSavedFilter
+                        )
+                    }
+
+                    filterGroup(title: "Apps", isExpanded: $appsExpanded) {
+                        ForEach(store.trafficApps.prefix(20)) { item in
+                            filterLeaf(
+                                title: item.title,
+                                symbol: item.symbol,
+                                count: item.count,
+                                selected: store.trafficFilter.apps.contains(item.title)
+                            ) {
+                                store.toggleAppFilter(item.title)
+                            }
+                        }
+                    }
+
+                    filterGroup(title: "Domains", isExpanded: $domainsExpanded) {
+                        ForEach(store.trafficDomains.prefix(30)) { item in
+                            filterLeaf(
+                                title: item.title,
+                                symbol: item.symbol,
+                                count: item.count,
+                                selected: store.trafficFilter.domains.contains(item.title)
+                            ) {
+                                store.toggleDomainFilter(item.title)
+                            }
+                        }
+                    }
+
+                    filterGroup(title: "Methods", isExpanded: $methodsExpanded) {
+                        ForEach(store.trafficMethods) { item in
+                            filterLeaf(
+                                title: item.title,
+                                symbol: item.symbol,
+                                count: item.count,
+                                selected: store.trafficFilter.methods.contains(item.title)
+                            ) {
+                                store.toggleMethodFilter(item.title)
+                            }
+                        }
+                    }
+
+                    filterGroup(title: "Status", isExpanded: $statusesExpanded) {
+                        ForEach(NetworkTrafficStatusFilter.allCases) { status in
+                            filterLeaf(
+                                title: status.title,
+                                symbol: "number",
+                                count: store.statusCount(for: status),
+                                selected: store.trafficFilter.statuses.contains(status)
+                            ) {
+                                store.toggleStatusFilter(status)
+                            }
+                        }
+                    }
+
+                    filterGroup(title: "Protocols", isExpanded: $protocolsExpanded) {
+                        ForEach(NetworkFlowProtocol.allCases) { proto in
+                            filterLeaf(
+                                title: proto.rawValue,
+                                symbol: "point.3.connected.trianglepath.dotted",
+                                count: store.protocolCount(for: proto),
+                                selected: store.trafficFilter.protocols.contains(proto)
+                            ) {
+                                store.toggleProtocolFilter(proto)
+                            }
+                        }
+                    }
+                }
+                .padding(.bottom, 16)
+            }
+        }
+    }
+
+    private var trafficSplitRow: some View {
+        HStack(spacing: 4) {
+            Button {
+                section = .traffic
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: NetworkSection.traffic.symbol)
+                        .font(.system(size: 13, weight: .medium))
+                        .frame(width: 18)
+                        .foregroundStyle(section == .traffic ? Color.stxAccent : Color.stxMuted)
+                    Text(NetworkSection.traffic.title)
+                        .font(.sora(13))
+                        .foregroundStyle(section == .traffic ? .primary : Color.stxMuted)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background {
+                    if section == .traffic {
+                        RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.10))
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                section = .traffic
+                store.trafficSidebarLayer = .filters
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(Color.stxMuted)
+                    .frame(width: 26, height: 26)
+                    .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 6))
+            }
+            .buttonStyle(.plain)
+            .help("Open traffic filters")
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 1)
     }
 
     private var captureControls: some View {
@@ -65,37 +243,12 @@ struct NetworkSidebarColumn: View {
                 .disabled(store.flows.isEmpty)
                 .help("Clear traffic")
             }
-
-            filterField
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("PROTOCOL")
-                    .font(.sora(9, weight: .semibold))
-                    .tracking(0.8)
-                    .foregroundStyle(Color.stxMuted)
-                    .padding(.leading, 2)
-
-                LazyVGrid(columns: filterColumns, alignment: .leading, spacing: 6) {
-                    filterButton("All", protocol: nil)
-                    filterButton("HTTP", protocol: .http)
-                    filterButton("HTTPS", protocol: .https)
-                    filterButton("WebSocket", protocol: .webSocket)
-                    filterButton("Tunnel", protocol: .tunnel)
-                }
-            }
         }
         .padding(10)
         .background {
             RoundedRectangle(cornerRadius: 8)
                 .fill(Color.primary.opacity(0.045))
         }
-    }
-
-    private var filterColumns: [GridItem] {
-        [
-            GridItem(.flexible(minimum: 76), spacing: 6, alignment: .leading),
-            GridItem(.flexible(minimum: 76), spacing: 6, alignment: .leading)
-        ]
     }
 
     private var statusPill: some View {
@@ -137,34 +290,70 @@ struct NetworkSidebarColumn: View {
         .background(RoundedRectangle(cornerRadius: 7).fill(Color.primary.opacity(0.06)))
     }
 
-    private func filterButton(_ title: String, protocol proto: NetworkFlowProtocol?) -> some View {
-        let selected = store.selectedProtocol == proto
-        return Button {
-            store.selectedProtocol = proto
-        } label: {
-            Text(title)
-                .font(.sora(10, weight: selected ? .semibold : .medium))
-                .foregroundStyle(selected ? .primary : Color.stxMuted)
-                .lineLimit(1)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .frame(maxWidth: .infinity)
-                .background {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(selected ? Color.primary.opacity(0.12) : Color.primary.opacity(0.04))
+    private func filterGroup<Content: View>(
+        title: String,
+        isExpanded: Binding<Bool>,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Button {
+                isExpanded.wrappedValue.toggle()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .rotationEffect(.degrees(isExpanded.wrappedValue ? 90 : 0))
+                        .foregroundStyle(Color.stxMuted)
+                        .frame(width: 10)
+                    Text(title)
+                        .font(.sora(11, weight: .semibold))
+                        .foregroundStyle(Color.stxMuted)
+                    Spacer()
                 }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 4)
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded.wrappedValue {
+                content()
+            }
         }
-        .buttonStyle(.plain)
     }
 
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(.sora(10, weight: .semibold))
-            .tracking(1.0)
-            .foregroundStyle(Color.stxMuted)
-            .padding(.horizontal, 14)
-            .padding(.top, 14)
-            .padding(.bottom, 4)
+    private func filterLeaf(
+        title: String,
+        symbol: String,
+        count: Int,
+        selected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: symbol)
+                    .font(.system(size: 12, weight: .medium))
+                    .frame(width: 16)
+                    .foregroundStyle(selected ? Color.stxAccent : Color.stxMuted)
+                Text(title)
+                    .font(.sora(12, weight: selected ? .semibold : .medium))
+                    .lineLimit(1)
+                    .foregroundStyle(selected ? .primary : Color.stxMuted)
+                Spacer(minLength: 6)
+                Text("\(count)")
+                    .font(.sora(10).monospacedDigit())
+                    .foregroundStyle(Color.stxMuted)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+            .background {
+                if selected {
+                    RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.12))
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 8)
     }
 }
 

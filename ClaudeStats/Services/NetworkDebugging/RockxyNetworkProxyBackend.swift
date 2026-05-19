@@ -46,6 +46,96 @@ final class RockxyNetworkProxyBackend: NetworkProxyBackend, @unchecked Sendable 
         )
     }
 
+    func rules() async -> [NetworkRuleDraft] {
+        await backend.rules().map(\.networkRule)
+    }
+
+    func saveRule(_ rule: NetworkRuleDraft) async throws {
+        try await backend.saveRule(rule.rockxyRule)
+    }
+
+    func deleteRule(id: UUID) async throws {
+        try await backend.deleteRule(id: id)
+    }
+
+    func setRuleEnabled(id: UUID, enabled: Bool) async throws {
+        try await backend.setRuleEnabled(id: id, enabled: enabled)
+    }
+
+    func moveRule(id: UUID, before destinationID: UUID?) async throws {
+        try await backend.moveRule(id: id, before: destinationID)
+    }
+
+    func testRule(_ rule: NetworkRuleDraft, sampleURL: URL, method: String, headers: [NetworkHeaderPair]) async -> NetworkRuleMatchSnapshot {
+        let result = await backend.testRule(
+            rule.rockxyRule,
+            url: sampleURL,
+            method: method,
+            headers: headers.map { RockxyCapturedHeader(name: $0.name, value: $0.value) }
+        )
+        return NetworkRuleMatchSnapshot(matches: result.matches, message: result.message)
+    }
+
+    func exportRulesData() async throws -> Data {
+        try await backend.exportRulesData()
+    }
+
+    func importRulesData(_ data: Data) async throws {
+        try await backend.importRulesData(data)
+    }
+
+    func plugins() async -> [NetworkPluginItem] {
+        await backend.plugins().map(\.networkPlugin)
+    }
+
+    func installPlugin(at path: String) async throws {
+        try await backend.installPlugin(at: path)
+    }
+
+    func setPluginEnabled(id: String, enabled: Bool) async throws {
+        try await backend.setPluginEnabled(id: id, enabled: enabled)
+    }
+
+    func reloadPlugin(id: String) async throws {
+        try await backend.reloadPlugin(id: id)
+    }
+
+    func deletePlugin(id: String) async throws {
+        try await backend.deletePlugin(id: id)
+    }
+
+    func breakpoints() async -> [NetworkBreakpointItem] {
+        await backend.breakpoints().map(\.networkBreakpoint)
+    }
+
+    func updateBreakpoint(_ item: NetworkBreakpointItem) async {
+        await backend.updateBreakpoint(item.rockxyBreakpoint)
+    }
+
+    func resolveBreakpoint(id: UUID, decision: NetworkBreakpointDecision) async {
+        await backend.resolveBreakpoint(
+            id: id,
+            decision: RockxyBreakpointDecisionSnapshot(rawValue: decision.rawValue) ?? .execute
+        )
+    }
+
+    func replay(_ draft: NetworkReplayDraft) async throws -> NetworkFlow {
+        guard let url = URL(string: draft.url) else {
+            throw NetworkReplayError.invalidURL
+        }
+        let body = draft.bodyText.isEmpty ? nil : Data(draft.bodyText.utf8)
+        let result = try await backend.replay(RockxyReplayRequest(
+            method: draft.method,
+            url: url,
+            headers: draft.headers.map { RockxyCapturedHeader(name: $0.name, value: $0.value) },
+            body: body,
+            contentType: draft.contentType
+        ))
+        var flow = Self.flow(from: result.transaction, bodyLimit: bodyLimit)
+        flow.isReplay = true
+        return flow
+    }
+
     static func flow(from transaction: RockxyCapturedTransaction, bodyLimit: Int = 2 * 1024 * 1024) -> NetworkFlow {
         let requestBody = body(from: transaction.request.body, contentType: transaction.request.contentType, isTruncated: false, limit: bodyLimit)
         let response = transaction.response.map { response in
@@ -86,7 +176,11 @@ final class RockxyNetworkProxyBackend: NetworkProxyBackend, @unchecked Sendable 
             upstreamProxy: NetworkFlowUpstreamProxy(
                 kind: transaction.upstreamProxyKind ?? "Direct",
                 summary: transaction.upstreamProxySummary ?? "Direct"
-            )
+            ),
+            matchedRuleName: transaction.matchedRuleName,
+            matchedRuleSummary: transaction.matchedRuleActionSummary,
+            matchedRulePattern: transaction.matchedRulePattern,
+            webSocketFrames: transaction.webSocketFrames.map(Self.webSocketFrame(from:))
         )
     }
 
@@ -150,8 +244,35 @@ final class RockxyNetworkProxyBackend: NetworkProxyBackend, @unchecked Sendable 
             bytes: data.count,
             text: text,
             isTruncated: isTruncated || data.count > limit,
-            contentType: contentType
+            contentType: contentType,
+            data: Data(slice)
         )
+    }
+
+    private static func webSocketFrame(from frame: RockxyWebSocketFrameSnapshot) -> NetworkWebSocketFrame {
+        let payloadText = String(data: frame.payload, encoding: .utf8)
+            ?? String(data: frame.payload.prefix(512), encoding: .isoLatin1)
+            ?? "<\(frame.payload.count) binary bytes>"
+        return NetworkWebSocketFrame(
+            id: frame.id,
+            timestamp: frame.timestamp,
+            direction: frame.direction == .sent ? .sent : .received,
+            opcode: frame.opcode,
+            payloadText: payloadText,
+            payloadBytes: frame.payload.count,
+            isFinal: frame.isFinal
+        )
+    }
+}
+
+private enum NetworkReplayError: LocalizedError {
+    case invalidURL
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidURL:
+            "Replay URL is invalid."
+        }
     }
 }
 
@@ -194,5 +315,178 @@ private extension NetworkUpstreamProxyProtocol {
         case .pac:
             .pac
         }
+    }
+}
+
+private extension RockxyProxyRuleSnapshot {
+    var networkRule: NetworkRuleDraft {
+        NetworkRuleDraft(
+            id: id,
+            name: name,
+            isEnabled: isEnabled,
+            urlPattern: urlPattern,
+            method: NetworkRuleMatchMethod(rawValue: method.rawValue) ?? .any,
+            headerName: headerName ?? "",
+            headerValue: headerValue ?? "",
+            priority: priority,
+            action: action.networkAction,
+            lastError: lastError
+        )
+    }
+}
+
+private extension NetworkRuleDraft {
+    var rockxyRule: RockxyProxyRuleSnapshot {
+        RockxyProxyRuleSnapshot(
+            id: id,
+            name: name,
+            isEnabled: isEnabled,
+            urlPattern: urlPattern,
+            method: RockxyRuleMatchMethod(rawValue: method.rawValue) ?? .any,
+            headerName: headerName.nilIfBlank,
+            headerValue: headerValue.nilIfBlank,
+            priority: priority,
+            action: action.rockxyAction,
+            lastError: lastError
+        )
+    }
+}
+
+private extension RockxyRuleActionSnapshot {
+    var networkAction: NetworkRuleActionDraft {
+        NetworkRuleActionDraft(
+            kind: NetworkRuleActionKind(rawValue: kind.rawValue) ?? .block,
+            blockStatusCode: blockStatusCode,
+            mapLocalPath: mapLocalPath,
+            mapLocalStatusCode: mapLocalStatusCode,
+            mapLocalIsDirectory: mapLocalIsDirectory,
+            mapRemoteScheme: mapRemoteScheme ?? "https",
+            mapRemoteHost: mapRemoteHost ?? "",
+            mapRemotePortText: mapRemotePort.map(String.init) ?? "",
+            mapRemotePath: mapRemotePath ?? "",
+            mapRemoteQuery: mapRemoteQuery ?? "",
+            mapRemotePreserveHostHeader: mapRemotePreserveHostHeader,
+            headerOperations: headerOperations.map(\.networkOperation).nonEmpty(or: [NetworkHeaderOperationDraft()]),
+            throttleDelayMs: throttleDelayMs,
+            networkConditionName: networkConditionPreset,
+            networkConditionDelayMs: networkConditionDelayMs,
+            breakpointPhase: NetworkBreakpointPhase(rawValue: breakpointPhase.rawValue) ?? .both,
+            scriptMode: NetworkScriptRuleMode(rawValue: scriptMode.rawValue) ?? .transform,
+            scriptSource: scriptSource,
+            scriptRunOnRequest: scriptRunOnRequest,
+            scriptRunOnResponse: scriptRunOnResponse
+        )
+    }
+}
+
+private extension NetworkRuleActionDraft {
+    var rockxyAction: RockxyRuleActionSnapshot {
+        RockxyRuleActionSnapshot(
+            kind: RockxyRuleActionKind(rawValue: kind.rawValue) ?? .block,
+            blockStatusCode: blockStatusCode,
+            mapLocalPath: mapLocalPath,
+            mapLocalStatusCode: mapLocalStatusCode,
+            mapLocalIsDirectory: mapLocalIsDirectory,
+            mapRemoteScheme: mapRemoteScheme.nilIfBlank,
+            mapRemoteHost: mapRemoteHost.nilIfBlank,
+            mapRemotePort: Int(mapRemotePortText),
+            mapRemotePath: mapRemotePath.nilIfBlank,
+            mapRemoteQuery: mapRemoteQuery.nilIfBlank,
+            mapRemotePreserveHostHeader: mapRemotePreserveHostHeader,
+            headerOperations: headerOperations.map(\.rockxyOperation),
+            throttleDelayMs: throttleDelayMs,
+            networkConditionPreset: networkConditionName,
+            networkConditionDelayMs: networkConditionDelayMs,
+            breakpointPhase: RockxyBreakpointPhaseSnapshot(rawValue: breakpointPhase.rawValue) ?? .both,
+            scriptMode: RockxyScriptRuleMode(rawValue: scriptMode.rawValue) ?? .transform,
+            scriptSource: scriptSource,
+            scriptRunOnRequest: scriptRunOnRequest,
+            scriptRunOnResponse: scriptRunOnResponse
+        )
+    }
+}
+
+private extension RockxyRuleHeaderOperationSnapshot {
+    var networkOperation: NetworkHeaderOperationDraft {
+        NetworkHeaderOperationDraft(
+            id: id,
+            kind: NetworkHeaderOperationKind(rawValue: kind.rawValue) ?? .add,
+            phase: NetworkHeaderOperationPhase(rawValue: phase.rawValue) ?? .request,
+            name: name,
+            value: value
+        )
+    }
+}
+
+private extension NetworkHeaderOperationDraft {
+    var rockxyOperation: RockxyRuleHeaderOperationSnapshot {
+        RockxyRuleHeaderOperationSnapshot(
+            id: id,
+            kind: RockxyRuleHeaderOperationKind(rawValue: kind.rawValue) ?? .add,
+            phase: RockxyRuleHeaderOperationPhase(rawValue: phase.rawValue) ?? .request,
+            name: name,
+            value: value
+        )
+    }
+}
+
+private extension RockxyBreakpointItemSnapshot {
+    var networkBreakpoint: NetworkBreakpointItem {
+        NetworkBreakpointItem(
+            id: id,
+            phase: NetworkBreakpointPhase(rawValue: phase.rawValue) ?? .request,
+            method: method,
+            url: url,
+            headers: headers.map { NetworkHeaderPair(name: $0.name, value: $0.value) },
+            body: body,
+            statusCode: statusCode,
+            createdAt: createdAt
+        )
+    }
+}
+
+private extension NetworkBreakpointItem {
+    var rockxyBreakpoint: RockxyBreakpointItemSnapshot {
+        RockxyBreakpointItemSnapshot(
+            id: id,
+            phase: RockxyBreakpointPhaseSnapshot(rawValue: phase.rawValue) ?? .request,
+            method: method,
+            url: url,
+            headers: headers.map { RockxyCapturedHeader(name: $0.name, value: $0.value) },
+            body: body,
+            statusCode: statusCode,
+            createdAt: createdAt
+        )
+    }
+}
+
+private extension RockxyPluginSnapshot {
+    var networkPlugin: NetworkPluginItem {
+        NetworkPluginItem(
+            id: id,
+            name: name,
+            version: version,
+            author: author,
+            summary: summary,
+            bundlePath: bundlePath,
+            isEnabled: isEnabled,
+            status: NetworkPluginStatus(rawValue: status.rawValue) ?? .disabled,
+            statusMessage: statusMessage,
+            lastError: lastError,
+            configurationFields: configurationFields
+        )
+    }
+}
+
+private extension String {
+    var nilIfBlank: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
+private extension Array {
+    func nonEmpty(or fallback: [Element]) -> [Element] {
+        isEmpty ? fallback : self
     }
 }

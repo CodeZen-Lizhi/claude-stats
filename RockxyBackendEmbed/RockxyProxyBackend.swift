@@ -5,7 +5,11 @@ public actor RockxyProxyBackend {
 
     private var proxyServer: ProxyServer?
     private var eventHandler: EventHandler?
-    private let sequenceCounter = RockxySequenceCounter()
+    let sequenceCounter = RockxySequenceCounter()
+    let ruleEngine = RuleEngine()
+    let ruleStore = RuleStore()
+    let pluginManager = PluginManager.shared
+    var currentUpstreamProxy: RockxyUpstreamProxyConfiguration = .disabled
 
     public init() {}
 
@@ -41,6 +45,7 @@ public actor RockxyProxyBackend {
     }
 
     public func updateUpstreamProxy(_ configuration: RockxyUpstreamProxyConfiguration) async {
+        currentUpstreamProxy = configuration
         guard let server = proxyServer else { return }
         await server.updateUpstreamProxy(configuration.internalConfiguration)
     }
@@ -77,17 +82,22 @@ public actor RockxyProxyBackend {
     private func start(on port: UInt16, eventHandler: @escaping EventHandler) async throws -> RockxyProxyEndpoint {
         let endpoint = RockxyProxyEndpoint(host: "127.0.0.1", port: port)
         let sequenceCounter = sequenceCounter
+        try? await ruleEngine.loadRules(from: ruleStore)
+        await pluginManager.ensureLoadedOnce()
         let server = ProxyServer(
             configuration: ProxyConfiguration(port: Int(port), listenAddress: endpoint.host, listenIPv6: false),
             certificateManager: .shared,
-            ruleEngine: RuleEngine(),
-            scriptPluginManager: nil,
+            ruleEngine: ruleEngine,
+            scriptPluginManager: pluginManager.scriptManager,
             onTransactionComplete: { transaction in
                 let captured = RockxyTransactionMapper.captured(
                     from: transaction,
                     sequenceNumber: sequenceCounter.next()
                 )
                 eventHandler(.transaction(captured))
+            },
+            onBreakpointHit: { data in
+                await BreakpointManager.shared.enqueueAndWait(data)
             }
         )
 
@@ -151,7 +161,7 @@ private extension RockxyUpstreamProxyKind {
     }
 }
 
-private final class RockxySequenceCounter: @unchecked Sendable {
+final class RockxySequenceCounter: @unchecked Sendable {
     private let lock = NSLock()
     private var value = 0
 

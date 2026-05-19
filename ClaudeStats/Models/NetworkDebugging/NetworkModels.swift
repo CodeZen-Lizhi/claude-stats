@@ -1,17 +1,30 @@
 import Foundation
 
-enum NetworkSection: String, CaseIterable, Identifiable, Sendable {
+enum NetworkSection: String, CaseIterable, Identifiable, Sendable, Hashable {
     case traffic
-    case setup
+    case proxy
+    case helper
+    case upstream
     case certificates
     case rules
 
     var id: String { rawValue }
 
+    init(storedRawValue: String) {
+        switch storedRawValue {
+        case "setup":
+            self = .proxy
+        default:
+            self = NetworkSection(rawValue: storedRawValue) ?? .traffic
+        }
+    }
+
     var title: String {
         switch self {
         case .traffic: "Traffic"
-        case .setup: "Setup"
+        case .proxy: "Proxy"
+        case .helper: "Helper"
+        case .upstream: "Upstream"
         case .certificates: "Certificates"
         case .rules: "Rules"
         }
@@ -20,11 +33,18 @@ enum NetworkSection: String, CaseIterable, Identifiable, Sendable {
     var symbol: String {
         switch self {
         case .traffic: "list.bullet.rectangle"
-        case .setup: "network"
+        case .proxy: "network"
+        case .helper: "wrench.and.screwdriver"
+        case .upstream: "arrow.triangle.branch"
         case .certificates: "checkmark.shield"
         case .rules: "slider.horizontal.3"
         }
     }
+}
+
+enum NetworkTrafficSidebarLayer: String, Sendable {
+    case sections
+    case filters
 }
 
 enum NetworkResolvedTrafficLayout: String, Sendable, Equatable {
@@ -103,36 +123,122 @@ enum NetworkInspectorSide: String, CaseIterable, Identifiable, Sendable, Hashabl
 }
 
 enum NetworkInspectorTab: String, CaseIterable, Identifiable, Sendable {
+    case overview
     case header
     case query
+    case cookies
+    case form
     case body
+    case preview
     case raw
     case json
+    case webSocket
+    case timing
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
+        case .overview: "Overview"
         case .header: "Header"
         case .query: "Query"
+        case .cookies: "Cookies"
+        case .form: "Form"
         case .body: "Body"
+        case .preview: "Preview"
         case .raw: "Raw"
         case .json: "JSON"
+        case .webSocket: "Frames"
+        case .timing: "Timing"
         }
     }
 }
 
-enum NetworkFlowProtocol: String, Sendable {
+enum NetworkFlowProtocol: String, CaseIterable, Identifiable, Sendable, Hashable {
     case http = "HTTP"
     case https = "HTTPS"
     case webSocket = "WebSocket"
     case tunnel = "Tunnel"
+
+    var id: String { rawValue }
 }
 
-enum NetworkFlowState: String, Sendable {
+enum NetworkFlowState: String, Sendable, Hashable {
     case active
     case completed
     case failed
+}
+
+enum NetworkTrafficStatusFilter: String, CaseIterable, Identifiable, Sendable, Hashable {
+    case informational
+    case success
+    case redirect
+    case clientError
+    case serverError
+    case active
+    case failed
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .informational: "1xx"
+        case .success: "2xx"
+        case .redirect: "3xx"
+        case .clientError: "4xx"
+        case .serverError: "5xx"
+        case .active: "Active"
+        case .failed: "Failed"
+        }
+    }
+
+    func matches(_ flow: NetworkFlow) -> Bool {
+        switch self {
+        case .active:
+            return flow.state == .active
+        case .failed:
+            return flow.state == .failed
+        case .informational:
+            return (flow.response.statusCode ?? -1) >= 100 && (flow.response.statusCode ?? -1) < 200
+        case .success:
+            return (flow.response.statusCode ?? -1) >= 200 && (flow.response.statusCode ?? -1) < 300
+        case .redirect:
+            return (flow.response.statusCode ?? -1) >= 300 && (flow.response.statusCode ?? -1) < 400
+        case .clientError:
+            return (flow.response.statusCode ?? -1) >= 400 && (flow.response.statusCode ?? -1) < 500
+        case .serverError:
+            return (flow.response.statusCode ?? -1) >= 500 && (flow.response.statusCode ?? -1) < 600
+        }
+    }
+}
+
+struct NetworkTrafficFilter: Sendable, Equatable {
+    var query: String = ""
+    var protocols: Set<NetworkFlowProtocol> = []
+    var apps: Set<String> = []
+    var domains: Set<String> = []
+    var methods: Set<String> = []
+    var statuses: Set<NetworkTrafficStatusFilter> = []
+    var pinnedOnly = false
+    var savedOnly = false
+
+    var isEmpty: Bool {
+        query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && protocols.isEmpty
+            && apps.isEmpty
+            && domains.isEmpty
+            && methods.isEmpty
+            && statuses.isEmpty
+            && !pinnedOnly
+            && !savedOnly
+    }
+}
+
+struct NetworkTrafficFilterGroup: Identifiable, Sendable, Hashable {
+    var id: String
+    var title: String
+    var symbol: String
+    var count: Int
 }
 
 enum NetworkUpstreamProxyMode: String, CaseIterable, Identifiable, Sendable {
@@ -249,8 +355,31 @@ struct NetworkBody: Sendable, Hashable {
     var text: String
     var isTruncated: Bool
     var contentType: String?
+    var data: Data?
 
-    static let empty = NetworkBody(bytes: 0, text: "", isTruncated: false, contentType: nil)
+    init(bytes: Int, text: String, isTruncated: Bool, contentType: String?, data: Data? = nil) {
+        self.bytes = bytes
+        self.text = text
+        self.isTruncated = isTruncated
+        self.contentType = contentType
+        self.data = data
+    }
+
+    static let empty = NetworkBody(bytes: 0, text: "", isTruncated: false, contentType: nil, data: nil)
+}
+
+struct NetworkCookie: Identifiable, Sendable, Hashable {
+    let id: String
+    var name: String
+    var value: String
+    var attributes: [String: String]
+
+    init(name: String, value: String, attributes: [String: String] = [:]) {
+        self.id = "\(name)=\(value)"
+        self.name = name
+        self.value = value
+        self.attributes = attributes
+    }
 }
 
 struct NetworkRequestCapture: Sendable, Hashable {
@@ -279,6 +408,34 @@ struct NetworkResponseCapture: Sendable, Hashable {
     static let empty = NetworkResponseCapture(statusCode: nil, reason: "", headers: [], body: .empty)
 }
 
+enum NetworkWebSocketFrameDirection: String, Sendable, Hashable {
+    case sent
+    case received
+
+    var title: String {
+        switch self {
+        case .sent: "Sent"
+        case .received: "Received"
+        }
+    }
+}
+
+struct NetworkWebSocketFrame: Identifiable, Sendable, Hashable {
+    var id: UUID
+    var timestamp: Date
+    var direction: NetworkWebSocketFrameDirection
+    var opcode: String
+    var payloadText: String
+    var payloadBytes: Int
+    var isFinal: Bool
+}
+
+struct NetworkFlowTiming: Sendable, Hashable {
+    var startedAt: Date
+    var completedAt: Date?
+    var duration: TimeInterval
+}
+
 struct NetworkFlow: Identifiable, Sendable, Hashable {
     var id: UUID
     var number: Int
@@ -295,6 +452,13 @@ struct NetworkFlow: Identifiable, Sendable, Hashable {
     var isEdited: Bool
     var errorDescription: String?
     var upstreamProxy: NetworkFlowUpstreamProxy = .direct
+    var matchedRuleName: String?
+    var matchedRuleSummary: String?
+    var matchedRulePattern: String?
+    var webSocketFrames: [NetworkWebSocketFrame] = []
+    var isPinned: Bool = false
+    var isSaved: Bool = false
+    var isReplay: Bool = false
 
     var duration: TimeInterval {
         (completedAt ?? Date()).timeIntervalSince(createdAt)
@@ -308,6 +472,17 @@ struct NetworkFlow: Identifiable, Sendable, Hashable {
     }
 
     var urlDisplay: String { request.url }
+
+    var domainDisplay: String {
+        if let host = URL(string: request.url)?.host, !host.isEmpty { return host }
+        return request.host.isEmpty ? "Unknown" : request.host
+    }
+
+    var methodDisplay: String { request.method.uppercased() }
+
+    var timing: NetworkFlowTiming {
+        NetworkFlowTiming(startedAt: createdAt, completedAt: completedAt, duration: duration)
+    }
 
     static func placeholder(now: Date = .now) -> [NetworkFlow] {
         [
@@ -369,6 +544,210 @@ struct NetworkFlow: Identifiable, Sendable, Hashable {
             ),
         ]
     }
+}
+
+enum NetworkRuleActionKind: String, CaseIterable, Identifiable, Sendable, Codable, Hashable {
+    case block
+    case mapLocal
+    case mapRemote
+    case modifyHeaders
+    case throttle
+    case networkCondition
+    case breakpoint
+    case script
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .block: "Block"
+        case .mapLocal: "Map Local"
+        case .mapRemote: "Map Remote"
+        case .modifyHeaders: "Modify Headers"
+        case .throttle: "Throttle"
+        case .networkCondition: "Network Condition"
+        case .breakpoint: "Breakpoint"
+        case .script: "Script"
+        }
+    }
+}
+
+enum NetworkRuleMatchMethod: String, CaseIterable, Identifiable, Sendable, Codable, Hashable {
+    case any = "ANY"
+    case get = "GET"
+    case post = "POST"
+    case put = "PUT"
+    case patch = "PATCH"
+    case delete = "DELETE"
+    case head = "HEAD"
+    case options = "OPTIONS"
+
+    var id: String { rawValue }
+}
+
+enum NetworkHeaderOperationKind: String, CaseIterable, Identifiable, Sendable, Codable, Hashable {
+    case add
+    case remove
+    case replace
+
+    var id: String { rawValue }
+}
+
+enum NetworkHeaderOperationPhase: String, CaseIterable, Identifiable, Sendable, Codable, Hashable {
+    case request
+    case response
+    case both
+
+    var id: String { rawValue }
+}
+
+struct NetworkHeaderOperationDraft: Identifiable, Sendable, Hashable, Codable {
+    var id: UUID = UUID()
+    var kind: NetworkHeaderOperationKind = .add
+    var phase: NetworkHeaderOperationPhase = .request
+    var name: String = ""
+    var value: String = ""
+}
+
+enum NetworkBreakpointPhase: String, CaseIterable, Identifiable, Sendable, Codable, Hashable {
+    case request
+    case response
+    case both
+
+    var id: String { rawValue }
+}
+
+enum NetworkScriptRuleMode: String, CaseIterable, Identifiable, Sendable, Codable, Hashable {
+    case transform
+    case mock
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .transform: "Transform"
+        case .mock: "Mock"
+        }
+    }
+}
+
+enum NetworkBreakpointDecision: String, CaseIterable, Identifiable, Sendable, Hashable {
+    case execute
+    case abort
+    case cancel
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .execute: "Continue"
+        case .abort: "Drop"
+        case .cancel: "Cancel"
+        }
+    }
+}
+
+struct NetworkRuleActionDraft: Sendable, Hashable, Codable {
+    var kind: NetworkRuleActionKind = .block
+    var blockStatusCode: Int = 403
+    var mapLocalPath: String = ""
+    var mapLocalStatusCode: Int = 200
+    var mapLocalIsDirectory = false
+    var mapRemoteScheme: String = "https"
+    var mapRemoteHost: String = ""
+    var mapRemotePortText: String = ""
+    var mapRemotePath: String = ""
+    var mapRemoteQuery: String = ""
+    var mapRemotePreserveHostHeader = false
+    var headerOperations: [NetworkHeaderOperationDraft] = [NetworkHeaderOperationDraft()]
+    var throttleDelayMs: Int = 500
+    var networkConditionName: String = "Slow 3G"
+    var networkConditionDelayMs: Int = 1_000
+    var breakpointPhase: NetworkBreakpointPhase = .both
+    var scriptMode: NetworkScriptRuleMode = .transform
+    var scriptSource: String = """
+function onRequest(ctx) {
+  return ctx;
+}
+"""
+    var scriptRunOnRequest = true
+    var scriptRunOnResponse = true
+}
+
+struct NetworkRuleDraft: Identifiable, Sendable, Hashable, Codable {
+    var id: UUID = UUID()
+    var name: String = "New Rule"
+    var isEnabled = true
+    var urlPattern: String = ".*"
+    var method: NetworkRuleMatchMethod = .any
+    var headerName: String = ""
+    var headerValue: String = ""
+    var priority: Int = 0
+    var action: NetworkRuleActionDraft = NetworkRuleActionDraft()
+    var lastError: String?
+
+    var summary: String {
+        "\(action.kind.title) · \(method.rawValue) · \(urlPattern)"
+    }
+}
+
+struct NetworkRuleMatchSnapshot: Sendable, Equatable {
+    var matches: Bool
+    var message: String
+}
+
+struct NetworkBreakpointItem: Identifiable, Sendable, Hashable {
+    var id: UUID
+    var phase: NetworkBreakpointPhase
+    var method: String
+    var url: String
+    var headers: [NetworkHeaderPair]
+    var body: String
+    var statusCode: Int?
+    var createdAt: Date
+
+    var title: String {
+        "\(method.uppercased()) \(URL(string: url)?.host ?? url)"
+    }
+}
+
+enum NetworkPluginStatus: String, Sendable, Hashable {
+    case active
+    case disabled
+    case loading
+    case error
+}
+
+struct NetworkPluginItem: Identifiable, Sendable, Hashable {
+    var id: String
+    var name: String
+    var version: String
+    var author: String
+    var summary: String
+    var bundlePath: String
+    var isEnabled: Bool
+    var status: NetworkPluginStatus
+    var statusMessage: String
+    var lastError: String?
+    var configurationFields: [String: String]
+}
+
+struct NetworkReplayDraft: Identifiable, Sendable, Hashable {
+    var id = UUID()
+    var sourceFlowID: UUID
+    var method: String
+    var url: String
+    var headers: [NetworkHeaderPair]
+    var bodyText: String
+    var contentType: String?
+}
+
+struct NetworkPayloadRenderResult: Sendable, Hashable {
+    var title: String
+    var text: String
+    var isBinary: Bool
+    var imageData: Data?
+    var errorMessage: String?
 }
 
 struct NetworkProxyEndpoint: Sendable, Hashable {

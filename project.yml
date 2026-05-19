@@ -141,16 +141,18 @@ targets:
       - path: ThirdParty/Rockxy/Shared/ConnectionValidator.swift
       - path: ThirdParty/Rockxy/Rockxy/Core/Services/Infrastructure/AppNotifications.swift
       - path: ThirdParty/Rockxy/Rockxy/Models/Network
-        excludes:
-          - SessionCodable.swift
+      - path: ThirdParty/Rockxy/Rockxy/Models/Log
+      - path: ThirdParty/Rockxy/Rockxy/Models/Plugins
       - path: ThirdParty/Rockxy/Rockxy/Models/Rules
       - path: ThirdParty/Rockxy/Rockxy/Models/Settings
       - path: ThirdParty/Rockxy/Rockxy/Core/Detection
+      - path: ThirdParty/Rockxy/Rockxy/Core/Storage/AppSettingsStorage.swift
       - path: ThirdParty/Rockxy/Rockxy/Core/Utilities
         excludes:
           - PreviewRenderer.swift
           - RequestCopyFormatter.swift
       - path: ThirdParty/Rockxy/Rockxy/Core/RuleEngine
+      - path: ThirdParty/Rockxy/Rockxy/Core/Plugins
       - path: ThirdParty/Rockxy/Rockxy/Core/Certificate
         excludes:
           - CertificateMenuActionRouter.swift
@@ -177,6 +179,7 @@ targets:
       - package: SwiftCrypto
         product: Crypto
       - sdk: AppKit.framework
+      - sdk: JavaScriptCore.framework
       - sdk: Security.framework
       - sdk: ServiceManagement.framework
     settings:

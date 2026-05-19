@@ -31,27 +31,6 @@ struct BreakpointRequestData {
     }
 }
 
-enum RequestHookOutcome {
-    case forward(HTTPRequestData)
-    case blockLocally
-    case mock(HTTPResponseData)
-    case mockFailure
-}
-
-actor ScriptPluginManager {
-    func runRequestHook(on request: HTTPRequestData) async -> RequestHookOutcome {
-        .forward(request)
-    }
-
-    func runResponseHook(request: HTTPRequestData, response: HTTPResponseData) async -> HTTPResponseData {
-        response
-    }
-
-    nonisolated func hasResponseHookForSnapshot(request _: HTTPRequestData) -> Bool {
-        false
-    }
-}
-
 enum Theme {
     enum Highlight {
         static let redNS = NSColor.systemRed

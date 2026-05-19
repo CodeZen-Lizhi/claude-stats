@@ -6,6 +6,20 @@ import Testing
 @Suite("Network Debugging")
 @MainActor
 struct NetworkDebuggingTests {
+    @Test("Network sections migrate legacy setup and expose six primary entries")
+    func networkSectionsMigrateLegacySetup() {
+        #expect(NetworkSection(storedRawValue: "setup") == .proxy)
+        #expect(NetworkSection(storedRawValue: "missing") == .traffic)
+        #expect(NetworkSection.allCases.map(\.title) == [
+            "Traffic",
+            "Proxy",
+            "Helper",
+            "Upstream",
+            "Certificates",
+            "Rules",
+        ])
+    }
+
     @Test("Rockxy transaction maps to NetworkFlow")
     func rockxyTransactionMapsToNetworkFlow() throws {
         let id = UUID()
@@ -65,6 +79,55 @@ struct NetworkDebuggingTests {
         #expect(flow.errorDescription == nil)
         #expect(flow.upstreamProxy.kind == "HTTP")
         #expect(flow.upstreamProxy.summary == "HTTP 127.0.0.1:6152")
+    }
+
+    @Test("Rockxy websocket frames and matched rule metadata map to NetworkFlow")
+    func rockxyWebSocketFramesAndRulesMapToNetworkFlow() throws {
+        let frameID = UUID()
+        let transaction = RockxyCapturedTransaction(
+            id: UUID(),
+            sequenceNumber: 12,
+            timestamp: Date(timeIntervalSince1970: 1_700_000_200),
+            measuredDuration: 0.25,
+            request: RockxyCapturedRequest(
+                method: "GET",
+                url: try #require(URL(string: "ws://stream.example.test/socket")),
+                httpVersion: "HTTP/1.1",
+                headers: [RockxyCapturedHeader(name: "Host", value: "stream.example.test")],
+                body: nil,
+                contentType: nil
+            ),
+            response: nil,
+            state: .active,
+            isTLSFailure: false,
+            isWebSocket: true,
+            sourcePort: 52_001,
+            clientApp: "curl",
+            matchedRuleName: "mock-stream",
+            matchedRuleActionSummary: "Mock Script",
+            matchedRulePattern: "stream.example.test",
+            webSocketFrames: [
+                RockxyWebSocketFrameSnapshot(
+                    id: frameID,
+                    timestamp: Date(timeIntervalSince1970: 1_700_000_201),
+                    direction: .received,
+                    opcode: "text",
+                    payload: Data("hello".utf8),
+                    isFinal: true
+                ),
+            ]
+        )
+
+        let flow = RockxyNetworkProxyBackend.flow(from: transaction)
+
+        #expect(flow.flowProtocol == .webSocket)
+        #expect(flow.matchedRuleName == "mock-stream")
+        #expect(flow.matchedRuleSummary == "Mock Script")
+        #expect(flow.matchedRulePattern == "stream.example.test")
+        #expect(flow.webSocketFrames.count == 1)
+        #expect(flow.webSocketFrames.first?.id == frameID)
+        #expect(flow.webSocketFrames.first?.direction == .received)
+        #expect(flow.webSocketFrames.first?.payloadText == "hello")
     }
 
     @Test("Rockxy tunnel websocket and blocked states map safely")
@@ -293,6 +356,69 @@ struct NetworkDebuggingTests {
         #expect(settings?.excludeHosts == ["*.local"])
     }
 
+    @Test("Traffic filters compose favorites apps domains methods status and protocols")
+    func trafficFiltersCompose() {
+        let firstID = UUID()
+        let secondID = UUID()
+        let store = NetworkDebuggerStore(
+            preferences: Preferences(defaults: makeDefaults()),
+            proxyBackend: FakeNetworkProxyBackend(),
+            systemProxyService: FakeSystemProxyService()
+        )
+        store.flows = [
+            makeFlow(
+                id: firstID,
+                number: 1,
+                clientName: "curl",
+                method: "GET",
+                url: "https://api.example.test/v1/messages",
+                protocol: .https,
+                statusCode: 200,
+                isPinned: true
+            ),
+            makeFlow(
+                id: secondID,
+                number: 2,
+                clientName: "Google Chrome",
+                method: "POST",
+                url: "http://docs.example.test/form",
+                protocol: .http,
+                statusCode: 404,
+                isSaved: true
+            ),
+            makeFlow(
+                number: 3,
+                clientName: "curl",
+                method: "GET",
+                url: "ws://api.example.test/socket",
+                protocol: .webSocket,
+                statusCode: nil,
+                state: .active
+            ),
+        ]
+
+        #expect(store.trafficApps.first { $0.id == "curl" }?.count == 2)
+        #expect(store.trafficDomains.first { $0.id == "api.example.test" }?.count == 2)
+        #expect(store.trafficMethods.first { $0.id == "GET" }?.count == 2)
+        #expect(store.statusCount(for: .success) == 1)
+        #expect(store.statusCount(for: .clientError) == 1)
+        #expect(store.protocolCount(for: .webSocket) == 1)
+        #expect(store.pinnedTrafficCount == 1)
+        #expect(store.savedTrafficCount == 1)
+
+        store.toggleAppFilter("curl")
+        store.toggleDomainFilter("api.example.test")
+        store.toggleMethodFilter("GET")
+        store.toggleStatusFilter(.success)
+        store.toggleProtocolFilter(.https)
+
+        #expect(store.filteredFlows.map(\.id) == [firstID])
+
+        store.resetTrafficFilters()
+        store.toggleSavedFilter()
+        #expect(store.filteredFlows.map(\.id) == [secondID])
+    }
+
     @Test("Helper snapshot maps to network helper state")
     func helperSnapshotMapsToNetworkHelperState() {
         let snapshot = makeHelperSnapshot(
@@ -472,6 +598,44 @@ struct NetworkDebuggingTests {
             sourcePort: nil,
             clientApp: nil,
             matchedRuleName: nil
+        )
+    }
+
+    private func makeFlow(
+        id: UUID = UUID(),
+        number: Int = 1,
+        clientName: String,
+        method: String,
+        url: String,
+        protocol flowProtocol: NetworkFlowProtocol,
+        statusCode: Int?,
+        state: NetworkFlowState = .completed,
+        isPinned: Bool = false,
+        isSaved: Bool = false
+    ) -> NetworkFlow {
+        NetworkFlow(
+            id: id,
+            number: number,
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000 + TimeInterval(number)),
+            completedAt: state == .completed ? Date(timeIntervalSince1970: 1_700_000_000 + TimeInterval(number) + 0.1) : nil,
+            clientName: clientName,
+            flowProtocol: flowProtocol,
+            state: state,
+            request: NetworkRequestCapture(
+                method: method,
+                url: url,
+                httpVersion: "HTTP/1.1",
+                headers: [],
+                body: .empty
+            ),
+            response: NetworkResponseCapture(statusCode: statusCode, reason: "", headers: [], body: .empty),
+            requestBytes: 0,
+            responseBytes: 0,
+            isSSLIntercepted: false,
+            isEdited: false,
+            errorDescription: nil,
+            isPinned: isPinned,
+            isSaved: isSaved
         )
     }
 

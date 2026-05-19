@@ -56,6 +56,15 @@ public struct RockxyUpstreamProxyServer: Sendable, Hashable, Codable {
         self.pacScript = pacScript
         self.pacURL = pacURL
     }
+
+    public var displayName: String {
+        switch kind {
+        case .pac:
+            pacURL?.absoluteString ?? "PAC"
+        default:
+            "\(kind.displayName) \(host):\(port)"
+        }
+    }
 }
 
 public struct RockxyUpstreamProxyConfiguration: Sendable, Hashable, Codable {
@@ -104,7 +113,37 @@ public enum RockxyProxyBackendEvent: Sendable {
     case failed(String)
 }
 
-public struct RockxyCapturedHeader: Sendable, Hashable {
+public enum RockxyWebSocketFrameDirection: String, Sendable, Hashable, Codable {
+    case sent
+    case received
+}
+
+public struct RockxyWebSocketFrameSnapshot: Identifiable, Sendable, Hashable, Codable {
+    public let id: UUID
+    public let timestamp: Date
+    public let direction: RockxyWebSocketFrameDirection
+    public let opcode: String
+    public let payload: Data
+    public let isFinal: Bool
+
+    public init(
+        id: UUID,
+        timestamp: Date,
+        direction: RockxyWebSocketFrameDirection,
+        opcode: String,
+        payload: Data,
+        isFinal: Bool
+    ) {
+        self.id = id
+        self.timestamp = timestamp
+        self.direction = direction
+        self.opcode = opcode
+        self.payload = payload
+        self.isFinal = isFinal
+    }
+}
+
+public struct RockxyCapturedHeader: Sendable, Hashable, Codable {
     public let name: String
     public let value: String
 
@@ -185,8 +224,11 @@ public struct RockxyCapturedTransaction: Identifiable, Sendable, Hashable {
     public let sourcePort: UInt16?
     public let clientApp: String?
     public let matchedRuleName: String?
+    public let matchedRuleActionSummary: String?
+    public let matchedRulePattern: String?
     public let upstreamProxySummary: String?
     public let upstreamProxyKind: String?
+    public let webSocketFrames: [RockxyWebSocketFrameSnapshot]
 
     public init(
         id: UUID,
@@ -201,8 +243,11 @@ public struct RockxyCapturedTransaction: Identifiable, Sendable, Hashable {
         sourcePort: UInt16?,
         clientApp: String?,
         matchedRuleName: String?,
+        matchedRuleActionSummary: String? = nil,
+        matchedRulePattern: String? = nil,
         upstreamProxySummary: String? = nil,
-        upstreamProxyKind: String? = nil
+        upstreamProxyKind: String? = nil,
+        webSocketFrames: [RockxyWebSocketFrameSnapshot] = []
     ) {
         self.id = id
         self.sequenceNumber = sequenceNumber
@@ -216,8 +261,11 @@ public struct RockxyCapturedTransaction: Identifiable, Sendable, Hashable {
         self.sourcePort = sourcePort
         self.clientApp = clientApp
         self.matchedRuleName = matchedRuleName
+        self.matchedRuleActionSummary = matchedRuleActionSummary
+        self.matchedRulePattern = matchedRulePattern
         self.upstreamProxySummary = upstreamProxySummary
         self.upstreamProxyKind = upstreamProxyKind
+        self.webSocketFrames = webSocketFrames
     }
 }
 
