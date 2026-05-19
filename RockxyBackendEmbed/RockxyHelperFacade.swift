@@ -4,6 +4,7 @@ import ServiceManagement
 public enum RockxyHelperStatus: String, Sendable, Hashable {
     case disabledForUnsignedBuild
     case notInstalled
+    case registered
     case requiresApproval
     case installedCompatible
     case installedOutdated
@@ -14,6 +15,7 @@ public enum RockxyHelperStatus: String, Sendable, Hashable {
 
 public enum RockxyHelperAction: String, Sendable, Hashable {
     case install
+    case check
     case update
     case retry
     case reinstall
@@ -91,6 +93,14 @@ public final class RockxyHelperController {
             return Self.unsignedBuildSnapshot()
         }
         return Self.snapshot(from: HelperManager.shared)
+    }
+
+    public func refreshPassiveStatus() -> RockxyHelperSnapshot {
+        guard Self.currentBuildAllowsPrivilegedHelper else {
+            return Self.unsignedBuildSnapshot()
+        }
+        let service = SMAppService.daemon(plistName: RockxyIdentity.current.helperPlistName)
+        return Self.passiveSnapshot(serviceStatus: service.status, manager: HelperManager.shared)
     }
 
     @discardableResult
@@ -208,6 +218,54 @@ public final class RockxyHelperController {
             canUsePrivilegedHelper: status == .installedCompatible && manager.isReachable
         )
     }
+
+    private static func passiveSnapshot(
+        serviceStatus: SMAppService.Status,
+        manager: HelperManager
+    ) -> RockxyHelperSnapshot {
+        let status: RockxyHelperStatus
+        let action: RockxyHelperAction?
+        let registrationStatus: String
+
+        switch serviceStatus {
+        case .enabled:
+            status = .registered
+            action = .check
+            registrationStatus = "Enabled"
+        case .requiresApproval:
+            status = .requiresApproval
+            action = .openSettings
+            registrationStatus = "Awaiting Approval"
+        case .notRegistered:
+            status = .notInstalled
+            action = .install
+            registrationStatus = "Not Registered"
+        case .notFound:
+            status = .notInstalled
+            action = .install
+            registrationStatus = "Not Found"
+        @unknown default:
+            status = .notInstalled
+            action = .install
+            registrationStatus = "Unknown"
+        }
+
+        return RockxyHelperSnapshot(
+            status: status,
+            action: action,
+            isReachable: false,
+            registrationStatus: registrationStatus,
+            installedVersion: nil,
+            installedBuild: nil,
+            installedProtocolVersion: nil,
+            bundledVersion: manager.bundledHelperVersion,
+            bundledBuild: manager.bundledHelperBuild,
+            expectedProtocolVersion: manager.expectedProtocolVersion,
+            lastErrorMessage: nil,
+            statusMessage: status.statusMessage,
+            canUsePrivilegedHelper: false
+        )
+    }
 }
 
 private extension RockxyHelperStatus {
@@ -236,6 +294,8 @@ private extension RockxyHelperStatus {
             "Helper embedded. Use a signed build to enable privileged helper operations."
         case .notInstalled:
             "Helper not installed"
+        case .registered:
+            "Helper registered"
         case .requiresApproval:
             "Approve helper in System Settings"
         case .installedCompatible:

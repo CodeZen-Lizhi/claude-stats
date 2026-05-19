@@ -93,6 +93,7 @@ fi
 
 PRODUCTS="$DERIVED/Build/Products/$CONFIGURATION"
 APP="$PRODUCTS/Claude Stats.app"
+ROCKXY_HELPER_TOOL="$APP/Contents/Library/HelperTools/RockxyHelperTool"
 
 xcodebuild \
     -project ClaudeStats.xcodeproj \
@@ -149,6 +150,14 @@ if [[ $SIGNED -eq 1 ]]; then
             fi
         done < <(find "$GITTOOLS_DIR" -type f -print0)
     fi
+    if [[ ! -f "$ROCKXY_HELPER_TOOL" ]]; then
+        echo "error: missing bundled Rockxy helper at $ROCKXY_HELPER_TOOL" >&2
+        exit 1
+    fi
+    echo "==> Re-signing Rockxy helper tool"
+    codesign --force --options runtime --timestamp \
+        --sign "$SIGN_IDENTITY" \
+        "$ROCKXY_HELPER_TOOL"
     codesign --force --options runtime --timestamp \
         --sign "$SIGN_IDENTITY" \
         --entitlements "$SIGNED_ENTITLEMENTS" \
@@ -218,6 +227,33 @@ APPLESCRIPT
     cleanup_dmg_stage
 }
 
+assert_no_get_task_allow_entitlements() {
+    local root="$1"
+    local found=0
+
+    while IFS= read -r -d '' item; do
+        if ! file "$item" | grep -q 'Mach-O'; then
+            continue
+        fi
+
+        local entitlements
+        entitlements="$(mktemp "$DIST/entitlements-check.XXXXXX")"
+        if codesign -d --entitlements :- "$item" > "$entitlements" 2>/dev/null; then
+            local get_task_allow
+            get_task_allow="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.get-task-allow' "$entitlements" 2>/dev/null || true)"
+            if [[ "$get_task_allow" == "true" ]]; then
+                echo "error: release executable has com.apple.security.get-task-allow=true: $item" >&2
+                found=1
+            fi
+        fi
+        rm -f "$entitlements"
+    done < <(find "$root" -type f -print0)
+
+    if [[ $found -ne 0 ]]; then
+        exit 1
+    fi
+}
+
 if [[ $SIGNED -eq 0 ]]; then
     echo "==> Packaging DMG + zip (unsigned)"
     make_dmg
@@ -229,6 +265,8 @@ fi
 
 echo "==> Verifying app signature"
 codesign --verify --deep --strict --verbose=2 "$APP"
+echo "==> Checking release entitlements"
+assert_no_get_task_allow_entitlements "$APP"
 ENTITLEMENTS_OUT="$DIST/entitlements.plist"
 codesign -dvvv --entitlements :- "$APP" > "$ENTITLEMENTS_OUT"
 grep -q "com.apple.developer.icloud-services" "$ENTITLEMENTS_OUT" || {

@@ -185,17 +185,10 @@ struct NetworkDebuggingTests {
 
     @Test("Helper snapshot maps to network helper state")
     func helperSnapshotMapsToNetworkHelperState() {
-        let snapshot = RockxyHelperSnapshot(
+        let snapshot = makeHelperSnapshot(
             status: .unreachable,
             action: .retry,
             isReachable: false,
-            registrationStatus: "registered",
-            installedVersion: "0.7.0",
-            installedBuild: 6,
-            installedProtocolVersion: 1,
-            bundledVersion: "0.7.1",
-            bundledBuild: 7,
-            expectedProtocolVersion: 1,
             lastErrorMessage: "Connection failed",
             statusMessage: "Helper unreachable",
             canUsePrivilegedHelper: false
@@ -208,6 +201,59 @@ struct NetworkDebuggingTests {
         #expect(state.action == .retry)
         #expect(state.isReachable == false)
         #expect(state.canUsePrivilegedHelper == false)
+    }
+
+    @Test("Registered helper snapshot maps to check action")
+    func registeredHelperSnapshotMapsToCheckAction() {
+        let snapshot = makeHelperSnapshot(
+            status: .registered,
+            action: .check,
+            statusMessage: "Helper registered"
+        )
+
+        let state = NetworkDebuggerStore.helperState(from: snapshot)
+
+        #expect(state.statusMessage == "Helper registered")
+        #expect(state.action == .check)
+        #expect(state.isReachable == false)
+        #expect(state.canUsePrivilegedHelper == false)
+    }
+
+    @Test("Passive helper refresh does not actively probe until check action")
+    func passiveHelperRefreshDoesNotActivelyProbeUntilCheckAction() async throws {
+        let helper = FakeHelperController(
+            passiveSnapshot: makeHelperSnapshot(
+                status: .registered,
+                action: .check,
+                statusMessage: "Helper registered"
+            ),
+            activeSnapshot: makeHelperSnapshot(
+                status: .installedCompatible,
+                action: nil,
+                isReachable: true,
+                statusMessage: "Helper installed",
+                canUsePrivilegedHelper: true
+            )
+        )
+        let store = NetworkDebuggerStore(
+            preferences: Preferences(defaults: makeDefaults()),
+            proxyBackend: FakeNetworkProxyBackend(),
+            systemProxyService: FakeSystemProxyService(),
+            helperController: helper
+        )
+
+        store.refreshPassiveHelperStatus()
+
+        #expect(helper.passiveRefreshCount == 1)
+        #expect(helper.activeRefreshCount == 0)
+        #expect(store.helperState.action == .check)
+
+        store.performHelperAction()
+        try await waitFor { helper.activeRefreshCount == 1 && !store.isHelperWorking }
+
+        #expect(helper.passiveRefreshCount == 1)
+        #expect(store.helperState.statusMessage == "Helper installed")
+        #expect(store.helperState.canUsePrivilegedHelper == true)
     }
 
     @Test("Rockxy certificate snapshot preserves local certificate UI state")
@@ -283,6 +329,8 @@ struct NetworkDebuggingTests {
         #expect(plist["Label"] as? String == "com.claudestats.rockxy.helper")
         #expect(plist["BundleProgram"] as? String == "Contents/Library/HelperTools/RockxyHelperTool")
         #expect(plist["AssociatedBundleIdentifiers"] as? [String] == ["com.claudestats.ClaudeStats"])
+        #expect(plist["RunAtLoad"] == nil)
+        #expect(plist["KeepAlive"] == nil)
 
         let machServices = try #require(plist["MachServices"] as? [String: Bool])
         #expect(machServices["com.claudestats.rockxy.helper"] == true)
@@ -338,6 +386,31 @@ struct NetworkDebuggingTests {
         let defaults = UserDefaults(suiteName: suiteName) ?? .standard
         defaults.removePersistentDomain(forName: suiteName)
         return defaults
+    }
+
+    private func makeHelperSnapshot(
+        status: RockxyHelperStatus,
+        action: RockxyHelperAction?,
+        isReachable: Bool = false,
+        lastErrorMessage: String? = nil,
+        statusMessage: String,
+        canUsePrivilegedHelper: Bool = false
+    ) -> RockxyHelperSnapshot {
+        RockxyHelperSnapshot(
+            status: status,
+            action: action,
+            isReachable: isReachable,
+            registrationStatus: "registered",
+            installedVersion: "0.7.0",
+            installedBuild: 6,
+            installedProtocolVersion: 1,
+            bundledVersion: "0.7.1",
+            bundledBuild: 7,
+            expectedProtocolVersion: 1,
+            lastErrorMessage: lastErrorMessage,
+            statusMessage: statusMessage,
+            canUsePrivilegedHelper: canUsePrivilegedHelper
+        )
     }
 }
 
@@ -398,4 +471,48 @@ private actor FakeSystemProxyService: NetworkSystemProxyManaging {
         disabledServices.append(services)
         return .idle
     }
+}
+
+@MainActor
+private final class FakeHelperController: NetworkHelperManaging {
+    private let passiveSnapshot: RockxyHelperSnapshot
+    private let activeSnapshot: RockxyHelperSnapshot
+    private(set) var passiveRefreshCount = 0
+    private(set) var activeRefreshCount = 0
+
+    init(
+        passiveSnapshot: RockxyHelperSnapshot,
+        activeSnapshot: RockxyHelperSnapshot
+    ) {
+        self.passiveSnapshot = passiveSnapshot
+        self.activeSnapshot = activeSnapshot
+    }
+
+    func refreshPassiveStatus() -> RockxyHelperSnapshot {
+        passiveRefreshCount += 1
+        return passiveSnapshot
+    }
+
+    func refreshStatus() async -> RockxyHelperSnapshot {
+        activeRefreshCount += 1
+        return activeSnapshot
+    }
+
+    func install() async throws -> RockxyHelperSnapshot {
+        activeSnapshot
+    }
+
+    func update() async throws -> RockxyHelperSnapshot {
+        activeSnapshot
+    }
+
+    func retryConnection() async -> RockxyHelperSnapshot {
+        activeSnapshot
+    }
+
+    func reinstall() async throws -> RockxyHelperSnapshot {
+        activeSnapshot
+    }
+
+    func openSystemSettingsLoginItems() {}
 }

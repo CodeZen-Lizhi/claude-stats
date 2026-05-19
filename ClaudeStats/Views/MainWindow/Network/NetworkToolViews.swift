@@ -77,7 +77,7 @@ struct NetworkSetupView: View {
         }
         .mainWindowPanel()
         .task {
-            store.refreshHelperStatus()
+            store.refreshPassiveHelperStatus()
         }
     }
 

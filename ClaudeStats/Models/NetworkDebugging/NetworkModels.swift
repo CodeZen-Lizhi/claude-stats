@@ -302,6 +302,7 @@ struct NetworkSystemProxyStatus: Sendable, Equatable {
 
 enum NetworkHelperAction: String, Sendable, Equatable {
     case install
+    case check
     case update
     case retry
     case reinstall
@@ -311,6 +312,8 @@ enum NetworkHelperAction: String, Sendable, Equatable {
         switch self {
         case .install:
             "Install"
+        case .check:
+            "Check"
         case .update:
             "Update"
         case .retry:

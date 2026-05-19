@@ -3,6 +3,19 @@ import Observation
 import RockxyBackendEmbed
 
 @MainActor
+protocol NetworkHelperManaging: AnyObject {
+    func refreshPassiveStatus() -> RockxyHelperSnapshot
+    func refreshStatus() async -> RockxyHelperSnapshot
+    func install() async throws -> RockxyHelperSnapshot
+    func update() async throws -> RockxyHelperSnapshot
+    func retryConnection() async -> RockxyHelperSnapshot
+    func reinstall() async throws -> RockxyHelperSnapshot
+    func openSystemSettingsLoginItems()
+}
+
+extension RockxyHelperController: NetworkHelperManaging {}
+
+@MainActor
 @Observable
 final class NetworkDebuggerStore: @unchecked Sendable {
     var selectedSection: NetworkSection = .traffic
@@ -22,6 +35,7 @@ final class NetworkDebuggerStore: @unchecked Sendable {
 
     private let proxyBackend: any NetworkProxyBackend
     private let systemProxyService: any NetworkSystemProxyManaging
+    private let helperController: any NetworkHelperManaging
     private let certificateService = NetworkCertificateService()
     private weak var preferences: Preferences?
     private var autoEnabledSystemProxyForCurrentCapture = false
@@ -29,11 +43,13 @@ final class NetworkDebuggerStore: @unchecked Sendable {
     init(
         preferences: Preferences? = nil,
         proxyBackend: any NetworkProxyBackend = RockxyNetworkProxyBackend(),
-        systemProxyService: any NetworkSystemProxyManaging = NetworkSystemProxyService()
+        systemProxyService: any NetworkSystemProxyManaging = NetworkSystemProxyService(),
+        helperController: any NetworkHelperManaging = RockxyHelperController.shared
     ) {
         self.preferences = preferences
         self.proxyBackend = proxyBackend
         self.systemProxyService = systemProxyService
+        self.helperController = helperController
     }
 
     var selectedFlow: NetworkFlow? {
@@ -115,10 +131,17 @@ final class NetworkDebuggerStore: @unchecked Sendable {
     func refreshHelperStatus() {
         isHelperWorking = true
         Task { @MainActor in
-            let snapshot = await RockxyHelperController.shared.refreshStatus()
+            let snapshot = await helperController.refreshStatus()
             helperState = Self.helperState(from: snapshot)
             isHelperWorking = false
         }
+    }
+
+    func refreshPassiveHelperStatus() {
+        isHelperWorking = true
+        let snapshot = helperController.refreshPassiveStatus()
+        helperState = Self.helperState(from: snapshot)
+        isHelperWorking = false
     }
 
     func performHelperAction() {
@@ -129,16 +152,18 @@ final class NetworkDebuggerStore: @unchecked Sendable {
                 let snapshot: RockxyHelperSnapshot
                 switch action {
                 case .install:
-                    snapshot = try await RockxyHelperController.shared.install()
+                    snapshot = try await helperController.install()
+                case .check:
+                    snapshot = await helperController.refreshStatus()
                 case .update:
-                    snapshot = try await RockxyHelperController.shared.update()
+                    snapshot = try await helperController.update()
                 case .retry:
-                    snapshot = await RockxyHelperController.shared.retryConnection()
+                    snapshot = await helperController.retryConnection()
                 case .reinstall:
-                    snapshot = try await RockxyHelperController.shared.reinstall()
+                    snapshot = try await helperController.reinstall()
                 case .openSettings:
-                    RockxyHelperController.shared.openSystemSettingsLoginItems()
-                    snapshot = await RockxyHelperController.shared.refreshStatus()
+                    helperController.openSystemSettingsLoginItems()
+                    snapshot = helperController.refreshPassiveStatus()
                 }
                 helperState = Self.helperState(from: snapshot)
             } catch {
@@ -288,6 +313,8 @@ private extension NetworkHelperAction {
         switch action {
         case .install:
             self = .install
+        case .check:
+            self = .check
         case .update:
             self = .update
         case .retry:
