@@ -21,6 +21,9 @@ struct LeaderboardLocalStoreTests {
             nickname: "Ada",
             avatarSeed: "avatar",
             historyStartMonthKey: "2026-05",
+            favoriteModels: [
+                LeaderboardFavoriteModel(rank: 1, model: "sonnet", tokens: 42),
+            ],
             updatedAt: savedAt
         )
         let historyKey = LeaderboardHistoryCacheKey(
@@ -41,6 +44,9 @@ struct LeaderboardLocalStoreTests {
             nickname: "Ada",
             avatarSeed: "avatar",
             historyStartMonthKey: "2026-05",
+            favoriteModels: [
+                LeaderboardFavoriteModel(rank: 1, model: "sonnet", tokens: 42),
+            ],
             updatedAt: savedAt
         )
         let syncState = LeaderboardLocalSyncState(

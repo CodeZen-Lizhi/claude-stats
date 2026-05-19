@@ -162,6 +162,10 @@ struct LeaderboardCloudKitMappingTests {
                 nickname: "New Name",
                 avatarSeed: "avatar-seed",
                 historyStartMonthKey: "2026-05",
+                favoriteModels: [
+                    LeaderboardFavoriteModel(rank: 1, model: "sonnet", tokens: 300),
+                    LeaderboardFavoriteModel(rank: 2, model: "opus", tokens: 100),
+                ],
                 appVersion: "1.2.3",
                 updatedAt: Date(timeIntervalSince1970: 1_768_210_000)
             )
@@ -172,8 +176,11 @@ struct LeaderboardCloudKitMappingTests {
         #expect(mappedProfile?.nickname == "New Name")
         #expect(mappedProfile?.avatarSeed == "avatar-seed")
         #expect(mappedProfile?.historyStartMonthKey == "2026-05")
+        #expect(mappedProfile?.favoriteModels?.map(\.model) == ["sonnet", "opus"])
+        #expect(mappedProfile?.favoriteModels?.map(\.tokens) == [300, 100])
         #expect(profile[CloudKitLeaderboardRecordMapper.Field.avatarVariant] as? String == "beam")
         #expect(profile[CloudKitLeaderboardRecordMapper.Field.historyStartMonthKey] as? String == "2026-05")
+        #expect((profile[CloudKitLeaderboardRecordMapper.Field.favoriteModels] as? String)?.contains("sonnet") == true)
         #expect(CloudKitLeaderboardRecordMapper.userHash(from: scoreRecord) == "userhash")
         #expect(CloudKitLeaderboardRecordMapper.score(
             from: scoreRecord,
@@ -185,6 +192,11 @@ struct LeaderboardCloudKitMappingTests {
             rank: 1,
             profile: mappedProfile
         )?.avatarSeed == "avatar-seed")
+        #expect(CloudKitLeaderboardRecordMapper.score(
+            from: scoreRecord,
+            rank: 1,
+            profile: mappedProfile
+        )?.favoriteModels?.first?.model == "sonnet")
     }
 
     @Test("Legacy profile records without avatar fields still map nickname")

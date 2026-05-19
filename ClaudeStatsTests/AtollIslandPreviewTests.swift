@@ -63,6 +63,13 @@ struct AtollIslandPreviewTests {
         #expect(alwaysAvailable.isSelectedTabEnabled)
     }
 
+    @Test("Size presets expose stable minimum preview widths")
+    func sizePresetMinimumPreviewWidthsAreStable() {
+        #expect(AtollIslandPreviewSizePreset.compact.minimumDisplayWidth == 584)
+        #expect(AtollIslandPreviewSizePreset.regular.minimumDisplayWidth == 654)
+        #expect(AtollIslandPreviewSizePreset.large.minimumDisplayWidth == 714)
+    }
+
     @Test("Settings snapshot reflects bridge values")
     func settingsSnapshotReflectsBridgeValues() {
         let settingIDs = [

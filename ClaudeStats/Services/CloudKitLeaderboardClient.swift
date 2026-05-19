@@ -117,6 +117,7 @@ enum CloudKitLeaderboardRecordMapper {
         static let avatarSeed = "avatarSeed"
         static let avatarVariant = "avatarVariant"
         static let historyStartMonthKey = "historyStartMonthKey"
+        static let favoriteModels = "favoriteModels"
     }
 
     static let avatarVariant = "beam"
@@ -137,6 +138,7 @@ enum CloudKitLeaderboardRecordMapper {
         Field.avatarSeed,
         Field.avatarVariant,
         Field.historyStartMonthKey,
+        Field.favoriteModels,
         Field.updatedAt,
     ]
 
@@ -239,6 +241,10 @@ enum CloudKitLeaderboardRecordMapper {
         if let historyStartMonthKey = profile.historyStartMonthKey {
             record[Field.historyStartMonthKey] = historyStartMonthKey
         }
+        if let favoriteModels = profile.favoriteModels,
+           let encodedFavoriteModels = encodeFavoriteModels(favoriteModels) {
+            record[Field.favoriteModels] = encodedFavoriteModels
+        }
         record[Field.metric] = profileMetric
         record[Field.period] = profilePeriod
         record[Field.periodKey] = profilePeriodKey
@@ -262,6 +268,7 @@ enum CloudKitLeaderboardRecordMapper {
         }
         let avatarSeed = record[Field.avatarSeed] as? String
         let historyStartMonthKey = record[Field.historyStartMonthKey] as? String
+        let favoriteModels = decodeFavoriteModels(from: record)
         let updatedAt = (record[Field.updatedAt] as? Date)
             ?? (record[Field.updatedAt] as? NSDate).map { $0 as Date }
             ?? record.modificationDate
@@ -271,6 +278,7 @@ enum CloudKitLeaderboardRecordMapper {
             nickname: nickname,
             avatarSeed: avatarSeed?.isEmpty == false ? avatarSeed : nil,
             historyStartMonthKey: historyStartMonthKey?.isEmpty == false ? historyStartMonthKey : nil,
+            favoriteModels: favoriteModels,
             updatedAt: updatedAt
         )
     }
@@ -309,6 +317,7 @@ enum CloudKitLeaderboardRecordMapper {
             nickname: profile?.nickname ?? nickname,
             avatarSeed: profile?.avatarSeed,
             historyStartMonthKey: profile?.historyStartMonthKey,
+            favoriteModels: profile?.favoriteModels,
             updatedAt: updatedAt
         )
     }
@@ -327,6 +336,22 @@ enum CloudKitLeaderboardRecordMapper {
             score: scoreNumber.int64Value,
             updatedAt: updatedAt
         )
+    }
+
+    private static func encodeFavoriteModels(_ favoriteModels: [LeaderboardFavoriteModel]) -> String? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        guard let data = try? encoder.encode(favoriteModels) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private static func decodeFavoriteModels(from record: CKRecord) -> [LeaderboardFavoriteModel]? {
+        guard let raw = record[Field.favoriteModels] as? String,
+              let data = raw.data(using: .utf8),
+              let decoded = try? JSONDecoder().decode([LeaderboardFavoriteModel].self, from: data) else {
+            return nil
+        }
+        return decoded
     }
 }
 
@@ -379,6 +404,7 @@ struct CloudKitLeaderboardClient: LeaderboardCloudServicing {
             nickname: profile.nickname,
             avatarSeed: profile.avatarSeed,
             historyStartMonthKey: profile.historyStartMonthKey,
+            favoriteModels: profile.favoriteModels,
             updatedAt: profile.updatedAt
         )
     }
@@ -428,6 +454,7 @@ struct CloudKitLeaderboardClient: LeaderboardCloudServicing {
             nickname: profile.nickname,
             avatarSeed: profile.avatarSeed,
             historyStartMonthKey: profile.historyStartMonthKey,
+            favoriteModels: profile.favoriteModels,
             updatedAt: profile.updatedAt
         )
     }

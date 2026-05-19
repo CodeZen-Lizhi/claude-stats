@@ -50,6 +50,10 @@ final class LeaderboardSyncViewModel {
         return scores.first { $0.userHash == currentUserHash }
     }
 
+    var currentUserFavoriteModels: [LeaderboardFavoriteModel] {
+        builder.favoriteModels(sessions: store.sessions)
+    }
+
     private let preferences: Preferences
     private let store: SessionStore
     private let client: any LeaderboardCloudServicing
@@ -548,6 +552,7 @@ final class LeaderboardSyncViewModel {
                 nickname: score.nickname,
                 avatarSeed: score.avatarSeed,
                 historyStartMonthKey: score.historyStartMonthKey,
+                favoriteModels: score.favoriteModels,
                 updatedAt: score.updatedAt
             ), savedAt: Date())
         }
@@ -698,7 +703,8 @@ final class LeaderboardSyncViewModel {
         LeaderboardProfileDraft(
             nickname: nickname,
             avatarSeed: ensureLocalAvatarSeed(),
-            historyStartMonthKey: builder.historyStartMonthKey(sessions: store.sessions)
+            historyStartMonthKey: builder.historyStartMonthKey(sessions: store.sessions),
+            favoriteModels: builder.favoriteModels(sessions: store.sessions)
         )
     }
 

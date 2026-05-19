@@ -58,9 +58,8 @@ struct LeaderboardWideWorkspaceLayout: Layout {
 
     private func measuredSizes(subviews: Subviews, detailWidth: CGFloat) -> (headerHeight: CGFloat, lowerHeight: CGFloat) {
         let headerHeight = subviews[0].sizeThatFits(ProposedViewSize(width: leftWidth, height: nil)).height
-        let leftHeight = subviews[1].sizeThatFits(ProposedViewSize(width: leftWidth, height: nil)).height
         let rightHeight = subviews[2].sizeThatFits(ProposedViewSize(width: detailWidth, height: nil)).height
-        return (headerHeight, max(leftHeight, rightHeight))
+        return (headerHeight, rightHeight)
     }
 }
 

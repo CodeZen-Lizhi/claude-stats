@@ -114,7 +114,7 @@ struct LeaderboardsView: View {
                 titleHeader
                     .frame(width: LeaderboardLayout.leftColumnWidth, alignment: .topLeading)
 
-                listColumn
+                listColumn(usesFixedScoreListHeight: true)
                     .frame(width: LeaderboardLayout.leftColumnWidth, alignment: .top)
                     .frame(maxHeight: .infinity, alignment: .top)
 
@@ -128,7 +128,7 @@ struct LeaderboardsView: View {
                 if env.preferences.leaderboardsEnabled {
                     overviewPanel
                 }
-                listColumn
+                listColumn(usesFixedScoreListHeight: false)
             }
                 .frame(width: contentWidth, alignment: .top)
         }
@@ -172,6 +172,7 @@ struct LeaderboardsView: View {
                 topScore: topScore,
                 currentUserScore: env.leaderboards.currentUserScore,
                 currentUserHash: env.leaderboards.currentUserHash,
+                favoriteModels: favoriteModels(for: selectedScore),
                 history: env.leaderboards.selectedUserHistory,
                 isLoadingHistory: env.leaderboards.isLoadingSelectedUserHistory,
                 historyError: env.leaderboards.selectedUserHistoryError
@@ -184,13 +185,14 @@ struct LeaderboardsView: View {
         }
     }
 
-    private var listColumn: some View {
+    private func listColumn(usesFixedScoreListHeight: Bool) -> some View {
         LeaderboardListColumn(
             metric: metric,
             scores: scores,
             topScore: topScore,
             selectedScoreID: selectedScore?.id,
             currentUserHash: env.leaderboards.currentUserHash,
+            usesFixedScoreListHeight: usesFixedScoreListHeight,
             isLoadingScores: env.leaderboards.isLoadingScores,
             scoreError: env.leaderboards.scoreError,
             scoreEmptyMessage: env.leaderboards.scoreEmptyMessage,
@@ -201,6 +203,15 @@ struct LeaderboardsView: View {
                 NotificationCenter.default.post(name: .openSettingsInMainWindow, object: SettingsSection.features)
             }
         )
+    }
+
+    private func favoriteModels(for score: LeaderboardScore?) -> [LeaderboardFavoriteModel]? {
+        guard let score else { return nil }
+        if let currentUserHash = env.leaderboards.currentUserHash,
+           score.userHash == currentUserHash {
+            return env.leaderboards.currentUserFavoriteModels
+        }
+        return score.favoriteModels
     }
 
     private func syncFromSceneStorage() {

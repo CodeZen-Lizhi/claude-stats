@@ -9,6 +9,7 @@ struct LeaderboardDetailPanel: View {
     let topScore: Int64
     let currentUserScore: LeaderboardScore?
     let currentUserHash: String?
+    let favoriteModels: [LeaderboardFavoriteModel]?
     let history: [LeaderboardScoreHistoryPoint]
     let isLoadingHistory: Bool
     let historyError: String?
@@ -18,6 +19,7 @@ struct LeaderboardDetailPanel: View {
             if let score {
                 profilePanel(score)
                 statsPanel(score)
+                favoriteModelsPanel
                 historyPanel(score)
                     .frame(maxHeight: .infinity, alignment: .top)
             } else {
@@ -84,6 +86,44 @@ struct LeaderboardDetailPanel: View {
             }
         }
         .mainWindowPanel(padding: 16)
+    }
+
+    private var favoriteModelsPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("TOP MODELS")
+                    .font(.sora(13, weight: .semibold))
+                    .tracking(1.0)
+                Spacer(minLength: 8)
+                Text("By total tokens")
+                    .font(.sora(10))
+                    .foregroundStyle(Color.stxMuted)
+                    .lineLimit(1)
+            }
+
+            if let favoriteModels {
+                if favoriteModels.isEmpty {
+                    LeaderboardFavoriteModelsMessage("No model usage yet.")
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(favoriteModels) { model in
+                            LeaderboardFavoriteModelRow(
+                                model: model,
+                                topTokens: favoriteModels.first?.tokens ?? model.tokens
+                            )
+                            if model.id != favoriteModels.last?.id {
+                                StxRule()
+                            }
+                        }
+                    }
+                }
+            } else {
+                LeaderboardFavoriteModelsMessage("This user has not uploaded model mix yet.")
+            }
+        }
+        .mainWindowPanel(padding: 16)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Top models")
     }
 
     private func historyPanel(_ score: LeaderboardScore) -> some View {
@@ -209,6 +249,57 @@ private struct LeaderboardDetailMetricCell: View {
                 .minimumScaleFactor(0.6)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct LeaderboardFavoriteModelRow: View {
+    let model: LeaderboardFavoriteModel
+    let topTokens: Int64
+
+    private var fraction: Double {
+        guard topTokens > 0 else { return 0 }
+        return min(max(Double(model.tokens) / Double(topTokens), 0), 1)
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text("#\(model.rank)")
+                .font(.sora(11, weight: .semibold).monospacedDigit())
+                .foregroundStyle(model.rank == 1 ? Color.stxAccent : Color.stxMuted)
+                .frame(width: 34, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(model.model)
+                    .font(.sora(12, weight: .semibold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                LeaderboardScoreBar(fraction: fraction, active: model.rank == 1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text(Format.tokens(Int(clamping: model.tokens)))
+                .font(.sora(12, weight: .semibold).monospacedDigit())
+                .foregroundStyle(model.rank == 1 ? Color.stxAccent : .primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+                .frame(width: 82, alignment: .trailing)
+        }
+        .padding(.vertical, 9)
+    }
+}
+
+private struct LeaderboardFavoriteModelsMessage: View {
+    let message: String
+
+    init(_ message: String) {
+        self.message = message
+    }
+
+    var body: some View {
+        Text(message)
+            .font(.sora(12))
+            .foregroundStyle(Color.stxMuted)
+            .frame(maxWidth: .infinity, minHeight: 58, alignment: .center)
     }
 }
 

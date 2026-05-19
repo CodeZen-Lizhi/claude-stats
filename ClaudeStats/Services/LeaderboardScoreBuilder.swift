@@ -100,6 +100,39 @@ struct LeaderboardScoreBuilder: Sendable {
         }
     }
 
+    func favoriteModels(sessions: [Session], limit: Int = 3) -> [LeaderboardFavoriteModel] {
+        guard limit > 0 else { return [] }
+
+        var totals: [String: Int64] = [:]
+        for session in sessions {
+            guard let stats = session.stats else { continue }
+            if stats.timeline.isEmpty {
+                for model in stats.models {
+                    let name = model.model.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !name.isEmpty else { continue }
+                    totals[name, default: 0] += Int64(model.usage.total)
+                }
+            } else {
+                for bucket in stats.timeline {
+                    let name = bucket.model.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !name.isEmpty else { continue }
+                    totals[name, default: 0] += Int64(bucket.usage.total)
+                }
+            }
+        }
+
+        return totals
+            .filter { $0.value > 0 }
+            .sorted { lhs, rhs in
+                lhs.value != rhs.value ? lhs.value > rhs.value : lhs.key < rhs.key
+            }
+            .prefix(limit)
+            .enumerated()
+            .map { index, entry in
+                LeaderboardFavoriteModel(rank: index + 1, model: entry.key, tokens: entry.value)
+            }
+    }
+
     private func tokenUsage(in sessions: [Session], window: LeaderboardPeriodWindow) -> TokenUsage {
         sessions.reduce(.zero) { partial, session in
             guard let stats = session.stats else { return partial }

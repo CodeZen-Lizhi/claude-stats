@@ -9,31 +9,42 @@ struct NotchIslandSettingsDetailPane: View {
     let refreshToken: Int
     let onSelectSection: (SettingsSection) -> Void
     let onSettingChanged: () -> Void
+    private static let horizontalContentGap: CGFloat = 22
 
     var body: some View {
+        GeometryReader { proxy in
+            content(showPreview: shouldShowPreview(in: proxy.size.width))
+        }
+    }
+
+    private func content(showPreview: Bool) -> some View {
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 14) {
-                if !isFeatureEnabled {
-                    FeatureDisabledNotice(
-                        featureName: "Notch Island",
-                        message: "Turn it on in Features to edit display behavior and modules."
-                    ) {
-                        onSelectSection(.features)
+            if shouldShowTopRegion(showPreview: showPreview) {
+                VStack(alignment: .leading, spacing: 14) {
+                    if !isFeatureEnabled {
+                        FeatureDisabledNotice(
+                            featureName: "Notch Island",
+                            message: "Turn it on in Features to edit display behavior and modules."
+                        ) {
+                            onSelectSection(.features)
+                        }
+                    }
+
+                    if showPreview {
+                        NotchIslandModulePreview(
+                            tab: tab,
+                            preferences: preferences,
+                            refreshToken: refreshToken
+                        )
                     }
                 }
+                .padding(.horizontal, Self.horizontalContentGap)
+                .padding(.bottom, 18)
 
-                NotchIslandModulePreview(
-                    tab: tab,
-                    preferences: preferences,
-                    refreshToken: refreshToken
-                )
+                Rectangle()
+                    .fill(Color.stxStroke)
+                    .frame(height: 1)
             }
-            .padding(.horizontal, 22)
-            .padding(.bottom, 18)
-
-            Rectangle()
-                .fill(Color.stxStroke)
-                .frame(height: 1)
 
             FadingScrollView {
                 VStack(alignment: .leading, spacing: 24) {
@@ -62,13 +73,22 @@ struct NotchIslandSettingsDetailPane: View {
                         }
                     }
                 }
-                .padding(.horizontal, 22)
+                .padding(.horizontal, Self.horizontalContentGap)
                 .padding(.top, 22)
                 .padding(.bottom, 28)
             }
             .disabled(!isFeatureEnabled)
             .opacity(isFeatureEnabled ? 1 : 0.58)
         }
+    }
+
+    private func shouldShowTopRegion(showPreview: Bool) -> Bool {
+        !isFeatureEnabled || showPreview
+    }
+
+    private func shouldShowPreview(in paneWidth: CGFloat) -> Bool {
+        let availableWidth = max(0, paneWidth - Self.horizontalContentGap * 2)
+        return availableWidth >= preferences.notchIslandSizePreset.previewSizePreset.minimumDisplayWidth
     }
 
     private func islandDisplaySettings(prefs: Preferences) -> some View {

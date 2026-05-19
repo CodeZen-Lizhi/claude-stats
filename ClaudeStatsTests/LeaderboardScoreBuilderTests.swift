@@ -181,10 +181,41 @@ struct LeaderboardScoreBuilderTests {
         #expect(builder.historyStartMonthKey(sessions: sessions) == "2026-05")
     }
 
+    @Test("Favorite models use timeline totals with legacy model fallback")
+    func favoriteModelsUseTimelineTotals() {
+        let now = dateUTC(2026, 5, 16, 8)
+        let sessions = [
+            session(
+                "timeline",
+                provider: .claude,
+                at: now,
+                usage: TokenUsage(inputTokens: 9_999),
+                timeline: [
+                    ModelBucket(model: "sonnet", start: dateUTC(2026, 5, 16, 1), usage: TokenUsage(inputTokens: 300)),
+                    ModelBucket(model: "opus", start: dateUTC(2026, 5, 16, 2), usage: TokenUsage(inputTokens: 100)),
+                ]
+            ),
+            session(
+                "legacy",
+                provider: .codex,
+                at: now,
+                usage: TokenUsage(inputTokens: 50),
+                modelName: "gpt-5.5"
+            ),
+        ]
+
+        let favoriteModels = builder.favoriteModels(sessions: sessions)
+
+        #expect(favoriteModels.map(\.model) == ["sonnet", "opus", "gpt-5.5"])
+        #expect(favoriteModels.map(\.tokens) == [300, 100, 50])
+        #expect(favoriteModels.map(\.rank) == [1, 2, 3])
+    }
+
     private func session(_ id: String,
                          provider: ProviderKind,
                          at date: Date,
                          usage: TokenUsage,
+                         modelName: String = "model",
                          timeline: [ModelBucket] = [],
                          activityIntervals: [DateInterval] = []) -> Session {
         let stats = SessionStats(
@@ -192,7 +223,7 @@ struct LeaderboardScoreBuilderTests {
             messageCount: 1,
             firstActivity: date,
             lastActivity: date,
-            models: [ModelUsage(model: "model", messageCount: 1, usage: usage, pricing: TestPricing.table)],
+            models: [ModelUsage(model: modelName, messageCount: 1, usage: usage, pricing: TestPricing.table)],
             timeline: timeline,
             activityIntervals: activityIntervals
         )

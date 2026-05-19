@@ -47,6 +47,33 @@ struct LeaderboardSyncViewModelTests {
         #expect(fixture.preferences.leaderboardLastSubmittedPeriodKeys.contains("allTime:all"))
     }
 
+    @Test("Sync profile includes the current user's top models")
+    func syncProfileIncludesFavoriteModels() async {
+        let now = dateUTC(2026, 5, 16, 8)
+        let fixture = makeFixture(enabled: true, sessions: [
+            session("sonnet", provider: .claude, at: now, tokens: 300, modelName: "sonnet"),
+            session("opus", provider: .codex, at: now, tokens: 100, modelName: "opus"),
+        ])
+
+        await fixture.viewModel.syncNow()
+
+        let savedProfile = await fixture.client.lastSavedProfile()
+        #expect(savedProfile?.favoriteModels?.map(\.model) == ["sonnet", "opus"])
+        #expect(savedProfile?.favoriteModels?.map(\.tokens) == [300, 100])
+    }
+
+    @Test("Current user favorite models are computed locally")
+    func currentUserFavoriteModelsUseLocalSessions() async {
+        let now = dateUTC(2026, 5, 16, 8)
+        let fixture = makeFixture(enabled: true, sessions: [
+            session("a", provider: .claude, at: now, tokens: 10, modelName: "haiku"),
+            session("b", provider: .claude, at: now, tokens: 40, modelName: "sonnet"),
+        ])
+
+        #expect(fixture.viewModel.currentUserFavoriteModels.map(\.model) == ["sonnet", "haiku"])
+    }
+
+
     @Test("Silent sync respects the minimum upload interval")
     func silentSyncMinimumInterval() async {
         let fixture = makeFixture(enabled: true, silentSyncMinimumInterval: 1_800)
@@ -452,6 +479,7 @@ struct LeaderboardSyncViewModelTests {
                          provider: ProviderKind,
                          at date: Date,
                          tokens: Int,
+                         modelName: String = "model",
                          timeline: [ModelBucket] = []) -> Session {
         let usage = TokenUsage(inputTokens: tokens, outputTokens: 0, cacheReadTokens: 0,
                                cacheCreation5mTokens: 0, cacheCreation1hTokens: 0)
@@ -460,7 +488,7 @@ struct LeaderboardSyncViewModelTests {
             messageCount: 1,
             firstActivity: date,
             lastActivity: date,
-            models: [ModelUsage(model: "model", messageCount: 1, usage: usage, pricing: TestPricing.table)],
+            models: [ModelUsage(model: modelName, messageCount: 1, usage: usage, pricing: TestPricing.table)],
             timeline: timeline
         )
         return Session(id: id, externalID: id, provider: provider, projectDirectoryName: "-p",
@@ -603,6 +631,7 @@ private actor FakeLeaderboardClient: LeaderboardCloudServicing {
             nickname: profile.nickname,
             avatarSeed: profile.avatarSeed,
             historyStartMonthKey: profile.historyStartMonthKey,
+            favoriteModels: profile.favoriteModels,
             updatedAt: profile.updatedAt
         )
         savedProfiles.append(saved)

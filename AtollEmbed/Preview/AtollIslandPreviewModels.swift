@@ -84,6 +84,26 @@ public enum AtollIslandPreviewSizePreset: String, CaseIterable, Sendable {
     case compact
     case regular
     case large
+
+    public var openDisplayWidth: CGFloat {
+        switch self {
+        case .compact: 350
+        case .regular: 420
+        case .large: 480
+        }
+    }
+
+    public var openDisplayHeight: CGFloat {
+        switch self {
+        case .compact: 152
+        case .regular: 176
+        case .large: 196
+        }
+    }
+
+    public var minimumDisplayWidth: CGFloat {
+        190 + 16 + openDisplayWidth + 28
+    }
 }
 
 public struct AtollIslandPreviewConfiguration: Equatable, Sendable {

@@ -12,6 +12,7 @@ enum LeaderboardSyncFingerprint {
         let nickname: String
         let avatarSeed: String
         let historyStartMonthKey: String?
+        let favoriteModels: [LeaderboardFavoriteModel]?
     }
 
     private struct Score: Codable, Comparable {
@@ -63,7 +64,8 @@ enum LeaderboardSyncFingerprint {
             profile: Profile(
                 nickname: profile.nickname,
                 avatarSeed: profile.avatarSeed,
-                historyStartMonthKey: profile.historyStartMonthKey
+                historyStartMonthKey: profile.historyStartMonthKey,
+                favoriteModels: profile.favoriteModels
             ),
             scores: submissions
                 .map { Score(metric: $0.metric, period: $0.period, periodKey: $0.periodKey, score: $0.score) }

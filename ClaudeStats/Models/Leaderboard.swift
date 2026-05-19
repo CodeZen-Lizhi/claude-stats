@@ -53,6 +53,7 @@ struct LeaderboardScore: Sendable, Hashable, Identifiable, Codable {
     let nickname: String
     let avatarSeed: String?
     let historyStartMonthKey: String?
+    let favoriteModels: [LeaderboardFavoriteModel]?
     let updatedAt: Date
 
     init(id: String,
@@ -65,6 +66,7 @@ struct LeaderboardScore: Sendable, Hashable, Identifiable, Codable {
          nickname: String,
          avatarSeed: String?,
          historyStartMonthKey: String? = nil,
+         favoriteModels: [LeaderboardFavoriteModel]? = nil,
          updatedAt: Date) {
         self.id = id
         self.userHash = userHash
@@ -76,6 +78,7 @@ struct LeaderboardScore: Sendable, Hashable, Identifiable, Codable {
         self.nickname = nickname
         self.avatarSeed = avatarSeed
         self.historyStartMonthKey = historyStartMonthKey
+        self.favoriteModels = favoriteModels
         self.updatedAt = updatedAt
     }
 
@@ -91,9 +94,18 @@ struct LeaderboardScore: Sendable, Hashable, Identifiable, Codable {
             nickname: nickname,
             avatarSeed: avatarSeed,
             historyStartMonthKey: historyStartMonthKey,
+            favoriteModels: favoriteModels,
             updatedAt: updatedAt
         )
     }
+}
+
+struct LeaderboardFavoriteModel: Sendable, Hashable, Identifiable, Codable {
+    let rank: Int
+    let model: String
+    let tokens: Int64
+
+    var id: String { model }
 }
 
 struct LeaderboardScoreHistoryPoint: Sendable, Hashable, Identifiable, Codable {
@@ -170,26 +182,44 @@ struct LeaderboardProfile: Sendable, Hashable, Identifiable, Codable {
     let nickname: String
     let avatarSeed: String?
     let historyStartMonthKey: String?
+    let favoriteModels: [LeaderboardFavoriteModel]?
     let updatedAt: Date
 
     var id: String { userHash }
+
+    init(userHash: String,
+         nickname: String,
+         avatarSeed: String?,
+         historyStartMonthKey: String?,
+         favoriteModels: [LeaderboardFavoriteModel]? = nil,
+         updatedAt: Date) {
+        self.userHash = userHash
+        self.nickname = nickname
+        self.avatarSeed = avatarSeed
+        self.historyStartMonthKey = historyStartMonthKey
+        self.favoriteModels = favoriteModels
+        self.updatedAt = updatedAt
+    }
 }
 
 struct LeaderboardProfileDraft: Sendable, Hashable, Codable {
     let nickname: String
     let avatarSeed: String
     let historyStartMonthKey: String?
+    let favoriteModels: [LeaderboardFavoriteModel]?
     let appVersion: String
     let updatedAt: Date
 
     init(nickname: String,
          avatarSeed: String,
          historyStartMonthKey: String? = nil,
+         favoriteModels: [LeaderboardFavoriteModel]? = nil,
          appVersion: String = Self.appVersion,
          updatedAt: Date = .now) {
         self.nickname = nickname
         self.avatarSeed = avatarSeed
         self.historyStartMonthKey = historyStartMonthKey
+        self.favoriteModels = favoriteModels
         self.appVersion = appVersion
         self.updatedAt = updatedAt
     }

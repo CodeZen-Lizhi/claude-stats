@@ -45,7 +45,7 @@ private struct AtollIslandClosedPreviewColumn: View {
             }
             .frame(width: closedWidth, height: 34)
             .frame(maxWidth: .infinity)
-            .opacity(configuration.isSelectedTabEnabled ? 1 : 0.48)
+            .opacity(configuration.isSelectedTabEnabled ? 1 : 0.62)
 
             closedSupplement
         }
@@ -53,6 +53,15 @@ private struct AtollIslandClosedPreviewColumn: View {
 
     @ViewBuilder
     private var closedActivity: some View {
+        if !configuration.isSelectedTabEnabled {
+            disabledClosedActivity
+        } else {
+            enabledClosedActivity
+        }
+    }
+
+    @ViewBuilder
+    private var enabledClosedActivity: some View {
         switch configuration.selectedTab {
         case .media, .appearance, .island:
             mediaClosedActivity
@@ -91,6 +100,19 @@ private struct AtollIslandClosedPreviewColumn: View {
         case .terminal:
             closedBadge(symbol: "apple.terminal", title: "~", tint: .green)
         }
+    }
+
+    private var disabledClosedActivity: some View {
+        HStack(spacing: 8) {
+            Image(systemName: configuration.selectedTab.systemImage)
+                .font(.system(size: 13, weight: .semibold))
+            Text("Off")
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(.white.opacity(0.72))
+        .padding(.horizontal, 12)
     }
 
     private var mediaClosedActivity: some View {
@@ -904,19 +926,11 @@ private struct AtollIslandOpenPreviewColumn: View {
     }
 
     private var openWidth: CGFloat {
-        switch configuration.sizePreset {
-        case .compact: 350
-        case .regular: 420
-        case .large: 480
-        }
+        configuration.sizePreset.openDisplayWidth
     }
 
     private var openHeight: CGFloat {
-        switch configuration.sizePreset {
-        case .compact: 152
-        case .regular: 176
-        case .large: 196
-        }
+        configuration.sizePreset.openDisplayHeight
     }
 }
 

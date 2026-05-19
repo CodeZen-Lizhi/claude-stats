@@ -6,6 +6,7 @@ struct LeaderboardListColumn: View {
     let topScore: Int64
     let selectedScoreID: String?
     let currentUserHash: String?
+    let usesFixedScoreListHeight: Bool
     let isLoadingScores: Bool
     let scoreError: String?
     let scoreEmptyMessage: String?
@@ -35,6 +36,7 @@ struct LeaderboardListColumn: View {
                 disabledPanel
             }
         }
+        .frame(maxHeight: usesFixedScoreListHeight ? .infinity : nil, alignment: .top)
     }
 
     @ViewBuilder
@@ -78,30 +80,46 @@ struct LeaderboardListColumn: View {
             }
             .padding(.bottom, 10)
 
-            if remainingScores.isEmpty {
-                Text(scores.count <= 3 ? "The podium has everyone for this window." : "No additional ranks.")
-                    .font(.sora(12))
-                    .foregroundStyle(Color.stxMuted)
-                    .frame(maxWidth: .infinity, minHeight: 72, alignment: .center)
+            if usesFixedScoreListHeight {
+                ScrollView(.vertical) {
+                    scoreRows
+                        .padding(.trailing, 4)
+                }
+                .scrollIndicators(.visible)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             } else {
-                LazyVStack(spacing: 0) {
-                    ForEach(remainingScores) { score in
-                        LeaderboardScoreRow(
-                            score: score,
-                            formattedScore: LeaderboardFormat.score(score.score, metric: score.metric),
-                            topScore: topScore,
-                            isSelected: score.id == selectedScoreID,
-                            isCurrentUser: isCurrentUser(score),
-                            onSelect: onSelectScore
-                        )
-                        if score.id != remainingScores.last?.id {
-                            StxRule()
-                        }
+                scoreRows
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: usesFixedScoreListHeight ? .infinity : nil, alignment: .topLeading)
+        .mainWindowPanel(padding: 14)
+        .frame(maxHeight: usesFixedScoreListHeight ? .infinity : nil, alignment: .top)
+    }
+
+    @ViewBuilder
+    private var scoreRows: some View {
+        if remainingScores.isEmpty {
+            Text(scores.count <= 3 ? "The podium has everyone for this window." : "No additional ranks.")
+                .font(.sora(12))
+                .foregroundStyle(Color.stxMuted)
+                .frame(maxWidth: .infinity, minHeight: 72, alignment: .center)
+        } else {
+            LazyVStack(spacing: 0) {
+                ForEach(remainingScores) { score in
+                    LeaderboardScoreRow(
+                        score: score,
+                        formattedScore: LeaderboardFormat.score(score.score, metric: score.metric),
+                        topScore: topScore,
+                        isSelected: score.id == selectedScoreID,
+                        isCurrentUser: isCurrentUser(score),
+                        onSelect: onSelectScore
+                    )
+                    if score.id != remainingScores.last?.id {
+                        StxRule()
                     }
                 }
             }
         }
-        .mainWindowPanel(padding: 14)
     }
 
     private var disabledPanel: some View {
@@ -318,7 +336,7 @@ private struct LeaderboardScoreRow: View {
     }
 }
 
-private struct LeaderboardScoreBar: View {
+struct LeaderboardScoreBar: View {
     let fraction: Double
     let active: Bool
 
