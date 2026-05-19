@@ -10,8 +10,10 @@ enum UsageTrendMotion {
 struct UsageTrendChartSnapshot {
     let points: [UsageTrendChartPoint]
     let legendEntries: [UsageTrendLegendEntry]
-    let yUpperBound: Double
-    let structureID: String
+    let viewport: STXDateChartViewport
+    let renderFamilyID: String
+    let viewportID: String
+    let stageID: String
     let dataID: Int
     let isHourly: Bool
     let style: TrendChartStyle
@@ -40,27 +42,24 @@ struct UsageTrendChartSnapshot {
 
         let isEmpty = series.buckets.isEmpty || series.isEmpty || points.isEmpty
         let yUpperBound = Self.chartUpperBound(points, style: style, useLog: useLog, stackByType: stackByType)
+        let viewport = Self.chartViewport(series: series, points: points, yUpperBound: yUpperBound)
         self.points = points
         self.legendEntries = legendEntries
-        self.yUpperBound = yUpperBound
+        self.viewport = viewport
         self.isHourly = isHourly
         self.style = style
         self.useLog = useLog
         self.stackByType = stackByType
         self.isEmpty = isEmpty
 
-        let seriesSignature = stackByType
-            ? Self.tokenTypeKeys.map(\.label).joined(separator: ",")
-            : series.models.joined(separator: ",")
-        self.structureID = [
-            rangeID,
+        let renderFamilyID = [
             isHourly ? "hour" : "day",
-            style == .line ? "line" : "bar",
-            stackByType ? "stack" : "models",
+            Self.renderFamily(style: style, stackByType: stackByType),
             useLog ? "log" : "linear",
-            isEmpty ? "empty" : "data",
-            seriesSignature,
         ].joined(separator: "|")
+        self.renderFamilyID = renderFamilyID
+        self.stageID = "\(isEmpty ? "empty" : "data")|\(renderFamilyID)"
+        self.viewportID = Self.viewportID(rangeID: rangeID, viewport: viewport)
         self.dataID = Self.dataID(points: points, yUpperBound: yUpperBound)
     }
 
@@ -124,6 +123,46 @@ struct UsageTrendChartSnapshot {
             return log1p(niceTokenCeiling(expm1(max(1, visibleMax))))
         }
         return niceTokenCeiling(max(1, visibleMax))
+    }
+
+    private static func chartViewport(
+        series: TrendSeries,
+        points: [UsageTrendChartPoint],
+        yUpperBound: Double
+    ) -> STXDateChartViewport {
+        let starts = series.buckets.map(\.start).isEmpty
+            ? points.map(\.date)
+            : series.buckets.map(\.start)
+        let xStart = starts.min() ?? Date(timeIntervalSinceReferenceDate: 0)
+        let rawXEnd = starts.max() ?? xStart
+        let unit: Calendar.Component = series.granularity == .hour ? .hour : .day
+        let fallbackInterval: TimeInterval = series.granularity == .hour ? 3_600 : 86_400
+        let xEnd = Calendar.current.date(byAdding: unit, value: 1, to: rawXEnd)
+            ?? rawXEnd.addingTimeInterval(fallbackInterval)
+        return STXDateChartViewport(xStart: xStart, xEnd: xEnd, yStart: 0, yEnd: yUpperBound)
+    }
+
+    private static func renderFamily(style: TrendChartStyle, stackByType: Bool) -> String {
+        switch (style, stackByType) {
+        case (.line, false):
+            "model-line"
+        case (.line, true):
+            "type-area"
+        case (.bar, false):
+            "model-bar"
+        case (.bar, true):
+            "type-bar"
+        }
+    }
+
+    private static func viewportID(rangeID: String, viewport: STXDateChartViewport) -> String {
+        [
+            rangeID,
+            String(Int(viewport.xStart.timeIntervalSinceReferenceDate.rounded())),
+            String(Int(viewport.xEnd.timeIntervalSinceReferenceDate.rounded())),
+            String(Int((viewport.yStart * 1_000).rounded())),
+            String(Int((viewport.yEnd * 1_000).rounded())),
+        ].joined(separator: "|")
     }
 
     private static func niceTokenCeiling(_ value: Double) -> Double {
@@ -221,7 +260,7 @@ struct UsageTrendChartView<Legend: View>: View {
             }
             chartStage
         }
-        .animation(UsageTrendMotion.chartCrossfade, value: snapshot.structureID)
+        .animation(UsageTrendMotion.chartCrossfade, value: snapshot.stageID)
     }
 
     private var chartStage: some View {
@@ -231,11 +270,11 @@ struct UsageTrendChartView<Legend: View>: View {
                     .font(.sora(12))
                     .foregroundStyle(Color.stxMuted.opacity(0.72))
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                    .id("empty|\(snapshot.structureID)")
+                    .id("empty|\(snapshot.stageID)")
                     .transition(stageTransition)
             } else {
                 chart
-                    .id("chart|\(snapshot.structureID)")
+                    .id("chart|\(snapshot.renderFamilyID)")
                     .transition(stageTransition)
             }
         }
@@ -272,7 +311,6 @@ struct UsageTrendChartView<Legend: View>: View {
                 .cornerRadius(barCornerRadius)
             }
         }
-        .chartYScale(domain: 0...snapshot.yUpperBound)
         .chartYAxis {
             AxisMarks { value in
                 AxisGridLine().foregroundStyle(Color.stxStroke)
@@ -312,6 +350,7 @@ struct UsageTrendChartView<Legend: View>: View {
         }
         .chartLegend(.hidden)
         .animation(UsageTrendMotion.chartMorph, value: snapshot.dataID)
+        .stxDateChartViewportTransition(snapshot.viewport, value: snapshot.viewportID)
 
         if snapshot.stackByType {
             base.chartForegroundStyleScale(

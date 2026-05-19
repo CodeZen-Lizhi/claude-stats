@@ -34,18 +34,24 @@ struct SettingsDetailView: View {
     }
 
     private var settingsContent: some View {
-        FadingScrollView {
-            VStack(alignment: .leading, spacing: 32) {
-                Text(section.title)
-                    .font(.sora(28, weight: .semibold))
-                    .padding(.bottom, 4)
-                sectionContent
+        Group {
+            if section == .notchIsland {
+                NotchIslandSettingsView(onSelectSection: onSelectSection)
+            } else {
+                FadingScrollView {
+                    VStack(alignment: .leading, spacing: 32) {
+                        Text(section.title)
+                            .font(.sora(28, weight: .semibold))
+                            .padding(.bottom, 4)
+                        sectionContent
+                    }
+                    .frame(maxWidth: 980, alignment: .leading)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 52)
+                    .padding(.bottom, 28)
+                }
             }
-            .frame(maxWidth: 980, alignment: .leading)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 20)
-            .padding(.top, 52)
-            .padding(.bottom, 28)
         }
     }
 
@@ -55,7 +61,7 @@ struct SettingsDetailView: View {
         case .general: GeneralSettingsView()
         case .features: FeaturesSettingsView(onSelectSection: onSelectSection)
         case .menuBar: MenuBarSettingsView()
-        case .notchIsland: NotchIslandSettingsView(onSelectSection: onSelectSection)
+        case .notchIsland: EmptyView()
         case .platforms: PlatformsSettingsView()
         case .tracking: TrackingSettingsView(onSelectSection: onSelectSection)
         case .leaderboards: LeaderboardsSettingsView(onSelectSection: onSelectSection)

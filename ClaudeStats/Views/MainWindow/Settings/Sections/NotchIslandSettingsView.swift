@@ -1,115 +1,228 @@
+import AtollEmbed
 import SwiftUI
 
 struct NotchIslandSettingsView: View {
     @Environment(AppEnvironment.self) private var env
     var onSelectSection: (SettingsSection) -> Void = { _ in }
+    @SceneStorage("notchIslandSettings.selectedTab") private var selectedTabRaw = NotchIslandSettingsTab.island.rawValue
+    @State private var settingsRefreshToken = 0
+
+    private var selectedTab: NotchIslandSettingsTab {
+        NotchIslandSettingsTab(rawValue: selectedTabRaw) ?? .island
+    }
 
     var body: some View {
         @Bindable var prefs = env.preferences
 
-        VStack(alignment: .leading, spacing: 28) {
-            if !prefs.notchIslandEnabled {
-                FeatureDisabledNotice(
-                    featureName: "Notch Island",
-                    message: "Turn it on in Features to edit display behavior and modules."
-                ) {
-                    onSelectSection(.features)
-                }
-            }
+        HStack(spacing: 0) {
+            NotchIslandSettingsSidebar(
+                selection: selectedTabBinding,
+                enabledModules: prefs.notchIslandEnabledModules
+            )
+            .frame(width: 232)
 
-            SettingGroup(title: "Display") {
-                VStack(spacing: 0) {
-                    SettingRow(title: "Display mode",
-                               description: "Where the island window is created.") {
-                        Picker("", selection: $prefs.notchIslandDisplayMode) {
-                            ForEach(NotchIslandDisplayMode.allCases) { mode in
-                                Text(mode.displayName).tag(mode)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(maxWidth: 190)
-                    }
+            Rectangle()
+                .fill(Color.stxStroke)
+                .frame(width: 1)
 
-                    SettingRowDivider()
-
-                    SettingRow(title: "Size",
-                               description: "Compact and expanded island dimensions.") {
-                        Picker("", selection: $prefs.notchIslandSizePreset) {
-                            ForEach(NotchIslandSizePreset.allCases) { preset in
-                                Text(preset.displayName).tag(preset)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(maxWidth: 150)
-                    }
-
-                    SettingRowDivider()
-
-                    SettingRow(title: "Hover expansion",
-                               description: "Expand while the pointer is over the island.") {
-                        Toggle("", isOn: $prefs.notchIslandHoverExpansionEnabled)
-                            .labelsHidden()
-                    }
-
-                    SettingRowDivider()
-
-                    SettingRow(title: "Shortcut bridge",
-                               description: "Open or close the island with Command-Option-N.") {
-                        Toggle("", isOn: $prefs.notchIslandShortcutEnabled)
-                            .labelsHidden()
-                    }
-                }
-                .settingCard()
-            }
-            .disabledSettingsBlock(!prefs.notchIslandEnabled)
-
-            SettingGroup(title: "Modules", caption: "Heavy or permissioned Atoll modules stay off unless you enable them here.") {
-                VStack(spacing: 0) {
-                    ForEach(NotchIslandModule.allCases) { module in
-                        moduleRow(module, prefs: prefs)
-                        if module.id != NotchIslandModule.allCases.last?.id {
-                            SettingRowDivider()
-                        }
-                    }
-                }
-                .settingCard()
-            }
-            .disabledSettingsBlock(!prefs.notchIslandEnabled)
+            NotchIslandSettingsDetailPane(
+                tab: selectedTab,
+                preferences: prefs,
+                isFeatureEnabled: prefs.notchIslandEnabled,
+                refreshToken: settingsRefreshToken,
+                onSelectSection: onSelectSection,
+                onSettingChanged: noteSettingChanged
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onChange(of: selectedTabRaw) { _, _ in
+            noteSettingChanged()
         }
     }
 
-    private func moduleRow(_ module: NotchIslandModule, prefs: Preferences) -> some View {
-        let descriptor = NotchIslandFeatureRegistry.descriptor(for: module)
-        return SettingRow(
-            title: module.title,
-            description: module.settingsDescription
-        ) {
-            HStack(spacing: 10) {
-                Text(descriptor.permissionState.displayName)
-                    .font(.sora(10, weight: .medium))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .foregroundStyle(module.isHeavyOrExperimental ? Color.stxMuted : Color.primary)
-                Toggle("", isOn: moduleBinding(module, prefs: prefs))
-                    .labelsHidden()
-            }
-            .frame(maxWidth: 190, alignment: .trailing)
-        }
-    }
-
-    private func moduleBinding(_ module: NotchIslandModule, prefs: Preferences) -> Binding<Bool> {
+    private var selectedTabBinding: Binding<NotchIslandSettingsTab> {
         Binding(
-            get: { prefs.notchIslandEnabledModules.contains(module) },
-            set: { isEnabled in
-                var modules = prefs.notchIslandEnabledModules
-                if isEnabled {
-                    modules.insert(module)
-                } else {
-                    modules.remove(module)
-                }
-                prefs.notchIslandEnabledModules = modules
-            }
+            get: { selectedTab },
+            set: { selectedTabRaw = $0.rawValue }
         )
+    }
+
+    private func noteSettingChanged() {
+        settingsRefreshToken &+= 1
+    }
+}
+
+enum NotchIslandSettingsGroup: String, CaseIterable, Identifiable {
+    case core
+    case live
+    case utilities
+    case system
+    case integrations
+
+    var id: String { rawValue }
+
+    var title: String? {
+        switch self {
+        case .core: nil
+        case .live: "LIVE"
+        case .utilities: "UTILITIES"
+        case .system: "SYSTEM"
+        case .integrations: "INTEGRATIONS"
+        }
+    }
+}
+
+enum NotchIslandSettingsTab: String, CaseIterable, Identifiable {
+    case island
+    case appearance
+    case media
+    case stats
+    case timer
+    case clipboard
+    case colorPicker
+    case calendar
+    case shelf
+    case privacy
+    case recording
+    case focus
+    case battery
+    case bluetooth
+    case downloads
+    case osd
+    case lockScreenWidgets
+    case extensionBridge
+    case screenAssistant
+    case terminal
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .island: "Island"
+        case .appearance: "Appearance"
+        case .media: "Media"
+        case .stats: "Stats"
+        case .timer: "Timer"
+        case .clipboard: "Clipboard"
+        case .colorPicker: "Color Picker"
+        case .calendar: "Calendar"
+        case .shelf: "Shelf"
+        case .privacy: "Privacy"
+        case .recording: "Recording"
+        case .focus: "Focus"
+        case .battery: "Battery"
+        case .bluetooth: "Bluetooth"
+        case .downloads: "Downloads"
+        case .osd: "OSD"
+        case .lockScreenWidgets: "Lock Widgets"
+        case .extensionBridge: "Extensions"
+        case .screenAssistant: "Screen Assistant"
+        case .terminal: "Terminal"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .island: "capsule.portrait.tophalf.filled"
+        case .appearance: "paintpalette"
+        case .media: "music.note"
+        case .stats: "cpu"
+        case .timer: "timer"
+        case .clipboard: "doc.on.clipboard"
+        case .colorPicker: "eyedropper"
+        case .calendar: "calendar"
+        case .shelf: "tray.and.arrow.down"
+        case .privacy: "web.camera"
+        case .recording: "record.circle"
+        case .focus: "moon"
+        case .battery: "battery.75percent"
+        case .bluetooth: "headphones"
+        case .downloads: "arrow.down.circle"
+        case .osd: "slider.horizontal.3"
+        case .lockScreenWidgets: "lock.display"
+        case .extensionBridge: "puzzlepiece.extension"
+        case .screenAssistant: "sparkles"
+        case .terminal: "terminal"
+        }
+    }
+
+    var group: NotchIslandSettingsGroup {
+        switch self {
+        case .island, .appearance: .core
+        case .media, .stats, .timer, .calendar, .privacy, .recording, .focus, .battery: .live
+        case .clipboard, .colorPicker, .shelf, .downloads, .osd, .terminal: .utilities
+        case .bluetooth, .lockScreenWidgets: .system
+        case .extensionBridge, .screenAssistant: .integrations
+        }
+    }
+
+    var module: NotchIslandModule? {
+        switch self {
+        case .island, .appearance:
+            nil
+        case .media:
+            .media
+        case .stats:
+            .stats
+        case .timer:
+            .timer
+        case .clipboard:
+            .clipboard
+        case .colorPicker:
+            .colorPicker
+        case .calendar:
+            .calendar
+        case .shelf:
+            .shelf
+        case .privacy:
+            .privacy
+        case .recording:
+            .recording
+        case .focus:
+            .focus
+        case .battery:
+            .battery
+        case .bluetooth:
+            .bluetooth
+        case .downloads:
+            .downloads
+        case .osd:
+            .osd
+        case .lockScreenWidgets:
+            .lockScreenWidgets
+        case .extensionBridge:
+            .extensionBridge
+        case .screenAssistant:
+            .screenAssistant
+        case .terminal:
+            .terminal
+        }
+    }
+
+    var bridgeTab: AtollSettingsTabID {
+        AtollSettingsTabID(rawValue: rawValue) ?? .island
+    }
+
+    var subtitle: String {
+        if let module {
+            return module.settingsDescription
+        }
+        switch self {
+        case .island:
+            return "Window placement, sizing, hover behavior, and shortcuts."
+        case .appearance:
+            return "Visual effects, chrome, media tinting, and idle details."
+        default:
+            return ""
+        }
+    }
+
+    static var grouped: [(group: NotchIslandSettingsGroup, tabs: [NotchIslandSettingsTab])] {
+        NotchIslandSettingsGroup.allCases.compactMap { group in
+            let tabs = allCases.filter { $0.group == group }
+            return tabs.isEmpty ? nil : (group, tabs)
+        }
     }
 }
 
@@ -117,7 +230,6 @@ struct NotchIslandSettingsView: View {
 #Preview("Notch Island Settings") {
     NotchIslandSettingsView()
         .environment(AppEnvironment.preview())
-        .padding()
-        .frame(width: 780)
+        .frame(width: 980, height: 680)
 }
 #endif

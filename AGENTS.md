@@ -103,6 +103,67 @@ the GitHub Release body) and minimal HTML (embedded directly in the appcast's
 `ClaudeStats.xcodeproj` is generated, not committed. After editing `project.yml`
 (or adding/removing source folders), run `bash scripts/generate.sh`.
 
+## Atoll / Notch Island integration
+
+`ThirdParty/Atoll` is a maintained fork submodule, not a throwaway dirty checkout.
+Its fork remote is `https://github.com/1pitaph/Atoll.git`, the original project
+remote is named `upstream`, and Claude Stats integration work lives on
+`integration/claude-stats`.
+
+Keep Atoll source changes inside the Atoll fork. Commit and push them from inside
+`ThirdParty/Atoll`, then return to the main repo and commit only the updated
+submodule pointer plus any Claude Stats integration files. Do not add
+`ignore = dirty` back to `.gitmodules`; a dirty Atoll checkout should be visible
+because it means the main app depends on uncommitted submodule code.
+
+Typical Atoll edit flow:
+
+```bash
+git -C ThirdParty/Atoll checkout integration/claude-stats
+# edit Atoll files
+git -C ThirdParty/Atoll commit -am "Describe Atoll change"
+git -C ThirdParty/Atoll push origin integration/claude-stats
+git add ThirdParty/Atoll
+```
+
+When pulling new upstream Atoll changes, merge them into the integration branch
+instead of replacing the branch:
+
+```bash
+git -C ThirdParty/Atoll fetch upstream
+git -C ThirdParty/Atoll checkout integration/claude-stats
+git -C ThirdParty/Atoll merge upstream/main
+git -C ThirdParty/Atoll push origin integration/claude-stats
+git add ThirdParty/Atoll
+```
+
+Atoll's MediaRemote runtime resources are intentionally split between the fork
+and the app integration:
+
+- `MediaRemoteAdapter.framework` stays embedded as nested code in
+  `Contents/Frameworks` through the normal XcodeGen embed/sign configuration.
+  Do not copy it into Resources for the app just to satisfy an old lookup path.
+- `mediaremote-adapter.pl` is copied from
+  `ThirdParty/Atoll/mediaremote-adapter/mediaremote-adapter.pl` into
+  `Contents/Resources`.
+- `NowPlayingTestClient` is copied from
+  `ThirdParty/Atoll/Contents/Helpers/NowPlayingTestClient` into
+  `Contents/Helpers`, kept executable, and re-signed during signed release builds.
+
+The app-side runtime path logic lives in
+`AtollEmbed/Runtime/AtollRuntimeResourceLocator.swift`. Use that locator for
+Atoll bundle paths instead of open-coding `Bundle.main` lookups. It resolves the
+Perl script from Resources, prefers `Bundle.main.privateFrameworksURL` /
+`Contents/Frameworks` for `MediaRemoteAdapter.framework` with a Resources fallback
+for compatibility, and requires `NowPlayingTestClient` to be executable. Keep
+focused tests in `ClaudeStatsTests/AtollRuntimeResourceLocatorTests.swift` when
+changing these paths.
+
+After changing Atoll integration or `project.yml`, run `bash scripts/generate.sh`
+if the Xcode project needs regeneration, then run `bash scripts/run-tests.sh` and
+`bash scripts/run-debug.sh`. For release/signing-related changes, also verify the
+built app with `codesign --verify --deep --strict`.
+
 ## Provider code organization
 
 Today there is one provider (Codex). Provider-specific behaviour lives under

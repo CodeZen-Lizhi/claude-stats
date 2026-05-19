@@ -8,36 +8,19 @@ public enum AtollDefaultsBridge {
         let features = configuration.enabledFeatures
 
         Defaults[.openNotchOnHover] = configuration.openOnHover
-        Defaults[.minimumHoverDuration] = 0.3
         Defaults[.showOnAllDisplays] = configuration.showOnAllDisplays
-        Defaults[.settingsIconInNotch] = true
-        Defaults[.enableMinimalisticUI] = false
-        Defaults[.hideNonNotchUntilHover] = false
-        Defaults[.externalDisplayStyle] = .dynamicIsland
 
         Defaults[.showStandardMediaControls] = features.contains(.media)
         Defaults[.showCalendar] = features.contains(.calendar)
-        Defaults[.showMirror] = false
         Defaults[.dynamicShelf] = features.contains(.shelf)
 
         Defaults[.enableTimerFeature] = features.contains(.timer)
-        Defaults[.timerDisplayMode] = .tab
-        Defaults[.timerControlWindowEnabled] = false
 
         Defaults[.enableStatsFeature] = features.contains(.stats)
-        Defaults[.statsUpdateInterval] = configuration.statsUpdateInterval
-        Defaults[.showCpuGraph] = features.contains(.stats)
-        Defaults[.showMemoryGraph] = features.contains(.stats)
-        Defaults[.showGpuGraph] = features.contains(.stats)
 
         Defaults[.enableClipboardManager] = features.contains(.clipboard)
-        Defaults[.clipboardDisplayMode] = .separateTab
-        Defaults[.showClipboardIcon] = false
-        Defaults[.enableNotes] = false
 
         Defaults[.enableColorPickerFeature] = features.contains(.colorPicker)
-        Defaults[.showColorPickerIcon] = features.contains(.colorPicker)
-        Defaults[.colorPickerDisplayMode] = .popover
 
         Defaults[.showBatteryIndicator] = features.contains(.battery)
         Defaults[.showPowerStatusNotifications] = features.contains(.battery)
@@ -51,24 +34,11 @@ public enum AtollDefaultsBridge {
 
         Defaults[.showBluetoothDeviceConnections] = features.contains(.bluetooth)
         Defaults[.enableDownloadListener] = features.contains(.downloads)
-        Defaults[.enableSystemHUD] = features.contains(.osd)
-        Defaults[.enableCustomOSD] = features.contains(.osd)
+        syncOSDAvailability(features.contains(.osd))
 
-        let lockScreenEnabled = features.contains(.lockScreenWidgets)
-        Defaults[.enableLockScreenLiveActivity] = lockScreenEnabled
-        Defaults[.enableLockScreenMediaWidget] = lockScreenEnabled
-        Defaults[.enableLockScreenWeatherWidget] = lockScreenEnabled
-        Defaults[.enableLockScreenFocusWidget] = lockScreenEnabled
-        Defaults[.enableLockScreenReminderWidget] = lockScreenEnabled
-        Defaults[.enableLockScreenTimerWidget] = lockScreenEnabled
+        Defaults[.enableLockScreenLiveActivity] = features.contains(.lockScreenWidgets)
 
-        let extensionsEnabled = features.contains(.extensionBridge)
-        Defaults[.enableThirdPartyExtensions] = extensionsEnabled
-        Defaults[.enableExtensionLiveActivities] = extensionsEnabled
-        Defaults[.enableExtensionLockScreenWidgets] = extensionsEnabled
-        Defaults[.enableExtensionNotchExperiences] = extensionsEnabled
-        Defaults[.enableExtensionNotchTabs] = extensionsEnabled
-        Defaults[.enableExtensionFileSharing] = extensionsEnabled
+        Defaults[.enableThirdPartyExtensions] = features.contains(.extensionBridge)
 
         Defaults[.enableScreenAssistant] = features.contains(.screenAssistant)
         Defaults[.enableTerminalFeature] = features.contains(.terminal)
@@ -78,6 +48,22 @@ public enum AtollDefaultsBridge {
             features: features,
             maxAllowedWidth: maxAllowedNotchWidth()
         )
+    }
+
+    private static func syncOSDAvailability(_ isEnabled: Bool) {
+        guard isEnabled else {
+            Defaults[.enableSystemHUD] = false
+            Defaults[.enableCustomOSD] = false
+            Defaults[.enableVerticalHUD] = false
+            Defaults[.enableCircularHUD] = false
+            return
+        }
+
+        if !Defaults[.enableCustomOSD],
+           !Defaults[.enableVerticalHUD],
+           !Defaults[.enableCircularHUD] {
+            Defaults[.enableSystemHUD] = true
+        }
     }
 
     public static func standardTabCount(for features: Set<AtollIslandFeature>) -> Int {
@@ -122,7 +108,7 @@ public enum AtollDefaultsBridge {
     }
 
     @MainActor
-    static var featuresFromCurrentDefaults: Set<AtollIslandFeature> {
+    public static var featuresFromCurrentDefaults: Set<AtollIslandFeature> {
         var features: Set<AtollIslandFeature> = []
         if Defaults[.showStandardMediaControls] {
             features.insert(.media)
