@@ -59,6 +59,60 @@ struct LeaderboardCloudKitMappingTests {
         #expect(record[CloudKitLeaderboardRecordMapper.Field.period] as? String == "month")
         #expect(record[CloudKitLeaderboardRecordMapper.Field.periodKey] as? String == "2026-05")
         #expect((record[CloudKitLeaderboardRecordMapper.Field.score] as? NSNumber)?.int64Value == 123_000)
+        #expect(record[CloudKitLeaderboardRecordMapper.Field.providerScope] as? String == "history")
+    }
+
+    @Test("History records are excluded before assigning leaderboard ranks")
+    func rankedScoresExcludeHistoryRecordsBeforeRankAssignment() {
+        let highScore = CloudKitLeaderboardRecordMapper.record(
+            from: LeaderboardSubmission(
+                metric: .tokensWithCache,
+                period: .day,
+                periodKey: "2026-05-19",
+                score: 300,
+                nickname: "Ada",
+                periodStartUTC: Date(timeIntervalSince1970: 1_768_521_600),
+                periodEndUTC: Date(timeIntervalSince1970: 1_768_608_000),
+                appVersion: "1.2.3",
+                updatedAt: Date(timeIntervalSince1970: 1_768_530_000)
+            ),
+            userHash: "ada"
+        )
+        let lowerScore = CloudKitLeaderboardRecordMapper.record(
+            from: LeaderboardSubmission(
+                metric: .tokensWithCache,
+                period: .day,
+                periodKey: "2026-05-19",
+                score: 200,
+                nickname: "Grace",
+                periodStartUTC: Date(timeIntervalSince1970: 1_768_521_600),
+                periodEndUTC: Date(timeIntervalSince1970: 1_768_608_000),
+                appVersion: "1.2.3",
+                updatedAt: Date(timeIntervalSince1970: 1_768_540_000)
+            ),
+            userHash: "grace"
+        )
+        let history = CloudKitLeaderboardRecordMapper.historyRecord(
+            from: LeaderboardHistorySubmission(
+                metric: .tokensWithCache,
+                bucketPeriod: .day,
+                periodKey: "2026-05-19",
+                score: 500,
+                periodStartUTC: Date(timeIntervalSince1970: 1_768_521_600),
+                periodEndUTC: Date(timeIntervalSince1970: 1_768_608_000),
+                appVersion: "1.2.3",
+                updatedAt: Date(timeIntervalSince1970: 1_768_520_000)
+            ),
+            userHash: "history"
+        )
+
+        let scores = CloudKitLeaderboardRecordMapper.rankedScores(from: [history, highScore, history, lowerScore])
+
+        #expect(scores.map(\.id) == [
+            "score_v1_ada_tokensWithCache_day_2026-05-19",
+            "score_v1_grace_tokensWithCache_day_2026-05-19",
+        ])
+        #expect(scores.compactMap(\.rank) == [1, 2])
     }
 
     @Test("CKRecord maps back to a Sendable score value")

@@ -78,6 +78,22 @@ struct LeaderboardScore: Sendable, Hashable, Identifiable, Codable {
         self.historyStartMonthKey = historyStartMonthKey
         self.updatedAt = updatedAt
     }
+
+    func withRank(_ rank: Int?) -> LeaderboardScore {
+        LeaderboardScore(
+            id: id,
+            userHash: userHash,
+            metric: metric,
+            period: period,
+            periodKey: periodKey,
+            score: score,
+            rank: rank,
+            nickname: nickname,
+            avatarSeed: avatarSeed,
+            historyStartMonthKey: historyStartMonthKey,
+            updatedAt: updatedAt
+        )
+    }
 }
 
 struct LeaderboardScoreHistoryPoint: Sendable, Hashable, Identifiable, Codable {

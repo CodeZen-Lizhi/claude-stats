@@ -477,7 +477,7 @@ final class LeaderboardSyncViewModel {
     }
 
     private func applyCachedScores(_ cached: LeaderboardCachedScores, requestedPeriod: LeaderboardPeriod) {
-        scores = cached.scores
+        scores = scoresWithContiguousRanks(cached.scores)
         lastLoadedPeriodKey = cached.key.periodKey
         scoreError = nil
         scoreEmptyMessage = cached.scores.isEmpty ? emptyScoresMessage(for: requestedPeriod) : nil
@@ -502,10 +502,11 @@ final class LeaderboardSyncViewModel {
                     periodKey: window.periodKey,
                     limit: 100
                 )
-                await localStore.writeScores(fetched, for: key, savedAt: Date())
-                await cacheProfiles(from: fetched)
+                let displayScores = scoresWithContiguousRanks(fetched)
+                await localStore.writeScores(displayScores, for: key, savedAt: Date())
+                await cacheProfiles(from: displayScores)
                 if !fetched.isEmpty {
-                    scores = fetched
+                    scores = displayScores
                     lastLoadedPeriodKey = window.periodKey
                     scoreError = nil
                     scoreEmptyMessage = nil
@@ -530,6 +531,12 @@ final class LeaderboardSyncViewModel {
         } else {
             scores = []
             scoreError = reason
+        }
+    }
+
+    private func scoresWithContiguousRanks(_ scores: [LeaderboardScore]) -> [LeaderboardScore] {
+        scores.enumerated().map { index, score in
+            score.withRank(index + 1)
         }
     }
 

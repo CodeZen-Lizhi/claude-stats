@@ -6,7 +6,7 @@ struct NotchIslandSettingsSidebar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ScrollView {
+            FadingScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     ForEach(NotchIslandSettingsTab.grouped, id: \.group) { section in
                         if let title = section.group.title {
@@ -33,7 +33,6 @@ struct NotchIslandSettingsSidebar: View {
                 .padding(.bottom, 14)
             }
         }
-        .background(Color.primary.opacity(0.025))
     }
 }
 
@@ -73,7 +72,7 @@ private struct NotchIslandSidebarRow: View {
             .background(rowBackground)
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, 8)
+        .padding(.trailing, 8)
     }
 
     private var iconForeground: Color {

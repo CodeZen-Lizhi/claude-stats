@@ -114,6 +114,27 @@ struct LeaderboardSyncViewModelTests {
         #expect(await fixture.client.fetchedPeriodKeys().isEmpty)
     }
 
+    @Test("Fresh cached scores normalize skipped ranks without hitting CloudKit")
+    func freshCachedScoresNormalizeSkippedRanks() async {
+        let fixture = makeFixture(enabled: true)
+        let now = dateUTC(2026, 5, 16, 8)
+        let periodKey = LeaderboardPeriodCalculator.window(for: .day, now: now).periodKey
+        await fixture.localStore.writeScores(
+            [
+                score(id: "cached-a", userHash: "cached-a", rank: 2, nickname: "Cached A", value: 300, now: now),
+                score(id: "cached-b", userHash: "cached-b", rank: 6, nickname: "Cached B", value: 200, now: now),
+            ],
+            for: LeaderboardScoresCacheKey(metric: .tokensWithCache, period: .day, periodKey: periodKey, limit: 100),
+            savedAt: Date()
+        )
+
+        await fixture.viewModel.loadScores(metric: .tokensWithCache, period: .day, now: now)
+
+        #expect(fixture.viewModel.scores.map(\.id) == ["cached-a", "cached-b"])
+        #expect(fixture.viewModel.scores.compactMap(\.rank) == [1, 2])
+        #expect(await fixture.client.fetchedPeriodKeys().isEmpty)
+    }
+
     @Test("Stale cached scores stay visible while CloudKit refreshes")
     func staleCachedScoresRefreshFromCloudKit() async {
         let fixture = makeFixture(enabled: true)

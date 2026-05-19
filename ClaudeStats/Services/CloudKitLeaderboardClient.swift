@@ -70,6 +70,7 @@ enum CloudKitLeaderboardConfig {
     static let containerIdentifier = "iCloud.com.claudestats.ClaudeStats"
     static let recordType = "LeaderboardScoreV1"
     static let providerScope = "all"
+    static let historyProviderScope = "history"
 }
 
 enum CloudKitRuntimeEntitlements {
@@ -158,6 +159,25 @@ enum CloudKitLeaderboardRecordMapper {
         "history_v1_\(userHash)_\(metric.rawValue)_\(bucketPeriod.rawValue)_\(periodKey)"
     }
 
+    static func isScoreRecord(_ record: CKRecord) -> Bool {
+        record.recordID.recordName.hasPrefix("score_v1_")
+    }
+
+    static func rankedScores(from records: [CKRecord],
+                             profiles: [String: LeaderboardProfile] = [:]) -> [LeaderboardScore] {
+        records
+            .filter(isScoreRecord)
+            .enumerated()
+            .compactMap { index, record in
+                let userHash = userHash(from: record)
+                return score(
+                    from: record,
+                    rank: index + 1,
+                    profile: userHash.flatMap { profiles[$0] }
+                )
+            }
+    }
+
     static func record(from submission: LeaderboardSubmission, userHash: String) -> CKRecord {
         let recordID = CKRecord.ID(recordName: recordName(
             userHash: userHash,
@@ -195,7 +215,7 @@ enum CloudKitLeaderboardRecordMapper {
         record[Field.period] = submission.bucketPeriod.rawValue
         record[Field.periodKey] = submission.periodKey
         record[Field.score] = NSNumber(value: submission.score)
-        record[Field.providerScope] = CloudKitLeaderboardConfig.providerScope
+        record[Field.providerScope] = CloudKitLeaderboardConfig.historyProviderScope
         record[Field.periodStartUTC] = submission.periodStartUTC as NSDate
         if let periodEndUTC = submission.periodEndUTC {
             record[Field.periodEndUTC] = periodEndUTC as NSDate
@@ -438,16 +458,7 @@ struct CloudKitLeaderboardClient: LeaderboardCloudServicing {
             let records = result.matchResults
                 .compactMap { try? $0.1.get() }
             let profiles = await profiles(for: records)
-            return records
-                .enumerated()
-                .compactMap { index, record in
-                    let userHash = CloudKitLeaderboardRecordMapper.userHash(from: record)
-                    return CloudKitLeaderboardRecordMapper.score(
-                        from: record,
-                        rank: index + 1,
-                        profile: userHash.flatMap { profiles[$0] }
-                    )
-                }
+            return CloudKitLeaderboardRecordMapper.rankedScores(from: records, profiles: profiles)
         } catch {
             throw LeaderboardCloudError.cloudKit(Self.shortCloudKitMessage(error))
         }
