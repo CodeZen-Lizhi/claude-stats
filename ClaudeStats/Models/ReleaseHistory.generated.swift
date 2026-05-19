@@ -3,6 +3,29 @@
 extension ReleaseHistoryCatalog {
     static let generatedEntries: [ReleaseHistoryEntry] = [
         ReleaseHistoryEntry(
+            version: "1.5.2",
+            date: "May 19, 2026",
+            headline: "新增被动刷新助手状态的API，无需主动请求即可获取当前注册状态",
+            changes: [
+                "新增check类型的助手操作枚举与对应展示文案",
+                "优化release构建脚本，添加助手工具重签名和权限校验逻辑",
+                "修复Xcode构建签名配置，禁用自动注入权限",
+                "新增单元测试验证被动状态刷新逻辑",
+            ]
+        ),
+        ReleaseHistoryEntry(
+            version: "1.5.0 / 1.5.1",
+            date: "May 19, 2026",
+            headline: "重构并扩展了排行榜功能，新增了每日排行榜的日期导航控件，支持切换查看过往UTC日期的排行榜数据。",
+            changes: [
+                "将原收藏模型面板重命名为收藏模型面板并调整标题文本",
+                "新增`LeaderboardDailyDateNavigator`工具类处理UTC日期计算和格式化",
+                "新增每日周期选择控件，支持前后切换日期和显示今日/昨日标签",
+                "重构排行榜总览面板布局，拆分周期选择器并集成日期导航控件",
+                "更新视图模型和测试用例，支持按指定UTC日期加载排行榜数据",
+            ]
+        ),
+        ReleaseHistoryEntry(
             version: "1.4.9",
             date: "May 18, 2026",
             headline: "实现首次启动时自动设置开机自启的默认行为，仅在用户未手动修改过设置时生效",
