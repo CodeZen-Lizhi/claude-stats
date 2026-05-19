@@ -352,6 +352,44 @@ targets:
       - sdk: SystemConfiguration.framework
       - sdk: CoreWLAN.framework
     postBuildScripts:
+      - name: Copy Atoll MediaRemote Runtime Resources
+        inputFiles:
+          - "$(SRCROOT)/ThirdParty/Atoll/mediaremote-adapter/mediaremote-adapter.pl"
+          - "$(SRCROOT)/ThirdParty/Atoll/Contents/Helpers/NowPlayingTestClient"
+        outputFiles:
+          - "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/mediaremote-adapter.pl"
+          - "$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/NowPlayingTestClient"
+        script: |
+          set -euo pipefail
+
+          RESOURCES_DIR="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}"
+          HELPERS_DIR="${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Helpers"
+
+          /bin/mkdir -p "$RESOURCES_DIR" "$HELPERS_DIR"
+          /usr/bin/install -m 755 \
+            "${SRCROOT}/ThirdParty/Atoll/mediaremote-adapter/mediaremote-adapter.pl" \
+            "${RESOURCES_DIR}/mediaremote-adapter.pl"
+          /usr/bin/install -m 755 \
+            "${SRCROOT}/ThirdParty/Atoll/Contents/Helpers/NowPlayingTestClient" \
+            "${HELPERS_DIR}/NowPlayingTestClient"
+
+          if [ "${CODE_SIGNING_ALLOWED:-NO}" != "NO" ] \
+            && [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ] \
+            && [ "${EXPANDED_CODE_SIGN_IDENTITY}" != "-" ]; then
+            CODESIGN_OPTIONS=""
+            if [ "${ENABLE_HARDENED_RUNTIME:-NO}" = "YES" ]; then
+              CODESIGN_OPTIONS="--options runtime"
+            fi
+
+            CODESIGN_TIMESTAMP=""
+            case " ${OTHER_CODE_SIGN_FLAGS:-} " in
+              *" --timestamp "*) CODESIGN_TIMESTAMP="--timestamp" ;;
+            esac
+
+            /usr/bin/codesign --force $CODESIGN_OPTIONS $CODESIGN_TIMESTAMP \
+              --sign "${EXPANDED_CODE_SIGN_IDENTITY}" \
+              "${HELPERS_DIR}/NowPlayingTestClient"
+          fi
       - name: Generate Rockxy Helper LaunchDaemon Plist
         outputFiles:
           - "$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchDaemons/$(ROCKXY_HELPER_PLIST_NAME)"

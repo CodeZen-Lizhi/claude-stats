@@ -4,8 +4,8 @@
 	ignore = dirty
 [submodule "ThirdParty/Atoll"]
 	path = ThirdParty/Atoll
-	url = https://github.com/Ebullioscopic/Atoll.git
-	ignore = dirty
+	url = https://github.com/1pitaph/Atoll.git
+	branch = integration/claude-stats
 [submodule "ThirdParty/Rockxy"]
 	path = ThirdParty/Rockxy
 	url = https://github.com/RockxyApp/Rockxy.git

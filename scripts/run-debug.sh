@@ -74,10 +74,24 @@ xcodebuild \
     -f "$APP" 2>/dev/null || true
 
 open "$APP"
-sleep 0.5
+for ((i = 0; i < 20; i++)); do
+    if [[ -n "$(running_app_pids)" ]]; then
+        break
+    fi
+    sleep 0.25
+done
+
 if [[ -z "$(running_app_pids)" ]]; then
     echo "error: launch did not produce a Claude Stats process" >&2
     exit 1
 fi
+
+for ((i = 0; i < 24; i++)); do
+    sleep 0.25
+    if [[ -z "$(running_app_pids)" ]]; then
+        echo "error: Claude Stats process exited during startup verification" >&2
+        exit 1
+    fi
+done
 
 echo "Launched $APP"
