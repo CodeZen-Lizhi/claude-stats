@@ -33,12 +33,13 @@ struct MainUsageView: View {
                 )
                 UsageTrendPanel(
                     series: series,
+                    rangeID: vm.period.rawValue,
                     chartStyle: $bvm.chartStyle,
                     scaleMode: $bvm.scaleMode,
                     stackByType: $bvm.stackByType,
                     displayName: modelDisplayName
                 )
-                lowerPanels(summary: summary, series: series, includeCache: includeCache, costMode: costMode, cacheHitRate: cacheHitRate)
+                lowerPanels(summary: summary, includeCache: includeCache, costMode: costMode, cacheHitRate: cacheHitRate)
             }
             .padding(.horizontal, 20)
             .padding(.top, 52)
@@ -77,12 +78,11 @@ struct MainUsageView: View {
     }
 
     @ViewBuilder
-    private func lowerPanels(summary: UsageSummary, series: TrendSeries, includeCache: Bool, costMode: CostEstimationMode, cacheHitRate: Double?) -> some View {
+    private func lowerPanels(summary: UsageSummary, includeCache: Bool, costMode: CostEstimationMode, cacheHitRate: Double?) -> some View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .top, spacing: 12) {
                 UsageModelBreakdown(
                     models: summary.models,
-                    series: series,
                     includeCacheInTokens: includeCache,
                     costEstimationMode: costMode,
                     displayName: modelDisplayName
@@ -100,7 +100,6 @@ struct MainUsageView: View {
             VStack(alignment: .leading, spacing: 12) {
                 UsageModelBreakdown(
                     models: summary.models,
-                    series: series,
                     includeCacheInTokens: includeCache,
                     costEstimationMode: costMode,
                     displayName: modelDisplayName
@@ -147,7 +146,7 @@ private struct UsagePeriodChips: View {
     private func chip(_ value: StatsPeriod) -> some View {
         let selected = period == value
         return Button {
-            withAnimation(.easeOut(duration: 0.18)) { period = value }
+            period = value
         } label: {
             Text(label(for: value))
                 .font(.sora(11, weight: .medium))
@@ -167,6 +166,7 @@ private struct UsagePeriodChips: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .animation(UsageTrendMotion.periodChip, value: selected)
         .help(value.displayName)
     }
 

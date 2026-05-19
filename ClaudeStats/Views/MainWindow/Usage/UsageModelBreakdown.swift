@@ -2,7 +2,6 @@ import SwiftUI
 
 struct UsageModelBreakdown: View {
     let models: [ModelUsage]
-    let series: TrendSeries
     let includeCacheInTokens: Bool
     let costEstimationMode: CostEstimationMode
     let displayName: (String) -> String
@@ -27,10 +26,10 @@ struct UsageModelBreakdown: View {
                     .frame(maxWidth: .infinity, minHeight: 98, alignment: .center)
             } else {
                 LazyVStack(spacing: 0) {
-                    ForEach(Array(models.enumerated()), id: \.element.id) { index, model in
+                    ForEach(Array(models.enumerated()), id: \.element.id) { _, model in
                         UsageModelRow(
                             model: model,
-                            color: color(for: model, fallback: index),
+                            color: color(for: model),
                             totalTokens: totalTokens(for: model),
                             maxTokens: maxTokens,
                             allTokens: allTokens,
@@ -60,8 +59,8 @@ struct UsageModelBreakdown: View {
         model.usage.total(includingCacheRead: includeCacheInTokens)
     }
 
-    private func color(for model: ModelUsage, fallback: Int) -> Color {
-        ModelPalette.color(at: series.models.firstIndex(of: model.model) ?? fallback)
+    private func color(for model: ModelUsage) -> Color {
+        ModelPalette.color(for: model.model)
     }
 }
 

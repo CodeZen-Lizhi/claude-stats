@@ -35,6 +35,7 @@ struct UsageView: View {
         let stackByType = exportConfig?.stackByType ?? vm.stackByType
         let useLog = style == .line && !stackByType && (exportConfig?.useLog ?? (vm.scaleMode == .log))
         let interactive = exportConfig == nil
+        let rangeID = exportConfig.map { rangeIdentifier(for: $0.period) } ?? vm.period.rawValue
 
         let content = VStack(alignment: .leading, spacing: 16) {
             if interactive {
@@ -47,11 +48,11 @@ struct UsageView: View {
             }
 
             statGrid(summary)
-            breakdownPanel(summary, series: series, isHourly: isHourly, style: style, useLog: useLog,
+            breakdownPanel(summary, series: series, rangeID: rangeID, isHourly: isHourly, style: style, useLog: useLog,
                            stackByType: stackByType,
                            interactive: interactive, exportPeriod: exportConfig?.period)
             cacheStats(summary)
-            modelBreakdown(summary, series: series)
+            modelBreakdown(summary)
         }
         .padding(14)
 
@@ -59,6 +60,15 @@ struct UsageView: View {
             FadingScrollView { content }
         } else {
             content
+        }
+    }
+
+    private func rangeIdentifier(for selection: PeriodSelection) -> String {
+        switch selection {
+        case .preset(let period):
+            return period.rawValue
+        case .custom(let start, let end):
+            return "custom|\(start.timeIntervalSinceReferenceDate)|\(end.timeIntervalSinceReferenceDate)"
         }
     }
 
@@ -129,83 +139,17 @@ struct UsageView: View {
 
     // MARK: Trend chart
 
-    private struct TrendPoint: Identifiable {
-        /// Stack key — either a model name or a token-type label, depending on
-        /// the panel's stacking mode. The Chart treats it as an opaque series
-        /// identifier; ``chartForegroundStyleScale`` maps it back to a color.
-        let series: String
-        let date: Date
-        let value: Double
-        var id: String { "\(series)|\(date.timeIntervalSinceReferenceDate)" }
-    }
-
-    /// Fixed token-type breakdown used when ``UsageViewModel/stackByType`` is on.
-    /// Order is also the visual stack order, bottom → top, and the legend order.
-    /// Colors come from ``Color/stxRamp`` so the warm aesthetic carries through;
-    /// Cache Read sits last (palest) — the "free" tier visually.
-    private static let tokenTypeKeys: [(label: String, color: Color)] = [
-        ("Output", Color.stxRamp[0]),
-        ("Input", Color.stxRamp[1]),
-        ("Cache Write", Color.stxRamp[2]),
-        ("Cache Read", Color.stxRamp[3]),
-    ]
-
-    private static func tokenTypeValue(_ usage: TokenUsage, label: String) -> Int {
-        switch label {
-        case "Output": return usage.outputTokens
-        case "Input": return usage.inputTokens
-        case "Cache Write": return usage.cacheCreationTotalTokens
-        case "Cache Read": return usage.cacheReadTokens
-        default: return 0
-        }
-    }
-
-    /// Per-series points for the trend chart. Series key is the model name in
-    /// the default mode, or a token-type label when ``stackByType`` is on.
-    /// In line mode (model stacking) the per-bucket token counts are smoothed
-    /// and optionally `log1p`-compressed; in bar mode they're raw counts with
-    /// empty buckets dropped so each day renders one stacked bar of segments.
-    /// When stacking by type, line mode also returns raw per-bucket sums (no
-    /// smoothing) so an ``AreaMark`` can stack them cleanly.
-    private func trendPoints(_ series: TrendSeries, style: TrendChartStyle, useLog: Bool, stackByType: Bool) -> [TrendPoint] {
-        if stackByType {
-            // Sum across models per bucket-start, then split into 4 type series.
-            var byStart: [Date: TokenUsage] = [:]
-            for b in series.buckets { byStart[b.start, default: .zero] += b.usage }
-            let starts = byStart.keys.sorted()
-            return Self.tokenTypeKeys.flatMap { key in
-                starts.compactMap { date -> TrendPoint? in
-                    let usage = byStart[date] ?? .zero
-                    let v = Self.tokenTypeValue(usage, label: key.label)
-                    // Drop zero-only points in bar mode so empty days don't
-                    // render a phantom segment; keep them in line mode so the
-                    // area path stays continuous.
-                    if style == .bar && v == 0 { return nil }
-                    return TrendPoint(series: key.label, date: date, value: Double(v))
-                }
-            }
-        }
-        switch style {
-        case .bar:
-            return series.models.flatMap { model in
-                series.buckets(for: model)
-                    .filter { $0.tokens > 0 }
-                    .map { TrendPoint(series: model, date: $0.start, value: Double($0.tokens)) }
-            }
-        case .line:
-            let count = series.buckets(for: series.models.first ?? "").count
-            let window = Smoothing.adaptiveWindow(count: count, granularity: series.granularity)
-            return series.models.flatMap { model -> [TrendPoint] in
-                let buckets = series.buckets(for: model)
-                var values = Smoothing.movingAverage(buckets.map { Double($0.tokens) }, window: window)
-                if useLog { values = values.map { log1p($0) } }
-                return zip(buckets, values).map { TrendPoint(series: model, date: $0.start, value: $1) }
-            }
-        }
-    }
-
     @ViewBuilder
-    private func breakdownPanel(_ s: UsageSummary, series: TrendSeries, isHourly: Bool, style: TrendChartStyle, useLog: Bool, stackByType: Bool, interactive: Bool, exportPeriod: PeriodSelection?) -> some View {
+    private func breakdownPanel(_ s: UsageSummary, series: TrendSeries, rangeID: String, isHourly: Bool, style: TrendChartStyle, useLog: Bool, stackByType: Bool, interactive: Bool, exportPeriod: PeriodSelection?) -> some View {
+        let snapshot = UsageTrendChartSnapshot(
+            series: series,
+            rangeID: rangeID,
+            style: style,
+            useLog: useLog,
+            stackByType: stackByType,
+            displayName: { $0 }
+        )
+
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Text("BREAKDOWN")
@@ -213,7 +157,7 @@ struct UsageView: View {
                     .tracking(1.5)
                     .foregroundStyle(.primary)
                 Spacer()
-                if interactive && !series.buckets.isEmpty {
+                if interactive && !snapshot.isEmpty {
                     trendControls(style: style, stackByType: stackByType, showStyleToggle: !isHourly)
                 }
             }
@@ -221,16 +165,17 @@ struct UsageView: View {
                 .font(.sora(9))
                 .tracking(0.8)
                 .foregroundStyle(Color.stxMuted)
-            if series.buckets.isEmpty {
-                Text(isHourly ? "No usage today yet." : "No usage for this period.")
-                    .font(.sora(10))
-                    .foregroundStyle(Color.stxMuted.opacity(0.7))
-                    .frame(maxWidth: .infinity, minHeight: 80)
-            } else {
-                legend(series, stackByType: stackByType)
-                StxRule()
-                chart(series: series, isHourly: isHourly, style: style, useLog: useLog, stackByType: stackByType)
+
+            UsageTrendChartView(
+                snapshot: snapshot,
+                chartHeight: 150,
+                emptyMessage: isHourly ? "No usage today yet." : "No usage for this period.",
+                axisFontSize: 8,
+                barCornerRadius: 0
+            ) {
+                legend(snapshot.legendEntries)
             }
+
             if let exportPeriod {
                 StxRule()
                 periodReadout(exportPeriod)
@@ -249,12 +194,9 @@ struct UsageView: View {
         return parts.joined(separator: " · ")
     }
 
-    private func legend(_ series: TrendSeries, stackByType: Bool) -> some View {
-        let entries: [(label: String, color: Color)] = stackByType
-            ? Self.tokenTypeKeys
-            : series.models.enumerated().map { ($0.element, ModelPalette.color(at: $0.offset)) }
+    private func legend(_ entries: [UsageTrendLegendEntry]) -> some View {
         return LazyVGrid(columns: [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)], alignment: .leading, spacing: 4) {
-            ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
+            ForEach(entries) { entry in
                 BracketBox(spacing: 6) {
                     Rectangle().fill(entry.color).frame(width: 7, height: 7)
                     Text(entry.label)
@@ -265,99 +207,6 @@ struct UsageView: View {
                     Spacer(minLength: 0)
                 }
             }
-        }
-    }
-
-    @ViewBuilder
-    private func chart(series: TrendSeries, isHourly: Bool, style: TrendChartStyle, useLog: Bool, stackByType: Bool) -> some View {
-        let points = trendPoints(series, style: style, useLog: useLog, stackByType: stackByType)
-        // In line+stackByType we use AreaMark, which stacks y-values. The raw
-        // per-point value is just a layer height, so the visible max is the
-        // sum across types per bucket; precompute that for the y-domain.
-        let maxY: Double = {
-            if style == .line && stackByType {
-                let sums = Dictionary(grouping: points, by: { $0.date }).mapValues { $0.reduce(0) { $0 + $1.value } }
-                return max(1, sums.values.max() ?? 1)
-            }
-            return max(1, points.map(\.value).max() ?? 1)
-        }()
-        let typeDomain = Self.tokenTypeKeys.map(\.label)
-        let typeRange = Self.tokenTypeKeys.map(\.color)
-        let base = Chart(points) { p in
-            switch style {
-            case .line:
-                if stackByType {
-                    AreaMark(
-                        x: .value("Time", p.date, unit: isHourly ? .hour : .day),
-                        y: .value("Tokens", p.value)
-                    )
-                    .foregroundStyle(by: .value("Type", p.series))
-                    .interpolationMethod(.catmullRom)
-                } else {
-                    LineMark(
-                        x: .value("Time", p.date, unit: isHourly ? .hour : .day),
-                        y: .value("Tokens", p.value)
-                    )
-                    .foregroundStyle(by: .value("Model", p.series))
-                    .interpolationMethod(.catmullRom)
-                    .lineStyle(StrokeStyle(lineWidth: 2))
-                }
-            case .bar:
-                BarMark(
-                    x: .value("Day", p.date, unit: .day),
-                    y: .value("Tokens", p.value)
-                )
-                .foregroundStyle(by: .value(stackByType ? "Type" : "Model", p.series))
-                .cornerRadius(0)
-            }
-        }
-        .chartYScale(domain: 0...(maxY * 1.05))
-        .chartYAxis {
-            AxisMarks { value in
-                AxisGridLine().foregroundStyle(Color.stxStroke)
-                AxisValueLabel {
-                    if let v = value.as(Double.self) {
-                        Text(Format.tokens(Int(useLog ? expm1(v) : v)))
-                            .font(.sora(8))
-                            .foregroundStyle(Color.stxMuted)
-                    }
-                }
-            }
-        }
-        .chartXAxis {
-            if isHourly {
-                AxisMarks(values: .stride(by: .hour, count: 6)) { value in
-                    AxisGridLine().foregroundStyle(Color.stxStroke)
-                    AxisValueLabel {
-                        if let d = value.as(Date.self) {
-                            Text(d, format: .dateTime.hour())
-                                .font(.sora(8))
-                                .foregroundStyle(Color.stxMuted)
-                        }
-                    }
-                }
-            } else {
-                AxisMarks { value in
-                    AxisGridLine().foregroundStyle(Color.stxStroke)
-                    AxisValueLabel {
-                        if let d = value.as(Date.self) {
-                            Text(d, format: .dateTime.month(.abbreviated).day())
-                                .font(.sora(8))
-                                .foregroundStyle(Color.stxMuted)
-                        }
-                    }
-                }
-            }
-        }
-        .chartLegend(.hidden)
-        .frame(height: 150)
-
-        if stackByType {
-            base.chartForegroundStyleScale(domain: typeDomain, range: typeRange)
-        } else {
-            base.chartForegroundStyleScale(mapping: { (key: String) in
-                ModelPalette.color(at: series.models.firstIndex(of: key) ?? 0)
-            })
         }
     }
 
@@ -418,7 +267,7 @@ struct UsageView: View {
             }
             .buttonStyle(.plain)
             .onHover { hovering = $0 }
-            .animation(.easeOut(duration: 0.22), value: isSelected)
+            .animation(UsageTrendMotion.periodChip, value: isSelected)
             .animation(.easeOut(duration: 0.12), value: hovering)
         }
 
@@ -442,7 +291,7 @@ struct UsageView: View {
     // MARK: Per-model breakdown
 
     @ViewBuilder
-    private func modelBreakdown(_ s: UsageSummary, series: TrendSeries) -> some View {
+    private func modelBreakdown(_ s: UsageSummary) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("BY MODEL")
                 .font(.sora(11, weight: .semibold))
@@ -456,8 +305,8 @@ struct UsageView: View {
                 let includeCache = env.preferences.includeCacheInTokens
                 let costMode = env.preferences.costEstimationMode
                 let maxTokens = max(1, s.models.map { $0.usage.total(includingCacheRead: includeCache) }.max() ?? 1)
-                ForEach(Array(s.models.enumerated()), id: \.element.id) { idx, model in
-                    let color = ModelPalette.color(at: series.models.firstIndex(of: model.model) ?? idx)
+                ForEach(s.models, id: \.id) { model in
+                    let color = ModelPalette.color(for: model.model)
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 6) {
                             Rectangle().fill(color).frame(width: 7, height: 7)

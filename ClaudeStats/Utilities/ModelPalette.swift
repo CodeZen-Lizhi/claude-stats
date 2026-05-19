@@ -4,11 +4,9 @@ import SwiftUI
 /// list, and the session-row dots all agree.
 ///
 /// Colors come from ``Color/stxRamp`` — a warm deep-red → gold ramp matching
-/// the dashboard aesthetic. When a token-ordered set of models is on hand
-/// (the chart, the breakdown list), use ``color(at:)`` so the busiest model
-/// gets the deepest red and the rest fan out to gold. When only a single name
-/// is available (a session row's dots), ``color(for:)`` picks a ramp stop from
-/// the name's hash.
+/// the dashboard aesthetic. Rank-ordered summaries can use ``color(at:)`` so
+/// the busiest model gets the deepest red. Views that animate across ranges
+/// should use ``color(for:)`` so a model keeps its color when rankings change.
 enum ModelPalette {
     /// Ramp color for the model at `index` in a token-ordered display set.
     /// Wraps if there are more models than ramp stops.
