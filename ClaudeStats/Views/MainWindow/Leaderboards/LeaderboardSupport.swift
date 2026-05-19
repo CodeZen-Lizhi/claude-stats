@@ -82,6 +82,51 @@ enum LeaderboardFormat {
     }
 }
 
+enum LeaderboardDailyDateNavigator {
+    static func todayStartUTC(now: Date = .now) -> Date {
+        LeaderboardPeriodCalculator.window(for: .day, now: now).startUTC
+    }
+
+    static func normalized(_ date: Date, now: Date = .now) -> Date {
+        let day = LeaderboardPeriodCalculator.window(for: .day, now: date).startUTC
+        let today = todayStartUTC(now: now)
+        return min(day, today)
+    }
+
+    static func stepped(from date: Date, by offset: Int, now: Date = .now) -> Date {
+        normalized(
+            date.addingTimeInterval(TimeInterval(offset * 86_400)),
+            now: now
+        )
+    }
+
+    static func canStepForward(from date: Date, now: Date = .now) -> Bool {
+        normalized(date, now: now) < todayStartUTC(now: now)
+    }
+
+    static func periodKey(for date: Date) -> String {
+        LeaderboardPeriodCalculator.window(for: .day, now: date).periodKey
+    }
+
+    static func date(fromPeriodKey periodKey: String) -> Date? {
+        guard let window = LeaderboardPeriodCalculator.window(for: .day, periodKey: periodKey) else {
+            return nil
+        }
+        return normalized(window.startUTC)
+    }
+
+    static func label(for date: Date, now: Date = .now) -> String {
+        let day = normalized(date, now: now)
+        let today = todayStartUTC(now: now)
+        if day == today { return "Today" }
+
+        let yesterday = stepped(from: today, by: -1, now: now)
+        if day == yesterday { return "Yesterday" }
+
+        return Format.day(day)
+    }
+}
+
 extension LeaderboardMetric {
     var symbolName: String {
         switch self {

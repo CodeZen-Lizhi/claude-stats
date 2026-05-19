@@ -19,16 +19,107 @@ struct LeaderboardMetricChips: View {
 struct LeaderboardPeriodChips: View {
     @Binding var period: LeaderboardPeriod
     let compact: Bool
+    var values: [LeaderboardPeriod] = LeaderboardPeriod.allCases
 
     var body: some View {
         LeaderboardSegmentedChips(
-            values: LeaderboardPeriod.allCases,
+            values: values,
             selection: $period,
             label: \.chipLabel,
             icon: \.symbolName,
             accessibilityLabel: \.displayName,
             compact: compact
         )
+    }
+}
+
+struct LeaderboardDailyPeriodControl: View {
+    @Binding var period: LeaderboardPeriod
+    @Binding var selectedDate: Date
+
+    private var isSelected: Bool {
+        period == .day
+    }
+
+    private var canStepForward: Bool {
+        LeaderboardDailyDateNavigator.canStepForward(from: selectedDate)
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button {
+                withAnimation(.easeOut(duration: 0.18)) {
+                    period = .day
+                }
+            } label: {
+                Text("Daily")
+                    .font(.sora(11, weight: .medium))
+                    .foregroundStyle(isSelected ? .primary : Color.stxMuted)
+                    .lineLimit(1)
+                    .padding(.horizontal, 10)
+                    .frame(height: 30)
+                    .leaderboardSelectedSegment(isSelected)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .leaderboardSegmentedBackground()
+            .help("Show one UTC day")
+            .accessibilityLabel("Daily")
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+
+            dayStepper
+        }
+        .fixedSize(horizontal: true, vertical: false)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Daily leaderboard date")
+    }
+
+    private var dayStepper: some View {
+        HStack(spacing: 4) {
+            stepButton(systemName: "chevron.left", help: "Previous UTC day") {
+                stepDay(-1)
+            }
+
+            Text(LeaderboardDailyDateNavigator.label(for: selectedDate))
+                .font(.sora(11, weight: .medium).monospacedDigit())
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .frame(minWidth: 70)
+                .accessibilityLabel("Selected UTC day")
+
+            stepButton(systemName: "chevron.right", disabled: !canStepForward, help: "Next UTC day") {
+                stepDay(1)
+            }
+        }
+        .padding(3)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.primary.opacity(0.06))
+        )
+    }
+
+    private func stepButton(systemName: String,
+                            disabled: Bool = false,
+                            help: String,
+                            action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(disabled ? Color.stxMuted.opacity(0.35) : Color.stxMuted)
+                .frame(width: 24, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .help(help)
+        .accessibilityLabel(help)
+    }
+
+    private func stepDay(_ offset: Int) {
+        withAnimation(.easeOut(duration: 0.18)) {
+            selectedDate = LeaderboardDailyDateNavigator.stepped(from: selectedDate, by: offset)
+            period = .day
+        }
     }
 }
 

@@ -91,11 +91,11 @@ struct LeaderboardDetailPanel: View {
     private var favoriteModelsPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
-                Text("TOP MODELS")
+                Text("FAVORITE MODEL")
                     .font(.sora(13, weight: .semibold))
                     .tracking(1.0)
                 Spacer(minLength: 8)
-                Text("By total tokens")
+                Text("Relative use")
                     .font(.sora(10))
                     .foregroundStyle(Color.stxMuted)
                     .lineLimit(1)
@@ -123,7 +123,7 @@ struct LeaderboardDetailPanel: View {
         }
         .mainWindowPanel(padding: 16)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Top models")
+        .accessibilityLabel("Favorite model")
     }
 
     private func historyPanel(_ score: LeaderboardScore) -> some View {
@@ -277,12 +277,6 @@ private struct LeaderboardFavoriteModelRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text(Format.tokens(Int(clamping: model.tokens)))
-                .font(.sora(12, weight: .semibold).monospacedDigit())
-                .foregroundStyle(model.rank == 1 ? Color.stxAccent : .primary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.65)
-                .frame(width: 82, alignment: .trailing)
         }
         .padding(.vertical, 9)
     }

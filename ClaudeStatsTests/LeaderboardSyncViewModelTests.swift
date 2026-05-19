@@ -121,6 +121,42 @@ struct LeaderboardSyncViewModelTests {
         #expect(await fixture.client.fetchedPeriodKeys() == ["2026-05-16", "2026-05-15"])
     }
 
+    @Test("Daily scores can load the selected UTC day without recent fallback")
+    func dailyScoresLoadSelectedDayWithoutFallback() async {
+        let fixture = makeFixture(enabled: true)
+        let now = dateUTC(2026, 5, 16, 8)
+        let previousDay = now.addingTimeInterval(-86_400)
+        let previousDayKey = LeaderboardPeriodCalculator.window(for: .day, now: previousDay).periodKey
+        await fixture.client.setScores([
+            previousDayKey: [
+                LeaderboardScore(
+                    id: "score",
+                    userHash: "userhash",
+                    metric: .tokensWithCache,
+                    period: .day,
+                    periodKey: previousDayKey,
+                    score: 42,
+                    rank: 1,
+                    nickname: "Ada",
+                    avatarSeed: "avatar-ada",
+                    updatedAt: now
+                ),
+            ],
+        ])
+
+        await fixture.viewModel.loadScores(
+            metric: .tokensWithCache,
+            period: .day,
+            now: now,
+            allowsRecentDayFallback: false
+        )
+
+        #expect(fixture.viewModel.lastLoadedPeriodKey == "2026-05-16")
+        #expect(fixture.viewModel.scores.isEmpty)
+        #expect(fixture.viewModel.scoreEmptyMessage == "No scores for this UTC day yet.")
+        #expect(await fixture.client.fetchedPeriodKeys() == ["2026-05-16"])
+    }
+
     @Test("Fresh cached scores render without hitting CloudKit")
     func freshCachedScoresRenderWithoutCloudKit() async {
         let fixture = makeFixture(enabled: true)

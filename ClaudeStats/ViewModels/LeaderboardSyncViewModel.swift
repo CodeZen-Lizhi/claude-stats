@@ -75,6 +75,8 @@ final class LeaderboardSyncViewModel {
     private struct VisibleScoreQuery: Sendable {
         let metric: LeaderboardMetric
         let period: LeaderboardPeriod
+        let now: Date
+        let allowsRecentDayFallback: Bool
     }
 
     private struct VisibleHistoryQuery: Sendable {
@@ -82,6 +84,7 @@ final class LeaderboardSyncViewModel {
         let metric: LeaderboardMetric
         let period: LeaderboardPeriod
         let historyStartMonthKey: String?
+        let now: Date
     }
 
     init(preferences: Preferences,
@@ -159,6 +162,7 @@ final class LeaderboardSyncViewModel {
     func loadScores(metric: LeaderboardMetric,
                     period: LeaderboardPeriod,
                     now: Date = .now,
+                    allowsRecentDayFallback: Bool = true,
                     forceRefresh: Bool = false) async {
         guard preferences.leaderboardsEnabled else {
             scores = []
@@ -168,17 +172,30 @@ final class LeaderboardSyncViewModel {
             return
         }
 
-        visibleScoreQuery = VisibleScoreQuery(metric: metric, period: period)
+        visibleScoreQuery = VisibleScoreQuery(
+            metric: metric,
+            period: period,
+            now: now,
+            allowsRecentDayFallback: allowsRecentDayFallback
+        )
         ensureLocalAvatarSeed()
         let requestedWindow = LeaderboardPeriodCalculator.window(for: period, now: now)
-        let windows = scoreLookupWindows(for: period, now: now)
+        let windows = scoreLookupWindows(
+            for: period,
+            now: now,
+            allowsRecentDayFallback: allowsRecentDayFallback
+        )
         lastLoadedPeriodKey = requestedWindow.periodKey
         scoreError = nil
         scoreEmptyMessage = nil
 
         let cached = await cachedScores(metric: metric, period: period, windows: windows)
         if let cached {
-            applyCachedScores(cached, requestedPeriod: period)
+            applyCachedScores(
+                cached,
+                requestedPeriod: period,
+                allowsRecentDayFallback: windows.count > 1
+            )
         }
         let shouldRefresh = forceRefresh || cached.map { !cacheIsFresh($0.savedAt) } ?? true
         guard shouldRefresh else { return }
@@ -203,7 +220,8 @@ final class LeaderboardSyncViewModel {
             userHash: userHash,
             metric: metric,
             period: period,
-            historyStartMonthKey: historyStartMonthKey
+            historyStartMonthKey: historyStartMonthKey,
+            now: now
         )
         selectedUserHistoryError = nil
         if userHash == currentUserHash {
@@ -446,8 +464,10 @@ final class LeaderboardSyncViewModel {
         Date().timeIntervalSince(savedAt) < scoreCacheTTL
     }
 
-    private func scoreLookupWindows(for period: LeaderboardPeriod, now: Date) -> [LeaderboardPeriodWindow] {
-        guard period == .day else {
+    private func scoreLookupWindows(for period: LeaderboardPeriod,
+                                    now: Date,
+                                    allowsRecentDayFallback: Bool) -> [LeaderboardPeriodWindow] {
+        guard period == .day, allowsRecentDayFallback else {
             return [LeaderboardPeriodCalculator.window(for: period, now: now)]
         }
         return (0..<7).map { dayOffset in
@@ -480,11 +500,18 @@ final class LeaderboardSyncViewModel {
         return firstEmptyCache
     }
 
-    private func applyCachedScores(_ cached: LeaderboardCachedScores, requestedPeriod: LeaderboardPeriod) {
+    private func applyCachedScores(_ cached: LeaderboardCachedScores,
+                                   requestedPeriod: LeaderboardPeriod,
+                                   allowsRecentDayFallback: Bool) {
         scores = scoresWithContiguousRanks(cached.scores)
         lastLoadedPeriodKey = cached.key.periodKey
         scoreError = nil
-        scoreEmptyMessage = cached.scores.isEmpty ? emptyScoresMessage(for: requestedPeriod) : nil
+        scoreEmptyMessage = cached.scores.isEmpty
+            ? emptyScoresMessage(
+                for: requestedPeriod,
+                allowsRecentDayFallback: allowsRecentDayFallback
+            )
+            : nil
     }
 
     private func fetchScoresFromCloud(metric: LeaderboardMetric,
@@ -520,7 +547,10 @@ final class LeaderboardSyncViewModel {
             scores = []
             lastLoadedPeriodKey = requestedWindow.periodKey
             scoreError = nil
-            scoreEmptyMessage = emptyScoresMessage(for: period)
+            scoreEmptyMessage = emptyScoresMessage(
+                for: period,
+                allowsRecentDayFallback: windows.count > 1
+            )
         } catch let error as LeaderboardCloudError {
             handleScoreRefreshError(error.description, hadDisplayableScores: hadDisplayableScores)
         } catch {
@@ -591,7 +621,13 @@ final class LeaderboardSyncViewModel {
 
     private func refreshVisibleLeaderboardAfterSync() async {
         if let query = visibleScoreQuery {
-            await loadScores(metric: query.metric, period: query.period, forceRefresh: true)
+            await loadScores(
+                metric: query.metric,
+                period: query.period,
+                now: query.now,
+                allowsRecentDayFallback: query.allowsRecentDayFallback,
+                forceRefresh: true
+            )
         }
         if let query = visibleHistoryQuery {
             await loadScoreHistory(
@@ -599,15 +635,19 @@ final class LeaderboardSyncViewModel {
                 metric: query.metric,
                 period: query.period,
                 historyStartMonthKey: query.historyStartMonthKey,
-                forceRefresh: true
+                forceRefresh: true,
+                now: query.now
             )
         }
     }
 
-    private func emptyScoresMessage(for period: LeaderboardPeriod) -> String {
+    private func emptyScoresMessage(for period: LeaderboardPeriod,
+                                    allowsRecentDayFallback: Bool) -> String {
         switch period {
         case .day:
-            return "No daily scores in the last 7 UTC days yet."
+            return allowsRecentDayFallback
+                ? "No daily scores in the last 7 UTC days yet."
+                : "No scores for this UTC day yet."
         case .week, .month, .allTime:
             return "No scores for this UTC period yet."
         }

@@ -22,6 +22,7 @@ struct LeaderboardTitleHeader: View {
 struct LeaderboardOverviewPanel: View {
     @Binding var metric: LeaderboardMetric
     @Binding var period: LeaderboardPeriod
+    @Binding var selectedDailyDate: Date
 
     let scores: [LeaderboardScore]
     let topScore: Int64
@@ -41,49 +42,59 @@ struct LeaderboardOverviewPanel: View {
     }
 
     private var controls: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ViewThatFits(in: .horizontal) {
-                metricAndActionsRow(compactMetric: false)
-                metricAndActionsRow(compactMetric: true)
-            }
-            ViewThatFits(in: .horizontal) {
-                LeaderboardPeriodChips(period: $period, compact: false)
-                LeaderboardPeriodChips(period: $period, compact: true)
-            }
+        ViewThatFits(in: .horizontal) {
+            controlsRows(compactMetric: false, compactPeriod: false)
+            controlsRows(compactMetric: true, compactPeriod: false)
+            controlsRows(compactMetric: true, compactPeriod: true)
         }
     }
 
-    private func metricAndActionsRow(compactMetric: Bool) -> some View {
-        HStack(alignment: .center, spacing: 10) {
-            LeaderboardMetricChips(metric: $metric, compact: compactMetric)
-            Spacer(minLength: 12)
-            actionButtons
+    private func controlsRows(compactMetric: Bool, compactPeriod: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 10) {
+                LeaderboardMetricChips(metric: $metric, compact: compactMetric)
+                Spacer(minLength: 12)
+                LeaderboardPeriodChips(
+                    period: $period,
+                    compact: compactPeriod,
+                    values: [.week, .month, .allTime]
+                )
+            }
+            HStack(alignment: .center, spacing: 10) {
+                actionButtons
+                Spacer(minLength: 12)
+                LeaderboardDailyPeriodControl(
+                    period: $period,
+                    selectedDate: $selectedDailyDate
+                )
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var actionButtons: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
+            LeaderboardIconActionButton(
+                systemName: "arrow.clockwise",
+                help: "Refresh",
+                isDisabled: isLoadingScores,
+                action: onRefresh
+            )
+
+            LeaderboardIconActionButton(
+                systemName: "icloud.and.arrow.up",
+                help: "Sync mine",
+                isDisabled: isSyncBusy,
+                action: onSync
+            )
+
             if isLoadingScores {
                 ProgressView()
                     .controlSize(.small)
                     .help("Loading leaderboard scores")
             }
-            Button(action: onRefresh) {
-                Label("Refresh", systemImage: "arrow.clockwise")
-                    .labelStyle(.titleAndIcon)
-            }
-            .controlSize(.small)
-            .disabled(isLoadingScores)
-
-            Button(action: onSync) {
-                Label("Sync mine", systemImage: "icloud.and.arrow.up")
-                    .labelStyle(.titleAndIcon)
-            }
-            .controlSize(.small)
-            .disabled(isSyncBusy)
         }
-        .font(.sora(11, weight: .medium))
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private var summaryStrip: some View {
@@ -107,6 +118,31 @@ struct LeaderboardOverviewPanel: View {
             return "--"
         }
         return "#\(rank)"
+    }
+}
+
+private struct LeaderboardIconActionButton: View {
+    let systemName: String
+    let help: String
+    let isDisabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(isDisabled ? Color.stxAccent.opacity(0.35) : Color.stxAccent)
+                .frame(width: 42, height: 36)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.stxAccent.opacity(0.08))
+        )
+        .help(help)
+        .accessibilityLabel(help)
     }
 }
 

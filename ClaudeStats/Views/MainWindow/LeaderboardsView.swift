@@ -6,13 +6,20 @@ struct LeaderboardsView: View {
     @SceneStorage("mainWindow.leaderboards.metric") private var metricRaw: String = LeaderboardMetric.tokensWithCache.rawValue
     @SceneStorage("mainWindow.leaderboards.period") private var periodRaw: String = LeaderboardPeriod.day.rawValue
     @SceneStorage("mainWindow.leaderboards.selectedUserHash") private var selectedUserHashRaw: String = ""
+    @SceneStorage("mainWindow.leaderboards.dailyPeriodKey") private var dailyPeriodKeyRaw: String = ""
 
     @State private var metric: LeaderboardMetric = .tokensWithCache
     @State private var period: LeaderboardPeriod = .day
+    @State private var selectedDailyDate: Date = LeaderboardDailyDateNavigator.todayStartUTC()
     @State private var selectedScoreIDOverride: String?
 
     private var reloadID: String {
-        "\(metric.rawValue)-\(period.rawValue)-\(env.preferences.leaderboardsEnabled)"
+        [
+            metric.rawValue,
+            period.rawValue,
+            requestedWindow.periodKey,
+            "\(env.preferences.leaderboardsEnabled)",
+        ].joined(separator: "|")
     }
 
     private var historyReloadID: String {
@@ -21,7 +28,7 @@ struct LeaderboardsView: View {
             selectedScore?.userHash ?? "no-user-hash",
             metric.rawValue,
             period.rawValue,
-            anchorWindow.periodKey,
+            requestedWindow.periodKey,
             "\(env.preferences.leaderboardsEnabled)",
         ].joined(separator: "|")
     }
@@ -50,12 +57,12 @@ struct LeaderboardsView: View {
         )
     }
 
-    private var anchorWindow: LeaderboardPeriodWindow {
-        if let periodKey = env.leaderboards.lastLoadedPeriodKey,
-           let window = LeaderboardPeriodCalculator.window(for: period, periodKey: periodKey) {
-            return window
-        }
-        return LeaderboardPeriodCalculator.window(for: period)
+    private var scoreAnchorDate: Date {
+        period == .day ? selectedDailyDate : Date()
+    }
+
+    private var requestedWindow: LeaderboardPeriodWindow {
+        LeaderboardPeriodCalculator.window(for: period, now: scoreAnchorDate)
     }
 
     private var isSyncBusy: Bool {
@@ -84,7 +91,12 @@ struct LeaderboardsView: View {
         }
         .task(id: reloadID) {
             guard env.preferences.leaderboardsEnabled else { return }
-            await env.leaderboards.loadScores(metric: metric, period: period)
+            await env.leaderboards.loadScores(
+                metric: metric,
+                period: period,
+                now: scoreAnchorDate,
+                allowsRecentDayFallback: false
+            )
         }
         .onChange(of: metric) { _, new in
             metricRaw = new.rawValue
@@ -93,6 +105,14 @@ struct LeaderboardsView: View {
         .onChange(of: period) { _, new in
             periodRaw = new.rawValue
             reconcileSelection()
+        }
+        .onChange(of: selectedDailyDate) { _, new in
+            let normalized = LeaderboardDailyDateNavigator.normalized(new)
+            if normalized != new {
+                selectedDailyDate = normalized
+                return
+            }
+            dailyPeriodKeyRaw = LeaderboardDailyDateNavigator.periodKey(for: normalized)
         }
         .onChange(of: env.leaderboards.scores) { _, _ in
             reconcileSelection()
@@ -142,6 +162,7 @@ struct LeaderboardsView: View {
         LeaderboardOverviewPanel(
             metric: $metric,
             period: $period,
+            selectedDailyDate: $selectedDailyDate,
             scores: scores,
             topScore: topScore,
             currentUserHash: env.leaderboards.currentUserHash,
@@ -149,7 +170,15 @@ struct LeaderboardsView: View {
             isLoadingScores: env.leaderboards.isLoadingScores,
             isSyncBusy: isSyncBusy,
             onRefresh: {
-                Task { await env.leaderboards.loadScores(metric: metric, period: period, forceRefresh: true) }
+                Task {
+                    await env.leaderboards.loadScores(
+                        metric: metric,
+                        period: period,
+                        now: scoreAnchorDate,
+                        allowsRecentDayFallback: false,
+                        forceRefresh: true
+                    )
+                }
             },
             onSync: {
                 Task {
@@ -217,6 +246,9 @@ struct LeaderboardsView: View {
     private func syncFromSceneStorage() {
         metric = LeaderboardMetric(rawValue: metricRaw) ?? .tokensWithCache
         period = LeaderboardPeriod(rawValue: periodRaw) ?? .day
+        selectedDailyDate = LeaderboardDailyDateNavigator.date(fromPeriodKey: dailyPeriodKeyRaw)
+            ?? LeaderboardDailyDateNavigator.todayStartUTC()
+        dailyPeriodKeyRaw = LeaderboardDailyDateNavigator.periodKey(for: selectedDailyDate)
     }
 
     private func selectScore(_ score: LeaderboardScore) {
@@ -249,7 +281,8 @@ struct LeaderboardsView: View {
             userHash: userHash,
             metric: metric,
             period: period,
-            historyStartMonthKey: score.historyStartMonthKey
+            historyStartMonthKey: score.historyStartMonthKey,
+            now: scoreAnchorDate
         )
     }
 }
