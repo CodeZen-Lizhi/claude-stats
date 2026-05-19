@@ -3,6 +3,18 @@
 extension ReleaseHistoryCatalog {
     static let generatedEntries: [ReleaseHistoryEntry] = [
         ReleaseHistoryEntry(
+            version: "1.5.3",
+            date: "May 19, 2026",
+            headline: "此次提交新增了网络调试时的上游代理支持，包括：",
+            changes: [
+                "将Rockxy子模块切换至自定义分支仓库",
+                "添加上游代理相关的数据模型、配置UI和偏好存储",
+                "新增系统代理上游探测与自动链式代理功能",
+                "在流量列表中显示当前请求使用的上游代理信息",
+                "添加上游连通性测试功能",
+            ]
+        ),
+        ReleaseHistoryEntry(
             version: "1.5.2",
             date: "May 19, 2026",
             headline: "新增被动刷新助手状态的API，无需主动请求即可获取当前注册状态",
