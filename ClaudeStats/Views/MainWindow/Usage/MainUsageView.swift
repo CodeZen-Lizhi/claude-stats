@@ -39,7 +39,7 @@ struct MainUsageView: View {
                     stackByType: $bvm.stackByType,
                     displayName: modelDisplayName
                 )
-                lowerPanels(summary: summary, includeCache: includeCache, costMode: costMode, cacheHitRate: cacheHitRate)
+                lowerPanels(summary: summary, series: series, includeCache: includeCache, costMode: costMode, cacheHitRate: cacheHitRate)
             }
             .padding(.horizontal, 20)
             .padding(.top, 52)
@@ -78,11 +78,12 @@ struct MainUsageView: View {
     }
 
     @ViewBuilder
-    private func lowerPanels(summary: UsageSummary, includeCache: Bool, costMode: CostEstimationMode, cacheHitRate: Double?) -> some View {
+    private func lowerPanels(summary: UsageSummary, series: TrendSeries, includeCache: Bool, costMode: CostEstimationMode, cacheHitRate: Double?) -> some View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .top, spacing: 12) {
                 UsageModelBreakdown(
                     models: summary.models,
+                    series: series,
                     includeCacheInTokens: includeCache,
                     costEstimationMode: costMode,
                     displayName: modelDisplayName
@@ -100,6 +101,7 @@ struct MainUsageView: View {
             VStack(alignment: .leading, spacing: 12) {
                 UsageModelBreakdown(
                     models: summary.models,
+                    series: series,
                     includeCacheInTokens: includeCache,
                     costEstimationMode: costMode,
                     displayName: modelDisplayName

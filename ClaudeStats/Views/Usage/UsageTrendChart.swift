@@ -21,6 +21,7 @@ struct UsageTrendChartSnapshot {
     let useLog: Bool
     let stackByType: Bool
     let isEmpty: Bool
+    let modelColorIndexByID: [String: Int]
     var updateID: String { "\(transitionScopeID)|\(stageID)|\(viewportID)|\(dataID)" }
 
     init(
@@ -35,11 +36,13 @@ struct UsageTrendChartSnapshot {
         let isHourly = series.granularity == .hour
         let points = Self.trendPoints(series, style: style, useLog: useLog, stackByType: stackByType)
         let legendEntries: [UsageTrendLegendEntry]
+        var modelColorIndexByID: [String: Int] = [:]
         if stackByType {
             legendEntries = Self.tokenTypeKeys.map { UsageTrendLegendEntry(id: $0.label, label: $0.label, color: $0.color) }
         } else {
-            legendEntries = series.models.map { model in
-                UsageTrendLegendEntry(id: model, label: displayName(model), color: ModelPalette.color(for: model))
+            legendEntries = series.models.enumerated().map { index, model in
+                modelColorIndexByID[model] = index
+                return UsageTrendLegendEntry(id: model, label: displayName(model), color: ModelPalette.color(at: index))
             }
         }
 
@@ -54,6 +57,7 @@ struct UsageTrendChartSnapshot {
         self.useLog = useLog
         self.stackByType = stackByType
         self.isEmpty = isEmpty
+        self.modelColorIndexByID = modelColorIndexByID
         self.transitionScopeID = transitionScopeID
 
         let renderFamilyID = [
@@ -373,7 +377,7 @@ struct UsageTrendChartView<Legend: View>: View {
             )
         } else {
             base.chartForegroundStyleScale(mapping: { (key: String) in
-                ModelPalette.color(for: key)
+                ModelPalette.color(at: displayed.modelColorIndexByID[key] ?? 0)
             })
         }
     }

@@ -52,7 +52,7 @@ struct UsageView: View {
                            stackByType: stackByType,
                            interactive: interactive, exportPeriod: exportConfig?.period)
             cacheStats(summary)
-            modelBreakdown(summary)
+            modelBreakdown(summary, series: series)
         }
         .padding(14)
 
@@ -292,7 +292,7 @@ struct UsageView: View {
     // MARK: Per-model breakdown
 
     @ViewBuilder
-    private func modelBreakdown(_ s: UsageSummary) -> some View {
+    private func modelBreakdown(_ s: UsageSummary, series: TrendSeries) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("BY MODEL")
                 .font(.sora(11, weight: .semibold))
@@ -306,8 +306,8 @@ struct UsageView: View {
                 let includeCache = env.preferences.includeCacheInTokens
                 let costMode = env.preferences.costEstimationMode
                 let maxTokens = max(1, s.models.map { $0.usage.total(includingCacheRead: includeCache) }.max() ?? 1)
-                ForEach(s.models, id: \.id) { model in
-                    let color = ModelPalette.color(for: model.model)
+                ForEach(Array(s.models.enumerated()), id: \.element.id) { idx, model in
+                    let color = ModelPalette.color(at: series.models.firstIndex(of: model.model) ?? idx)
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 6) {
                             Rectangle().fill(color).frame(width: 7, height: 7)
