@@ -20,6 +20,7 @@ struct UsageTrendChartSnapshot {
     let useLog: Bool
     let stackByType: Bool
     let isEmpty: Bool
+    var updateID: String { "\(stageID)|\(viewportID)|\(dataID)" }
 
     init(
         series: TrendSeries,
@@ -236,6 +237,9 @@ struct UsageTrendChartView<Legend: View>: View {
     var barCornerRadius: CGFloat = 1
     let legend: Legend
 
+    @State private var displayedSnapshot: UsageTrendChartSnapshot?
+    @State private var chartStageNonce = 0
+
     init(
         snapshot: UsageTrendChartSnapshot,
         chartHeight: CGFloat,
@@ -253,28 +257,35 @@ struct UsageTrendChartView<Legend: View>: View {
     }
 
     var body: some View {
+        let displayed = displayedSnapshot ?? snapshot
         VStack(alignment: .leading, spacing: 10) {
-            if !snapshot.isEmpty {
+            if !displayed.isEmpty {
                 legend
                 StxRule()
             }
-            chartStage
+            chartStage(displayed)
         }
-        .animation(UsageTrendMotion.chartCrossfade, value: snapshot.stageID)
+        .animation(UsageTrendMotion.chartCrossfade, value: stageAnimationID(displayed))
+        .onAppear {
+            installSnapshotWithoutAnimation(snapshot)
+        }
+        .onChange(of: snapshot.updateID) { _, _ in
+            stageSnapshotChange()
+        }
     }
 
-    private var chartStage: some View {
+    private func chartStage(_ displayed: UsageTrendChartSnapshot) -> some View {
         ZStack {
-            if snapshot.isEmpty {
+            if displayed.isEmpty {
                 Text(emptyMessage)
                     .font(.sora(12))
                     .foregroundStyle(Color.stxMuted.opacity(0.72))
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                    .id("empty|\(snapshot.stageID)")
+                    .id("empty|\(displayed.stageID)|\(chartStageNonce)")
                     .transition(stageTransition)
             } else {
-                chart
-                    .id("chart|\(snapshot.renderFamilyID)")
+                chart(displayed)
+                    .id("chart|\(displayed.renderFamilyID)|\(chartStageNonce)")
                     .transition(stageTransition)
             }
         }
@@ -282,20 +293,20 @@ struct UsageTrendChartView<Legend: View>: View {
     }
 
     @ViewBuilder
-    private var chart: some View {
-        let base = Chart(snapshot.points) { point in
-            switch snapshot.style {
+    private func chart(_ displayed: UsageTrendChartSnapshot) -> some View {
+        let base = Chart(displayed.points) { point in
+            switch displayed.style {
             case .line:
-                if snapshot.stackByType {
+                if displayed.stackByType {
                     AreaMark(
-                        x: .value("Time", point.date, unit: snapshot.isHourly ? .hour : .day),
+                        x: .value("Time", point.date, unit: displayed.isHourly ? .hour : .day),
                         y: .value("Tokens", point.value)
                     )
                     .foregroundStyle(by: .value("Type", point.series))
                     .interpolationMethod(.catmullRom)
                 } else {
                     LineMark(
-                        x: .value("Time", point.date, unit: snapshot.isHourly ? .hour : .day),
+                        x: .value("Time", point.date, unit: displayed.isHourly ? .hour : .day),
                         y: .value("Tokens", point.value)
                     )
                     .foregroundStyle(by: .value("Model", point.series))
@@ -307,7 +318,7 @@ struct UsageTrendChartView<Legend: View>: View {
                     x: .value("Day", point.date, unit: .day),
                     y: .value("Tokens", point.value)
                 )
-                .foregroundStyle(by: .value(snapshot.stackByType ? "Type" : "Model", point.series))
+                .foregroundStyle(by: .value(displayed.stackByType ? "Type" : "Model", point.series))
                 .cornerRadius(barCornerRadius)
             }
         }
@@ -316,7 +327,7 @@ struct UsageTrendChartView<Legend: View>: View {
                 AxisGridLine().foregroundStyle(Color.stxStroke)
                 AxisValueLabel {
                     if let raw = value.as(Double.self) {
-                        Text(Format.tokens(Int(snapshot.useLog ? expm1(raw) : raw)))
+                        Text(Format.tokens(Int(displayed.useLog ? expm1(raw) : raw)))
                             .font(.sora(axisFontSize))
                             .foregroundStyle(Color.stxMuted)
                     }
@@ -324,7 +335,7 @@ struct UsageTrendChartView<Legend: View>: View {
             }
         }
         .chartXAxis {
-            if snapshot.isHourly {
+            if displayed.isHourly {
                 AxisMarks(values: .stride(by: .hour, count: 6)) { value in
                     AxisGridLine().foregroundStyle(Color.stxStroke)
                     AxisValueLabel {
@@ -349,10 +360,10 @@ struct UsageTrendChartView<Legend: View>: View {
             }
         }
         .chartLegend(.hidden)
-        .animation(UsageTrendMotion.chartMorph, value: snapshot.dataID)
-        .stxDateChartViewportTransition(snapshot.viewport, value: snapshot.viewportID)
+        .animation(UsageTrendMotion.chartMorph, value: displayed.dataID)
+        .stxDateChartViewportTransition(displayed.viewport, value: displayed.viewportID)
 
-        if snapshot.stackByType {
+        if displayed.stackByType {
             base.chartForegroundStyleScale(
                 domain: UsageTrendChartSnapshot.tokenTypeKeys.map(\.label),
                 range: UsageTrendChartSnapshot.tokenTypeKeys.map(\.color)
@@ -366,5 +377,41 @@ struct UsageTrendChartView<Legend: View>: View {
 
     private var stageTransition: AnyTransition {
         .opacity.combined(with: .scale(scale: 0.985, anchor: .center))
+    }
+
+    private func stageAnimationID(_ displayed: UsageTrendChartSnapshot) -> String {
+        "\(displayed.stageID)|\(chartStageNonce)"
+    }
+
+    @MainActor
+    private func stageSnapshotChange() {
+        guard let previous = displayedSnapshot else {
+            installSnapshotWithoutAnimation(snapshot)
+            return
+        }
+
+        let isSameDataStage = previous.renderFamilyID == snapshot.renderFamilyID
+            && !previous.isEmpty
+            && !snapshot.isEmpty
+        let isShrinkingTimeAxis = snapshot.viewport.xDuration < previous.viewport.xDuration - 0.5
+
+        if isSameDataStage && isShrinkingTimeAxis {
+            withAnimation(UsageTrendMotion.chartCrossfade) {
+                chartStageNonce += 1
+                displayedSnapshot = snapshot
+            }
+            return
+        }
+
+        displayedSnapshot = snapshot
+    }
+
+    @MainActor
+    private func installSnapshotWithoutAnimation(_ snapshot: UsageTrendChartSnapshot) {
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            displayedSnapshot = snapshot
+        }
     }
 }

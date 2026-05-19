@@ -1,11 +1,20 @@
 import SwiftUI
 import Charts
 
+enum STXChartViewportMotion {
+    static let duration: TimeInterval = 0.34
+    static let animation: Animation = .timingCurve(0.22, 1.0, 0.36, 1.0, duration: duration)
+}
+
 struct STXDateChartViewport: Equatable, Sendable {
     let xStart: Date
     let xEnd: Date
     let yStart: Double
     let yEnd: Double
+
+    var xDuration: TimeInterval {
+        xEnd.timeIntervalSinceReferenceDate - xStart.timeIntervalSinceReferenceDate
+    }
 
     init(xStart: Date, xEnd: Date, yStart: Double = 0, yEnd: Double) {
         let orderedXStart = min(xStart, xEnd)
@@ -21,7 +30,7 @@ struct STXDateChartViewport: Equatable, Sendable {
 }
 
 extension Animation {
-    static let stxChartViewportChange: Animation = .timingCurve(0.22, 1.0, 0.36, 1.0, duration: 0.34)
+    static let stxChartViewportChange: Animation = STXChartViewportMotion.animation
 }
 
 extension View {
