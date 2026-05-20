@@ -207,6 +207,39 @@ struct SkillFileEntry: Identifiable, Sendable, Hashable {
     var id: String { path }
 }
 
+struct SkillMarkdownDocument: Identifiable, Sendable, Hashable {
+    let id: String
+    let contentHash: String
+    let text: String
+
+    init(id: String, contentHash: String?, text: String) {
+        self.id = id
+        self.contentHash = contentHash ?? Self.fallbackHash(text)
+        self.text = text
+    }
+
+    private static func fallbackHash(_ text: String) -> String {
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in text.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x100000001b3
+        }
+        return String(hash, radix: 16)
+    }
+}
+
+struct SkillFactModel: Identifiable, Sendable, Hashable {
+    let id: String
+    let label: String
+    let value: String
+
+    init(_ label: String, value: String) {
+        self.id = label
+        self.label = label
+        self.value = value
+    }
+}
+
 struct LocalSkillItem: Identifiable, Sendable, Hashable {
     let id: String
     let name: String
@@ -297,6 +330,82 @@ struct LocalSkillRowModel: Identifiable, Sendable, Hashable {
         description = group.description ?? "No description"
         copyCount = group.installedCopyCount
         providerBadges = Array(group.providers.prefix(3))
+    }
+}
+
+struct LocalSkillActionModel: Sendable, Hashable {
+    let folderPath: String
+    let skillMarkdownPath: String
+}
+
+struct LocalSkillCopyRowModel: Identifiable, Sendable, Hashable {
+    let id: String
+    let providerName: String
+    let providerSymbol: String
+    let scopeName: String
+    let displayPath: String
+    let isSymlink: Bool
+
+    init(skill: LocalSkillItem) {
+        id = skill.id
+        providerName = skill.providerName
+        providerSymbol = skill.providerSymbol
+        scopeName = skill.scope.displayName
+        displayPath = skill.displayPath
+        isSymlink = skill.isSymlink
+    }
+}
+
+struct LocalSkillDetailModel: Identifiable, Sendable, Hashable {
+    let id: String
+    let title: String
+    let subtitle: String
+    let copyCount: Int
+    let fileCount: Int
+    let tokenCount: Int
+    let primaryFacts: [SkillFactModel]
+    let installedCopies: [LocalSkillCopyRowModel]
+    let files: [SkillFileEntry]
+    let markdownDocument: SkillMarkdownDocument?
+    let actions: LocalSkillActionModel?
+
+    init(group: LocalSkillGroup) {
+        let primary = group.primarySkill
+        id = group.id
+        title = group.name
+        subtitle = group.description ?? "Local SKILL.md directory"
+        copyCount = group.installedCopyCount
+        fileCount = primary?.stats.fileCount ?? 0
+        tokenCount = primary?.stats.tokenCount ?? 0
+        installedCopies = group.skills.map(LocalSkillCopyRowModel.init(skill:))
+        files = primary?.files ?? []
+        actions = primary.map {
+            LocalSkillActionModel(folderPath: $0.folderPath, skillMarkdownPath: $0.skillMarkdownPath)
+        }
+        markdownDocument = primary.map {
+            SkillMarkdownDocument(
+                id: "local:\($0.id)",
+                contentHash: $0.contentHash,
+                text: $0.skillMarkdown
+            )
+        }
+
+        var facts: [SkillFactModel] = []
+        if let primary {
+            facts.append(SkillFactModel("Provider", value: primary.providerName))
+            facts.append(SkillFactModel("Scope", value: primary.scope.displayName))
+            facts.append(SkillFactModel("Path", value: primary.displayPath))
+            if let creator = primary.frontmatter.creator {
+                facts.append(SkillFactModel("Creator", value: creator))
+            }
+            if let version = primary.frontmatter.version {
+                facts.append(SkillFactModel("Version", value: version))
+            }
+            if let plugin = primary.plugin {
+                facts.append(SkillFactModel("Plugin", value: plugin.displayName))
+            }
+        }
+        primaryFacts = facts
     }
 }
 
@@ -425,6 +534,66 @@ struct CuratedSkillOwnerRowModel: Identifiable, Sendable, Hashable {
     let skills: [RemoteSkillRowModel]
 
     var id: String { owner }
+}
+
+struct RemoteSkillActionModel: Sendable, Hashable {
+    let installCommand: String?
+    let remoteURLString: String?
+}
+
+struct RemoteSkillDetailModel: Identifiable, Sendable, Hashable {
+    let id: String
+    let title: String
+    let subtitle: String
+    let installsText: String
+    let fileCount: Int
+    let installStateTitle: String
+    let facts: [SkillFactModel]
+    let installCommand: String?
+    let files: [SkillFileEntry]
+    let audits: [SkillsShAuditEntry]
+    let markdownDocument: SkillMarkdownDocument?
+    let isDetailLoading: Bool
+    let actions: RemoteSkillActionModel
+
+    init(skill: RemoteSkillSummary, bundle: SkillRemoteDetailBundle?, installState: SkillInstallState, isDetailLoading: Bool) {
+        id = skill.id
+        title = skill.name
+        subtitle = skill.displaySource
+        installsText = skill.installs.map(String.init) ?? "-"
+        let fileEntries = bundle?.fileEntries ?? []
+        files = fileEntries
+        fileCount = fileEntries.count
+        installStateTitle = installState.title
+        installCommand = skill.installCommand
+        audits = bundle?.audit?.audits ?? []
+        self.isDetailLoading = isDetailLoading
+
+        let remoteURLString = skill.url ?? skill.installURL
+        actions = RemoteSkillActionModel(
+            installCommand: skill.installCommand,
+            remoteURLString: remoteURLString
+        )
+        markdownDocument = bundle?.skillMarkdown.map {
+            SkillMarkdownDocument(
+                id: "remote:\(skill.id)",
+                contentHash: bundle?.detail?.hash,
+                text: $0
+            )
+        }
+
+        var facts = [SkillFactModel("ID", value: skill.id)]
+        if let source = skill.source {
+            facts.append(SkillFactModel("Source", value: source))
+        }
+        if let installURL = skill.installURL {
+            facts.append(SkillFactModel("Install URL", value: installURL))
+        }
+        if let hash = bundle?.detail?.hash {
+            facts.append(SkillFactModel("Hash", value: hash))
+        }
+        self.facts = facts
+    }
 }
 
 struct RemoteSkillFile: Identifiable, Sendable, Hashable, Decodable {

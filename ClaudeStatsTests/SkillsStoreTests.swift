@@ -38,6 +38,11 @@ struct SkillsStoreTests {
         await store.loadIfNeeded(sessions: [])
         #expect(store.snapshot.summary.groupCount == 2)
         #expect(store.selectedLocalGroup?.name == "Alpha Skill")
+        let initialDetail = try #require(store.selectedLocalDetail)
+        #expect(initialDetail.title == "Alpha Skill")
+        #expect(initialDetail.copyCount == 1)
+        #expect(initialDetail.primaryFacts.contains { $0.label == "Provider" && $0.value == "Codex" })
+        #expect(initialDetail.markdownDocument?.text.contains("Alpha Skill") == true)
 
         store.searchText = "beta"
         store.syncLocalSelection()
@@ -45,6 +50,7 @@ struct SkillsStoreTests {
         #expect(store.visibleLocalRows.map(\.name) == ["Beta Skill"])
         #expect(store.visibleLocalRows.first?.providerBadges == ["Claude"])
         #expect(store.selectedLocalGroup?.name == "Beta Skill")
+        #expect(store.selectedLocalDetail?.title == "Beta Skill")
 
         store.selectedProviderID = "codex"
         store.searchText = ""
@@ -128,6 +134,13 @@ struct SkillsStoreTests {
         #expect(store.remoteDetails[remote.id]?.fileEntries.first?.path == "SKILL.md")
         #expect(store.installState(for: remote) == .outOfDate)
         #expect(store.discoverRows.first?.installState == .outOfDate)
+        let remoteDetail = try #require(store.selectedRemoteDetail)
+        #expect(remoteDetail.title == "React Native")
+        #expect(remoteDetail.installStateTitle == SkillInstallState.outOfDate.title)
+        #expect(remoteDetail.markdownDocument?.text.contains("React Native") == true)
+        #expect(remoteDetail.files.first?.path == "SKILL.md")
+        #expect(remoteDetail.audits.first?.provider == "Socket")
+        #expect(remoteDetail.actions.installCommand?.contains("npx skills add") == true)
     }
 
     @Test("Curated rows cache remote lookup and selected skill")

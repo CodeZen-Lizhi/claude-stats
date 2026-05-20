@@ -32,6 +32,20 @@ enum MainWindowMotion {
         )
     }
 
+    static var appSidebarTransition: AnyTransition {
+        .asymmetric(
+            insertion: .move(edge: .leading).combined(with: .opacity),
+            removal: .move(edge: .leading).combined(with: .opacity)
+        )
+    }
+
+    static var secondarySidebarTransition: AnyTransition {
+        .asymmetric(
+            insertion: .move(edge: .trailing).combined(with: .opacity),
+            removal: .move(edge: .trailing).combined(with: .opacity)
+        )
+    }
+
     static var linuxDoDetailTransition: AnyTransition {
         .asymmetric(
             insertion: .offset(x: detailOffset).combined(with: .opacity),
@@ -75,9 +89,10 @@ enum MainWindowMotion {
     }
 }
 
-/// Stable two-column shell for the main window. The sidebar column is a clipped
-/// deck that slides between app, LinuxDo, sessions, configs, settings, network, and ops navigation while the detail panel
-/// stays mounted so its leading boundary can move with the sidebar width.
+/// Stable two-column shell for the main window. The sidebar column transitions
+/// directly between app, LinuxDo, sessions, configs, settings, network, and ops
+/// navigation while the detail panel stays mounted so its leading boundary can
+/// move with the sidebar width.
 struct MainWindowModeShell<AppSidebar: View, LinuxDoSidebar: View, SessionsSidebar: View, ConfigsSidebar: View, SettingsSidebar: View, NetworkSidebar: View, OpsSidebar: View, AppDetail: View, LinuxDoDetail: View, SessionsDetail: View, ConfigsDetail: View, SettingsDetail: View, NetworkDetail: View, OpsDetail: View>: View {
     let mode: MainWindowMode
     let sidebarVisible: Bool
@@ -170,25 +185,6 @@ struct MainWindowModeShell<AppSidebar: View, LinuxDoSidebar: View, SessionsSideb
         }
     }
 
-    private var sidebarDeckOffset: CGFloat {
-        switch mode {
-        case .app:
-            0
-        case .linuxDo:
-            -MainWindowMotion.appSidebarWidth
-        case .sessions:
-            -(MainWindowMotion.appSidebarWidth + MainWindowMotion.linuxDoSidebarWidth)
-        case .configs:
-            -(MainWindowMotion.appSidebarWidth + MainWindowMotion.linuxDoSidebarWidth + MainWindowMotion.sessionsSidebarWidth)
-        case .settings:
-            -(MainWindowMotion.appSidebarWidth + MainWindowMotion.linuxDoSidebarWidth + MainWindowMotion.sessionsSidebarWidth + MainWindowMotion.configsSidebarWidth)
-        case .network:
-            -(MainWindowMotion.appSidebarWidth + MainWindowMotion.linuxDoSidebarWidth + MainWindowMotion.sessionsSidebarWidth + MainWindowMotion.configsSidebarWidth + MainWindowMotion.settingsSidebarWidth)
-        case .ops:
-            -(MainWindowMotion.appSidebarWidth + MainWindowMotion.linuxDoSidebarWidth + MainWindowMotion.sessionsSidebarWidth + MainWindowMotion.configsSidebarWidth + MainWindowMotion.settingsSidebarWidth + MainWindowMotion.networkSidebarWidth)
-        }
-    }
-
     private var detailRoundedLeading: Bool {
         switch mode {
         case .app:
@@ -237,53 +233,58 @@ struct MainWindowModeShell<AppSidebar: View, LinuxDoSidebar: View, SessionsSideb
     }
 
     private var sidebarDeck: some View {
-        HStack(spacing: 0) {
-            appSidebar
-                .frame(width: MainWindowMotion.appSidebarWidth)
-                .opacity(sidebarVisible ? 1 : 0)
-                .allowsHitTesting(appSidebarIsActive)
-                .accessibilityHidden(!appSidebarIsActive)
-
-            linuxDoSidebar
-                .frame(width: MainWindowMotion.linuxDoSidebarWidth)
-                .opacity(sidebarVisible ? 1 : 0)
-                .allowsHitTesting(linuxDoSidebarIsActive)
-                .accessibilityHidden(!linuxDoSidebarIsActive)
-
-            sessionsSidebar
-                .frame(width: MainWindowMotion.sessionsSidebarWidth)
-                .opacity(sidebarVisible ? 1 : 0)
-                .allowsHitTesting(sessionsSidebarIsActive)
-                .accessibilityHidden(!sessionsSidebarIsActive)
-
-            configsSidebar
-                .frame(width: MainWindowMotion.configsSidebarWidth)
-                .opacity(sidebarVisible ? 1 : 0)
-                .allowsHitTesting(configsSidebarIsActive)
-                .accessibilityHidden(!configsSidebarIsActive)
-
-            settingsSidebar
-                .frame(width: MainWindowMotion.settingsSidebarWidth)
-                .allowsHitTesting(settingsSidebarIsActive)
-                .accessibilityHidden(!settingsSidebarIsActive)
-
-            networkSidebar
-                .frame(width: MainWindowMotion.networkSidebarWidth)
-                .opacity(sidebarVisible ? 1 : 0)
-                .allowsHitTesting(networkSidebarIsActive)
-                .accessibilityHidden(!networkSidebarIsActive)
-
-            opsSidebar
-                .frame(width: MainWindowMotion.opsSidebarWidth)
-                .opacity(sidebarVisible ? 1 : 0)
-                .allowsHitTesting(opsSidebarIsActive)
-                .accessibilityHidden(!opsSidebarIsActive)
+        ZStack(alignment: .leading) {
+            switch mode {
+            case .app:
+                appSidebar
+                    .frame(width: MainWindowMotion.appSidebarWidth)
+                    .opacity(sidebarVisible ? 1 : 0)
+                    .allowsHitTesting(appSidebarIsActive)
+                    .accessibilityHidden(!appSidebarIsActive)
+                    .transition(MainWindowMotion.appSidebarTransition)
+            case .linuxDo:
+                linuxDoSidebar
+                    .frame(width: MainWindowMotion.linuxDoSidebarWidth)
+                    .opacity(sidebarVisible ? 1 : 0)
+                    .allowsHitTesting(linuxDoSidebarIsActive)
+                    .accessibilityHidden(!linuxDoSidebarIsActive)
+                    .transition(MainWindowMotion.secondarySidebarTransition)
+            case .sessions:
+                sessionsSidebar
+                    .frame(width: MainWindowMotion.sessionsSidebarWidth)
+                    .opacity(sidebarVisible ? 1 : 0)
+                    .allowsHitTesting(sessionsSidebarIsActive)
+                    .accessibilityHidden(!sessionsSidebarIsActive)
+                    .transition(MainWindowMotion.secondarySidebarTransition)
+            case .configs:
+                configsSidebar
+                    .frame(width: MainWindowMotion.configsSidebarWidth)
+                    .opacity(sidebarVisible ? 1 : 0)
+                    .allowsHitTesting(configsSidebarIsActive)
+                    .accessibilityHidden(!configsSidebarIsActive)
+                    .transition(MainWindowMotion.secondarySidebarTransition)
+            case .settings:
+                settingsSidebar
+                    .frame(width: MainWindowMotion.settingsSidebarWidth)
+                    .allowsHitTesting(settingsSidebarIsActive)
+                    .accessibilityHidden(!settingsSidebarIsActive)
+                    .transition(MainWindowMotion.secondarySidebarTransition)
+            case .network:
+                networkSidebar
+                    .frame(width: MainWindowMotion.networkSidebarWidth)
+                    .opacity(sidebarVisible ? 1 : 0)
+                    .allowsHitTesting(networkSidebarIsActive)
+                    .accessibilityHidden(!networkSidebarIsActive)
+                    .transition(MainWindowMotion.secondarySidebarTransition)
+            case .ops:
+                opsSidebar
+                    .frame(width: MainWindowMotion.opsSidebarWidth)
+                    .opacity(sidebarVisible ? 1 : 0)
+                    .allowsHitTesting(opsSidebarIsActive)
+                    .accessibilityHidden(!opsSidebarIsActive)
+                    .transition(MainWindowMotion.secondarySidebarTransition)
+            }
         }
-        .frame(
-            width: MainWindowMotion.appSidebarWidth + MainWindowMotion.linuxDoSidebarWidth + MainWindowMotion.sessionsSidebarWidth + MainWindowMotion.configsSidebarWidth + MainWindowMotion.settingsSidebarWidth + MainWindowMotion.networkSidebarWidth + MainWindowMotion.opsSidebarWidth,
-            alignment: .leading
-        )
-        .offset(x: sidebarDeckOffset)
     }
 
     @ViewBuilder

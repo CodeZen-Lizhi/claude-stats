@@ -94,6 +94,21 @@ final class SkillsStore {
         return remoteSkillsByID[selectedRemoteSkillID]
     }
 
+    var selectedLocalDetail: LocalSkillDetailModel? {
+        guard let selectedLocalGroup else { return nil }
+        return LocalSkillDetailModel(group: selectedLocalGroup)
+    }
+
+    var selectedRemoteDetail: RemoteSkillDetailModel? {
+        guard let skill = selectedRemoteSkill else { return nil }
+        return RemoteSkillDetailModel(
+            skill: skill,
+            bundle: remoteDetails[skill.id],
+            installState: computedInstallState(for: skill),
+            isDetailLoading: isRemoteLoading
+        )
+    }
+
     func loadIfNeeded(sessions: [Session]) async {
         guard !hasLoadedLocal else { return }
         await reloadLocal(sessions: sessions)
