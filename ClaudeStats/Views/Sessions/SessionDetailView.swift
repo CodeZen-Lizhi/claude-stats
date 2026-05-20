@@ -72,10 +72,15 @@ struct SessionDetailView: View {
         let includeCache = env.preferences.includeCacheInTokens
         Grid(horizontalSpacing: 12, verticalSpacing: 12) {
             GridRow {
-                StatCard(label: "Total tokens", value: Format.tokens(stats.totalTokens(includingCacheRead: includeCache)))
-                StatCard(label: "Estimated cost", value: Format.cost(stats.totalCost(for: env.preferences.costEstimationMode)))
-                StatCard(label: "Messages", value: "\(stats.messageCount)")
-                StatCard(label: "Last activity", value: Format.relativeDate(stats.lastActivity ?? session.lastModified), animatesNumericValue: false)
+                StatCard(label: L10n.string("session.stat.total_tokens", defaultValue: "TOTAL TOKENS"),
+                         value: Format.tokens(stats.totalTokens(includingCacheRead: includeCache)))
+                StatCard(label: L10n.string("session.stat.estimated_cost", defaultValue: "ESTIMATED COST"),
+                         value: Format.cost(stats.totalCost(for: env.preferences.costEstimationMode)))
+                StatCard(label: L10n.string("session.stat.messages", defaultValue: "MESSAGES"),
+                         value: "\(stats.messageCount)")
+                StatCard(label: L10n.string("session.stat.last_activity", defaultValue: "LAST ACTIVITY"),
+                         value: Format.relativeDate(stats.lastActivity ?? session.lastModified),
+                         animatesNumericValue: false)
             }
         }
     }
@@ -114,16 +119,18 @@ struct SessionDetailView: View {
                         .controlSize(.small)
                         .scaleEffect(0.72)
                 } else if !transcriptMessages.isEmpty {
-                    Text("\(transcriptMessages.count) messages")
+                    Text(L10n.messageCount(transcriptMessages.count))
                         .font(.sora(10))
                         .foregroundStyle(Color.stxMuted)
                 }
             }
 
             if transcriptIsLoading && transcriptMessages.isEmpty {
-                transcriptPlaceholder("Loading transcript…")
+                transcriptPlaceholder(L10n.string("session.transcript.loading",
+                                                  defaultValue: "Loading transcript…"))
             } else if transcriptMessages.isEmpty {
-                transcriptPlaceholder("No readable conversation content found in this transcript.")
+                transcriptPlaceholder(L10n.string("session.transcript.empty",
+                                                  defaultValue: "No readable conversation content found in this transcript."))
             } else {
                 LazyVStack(alignment: .leading, spacing: 10) {
                     ForEach(transcriptMessages) { message in
@@ -160,7 +167,8 @@ struct SessionDetailView: View {
     // MARK: - Missing stats placeholder
 
     private var missingStatsPlaceholder: some View {
-        Text("Transcript stats haven't been parsed yet.")
+        Text(L10n.string("session.stats.not_parsed",
+                         defaultValue: "Transcript stats haven't been parsed yet."))
             .font(.sora(12))
             .foregroundStyle(Color.stxMuted)
             .padding(16)

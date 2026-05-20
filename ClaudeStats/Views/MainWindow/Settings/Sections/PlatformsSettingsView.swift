@@ -116,18 +116,25 @@ struct PlatformsSettingsView: View {
             .labelsHidden()
             .toggleStyle(.switch)
             .disabled(env.claudeStatus.isRequestingNotificationAuthorization)
-            .help(env.claudeStatus.notificationPermissionDenied ? "Open macOS Notifications settings to allow alerts." : "Enable Claude Status alerts.")
+            .help(env.claudeStatus.notificationPermissionDenied
+                ? L10n.string("platforms.notifications.help.open_settings",
+                              defaultValue: "Open macOS Notifications settings to allow alerts.")
+                : L10n.string("platforms.claude_status.help.enable_alerts",
+                              defaultValue: "Enable Claude Status alerts."))
         }
     }
 
     private var claudeStatusAlertsDescription: String {
         if env.claudeStatus.isRequestingNotificationAuthorization {
-            return "Waiting for macOS notification permission."
+            return L10n.string("platforms.notifications.waiting_permission",
+                               defaultValue: "Waiting for macOS notification permission.")
         }
         if env.claudeStatus.notificationPermissionDenied {
-            return "Notification permission is denied in macOS Settings. Open Settings to allow alerts."
+            return L10n.string("platforms.notifications.permission_denied",
+                               defaultValue: "Notification permission is denied in macOS Settings. Open Settings to allow alerts.")
         }
-        return "Send a macOS notification when any shown Claude component is not operational."
+        return L10n.string("platforms.claude_status.alerts_description",
+                           defaultValue: "Send a macOS notification when any shown Claude component is not operational.")
     }
 
     private func claudeStatusComponentRow(_ component: ClaudeStatusComponent) -> some View {
@@ -198,18 +205,25 @@ struct PlatformsSettingsView: View {
             .labelsHidden()
             .toggleStyle(.switch)
             .disabled(env.openAIStatus.isRequestingNotificationAuthorization)
-            .help(env.openAIStatus.notificationPermissionDenied ? "Open macOS Notifications settings to allow alerts." : "Enable OpenAI Status alerts.")
+            .help(env.openAIStatus.notificationPermissionDenied
+                ? L10n.string("platforms.notifications.help.open_settings",
+                              defaultValue: "Open macOS Notifications settings to allow alerts.")
+                : L10n.string("platforms.openai_status.help.enable_alerts",
+                              defaultValue: "Enable OpenAI Status alerts."))
         }
     }
 
     private var openAIStatusAlertsDescription: String {
         if env.openAIStatus.isRequestingNotificationAuthorization {
-            return "Waiting for macOS notification permission."
+            return L10n.string("platforms.notifications.waiting_permission",
+                               defaultValue: "Waiting for macOS notification permission.")
         }
         if env.openAIStatus.notificationPermissionDenied {
-            return "Notification permission is denied in macOS Settings. Open Settings to allow alerts."
+            return L10n.string("platforms.notifications.permission_denied",
+                               defaultValue: "Notification permission is denied in macOS Settings. Open Settings to allow alerts.")
         }
-        return "Send a macOS notification when any shown OpenAI product group is not operational."
+        return L10n.string("platforms.openai_status.alerts_description",
+                           defaultValue: "Send a macOS notification when any shown OpenAI product group is not operational.")
     }
 
     private func openAIStatusGroupRow(_ group: OpenAIStatusGroup) -> some View {

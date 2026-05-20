@@ -73,7 +73,9 @@ struct MainUsageView: View {
             Text("Token usage")
                 .font(.sora(24, weight: .semibold))
                 .lineLimit(1)
-            Text("Cost, cache, and model mix for \(provider.displayName).")
+            Text(L10n.format("usage.subtitle.provider_mix",
+                             defaultValue: "Cost, cache, and model mix for %@.",
+                             provider.displayName))
                 .font(.sora(12))
                 .foregroundStyle(Color.stxMuted)
                 .lineLimit(1)
@@ -163,7 +165,11 @@ struct MainUsageView: View {
     private func copyClaudeSettingsSnippet() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(env.usageLimits.claudeSettingsSnippet(), forType: .string)
-        env.usageLimits.recordActionMessage("Claude settings snippet copied.", for: .claude)
+        env.usageLimits.recordActionMessage(
+            L10n.string("usage.limit.action.copied_settings_snippet",
+                        defaultValue: "Claude settings snippet copied."),
+            for: .claude
+        )
     }
 
     private func openClaudeSettings() {
@@ -218,10 +224,10 @@ private struct UsagePeriodChips: View {
 
     private func label(for period: StatsPeriod) -> String {
         switch period {
-        case .today: "Today"
+        case .today: L10n.string("usage.period_chip.today", defaultValue: "Today")
         case .last7Days: "7d"
         case .last30Days: "30d"
-        case .allTime: "All"
+        case .allTime: L10n.string("usage.period_chip.all", defaultValue: "All")
         }
     }
 }

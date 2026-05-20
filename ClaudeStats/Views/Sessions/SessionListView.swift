@@ -20,7 +20,8 @@ struct SessionListView: View {
             VStack(spacing: 0) {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass").foregroundStyle(Color.stxMuted)
-                    TextField("Search project or title", text: $vm.searchText)
+                    TextField(L10n.string("sessions.search.placeholder", defaultValue: "Search project or title"),
+                              text: $vm.searchText)
                         .textFieldStyle(.plain)
                         .font(.sora(12))
                     Picker("Sort", selection: $vm.sortOrder) {
@@ -43,7 +44,7 @@ struct SessionListView: View {
             .filter { selection.contains($0.stats?.lastActivity ?? $0.lastModified) }
             .prefix(Self.exportRowLimit)
         if sessions.isEmpty {
-            Text("No sessions for this period.")
+            Text(L10n.string("sessions.empty.period", defaultValue: "No sessions for this period."))
                 .font(.sora(11))
                 .foregroundStyle(Color.stxMuted)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -69,12 +70,22 @@ struct SessionListView: View {
         let providerSessions = store.sessions(for: provider)
         if !store.dataDirectoryExists(for: provider) {
             ContentUnavailableView {
-                Label("No \(provider.shortName) Data", systemImage: "tray")
+                Label {
+                    Text(L10n.format("sessions.empty.no_provider_data",
+                                     defaultValue: "No %@ Data",
+                                     provider.shortName))
+                } icon: {
+                    Image(systemName: "tray")
+                }
             } description: {
                 if let path = store.dataDirectoryPath(for: provider) {
-                    Text("Couldn't find \(path).")
+                    Text(L10n.format("sessions.empty.could_not_find",
+                                     defaultValue: "Couldn't find %@.",
+                                     path))
                 } else {
-                    Text("\(provider.displayName) usage isn't supported yet.")
+                    Text(L10n.format("sessions.empty.unsupported_provider",
+                                     defaultValue: "%@ usage isn't supported yet.",
+                                     provider.displayName))
                 }
             }
             .font(.sora(12))
@@ -82,17 +93,27 @@ struct SessionListView: View {
             let groups = vm.projectGroups(from: store, provider: provider, costMode: env.preferences.costEstimationMode)
             if groups.isEmpty {
                 if store.isLoading && providerSessions.isEmpty {
-                    ProgressView("Scanning sessions…")
+                    ProgressView(L10n.string("sessions.scanning", defaultValue: "Scanning sessions…"))
                         .font(.sora(11))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    ContentUnavailableView(
-                        providerSessions.isEmpty ? "No Sessions" : "No Matches",
-                        systemImage: providerSessions.isEmpty ? "tray" : "magnifyingglass",
-                        description: Text(providerSessions.isEmpty
-                            ? "No usable \(provider.shortName) transcripts found yet."
-                            : "No session matches “\(vm.searchText)”.")
-                    )
+                    ContentUnavailableView {
+                        Label {
+                            Text(providerSessions.isEmpty
+                                ? L10n.string("sessions.empty.no_sessions", defaultValue: "No Sessions")
+                                : L10n.string("sessions.empty.no_matches", defaultValue: "No Matches"))
+                        } icon: {
+                            Image(systemName: providerSessions.isEmpty ? "tray" : "magnifyingglass")
+                        }
+                    } description: {
+                        Text(providerSessions.isEmpty
+                            ? L10n.format("sessions.empty.no_transcripts",
+                                          defaultValue: "No usable %@ transcripts found yet.",
+                                          provider.shortName)
+                            : L10n.format("sessions.empty.no_match_query",
+                                          defaultValue: "No session matches \"%@\".",
+                                          vm.searchText))
+                    }
                     .font(.sora(12))
                 }
             } else {

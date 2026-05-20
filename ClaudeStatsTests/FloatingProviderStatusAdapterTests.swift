@@ -49,7 +49,7 @@ struct FloatingProviderStatusAdapterTests {
         let summary = try #require(ClaudeFloatingStatusAdapter.summary(snapshot: snapshot, uptimeSnapshot: uptime))
         #expect(summary.id == "claude:\(ClaudeStatusComponentCatalog.claudeCodeID)")
         #expect(summary.title == "Claude Code")
-        #expect(summary.statusText == "Operational")
+        #expect(summary.statusText == L10n.string("status.severity.operational", defaultValue: "Operational"))
         #expect(summary.days.count == 30)
         #expect(summary.days.first?.date == date(offset: 15))
     }
@@ -108,7 +108,7 @@ struct FloatingProviderStatusAdapterTests {
         let summary = try #require(OpenAIFloatingStatusAdapter.summary(snapshot: snapshot, uptimeSnapshot: uptime))
         #expect(summary.id == "openai:\(OpenAIStatusGroupCatalog.codexID)")
         #expect(summary.title == "Codex")
-        #expect(summary.statusText == "Degraded Performance")
+        #expect(summary.statusText == L10n.string("status.severity.degraded_performance", defaultValue: "Degraded Performance"))
         #expect(summary.days.count == 30)
         #expect(summary.days.first?.date == date(offset: 15))
     }

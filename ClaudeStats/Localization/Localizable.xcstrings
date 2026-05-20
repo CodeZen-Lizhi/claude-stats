@@ -1062,6 +1062,750 @@
         "en" : { "stringUnit" : { "state" : "translated", "value" : "TOKENS" } },
         "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Token" } }
       }
+    },
+    "USAGE" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "USAGE" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "使用情况" } }
+      }
+    },
+    "Token usage" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Token usage" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Token 使用量" } }
+      }
+    },
+    "Tokens · Cost · Share" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Tokens · Cost · Share" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Token · 费用 · 占比" } }
+      }
+    },
+    "No model data in this range." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No model data in this range." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "这个范围内没有模型数据。" } }
+      }
+    },
+    "COMPOSITION" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "COMPOSITION" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "构成" } }
+      }
+    },
+    "USAGE LIMITS" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "USAGE LIMITS" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "用量限制" } }
+      }
+    },
+    "left" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "left" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "剩余" } }
+      }
+    },
+    "Install bridge" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Install bridge" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "安装桥接" } }
+      }
+    },
+    "Copy settings snippet" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Copy settings snippet" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "复制设置片段" } }
+      }
+    },
+    "Open Claude settings" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open Claude settings" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "打开 Claude 设置" } }
+      }
+    },
+    "Search project or title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Search project or title" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "搜索项目或标题" } }
+      }
+    },
+    "Sort" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Sort" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "排序" } }
+      }
+    },
+    "No Sessions" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Sessions" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "没有会话" } }
+      }
+    },
+    "No Matches" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Matches" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "没有匹配项" } }
+      }
+    },
+    "CONVERSATION" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "CONVERSATION" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "对话" } }
+      }
+    },
+    "Reveal Transcript" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Reveal Transcript" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "显示转录文件" } }
+      }
+    },
+    "AI Coding Tools" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "AI Coding Tools" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "AI 编程工具" } }
+      }
+    },
+    "Claude Status" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Claude Status" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Claude 状态" } }
+      }
+    },
+    "OpenAI Status" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "OpenAI Status" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "OpenAI 状态" } }
+      }
+    },
+    "Status alerts" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Status alerts" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "状态提醒" } }
+      }
+    },
+    "CLAUDE STATUS" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "CLAUDE STATUS" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Claude 状态" } }
+      }
+    },
+    "OPENAI STATUS" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "OPENAI STATUS" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "OpenAI 状态" } }
+      }
+    },
+    "View incident" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "View incident" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "查看事件" } }
+      }
+    },
+    "90 days ago" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "90 days ago" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "90 天前" } }
+      }
+    },
+    "Today" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Today" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "今天" } }
+      }
+    },
+    "usage.subtitle.provider_mix" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cost, cache, and model mix for %@." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "%@ 的费用、缓存和模型构成。" } }
+      }
+    },
+    "usage.period_chip.today" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Today" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "今天" } }
+      }
+    },
+    "usage.period_chip.all" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "All" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "全部" } }
+      }
+    },
+    "usage.trend.help.log_scale" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Compress large gaps between models (ln scale)" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "压缩模型之间的巨大差距（ln 缩放）" } }
+      }
+    },
+    "usage.trend.help.series_per_model" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Show one series per model" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "按模型显示多条序列" } }
+      }
+    },
+    "usage.trend.help.stack_by_type" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Stack by token type" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "按 Token 类型堆叠" } }
+      }
+    },
+    "usage.trend.help.switch_to_bar" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Switch to bar chart" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "切换到柱状图" } }
+      }
+    },
+    "usage.trend.help.switch_to_line" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Switch to line chart" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "切换到折线图" } }
+      }
+    },
+    "usage.token.output" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Output" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "输出" } }
+      }
+    },
+    "usage.token.input" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Input" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "输入" } }
+      }
+    },
+    "usage.token.cache_write" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cache write" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "缓存写入" } }
+      }
+    },
+    "usage.token.cache_read" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cache read" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "缓存读取" } }
+      }
+    },
+    "usage.token.cache_hit_rate" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cache hit rate" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "缓存命中率" } }
+      }
+    },
+    "usage.token.cache_reads_included" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cache reads are included in totals." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "总数包含缓存读取。" } }
+      }
+    },
+    "usage.token.cache_reads_excluded" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cache reads are excluded from totals." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "总数不包含缓存读取。" } }
+      }
+    },
+    "usage.token.cache_write_note" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cache write tokens are always counted because they represent newly primed context." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "缓存写入 Token 始终计入，因为它们代表新注入的上下文。" } }
+      }
+    },
+    "usage.limit.accessibility.provider_limits" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ usage limits" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "%@ 用量限制" } }
+      }
+    },
+    "usage.limit.refresh" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Refresh usage limits" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "刷新用量限制" } }
+      }
+    },
+    "usage.limit.waiting_for_response" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Waiting for the next %@ response" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "等待下一次 %@ 响应" } }
+      }
+    },
+    "usage.limit.unavailable_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Usage limits unavailable" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "用量限制不可用" } }
+      }
+    },
+    "usage.limit.setup_required_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Setup required" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "需要设置" } }
+      }
+    },
+    "usage.limit.checking_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Checking usage limits" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "正在检查用量限制" } }
+      }
+    },
+    "usage.limit.not_loaded_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Usage limits not loaded" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "用量限制尚未加载" } }
+      }
+    },
+    "usage.limit.connect_status_line" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Connect Claude Code status line" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "连接 Claude Code 状态行" } }
+      }
+    },
+    "usage.limit.last_snapshot" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Last snapshot %@" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "上次快照 %@" } }
+      }
+    },
+    "usage.limit.updated" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Updated %@" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "更新于 %@" } }
+      }
+    },
+    "usage.limit.status.fresh" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "FRESH" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "最新" } }
+      }
+    },
+    "usage.limit.status.setup" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "SETUP" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "设置" } }
+      }
+    },
+    "usage.limit.status.waiting" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "WAITING" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "等待中" } }
+      }
+    },
+    "usage.limit.status.unavailable" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "UNAVAILABLE" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "不可用" } }
+      }
+    },
+    "usage.limit.status.unsupported" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "UNSUPPORTED" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "不支持" } }
+      }
+    },
+    "usage.limit.resets" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Resets %@" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "%@ 重置" } }
+      }
+    },
+    "usage.limit.reset_unknown" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Reset unknown" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "重置时间未知" } }
+      }
+    },
+    "usage.limit.used_value" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ used" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "已用 %@" } }
+      }
+    },
+    "usage.limit.window_accessibility" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ remaining, %@ used, %@" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "剩余 %@，已用 %@，%@" } }
+      }
+    },
+    "usage.limit.left" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Left" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "剩余" } }
+      }
+    },
+    "usage.limit.used" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Used" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "已用" } }
+      }
+    },
+    "usage.limit.window_label" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ usage limit" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "%@ 用量限制" } }
+      }
+    },
+    "usage.limit.action.copied_settings_snippet" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Claude settings snippet copied." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "已复制 Claude 设置片段。" } }
+      }
+    },
+    "sessions.search.placeholder" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Search project or title" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "搜索项目或标题" } }
+      }
+    },
+    "sessions.empty.period" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No sessions for this period." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "这个时间段没有会话。" } }
+      }
+    },
+    "sessions.empty.no_provider_data" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No %@ Data" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "没有 %@ 数据" } }
+      }
+    },
+    "sessions.empty.could_not_find" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn't find %@." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "找不到 %@。" } }
+      }
+    },
+    "sessions.empty.unsupported_provider" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ usage isn't supported yet." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "暂不支持 %@ 使用统计。" } }
+      }
+    },
+    "sessions.scanning" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Scanning sessions…" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "正在扫描会话…" } }
+      }
+    },
+    "sessions.empty.no_sessions" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Sessions" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "没有会话" } }
+      }
+    },
+    "sessions.empty.no_matches" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Matches" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "没有匹配项" } }
+      }
+    },
+    "sessions.empty.no_transcripts" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No usable %@ transcripts found yet." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "还没有找到可用的 %@ 转录。" } }
+      }
+    },
+    "sessions.empty.no_match_query" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No session matches \"%@\"." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "没有会话匹配“%@”。" } }
+      }
+    },
+    "session.stat.total_tokens" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "TOTAL TOKENS" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Token 总数" } }
+      }
+    },
+    "session.stat.estimated_cost" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "ESTIMATED COST" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "估算费用" } }
+      }
+    },
+    "session.stat.messages" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "MESSAGES" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "消息数" } }
+      }
+    },
+    "session.stat.last_activity" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "LAST ACTIVITY" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "最近活动" } }
+      }
+    },
+    "session.transcript.loading" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Loading transcript…" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "正在加载转录…" } }
+      }
+    },
+    "session.transcript.empty" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No readable conversation content found in this transcript." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "这个转录里没有可读取的对话内容。" } }
+      }
+    },
+    "session.stats.not_parsed" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Transcript stats haven't been parsed yet." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "转录统计尚未解析。" } }
+      }
+    },
+    "session.role.user" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "User" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "用户" } }
+      }
+    },
+    "session.role.assistant" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Assistant" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "助手" } }
+      }
+    },
+    "session.role.tool" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Tool" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "工具" } }
+      }
+    },
+    "session.role.system" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "System" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "系统" } }
+      }
+    },
+    "platforms.notifications.help.open_settings" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open macOS Notifications settings to allow alerts." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "打开 macOS 通知设置以允许提醒。" } }
+      }
+    },
+    "platforms.claude_status.help.enable_alerts" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enable Claude Status alerts." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "启用 Claude Status 提醒。" } }
+      }
+    },
+    "platforms.openai_status.help.enable_alerts" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enable OpenAI Status alerts." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "启用 OpenAI Status 提醒。" } }
+      }
+    },
+    "platforms.notifications.waiting_permission" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Waiting for macOS notification permission." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "正在等待 macOS 通知权限。" } }
+      }
+    },
+    "platforms.notifications.permission_denied" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Notification permission is denied in macOS Settings. Open Settings to allow alerts." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "macOS 设置中已拒绝通知权限。请打开设置允许提醒。" } }
+      }
+    },
+    "platforms.claude_status.alerts_description" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Send a macOS notification when any shown Claude component is not operational." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "当显示的 Claude 组件非正常运行时发送 macOS 通知。" } }
+      }
+    },
+    "platforms.openai_status.alerts_description" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Send a macOS notification when any shown OpenAI product group is not operational." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "当显示的 OpenAI 产品组非正常运行时发送 macOS 通知。" } }
+      }
+    },
+    "status.severity.operational" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Operational" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "正常运行" } }
+      }
+    },
+    "status.severity.degraded_performance" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Degraded Performance" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "性能下降" } }
+      }
+    },
+    "status.severity.partial_outage" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Partial Outage" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "部分中断" } }
+      }
+    },
+    "status.severity.major_outage" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Major Outage" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "严重中断" } }
+      }
+    },
+    "status.severity.full_outage" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Full Outage" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "完全中断" } }
+      }
+    },
+    "status.severity.under_maintenance" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Under Maintenance" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "维护中" } }
+      }
+    },
+    "status.severity.unknown" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unknown" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "未知" } }
+      }
+    },
+    "status.badge.operational" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "OPERATIONAL" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "正常" } }
+      }
+    },
+    "status.badge.degraded" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "DEGRADED" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "性能下降" } }
+      }
+    },
+    "status.badge.partial_outage" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "PARTIAL OUTAGE" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "部分中断" } }
+      }
+    },
+    "status.badge.major_outage" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "MAJOR OUTAGE" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "严重中断" } }
+      }
+    },
+    "status.badge.maintenance" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "MAINTENANCE" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "维护中" } }
+      }
+    },
+    "status.badge.unknown" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "UNKNOWN" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "未知" } }
+      }
+    },
+    "status.checking" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Checking" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "检查中" } }
+      }
+    },
+    "status.claude.refresh" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Refresh Claude Status" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "刷新 Claude Status" } }
+      }
+    },
+    "status.openai.refresh" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Refresh OpenAI Status" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "刷新 OpenAI Status" } }
+      }
+    },
+    "status.claude.open" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open Claude Status" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "打开 Claude Status" } }
+      }
+    },
+    "status.openai.open" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open OpenAI Status" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "打开 OpenAI Status" } }
+      }
+    },
+    "status.cached_status" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Using cached status. %@" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "正在使用缓存状态。%@" } }
+      }
+    },
+    "status.cached_uptime" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Using cached uptime. %@" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "正在使用缓存可用性。%@" } }
+      }
+    },
+    "status.claude.checking" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Checking Claude Status…" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "正在检查 Claude Status…" } }
+      }
+    },
+    "status.openai.checking" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Checking OpenAI Status…" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "正在检查 OpenAI Status…" } }
+      }
+    },
+    "status.stale_suffix" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : " · stale" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : " · 过期" } }
+      }
+    },
+    "status.updated_short" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "UPD %@" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "更新 %@" } }
+      }
+    },
+    "status.uptime.no_data" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No data" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "无数据" } }
+      }
+    },
+    "status.uptime.percent" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%.2f %% uptime" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "%.2f %% 可用性" } }
+      }
+    },
+    "status.uptime.accessibility" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@, %@, %@ over the last 90 days" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "%@，%@，过去 90 天 %@" } }
+      }
+    },
+    "status.uptime.no_downtime" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@: no downtime recorded" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "%@：没有记录到停机" } }
+      }
+    },
+    "status.uptime.degraded_duration" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "degraded performance %@" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "性能下降 %@" } }
+      }
+    },
+    "status.uptime.partial_outage_duration" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "partial outage %@" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "部分中断 %@" } }
+      }
+    },
+    "status.uptime.major_outage_duration" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "major outage %@" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "严重中断 %@" } }
+      }
+    },
+    "status.uptime.full_outage_duration" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "full outage %@" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "完全中断 %@" } }
+      }
     }
   },
   "version" : "1.0"

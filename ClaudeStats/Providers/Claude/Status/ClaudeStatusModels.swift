@@ -47,23 +47,35 @@ enum ClaudeStatusSeverity: Sendable, Codable, Equatable, Comparable {
 
     var displayName: String {
         switch self {
-        case .operational: "Operational"
-        case .degradedPerformance: "Degraded Performance"
-        case .partialOutage: "Partial Outage"
-        case .majorOutage: "Major Outage"
-        case .underMaintenance: "Under Maintenance"
-        case .unknown: "Unknown"
+        case .operational:
+            L10n.string("status.severity.operational", defaultValue: "Operational")
+        case .degradedPerformance:
+            L10n.string("status.severity.degraded_performance", defaultValue: "Degraded Performance")
+        case .partialOutage:
+            L10n.string("status.severity.partial_outage", defaultValue: "Partial Outage")
+        case .majorOutage:
+            L10n.string("status.severity.major_outage", defaultValue: "Major Outage")
+        case .underMaintenance:
+            L10n.string("status.severity.under_maintenance", defaultValue: "Under Maintenance")
+        case .unknown:
+            L10n.string("status.severity.unknown", defaultValue: "Unknown")
         }
     }
 
     var badgeText: String {
         switch self {
-        case .operational: "OPERATIONAL"
-        case .degradedPerformance: "DEGRADED"
-        case .partialOutage: "PARTIAL OUTAGE"
-        case .majorOutage: "MAJOR OUTAGE"
-        case .underMaintenance: "MAINTENANCE"
-        case .unknown: "UNKNOWN"
+        case .operational:
+            L10n.string("status.badge.operational", defaultValue: "OPERATIONAL")
+        case .degradedPerformance:
+            L10n.string("status.badge.degraded", defaultValue: "DEGRADED")
+        case .partialOutage:
+            L10n.string("status.badge.partial_outage", defaultValue: "PARTIAL OUTAGE")
+        case .majorOutage:
+            L10n.string("status.badge.major_outage", defaultValue: "MAJOR OUTAGE")
+        case .underMaintenance:
+            L10n.string("status.badge.maintenance", defaultValue: "MAINTENANCE")
+        case .unknown:
+            L10n.string("status.badge.unknown", defaultValue: "UNKNOWN")
         }
     }
 

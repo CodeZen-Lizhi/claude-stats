@@ -58,7 +58,8 @@ struct UsageTrendPanel: View {
                 UsageIconButton(
                     systemName: "function",
                     active: scaleMode == .log,
-                    help: "Compress large gaps between models (ln scale)"
+                    help: L10n.string("usage.trend.help.log_scale",
+                                      defaultValue: "Compress large gaps between models (ln scale)")
                 ) {
                     scaleMode = scaleMode == .linear ? .log : .linear
                 }
@@ -68,8 +69,10 @@ struct UsageTrendPanel: View {
                 systemName: "square.stack.3d.up.fill",
                 active: stackByType,
                 help: stackByType
-                    ? "Show one series per model"
-                    : "Stack by token type"
+                    ? L10n.string("usage.trend.help.series_per_model",
+                                  defaultValue: "Show one series per model")
+                    : L10n.string("usage.trend.help.stack_by_type",
+                                  defaultValue: "Stack by token type")
             ) {
                 stackByType.toggle()
             }
@@ -78,7 +81,11 @@ struct UsageTrendPanel: View {
                 UsageIconButton(
                     systemName: chartStyle == .line ? "chart.xyaxis.line" : "chart.bar.xaxis",
                     active: false,
-                    help: chartStyle == .line ? "Switch to bar chart" : "Switch to line chart"
+                    help: chartStyle == .line
+                        ? L10n.string("usage.trend.help.switch_to_bar",
+                                      defaultValue: "Switch to bar chart")
+                        : L10n.string("usage.trend.help.switch_to_line",
+                                      defaultValue: "Switch to line chart")
                 ) {
                     chartStyle = chartStyle == .line ? .bar : .line
                 }
@@ -87,15 +94,27 @@ struct UsageTrendPanel: View {
     }
 
     private var caption: String {
-        var parts = [isHourly ? "TOKENS TODAY · HOURLY" : "TOKENS PER DAY"]
-        parts.append(effectiveStyle == .bar ? "BARS" : "LINE")
-        if stackByType { parts.append("STACKED BY TYPE") }
-        if useLog { parts.append("LN SCALE") }
+        var parts = [
+            isHourly
+                ? L10n.string("usage.caption.tokens_today_hourly", defaultValue: "TOKENS TODAY · HOURLY")
+                : L10n.string("usage.caption.tokens_per_day", defaultValue: "TOKENS PER DAY")
+        ]
+        parts.append(effectiveStyle == .bar
+            ? L10n.string("usage.caption.bars", defaultValue: "BARS")
+            : L10n.string("usage.caption.line", defaultValue: "LINE"))
+        if stackByType {
+            parts.append(L10n.string("usage.caption.stacked_by_type", defaultValue: "STACKED BY TYPE"))
+        }
+        if useLog {
+            parts.append(L10n.string("usage.caption.ln_scale", defaultValue: "LN SCALE"))
+        }
         return parts.joined(separator: " · ")
     }
 
     private var emptyMessage: String {
-        isHourly ? "No usage today yet." : "No usage for this period."
+        isHourly
+            ? L10n.string("usage.empty.today", defaultValue: "No usage today yet.")
+            : L10n.string("usage.empty.period", defaultValue: "No usage for this period.")
     }
 
     private func legend(_ entries: [UsageTrendLegendEntry]) -> some View {

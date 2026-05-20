@@ -36,7 +36,7 @@ struct ClaudeStatusClientTests {
         let snapshot = try ClaudeStatusClient.decodeSummary(Self.unknownSummary)
 
         #expect(snapshot.components.first?.status == .unknown("new_status"))
-        #expect(snapshot.components.first?.status.displayName == "Unknown")
+        #expect(snapshot.components.first?.status.displayName == L10n.string("status.severity.unknown", defaultValue: "Unknown"))
     }
 
     private static let operationalSummary = Data("""

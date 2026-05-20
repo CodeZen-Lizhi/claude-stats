@@ -26,7 +26,7 @@ struct ClaudeStatusCard: View {
             } else if status.isLoading {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.mini)
-                    Text("Checking")
+                    Text(L10n.string("status.checking", defaultValue: "Checking"))
                         .font(.sora(10, weight: .medium))
                         .foregroundStyle(Color.stxMuted)
                 }
@@ -44,14 +44,14 @@ struct ClaudeStatusCard: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(Color.stxMuted)
-            .help("Refresh Claude Status")
+            .help(L10n.string("status.claude.refresh", defaultValue: "Refresh Claude Status"))
             Link(destination: status.statusPageURL) {
                 Image(systemName: "arrow.up.right.square")
                     .font(.system(size: 11, weight: .semibold))
             }
             .buttonStyle(.plain)
             .foregroundStyle(Color.stxMuted)
-            .help("Open Claude Status")
+            .help(L10n.string("status.claude.open", defaultValue: "Open Claude Status"))
         }
     }
 
@@ -70,9 +70,13 @@ struct ClaudeStatusCard: View {
                     incidentRow(incident)
                 }
                 if status.isStale, let lastError = status.lastError {
-                    cachedStatusRow("Using cached status. \(lastError)")
+                    cachedStatusRow(L10n.format("status.cached_status",
+                                                defaultValue: "Using cached status. %@",
+                                                lastError))
                 } else if status.isUptimeStale, let uptimeLastError = status.uptimeLastError {
-                    cachedStatusRow("Using cached uptime. \(uptimeLastError)")
+                    cachedStatusRow(L10n.format("status.cached_uptime",
+                                                defaultValue: "Using cached uptime. %@",
+                                                uptimeLastError))
                 }
             }
         } else if let lastError = status.lastError {
@@ -81,7 +85,7 @@ struct ClaudeStatusCard: View {
                 .foregroundStyle(Color.stxMuted)
                 .fixedSize(horizontal: false, vertical: true)
         } else {
-            Text("Checking Claude Status…")
+            Text(L10n.string("status.claude.checking", defaultValue: "Checking Claude Status…"))
                 .font(.sora(11))
                 .foregroundStyle(Color.stxMuted)
         }
@@ -90,8 +94,8 @@ struct ClaudeStatusCard: View {
     private var updatedLabel: String {
         guard let snapshot = status.snapshot else { return "" }
         let date = snapshot.pageUpdatedAt ?? snapshot.fetchedAt
-        let stale = status.isStale ? " · stale" : ""
-        return "UPD \(Format.relativeDate(date))\(stale)"
+        let stale = status.isStale ? L10n.string("status.stale_suffix", defaultValue: " · stale") : ""
+        return L10n.format("status.updated_short", defaultValue: "UPD %@", Format.relativeDate(date)) + stale
     }
 
     private func severityBadge(_ severity: ClaudeStatusSeverity, label: String) -> some View {
@@ -99,7 +103,7 @@ struct ClaudeStatusCard: View {
             Circle()
                 .fill(severity.tint)
                 .frame(width: 6, height: 6)
-            Text(label.uppercased())
+            Text(label)
                 .font(.sora(9, weight: .semibold))
                 .lineLimit(1)
         }
@@ -138,7 +142,9 @@ struct ClaudeStatusCard: View {
                     .font(.sora(11, weight: .medium))
                     .lineLimit(2)
                 if let shortlink = incident.shortlink {
-                    Link("View incident", destination: shortlink)
+                    Link(destination: shortlink) {
+                        Text("View incident")
+                    }
                         .font(.sora(10))
                 }
             }
@@ -170,8 +176,10 @@ private struct ClaudeStatusUptimeChart: View {
     }
 
     private var uptimeText: String {
-        guard let percent = history.uptimePercent() else { return "No data" }
-        return String(format: "%.2f %% uptime", percent)
+        guard let percent = history.uptimePercent() else {
+            return L10n.string("status.uptime.no_data", defaultValue: "No data")
+        }
+        return L10n.format("status.uptime.percent", defaultValue: "%.2f %% uptime", percent)
     }
 
     var body: some View {
@@ -204,7 +212,11 @@ private struct ClaudeStatusUptimeChart: View {
         }
         .padding(.vertical, 2)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(component.name), \(component.status.displayName), \(uptimeText) over the last 90 days")
+        .accessibilityLabel(L10n.format("status.uptime.accessibility",
+                                        defaultValue: "%@, %@, %@ over the last 90 days",
+                                        component.name,
+                                        component.status.displayName,
+                                        uptimeText))
     }
 
     private var footer: some View {
@@ -232,13 +244,21 @@ private struct ClaudeStatusUptimeChart: View {
 
     private func dayHelp(_ day: ClaudeStatusUptimeDay) -> String {
         let date = Format.day(day.date)
-        guard day.hasOutage else { return "\(date): no downtime recorded" }
+        guard day.hasOutage else {
+            return L10n.format("status.uptime.no_downtime",
+                               defaultValue: "%@: no downtime recorded",
+                               date)
+        }
         var parts: [String] = []
         if day.partialOutageSeconds > 0 {
-            parts.append("partial outage \(Format.duration(TimeInterval(day.partialOutageSeconds)))")
+            parts.append(L10n.format("status.uptime.partial_outage_duration",
+                                     defaultValue: "partial outage %@",
+                                     Format.duration(TimeInterval(day.partialOutageSeconds))))
         }
         if day.majorOutageSeconds > 0 {
-            parts.append("major outage \(Format.duration(TimeInterval(day.majorOutageSeconds)))")
+            parts.append(L10n.format("status.uptime.major_outage_duration",
+                                     defaultValue: "major outage %@",
+                                     Format.duration(TimeInterval(day.majorOutageSeconds))))
         }
         return "\(date): \(parts.joined(separator: ", "))"
     }

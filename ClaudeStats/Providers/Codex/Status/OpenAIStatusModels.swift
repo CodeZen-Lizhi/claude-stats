@@ -47,12 +47,18 @@ enum OpenAIStatusSeverity: Sendable, Codable, Equatable, Comparable {
 
     var displayName: String {
         switch self {
-        case .operational: "Operational"
-        case .degradedPerformance: "Degraded Performance"
-        case .partialOutage: "Partial Outage"
-        case .fullOutage: "Full Outage"
-        case .underMaintenance: "Under Maintenance"
-        case .unknown: "Unknown"
+        case .operational:
+            L10n.string("status.severity.operational", defaultValue: "Operational")
+        case .degradedPerformance:
+            L10n.string("status.severity.degraded_performance", defaultValue: "Degraded Performance")
+        case .partialOutage:
+            L10n.string("status.severity.partial_outage", defaultValue: "Partial Outage")
+        case .fullOutage:
+            L10n.string("status.severity.full_outage", defaultValue: "Full Outage")
+        case .underMaintenance:
+            L10n.string("status.severity.under_maintenance", defaultValue: "Under Maintenance")
+        case .unknown:
+            L10n.string("status.severity.unknown", defaultValue: "Unknown")
         }
     }
 

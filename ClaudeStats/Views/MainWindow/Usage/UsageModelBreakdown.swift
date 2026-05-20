@@ -150,10 +150,10 @@ struct UsageTokenCompositionPanel: View {
 
     private var parts: [Part] {
         [
-            Part(id: "output", label: "Output", value: usage.outputTokens, color: Color.stxRamp[0]),
-            Part(id: "input", label: "Input", value: usage.inputTokens, color: Color.stxRamp[1]),
-            Part(id: "cache-write", label: "Cache write", value: usage.cacheCreationTotalTokens, color: Color.stxRamp[2]),
-            Part(id: "cache-read", label: "Cache read", value: usage.cacheReadTokens, color: Color.stxRamp[3]),
+            Part(id: "output", label: L10n.string("usage.token.output", defaultValue: "Output"), value: usage.outputTokens, color: Color.stxRamp[0]),
+            Part(id: "input", label: L10n.string("usage.token.input", defaultValue: "Input"), value: usage.inputTokens, color: Color.stxRamp[1]),
+            Part(id: "cache-write", label: L10n.string("usage.token.cache_write", defaultValue: "Cache write"), value: usage.cacheCreationTotalTokens, color: Color.stxRamp[2]),
+            Part(id: "cache-read", label: L10n.string("usage.token.cache_read", defaultValue: "Cache read"), value: usage.cacheReadTokens, color: Color.stxRamp[3]),
         ]
     }
 
@@ -172,7 +172,7 @@ struct UsageTokenCompositionPanel: View {
                     .font(.sora(12, weight: .semibold).monospacedDigit())
                     .stxNumericValueTransition(value: cacheHitRate.map(Format.percent) ?? "--")
                     .foregroundStyle(.primary)
-                    .help("Cache hit rate")
+                    .help(L10n.string("usage.token.cache_hit_rate", defaultValue: "Cache hit rate"))
             }
 
             compositionBar
@@ -200,11 +200,14 @@ struct UsageTokenCompositionPanel: View {
             StxRule()
 
             VStack(alignment: .leading, spacing: 5) {
-                Text(includeCacheInTokens ? "Cache reads are included in totals." : "Cache reads are excluded from totals.")
+                Text(includeCacheInTokens
+                    ? L10n.string("usage.token.cache_reads_included", defaultValue: "Cache reads are included in totals.")
+                    : L10n.string("usage.token.cache_reads_excluded", defaultValue: "Cache reads are excluded from totals."))
                     .font(.sora(11, weight: .medium))
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("Cache write tokens are always counted because they represent newly primed context.")
+                Text(L10n.string("usage.token.cache_write_note",
+                                 defaultValue: "Cache write tokens are always counted because they represent newly primed context."))
                     .font(.sora(10))
                     .foregroundStyle(Color.stxMuted)
                     .fixedSize(horizontal: false, vertical: true)

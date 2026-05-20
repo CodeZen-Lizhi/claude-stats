@@ -11,10 +11,10 @@ struct SessionTranscriptMessage: Sendable, Identifiable, Hashable {
 
         var displayName: String {
             switch self {
-            case .user: "User"
-            case .assistant: "Assistant"
-            case .tool: "Tool"
-            case .system: "System"
+            case .user: L10n.string("session.role.user", defaultValue: "User")
+            case .assistant: L10n.string("session.role.assistant", defaultValue: "Assistant")
+            case .tool: L10n.string("session.role.tool", defaultValue: "Tool")
+            case .system: L10n.string("session.role.system", defaultValue: "System")
             }
         }
     }

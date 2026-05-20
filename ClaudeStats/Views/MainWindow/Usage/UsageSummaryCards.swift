@@ -10,29 +10,29 @@ struct UsageSummaryCards: View {
         ViewThatFits(in: .horizontal) {
             Grid(horizontalSpacing: 12, verticalSpacing: 12) {
                 GridRow {
-                    card("Total tokens", Format.tokens(summary.totalTokens(includingCacheRead: includeCacheInTokens)))
-                    card("Est. cost", Format.cost(summary.totalCost(for: costEstimationMode)))
-                    card("Sessions", "\(summary.sessionCount)")
+                    card(L10n.string("usage.stat.tokens", defaultValue: "TOKENS"), Format.tokens(summary.totalTokens(includingCacheRead: includeCacheInTokens)))
+                    card(L10n.string("usage.stat.estimated_cost", defaultValue: "EST. COST"), Format.cost(summary.totalCost(for: costEstimationMode)))
+                    card(L10n.string("usage.stat.sessions", defaultValue: "SESSIONS"), "\(summary.sessionCount)")
                 }
                 GridRow {
-                    card("Messages", Format.tokens(summary.messageCount))
-                    card("Cache hit", cacheHitRate.map(Format.percent) ?? "--")
-                    card("Cached tokens", Format.tokens(summary.totalUsage.cacheReadTokens))
+                    card(L10n.string("usage.stat.messages", defaultValue: "MESSAGES"), Format.tokens(summary.messageCount))
+                    card(L10n.string("usage.stat.cache_hit", defaultValue: "CACHE HIT"), cacheHitRate.map(Format.percent) ?? "--")
+                    card(L10n.string("usage.stat.cached", defaultValue: "CACHED"), Format.tokens(summary.totalUsage.cacheReadTokens))
                 }
             }
 
             Grid(horizontalSpacing: 12, verticalSpacing: 12) {
                 GridRow {
-                    card("Total tokens", Format.tokens(summary.totalTokens(includingCacheRead: includeCacheInTokens)))
-                    card("Est. cost", Format.cost(summary.totalCost(for: costEstimationMode)))
+                    card(L10n.string("usage.stat.tokens", defaultValue: "TOKENS"), Format.tokens(summary.totalTokens(includingCacheRead: includeCacheInTokens)))
+                    card(L10n.string("usage.stat.estimated_cost", defaultValue: "EST. COST"), Format.cost(summary.totalCost(for: costEstimationMode)))
                 }
                 GridRow {
-                    card("Sessions", "\(summary.sessionCount)")
-                    card("Messages", Format.tokens(summary.messageCount))
+                    card(L10n.string("usage.stat.sessions", defaultValue: "SESSIONS"), "\(summary.sessionCount)")
+                    card(L10n.string("usage.stat.messages", defaultValue: "MESSAGES"), Format.tokens(summary.messageCount))
                 }
                 GridRow {
-                    card("Cache hit", cacheHitRate.map(Format.percent) ?? "--")
-                    card("Cached tokens", Format.tokens(summary.totalUsage.cacheReadTokens))
+                    card(L10n.string("usage.stat.cache_hit", defaultValue: "CACHE HIT"), cacheHitRate.map(Format.percent) ?? "--")
+                    card(L10n.string("usage.stat.cached", defaultValue: "CACHED"), Format.tokens(summary.totalUsage.cacheReadTokens))
                 }
             }
         }

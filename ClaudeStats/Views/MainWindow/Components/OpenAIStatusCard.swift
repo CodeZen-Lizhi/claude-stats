@@ -26,7 +26,7 @@ struct OpenAIStatusCard: View {
             } else if status.isLoading {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.mini)
-                    Text("Checking")
+                    Text(L10n.string("status.checking", defaultValue: "Checking"))
                         .font(.sora(10, weight: .medium))
                         .foregroundStyle(Color.stxMuted)
                 }
@@ -44,14 +44,14 @@ struct OpenAIStatusCard: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(Color.stxMuted)
-            .help("Refresh OpenAI Status")
+            .help(L10n.string("status.openai.refresh", defaultValue: "Refresh OpenAI Status"))
             Link(destination: status.statusPageURL) {
                 Image(systemName: "arrow.up.right.square")
                     .font(.system(size: 11, weight: .semibold))
             }
             .buttonStyle(.plain)
             .foregroundStyle(Color.stxMuted)
-            .help("Open OpenAI Status")
+            .help(L10n.string("status.openai.open", defaultValue: "Open OpenAI Status"))
         }
     }
 
@@ -70,9 +70,13 @@ struct OpenAIStatusCard: View {
                     incidentRow(incident)
                 }
                 if status.isStale, let lastError = status.lastError {
-                    cachedStatusRow("Using cached status. \(lastError)")
+                    cachedStatusRow(L10n.format("status.cached_status",
+                                                defaultValue: "Using cached status. %@",
+                                                lastError))
                 } else if status.isUptimeStale, let uptimeLastError = status.uptimeLastError {
-                    cachedStatusRow("Using cached uptime. \(uptimeLastError)")
+                    cachedStatusRow(L10n.format("status.cached_uptime",
+                                                defaultValue: "Using cached uptime. %@",
+                                                uptimeLastError))
                 }
             }
         } else if let lastError = status.lastError {
@@ -81,7 +85,7 @@ struct OpenAIStatusCard: View {
                 .foregroundStyle(Color.stxMuted)
                 .fixedSize(horizontal: false, vertical: true)
         } else {
-            Text("Checking OpenAI Status…")
+            Text(L10n.string("status.openai.checking", defaultValue: "Checking OpenAI Status…"))
                 .font(.sora(11))
                 .foregroundStyle(Color.stxMuted)
         }
@@ -90,8 +94,8 @@ struct OpenAIStatusCard: View {
     private var updatedLabel: String {
         guard let snapshot = status.snapshot else { return "" }
         let date = snapshot.pageUpdatedAt ?? snapshot.fetchedAt
-        let stale = status.isStale ? " · stale" : ""
-        return "UPD \(Format.relativeDate(date))\(stale)"
+        let stale = status.isStale ? L10n.string("status.stale_suffix", defaultValue: " · stale") : ""
+        return L10n.format("status.updated_short", defaultValue: "UPD %@", Format.relativeDate(date)) + stale
     }
 
     private func severityBadge(_ severity: OpenAIStatusSeverity, label: String) -> some View {
@@ -99,7 +103,7 @@ struct OpenAIStatusCard: View {
             Circle()
                 .fill(severity.tint)
                 .frame(width: 6, height: 6)
-            Text(label.uppercased())
+            Text(label)
                 .font(.sora(9, weight: .semibold))
                 .lineLimit(1)
         }
@@ -138,7 +142,9 @@ struct OpenAIStatusCard: View {
                     .font(.sora(11, weight: .medium))
                     .lineLimit(2)
                 if let shortlink = incident.shortlink {
-                    Link("View incident", destination: shortlink)
+                    Link(destination: shortlink) {
+                        Text("View incident")
+                    }
                         .font(.sora(10))
                 }
             }
@@ -170,8 +176,10 @@ private struct OpenAIStatusUptimeChart: View {
     }
 
     private var uptimeText: String {
-        guard let percent = history.uptimePercent() else { return "No data" }
-        return String(format: "%.2f %% uptime", percent)
+        guard let percent = history.uptimePercent() else {
+            return L10n.string("status.uptime.no_data", defaultValue: "No data")
+        }
+        return L10n.format("status.uptime.percent", defaultValue: "%.2f %% uptime", percent)
     }
 
     var body: some View {
@@ -204,7 +212,11 @@ private struct OpenAIStatusUptimeChart: View {
         }
         .padding(.vertical, 2)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(group.name), \(group.status.displayName), \(uptimeText) over the last 90 days")
+        .accessibilityLabel(L10n.format("status.uptime.accessibility",
+                                        defaultValue: "%@, %@, %@ over the last 90 days",
+                                        group.name,
+                                        group.status.displayName,
+                                        uptimeText))
     }
 
     private var footer: some View {
@@ -232,16 +244,26 @@ private struct OpenAIStatusUptimeChart: View {
 
     private func dayHelp(_ day: OpenAIStatusUptimeDay) -> String {
         let date = Format.day(day.date)
-        guard day.hasOutage else { return "\(date): no downtime recorded" }
+        guard day.hasOutage else {
+            return L10n.format("status.uptime.no_downtime",
+                               defaultValue: "%@: no downtime recorded",
+                               date)
+        }
         var parts: [String] = []
         if day.degradedPerformanceSeconds > 0 {
-            parts.append("degraded performance \(Format.duration(TimeInterval(day.degradedPerformanceSeconds)))")
+            parts.append(L10n.format("status.uptime.degraded_duration",
+                                     defaultValue: "degraded performance %@",
+                                     Format.duration(TimeInterval(day.degradedPerformanceSeconds))))
         }
         if day.partialOutageSeconds > 0 {
-            parts.append("partial outage \(Format.duration(TimeInterval(day.partialOutageSeconds)))")
+            parts.append(L10n.format("status.uptime.partial_outage_duration",
+                                     defaultValue: "partial outage %@",
+                                     Format.duration(TimeInterval(day.partialOutageSeconds))))
         }
         if day.fullOutageSeconds > 0 {
-            parts.append("full outage \(Format.duration(TimeInterval(day.fullOutageSeconds)))")
+            parts.append(L10n.format("status.uptime.full_outage_duration",
+                                     defaultValue: "full outage %@",
+                                     Format.duration(TimeInterval(day.fullOutageSeconds))))
         }
         if let event = day.relatedEvents.first {
             parts.append(event.name)

@@ -17,7 +17,11 @@ struct UsageLimitPanel: View {
         }
         .mainUsagePanel(padding: 16)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(provider.shortName) usage limits")
+        .accessibilityLabel(
+            L10n.format("usage.limit.accessibility.provider_limits",
+                        defaultValue: "%@ usage limits",
+                        provider.shortName)
+        )
     }
 
     private var header: some View {
@@ -43,7 +47,7 @@ struct UsageLimitPanel: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(Color.stxMuted)
-            .help("Refresh usage limits")
+            .help(L10n.string("usage.limit.refresh", defaultValue: "Refresh usage limits"))
         }
     }
 
@@ -54,7 +58,7 @@ struct UsageLimitPanel: View {
             Circle()
                 .fill(tint(for: status))
                 .frame(width: 6, height: 6)
-            Text(label(for: status).uppercased())
+            Text(label(for: status))
                 .font(.sora(9, weight: .semibold))
                 .lineLimit(1)
         }
@@ -79,21 +83,25 @@ struct UsageLimitPanel: View {
             case .waitingForNextResponse:
                 stateContent(
                     systemImage: "clock.arrow.circlepath",
-                    title: "Waiting for the next \(provider.shortName) response",
+                    title: L10n.format("usage.limit.waiting_for_response",
+                                       defaultValue: "Waiting for the next %@ response",
+                                       provider.shortName),
                     message: report.message,
                     lastCapturedAt: report.lastCapturedAt
                 )
             case .unavailable:
                 stateContent(
                     systemImage: "exclamationmark.triangle.fill",
-                    title: "Usage limits unavailable",
+                    title: L10n.string("usage.limit.unavailable_title",
+                                       defaultValue: "Usage limits unavailable"),
                     message: report.message,
                     lastCapturedAt: report.lastCapturedAt
                 )
             case .setupRequired:
                 stateContent(
                     systemImage: "wrench.and.screwdriver.fill",
-                    title: "Setup required",
+                    title: L10n.string("usage.limit.setup_required_title",
+                                       defaultValue: "Setup required"),
                     message: report.message,
                     lastCapturedAt: report.lastCapturedAt
                 )
@@ -103,7 +111,9 @@ struct UsageLimitPanel: View {
         } else {
             stateContent(
                 systemImage: "clock.arrow.circlepath",
-                title: isLoading ? "Checking usage limits" : "Usage limits not loaded",
+                title: isLoading
+                    ? L10n.string("usage.limit.checking_title", defaultValue: "Checking usage limits")
+                    : L10n.string("usage.limit.not_loaded_title", defaultValue: "Usage limits not loaded"),
                 message: nil,
                 lastCapturedAt: nil
             )
@@ -134,7 +144,8 @@ struct UsageLimitPanel: View {
         VStack(alignment: .leading, spacing: 12) {
             stateContent(
                 systemImage: "terminal.fill",
-                title: "Connect Claude Code status line",
+                title: L10n.string("usage.limit.connect_status_line",
+                                   defaultValue: "Connect Claude Code status line"),
                 message: message,
                 lastCapturedAt: nil
             )
@@ -187,7 +198,9 @@ struct UsageLimitPanel: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let lastCapturedAt {
-                    Text("Last snapshot \(Format.relativeDate(lastCapturedAt))")
+                    Text(L10n.format("usage.limit.last_snapshot",
+                                     defaultValue: "Last snapshot %@",
+                                     Format.relativeDate(lastCapturedAt)))
                         .font(.sora(10))
                         .foregroundStyle(Color.stxMuted)
                 }
@@ -203,7 +216,7 @@ struct UsageLimitPanel: View {
                 .foregroundStyle(Color.stxMuted)
                 .lineLimit(1)
             if let planType = snapshot.planType {
-                Text(planType.uppercased())
+                Text(planType)
                     .font(.sora(9, weight: .semibold))
                     .foregroundStyle(Color.stxMuted)
                     .padding(.horizontal, 6)
@@ -216,21 +229,23 @@ struct UsageLimitPanel: View {
 
     private var updatedLabel: String? {
         guard let capturedAt = report?.lastCapturedAt else { return nil }
-        return "Updated \(Format.relativeDate(capturedAt))"
+        return L10n.format("usage.limit.updated",
+                           defaultValue: "Updated %@",
+                           Format.relativeDate(capturedAt))
     }
 
     private func label(for status: UsageLimitStatus) -> String {
         switch status {
         case .fresh:
-            "Fresh"
+            L10n.string("usage.limit.status.fresh", defaultValue: "FRESH")
         case .setupRequired:
-            "Setup"
+            L10n.string("usage.limit.status.setup", defaultValue: "SETUP")
         case .waitingForNextResponse:
-            "Waiting"
+            L10n.string("usage.limit.status.waiting", defaultValue: "WAITING")
         case .unavailable:
-            "Unavailable"
+            L10n.string("usage.limit.status.unavailable", defaultValue: "UNAVAILABLE")
         case .unsupported:
-            "Unsupported"
+            L10n.string("usage.limit.status.unsupported", defaultValue: "UNSUPPORTED")
         }
     }
 
@@ -289,14 +304,20 @@ struct UsageLimitWindowCardModel: Equatable, Identifiable, Sendable {
     init(window: UsageLimitWindow) {
         let remainingText = Format.percentPoints(window.remainingPercent)
         let usedText = Format.percentPoints(window.clampedUsedPercent)
-        let resetText = window.resetAt.map { "Resets \(Format.relativeDate($0))" } ?? "Reset unknown"
+        let resetText = window.resetAt.map {
+            L10n.format("usage.limit.resets", defaultValue: "Resets %@", Format.relativeDate($0))
+        } ?? L10n.string("usage.limit.reset_unknown", defaultValue: "Reset unknown")
 
         self.id = window.id
-        self.label = window.label.uppercased()
+        self.label = window.label
         self.resetText = resetText
         self.remainingText = remainingText
-        self.usedText = "\(usedText) used"
-        self.accessibilityValue = "\(remainingText) remaining, \(usedText) used, \(resetText)"
+        self.usedText = L10n.format("usage.limit.used_value", defaultValue: "%@ used", usedText)
+        self.accessibilityValue = L10n.format("usage.limit.window_accessibility",
+                                              defaultValue: "%@ remaining, %@ used, %@",
+                                              remainingText,
+                                              usedText,
+                                              resetText)
         self.segmentLayout = UsageLimitSegmentLayout(usedPercent: window.clampedUsedPercent)
         self.tintLevel = UsageLimitTintLevel(remainingPercent: window.remainingPercent)
     }
@@ -369,15 +390,17 @@ private struct UsageLimitWindowCard: View, Equatable {
             )
 
             HStack(spacing: 10) {
-                UsageLimitSegmentLegendItem(label: "Left", tint: model.tintLevel.color, style: .solid)
-                UsageLimitSegmentLegendItem(label: "Used", tint: Color.primary.opacity(0.34), style: .hatched)
+                UsageLimitSegmentLegendItem(label: L10n.string("usage.limit.left", defaultValue: "Left"), tint: model.tintLevel.color, style: .solid)
+                UsageLimitSegmentLegendItem(label: L10n.string("usage.limit.used", defaultValue: "Used"), tint: Color.primary.opacity(0.34), style: .hatched)
                 Spacer(minLength: 0)
             }
         }
         .padding(.vertical, 4)
         .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(model.label) usage limit")
+        .accessibilityLabel(L10n.format("usage.limit.window_label",
+                                        defaultValue: "%@ usage limit",
+                                        model.label))
         .accessibilityValue(model.accessibilityValue)
     }
 }
