@@ -39,13 +39,15 @@ git tag v1.2.0 && git push origin v1.2.0
 
 `.github/workflows/release.yml` (runs on `macos-26` with Xcode 26.4.1) then: writes `1.2.0` into `project.yml`
 (build number = the workflow run number), builds a Release `Codex Stats.app`, packages it,
-publishes a GitHub Release **on the public companion repo `1pitaph/Codex-stats-releases`** with
-the artifact(s) attached, and commits the bumped `project.yml` back to `master` here.
+publishes GitHub Releases **in this source repo and on the public companion repo
+`1pitaph/Codex-stats-releases`** with the artifact(s) attached, and commits the
+bumped `project.yml` back to `master` here.
 
 The source lives in a **private** repo; binaries and the Sparkle appcast live in the **public**
 `Codex-stats-releases` repo so anyone can download a release / receive an update. The release
 workflow uses a fine-grained PAT (`RELEASES_REPO_TOKEN`, repo secret, Contents: Read and write
-on `Codex-stats-releases`) to push across repos.
+on `Codex-stats-releases`) to push across repos; the source repo Release uses the
+built-in `GITHUB_TOKEN`.
 
 Packaging has two modes, picked automatically:
 
