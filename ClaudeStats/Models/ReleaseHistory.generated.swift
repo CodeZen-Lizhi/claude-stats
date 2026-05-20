@@ -3,6 +3,18 @@
 extension ReleaseHistoryCatalog {
     static let generatedEntries: [ReleaseHistoryEntry] = [
         ReleaseHistoryEntry(
+            version: "1.5.7",
+            date: "May 20, 2026",
+            headline: "更新Rockxy子模块到最新版本",
+            changes: [
+                "重构事务模型，拆分开始/完成时间，新增连接建立时长",
+                "添加客户端归因枚举，优化客户端名称识别逻辑",
+                "实现带图标的客户端列表展示，支持常见应用图标匹配",
+                "修复上游代理状态判断逻辑，新增代理模式变更处理",
+                "优化序列号生成逻辑，修复事务重复计数问题",
+            ]
+        ),
+        ReleaseHistoryEntry(
             version: "1.5.5",
             date: "May 20, 2026",
             headline: "This commit adds a full suite of network debugging features:",
