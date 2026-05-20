@@ -12,6 +12,7 @@ struct SidebarColumn: View {
     @Binding var page: MainPage
     var availablePages: [MainPage]
     var onOpenSettings: () -> Void
+    var onOpenLinuxDo: () -> Void
     var onOpenSessions: () -> Void
     var onOpenConfigs: () -> Void
     var onOpenNetwork: () -> Void
@@ -25,7 +26,16 @@ struct SidebarColumn: View {
             Color.clear.frame(height: 44)
 
             navRow(.dashboard)
-            navRow(.linuxDo)
+            SidebarRow(
+                title: MainPage.linuxDo.title,
+                symbol: MainPage.linuxDo.symbol,
+                isSelected: false,
+                trailingSymbol: "chevron.right",
+                showsTrailingOnHover: true
+            ) {
+                clearTextFocus()
+                onOpenLinuxDo()
+            }
             sessionsEntryRow
 
             sectionHeader("STATS")
@@ -195,6 +205,7 @@ struct SidebarRow: View {
         page: $page,
         availablePages: [.dashboard, .configurations, .usage, .activity, .git],
         onOpenSettings: {},
+        onOpenLinuxDo: {},
         onOpenSessions: {},
         onOpenConfigs: {},
         onOpenNetwork: {},

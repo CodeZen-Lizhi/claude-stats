@@ -71,7 +71,7 @@ struct MainWindowView: View {
     @State private var trafficLights = TrafficLightPositioner()
 
     private var availablePages: [MainPage] {
-        var pages: [MainPage] = [.dashboard, .linuxDo, .configurations, .usage, .leaderboards]
+        var pages: [MainPage] = [.dashboard, .configurations, .usage, .leaderboards]
         if env.preferences.aiActivityAnalysisEnabled { pages.append(.activity) }
         if env.preferences.gitTrackingEnabled { pages.append(.git) }
         if env.preferences.systemMonitorEnabled { pages.append(.system) }
@@ -169,10 +169,16 @@ struct MainWindowView: View {
                     page: $page,
                     availablePages: availablePages,
                     onOpenSettings: openSettings,
+                    onOpenLinuxDo: openLinuxDo,
                     onOpenSessions: openSessions,
                     onOpenConfigs: openConfigs,
                     onOpenNetwork: openNetwork,
                     onOpenOps: openOps
+                )
+            } linuxDoSidebar: {
+                LinuxDoSidebarColumn(
+                    store: env.linuxDo,
+                    onExit: closeLinuxDo
                 )
             } sessionsSidebar: {
                 SessionSidebarColumn(
@@ -193,6 +199,8 @@ struct MainWindowView: View {
                 OpsSidebarColumn(section: opsSectionBinding, onExit: closeOps)
             } appDetail: {
                 detail
+            } linuxDoDetail: {
+                LinuxDoWorkspaceView(store: env.linuxDo)
             } sessionsDetail: {
                 sessionsDetail
             } configsDetail: {
@@ -215,7 +223,7 @@ struct MainWindowView: View {
                     .onTapGesture { clearTextFocus() }
             }
 
-            if mode == .app || mode == .sessions || mode == .configs || mode == .network || mode == .ops {
+            if mode == .app || mode == .linuxDo || mode == .sessions || mode == .configs || mode == .network || mode == .ops {
                 sidebarToggle
                     .padding(.leading, 81)
                     .padding(.top, 11)
@@ -346,6 +354,10 @@ struct MainWindowView: View {
         transition(to: .sessions)
     }
 
+    private func openLinuxDo() {
+        transition(to: .linuxDo)
+    }
+
     private func openConfigs() {
         transition(to: .configs)
     }
@@ -363,6 +375,10 @@ struct MainWindowView: View {
     }
 
     private func closeSessions() {
+        transition(to: .app)
+    }
+
+    private func closeLinuxDo() {
         transition(to: .app)
     }
 

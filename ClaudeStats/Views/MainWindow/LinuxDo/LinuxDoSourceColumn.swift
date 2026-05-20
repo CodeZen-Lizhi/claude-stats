@@ -1,5 +1,27 @@
 import SwiftUI
 
+struct LinuxDoSidebarColumn: View {
+    @Bindable var store: LinuxDoStore
+    var onExit: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Color.clear.frame(height: 44)
+
+            SidebarRow(
+                title: "Back to App",
+                symbol: "chevron.left",
+                isSelected: false,
+                action: onExit
+            )
+
+            LinuxDoSourceColumn(store: store)
+                .frame(maxHeight: .infinity)
+        }
+        .padding(.bottom, 10)
+    }
+}
+
 struct LinuxDoSourceColumn: View {
     @Bindable var store: LinuxDoStore
 
@@ -7,9 +29,9 @@ struct LinuxDoSourceColumn: View {
         VStack(alignment: .leading, spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
+                    searchSection
                     feedSection
                     topSection
-                    searchSection
                     categoriesSection
                 }
                 .padding(12)
@@ -19,7 +41,6 @@ struct LinuxDoSourceColumn: View {
             accountSummary
                 .padding(12)
         }
-        .background(Color.primary.opacity(0.025))
     }
 
     private var feedSection: some View {

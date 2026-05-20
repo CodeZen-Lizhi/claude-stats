@@ -2,15 +2,8 @@ import AppKit
 import SwiftUI
 
 private enum LinuxDoPaneMetrics {
-    static let sourceMinWidth: CGFloat = 210
     static let listMinWidth: CGFloat = 340
     static let detailMinWidth: CGFloat = 430
-    static let secondaryMinWidth = listMinWidth + detailMinWidth
-
-    static let outerConfiguration = HoverableSplitViewConfiguration(
-        primaryMinimumPaneLength: sourceMinWidth,
-        secondaryMinimumPaneLength: secondaryMinWidth
-    )
     static let detailConfiguration = HoverableSplitViewConfiguration(
         primaryMinimumPaneLength: listMinWidth,
         secondaryMinimumPaneLength: detailMinWidth
@@ -35,23 +28,14 @@ struct LinuxDoWorkspaceView: View {
     private var workspace: some View {
         HoverableSplitView(
             axis: .vertical,
-            primaryFraction: 0.22,
-            configuration: LinuxDoPaneMetrics.outerConfiguration
+            primaryFraction: 0.42,
+            configuration: LinuxDoPaneMetrics.detailConfiguration
         ) {
-            LinuxDoSourceColumn(store: store)
-                .frame(minWidth: 0, idealWidth: 230, maxWidth: .infinity, maxHeight: .infinity)
+            LinuxDoTopicListView(store: store)
+                .frame(minWidth: 0, idealWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
         } secondary: {
-            HoverableSplitView(
-                axis: .vertical,
-                primaryFraction: 0.42,
-                configuration: LinuxDoPaneMetrics.detailConfiguration
-            ) {
-                LinuxDoTopicListView(store: store)
-                    .frame(minWidth: 0, idealWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
-            } secondary: {
-                LinuxDoTopicDetailView(store: store)
-                    .frame(minWidth: 0, idealWidth: 560, maxWidth: .infinity, maxHeight: .infinity)
-            }
+            LinuxDoTopicDetailView(store: store)
+                .frame(minWidth: 0, idealWidth: 560, maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 }
@@ -110,4 +94,3 @@ private struct LinuxDoHeader: View {
         .frame(width: 1040, height: 720)
 }
 #endif
-
