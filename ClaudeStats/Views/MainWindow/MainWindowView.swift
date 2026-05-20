@@ -57,6 +57,7 @@ struct MainWindowView: View {
     @SceneStorage("mainWindow.mode") private var modeRaw: String = MainWindowMode.app.rawValue
     @SceneStorage("mainWindow.settingsSection") private var settingsSectionRaw: String = SettingsSection.general.rawValue
     @SceneStorage("mainWindow.networkSection") private var networkSectionRaw: String = NetworkSection.traffic.rawValue
+    @SceneStorage("mainWindow.opsSection") private var opsSectionRaw: String = OpsSection.ports.rawValue
     @State private var page: MainPage = .dashboard
     /// When non-nil, the detail pane shows session detail instead of the page.
     /// Held here (not in the sidebar) because the detail view needs it too.
@@ -94,6 +95,10 @@ struct MainWindowView: View {
         NetworkSection(storedRawValue: networkSectionRaw)
     }
 
+    private var opsSection: OpsSection {
+        OpsSection(storedRawValue: opsSectionRaw)
+    }
+
     private var settingsSectionBinding: Binding<SettingsSection> {
         Binding(
             get: { settingsSection },
@@ -105,6 +110,13 @@ struct MainWindowView: View {
         Binding(
             get: { networkSection },
             set: { networkSectionRaw = $0.rawValue }
+        )
+    }
+
+    private var opsSectionBinding: Binding<OpsSection> {
+        Binding(
+            get: { opsSection },
+            set: { opsSectionRaw = $0.rawValue }
         )
     }
 
@@ -123,18 +135,23 @@ struct MainWindowView: View {
                     sessionsExpanded: $sessionsExpanded,
                     availablePages: availablePages,
                     onOpenSettings: openSettings,
-                    onOpenNetwork: openNetwork
+                    onOpenNetwork: openNetwork,
+                    onOpenOps: openOps
                 )
             } settingsSidebar: {
                 SettingsSidebarColumn(section: settingsSectionBinding, onExit: closeSettings)
             } networkSidebar: {
                 NetworkSidebarColumn(store: env.networkDebugger, section: networkSectionBinding, onExit: closeNetwork)
+            } opsSidebar: {
+                OpsSidebarColumn(section: opsSectionBinding, onExit: closeOps)
             } appDetail: {
                 detail
             } settingsDetail: {
                 SettingsDetailView(section: settingsSection, onSelectSection: selectSettingsSection)
             } networkDetail: {
                 NetworkDetailView(section: networkSection)
+            } opsDetail: {
+                OpsDetailView(store: env.ops, section: opsSection)
             }
             .background {
                 Color.clear
@@ -142,7 +159,7 @@ struct MainWindowView: View {
                     .onTapGesture { clearTextFocus() }
             }
 
-            if mode == .app || mode == .network {
+            if mode == .app || mode == .network || mode == .ops {
                 sidebarToggle
                     .padding(.leading, 81)
                     .padding(.top, 11)
@@ -261,11 +278,20 @@ struct MainWindowView: View {
         transition(to: .network)
     }
 
+    private func openOps() {
+        selectedSessionID = nil
+        transition(to: .ops)
+    }
+
     private func closeSettings() {
         transition(to: .app)
     }
 
     private func closeNetwork() {
+        transition(to: .app)
+    }
+
+    private func closeOps() {
         transition(to: .app)
     }
 

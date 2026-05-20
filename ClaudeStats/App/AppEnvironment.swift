@@ -32,6 +32,7 @@ final class AppEnvironment {
     let cliEnvironment: CLIEnvironmentViewModel
     let systemMonitor: SystemMonitorViewModel
     let networkDebugger: NetworkDebuggerStore
+    let ops: OpsStore
 
     init(
         pricing: ModelPricing,
@@ -42,7 +43,8 @@ final class AppEnvironment {
         usageLimits: UsageLimitStore? = nil,
         cliEnvironment: CLIEnvironmentViewModel = CLIEnvironmentViewModel(),
         systemMonitor: SystemMonitorViewModel = SystemMonitorViewModel(),
-        networkDebugger: NetworkDebuggerStore? = nil
+        networkDebugger: NetworkDebuggerStore? = nil,
+        ops: OpsStore = OpsStore()
     ) {
         self.pricing = pricing
         self.preferences = preferences
@@ -52,6 +54,7 @@ final class AppEnvironment {
         self.cliEnvironment = cliEnvironment
         self.systemMonitor = systemMonitor
         self.networkDebugger = networkDebugger ?? NetworkDebuggerStore(preferences: preferences)
+        self.ops = ops
         self.dashboard = DashboardViewModel(pricing: pricing)
         self.gitActivity = GitActivityViewModel()
         self.claudeStatus = ClaudeStatusViewModel(preferences: preferences)

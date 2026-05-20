@@ -22,6 +22,7 @@ struct SidebarColumn: View {
     var availablePages: [MainPage]
     var onOpenSettings: () -> Void
     var onOpenNetwork: () -> Void
+    var onOpenOps: () -> Void
 
     @Environment(AppEnvironment.self) private var env
     @State private var sessionsVM = SessionListViewModel()
@@ -43,6 +44,16 @@ struct SidebarColumn: View {
             navRow(.configurations)
             if env.preferences.gitTrackingEnabled { navRow(.git) }
             if env.preferences.systemMonitorEnabled { navRow(.system) }
+            SidebarRow(
+                title: "Ops",
+                symbol: "wrench.and.screwdriver",
+                isSelected: false,
+                trailingSymbol: "chevron.right",
+                showsTrailingOnHover: true
+            ) {
+                clearSearchFocus()
+                onOpenOps()
+            }
             SidebarRow(
                 title: "Network",
                 symbol: "network",
@@ -455,7 +466,8 @@ private struct HeaderIconButton: View {
         sessionsExpanded: .constant(false),
         availablePages: [.dashboard, .configurations, .usage, .activity, .git],
         onOpenSettings: {},
-        onOpenNetwork: {}
+        onOpenNetwork: {},
+        onOpenOps: {}
     )
     .environment(AppEnvironment.preview())
     .frame(width: 240, height: 600)
