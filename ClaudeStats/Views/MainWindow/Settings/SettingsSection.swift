@@ -19,17 +19,17 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .general:   "General"
-        case .features:  "Features"
-        case .menuBar:   "Menu Bar"
-        case .notchIsland: "Notch Island"
-        case .platforms: "Platforms"
-        case .tracking:  "Tracking"
-        case .leaderboards: "Leaderboards"
+        case .general:   L10n.string("settings.section.general", defaultValue: "General")
+        case .features:  L10n.string("settings.section.features", defaultValue: "Features")
+        case .menuBar:   L10n.string("settings.section.menu_bar", defaultValue: "Menu Bar")
+        case .notchIsland: L10n.string("settings.section.notch_island", defaultValue: "Notch Island")
+        case .platforms: L10n.string("settings.section.platforms", defaultValue: "Platforms")
+        case .tracking:  L10n.string("settings.section.tracking", defaultValue: "Tracking")
+        case .leaderboards: L10n.string("settings.section.leaderboards", defaultValue: "Leaderboards")
         case .github:    "GitHub"
-        case .systemMonitor: "System Monitor"
-        case .terminal:  "Terminal"
-        case .about:     "About"
+        case .systemMonitor: L10n.string("settings.section.system_monitor", defaultValue: "System Monitor")
+        case .terminal:  L10n.string("settings.section.terminal", defaultValue: "Terminal")
+        case .about:     L10n.string("settings.section.about", defaultValue: "About")
         }
     }
 

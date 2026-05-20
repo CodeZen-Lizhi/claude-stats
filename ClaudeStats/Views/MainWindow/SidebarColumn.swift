@@ -92,7 +92,7 @@ struct SidebarColumn: View {
     }
 
     private func sectionHeader(_ title: String) -> some View {
-        Text(title)
+        Text(LocalizedStringKey(title))
             .font(.sora(10, weight: .semibold))
             .tracking(1.0)
             .foregroundStyle(Color.stxMuted)
@@ -282,7 +282,7 @@ struct SidebarRow: View {
                     .font(.system(size: 13, weight: .medium))
                     .frame(width: 18)
                     .foregroundStyle(isSelected ? Color.stxAccent : Color.stxMuted)
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(.sora(13))
                     .foregroundStyle(isSelected ? .primary : Color.stxMuted)
                 Spacer(minLength: 0)

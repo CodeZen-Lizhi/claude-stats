@@ -11,10 +11,10 @@ enum StatsPeriod: String, CaseIterable, Sendable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .today: "Today"
-        case .last7Days: "Last 7 days"
-        case .last30Days: "Last 30 days"
-        case .allTime: "All time"
+        case .today: L10n.string("stats.period.today", defaultValue: "Today")
+        case .last7Days: L10n.string("stats.period.last_7_days", defaultValue: "Last 7 days")
+        case .last30Days: L10n.string("stats.period.last_30_days", defaultValue: "Last 30 days")
+        case .allTime: L10n.string("stats.period.all_time", defaultValue: "All time")
         }
     }
 

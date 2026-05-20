@@ -31,9 +31,9 @@ final class SessionListViewModel {
         var id: String { rawValue }
         var displayName: String {
             switch self {
-            case .recent: "Recent"
-            case .tokens: "Tokens"
-            case .cost: "Cost"
+            case .recent: L10n.string("sessions.sort.recent", defaultValue: "Recent")
+            case .tokens: L10n.string("sessions.sort.tokens", defaultValue: "Tokens")
+            case .cost: L10n.string("sessions.sort.cost", defaultValue: "Cost")
             }
         }
     }

@@ -1,0 +1,96 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "NSAppleEventsUsageDescription" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "A program running in the embedded terminal may request AppleScript access. Notch Island media controls may also use Apple Events for local music apps." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "嵌入式终端中运行的程序可能会请求 AppleScript 访问权限。Notch Island 媒体控制也可能使用 Apple Events 控制本机音乐应用。" } }
+      }
+    },
+    "NSAppleMusicUsageDescription" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Notch Island can read local Apple Music playback metadata when the media module is enabled." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "启用媒体模块后，Notch Island 可以读取本机 Apple Music 播放元数据。" } }
+      }
+    },
+    "NSAudioCaptureUsageDescription" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Notch Island can capture local audio levels for visualizer modules when audio features are enabled." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "启用音频功能后，Notch Island 可以为可视化模块捕获本机音频电平。" } }
+      }
+    },
+    "NSBluetoothAlwaysUsageDescription" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "A program running in the embedded terminal may request Bluetooth access. Notch Island can show Bluetooth audio device status when enabled." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "嵌入式终端中运行的程序可能会请求蓝牙访问权限。启用后，Notch Island 可以显示蓝牙音频设备状态。" } }
+      }
+    },
+    "NSCalendarsUsageDescription" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "A program running in the embedded terminal may request calendar access." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "嵌入式终端中运行的程序可能会请求日历访问权限。" } }
+      }
+    },
+    "NSCameraUsageDescription" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "A program running in the embedded terminal may request camera access." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "嵌入式终端中运行的程序可能会请求相机访问权限。" } }
+      }
+    },
+    "NSContactsUsageDescription" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "A program running in the embedded terminal may request contacts access." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "嵌入式终端中运行的程序可能会请求通讯录访问权限。" } }
+      }
+    },
+    "NSLocalNetworkUsageDescription" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "A program running in the embedded terminal may request local network access." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "嵌入式终端中运行的程序可能会请求本地网络访问权限。" } }
+      }
+    },
+    "NSLocationUsageDescription" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "A program running in the embedded terminal may request location access." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "嵌入式终端中运行的程序可能会请求位置访问权限。" } }
+      }
+    },
+    "NSMicrophoneUsageDescription" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "A program running in the embedded terminal may request microphone access. Notch Island can show microphone privacy indicators when enabled." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "嵌入式终端中运行的程序可能会请求麦克风访问权限。启用后，Notch Island 可以显示麦克风隐私指示器。" } }
+      }
+    },
+    "NSPhotoLibraryUsageDescription" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "A program running in the embedded terminal may request photo library access." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "嵌入式终端中运行的程序可能会请求照片图库访问权限。" } }
+      }
+    },
+    "NSRemindersUsageDescription" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "A program running in the embedded terminal may request reminders access." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "嵌入式终端中运行的程序可能会请求提醒事项访问权限。" } }
+      }
+    },
+    "NSScreenCaptureUsageDescription" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Notch Island can use screen recording for recording indicators and screen assistant modules when enabled." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "启用后，Notch Island 可以为录制指示器和屏幕辅助模块使用屏幕录制。" } }
+      }
+    },
+    "NSSpeechRecognitionUsageDescription" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "A program running in the embedded terminal may request speech recognition access." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "嵌入式终端中运行的程序可能会请求语音识别访问权限。" } }
+      }
+    },
+    "NSSystemAdministrationUsageDescription" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "A program running in the embedded terminal may request elevated privileges." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "嵌入式终端中运行的程序可能会请求提升权限。" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

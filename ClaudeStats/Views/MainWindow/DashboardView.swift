@@ -160,16 +160,16 @@ struct DashboardView: View {
         let s = vm.stats
         return Grid(horizontalSpacing: 12, verticalSpacing: 12) {
             GridRow {
-                StatCard(label: "Sessions", value: "\(s.sessions)")
-                StatCard(label: "Messages", value: Format.tokens(s.messages))
-                StatCard(label: "Total tokens", value: Format.tokens(s.totalTokens))
-                StatCard(label: "Active days", value: "\(s.activeDays)")
+                StatCard(label: L10n.string("dashboard.stat.sessions", defaultValue: "SESSIONS"), value: "\(s.sessions)")
+                StatCard(label: L10n.string("dashboard.stat.messages", defaultValue: "MESSAGES"), value: Format.tokens(s.messages))
+                StatCard(label: L10n.string("dashboard.stat.total_tokens", defaultValue: "TOTAL TOKENS"), value: Format.tokens(s.totalTokens))
+                StatCard(label: L10n.string("dashboard.stat.active_days", defaultValue: "ACTIVE DAYS"), value: "\(s.activeDays)")
             }
             GridRow {
-                StatCard(label: "Current streak", value: "\(s.currentStreak)d")
-                StatCard(label: "Longest streak", value: "\(s.longestStreak)d")
-                StatCard(label: "Peak hour", value: peakHourLabel(s.peakHour), animatesNumericValue: false)
-                StatCard(label: "Favorite model", value: favoriteModelLabel(s.favoriteModel), animatesNumericValue: false)
+                StatCard(label: L10n.string("dashboard.stat.current_streak", defaultValue: "CURRENT STREAK"), value: "\(s.currentStreak)d")
+                StatCard(label: L10n.string("dashboard.stat.longest_streak", defaultValue: "LONGEST STREAK"), value: "\(s.longestStreak)d")
+                StatCard(label: L10n.string("dashboard.stat.peak_hour", defaultValue: "PEAK HOUR"), value: peakHourLabel(s.peakHour), animatesNumericValue: false)
+                StatCard(label: L10n.string("dashboard.stat.favorite_model", defaultValue: "FAVORITE MODEL"), value: favoriteModelLabel(s.favoriteModel), animatesNumericValue: false)
             }
         }
     }
@@ -186,11 +186,20 @@ struct DashboardView: View {
 
     private var claudeHeatmapSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            heatmapHeader(title: "CLAUDE ACTIVITY", subtitle: "\(vm.heatmapActiveDays) active days · last 3 months")
+            heatmapHeader(
+                title: L10n.string("dashboard.heatmap.claude_activity", defaultValue: "CLAUDE ACTIVITY"),
+                subtitle: L10n.format("dashboard.heatmap.active_days_last_3_months",
+                                      defaultValue: "%@ · last 3 months",
+                                      L10n.activeDays(vm.heatmapActiveDays))
+            )
             CompactHeatmap(
                 cells: vm.heatmapCells,
                 range: vm.heatmapInterval(),
-                valueLabel: { Format.tokens($0) + " tokens" }
+                valueLabel: {
+                    L10n.format("dashboard.heatmap.tokens_value",
+                                defaultValue: "%@ tokens",
+                                Format.tokens($0))
+                }
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -207,7 +216,7 @@ struct DashboardView: View {
                 CompactHeatmap(
                     cells: cells,
                     range: vm.heatmapInterval(),
-                    valueLabel: { $0 == 1 ? "1 contribution" : "\($0) contributions" }
+                    valueLabel: { L10n.contributionCount($0) }
                 )
             }
         }
@@ -245,7 +254,9 @@ struct DashboardView: View {
                 Text("OVERLAP")
                     .font(.sora(9, weight: .medium)).tracking(0.4)
                     .foregroundStyle(Color.stxMuted)
-                Text("\(Format.percent(overlap.jaccard)) aligned")
+                Text(L10n.format("dashboard.overlap.aligned",
+                                 defaultValue: "%@ aligned",
+                                 Format.percent(overlap.jaccard)))
                     .font(.sora(13, weight: .semibold))
                     .stxNumericValueTransition(value: Format.percent(overlap.jaccard))
                     .help(pearsonHelp(for: overlap))
@@ -299,13 +310,24 @@ struct DashboardView: View {
 
     private var githubDisplay: GitHubDisplay {
         guard env.preferences.githubEnabled else {
-            return .placeholder(message: "Enable GitHub in Features to compare your contributions.", isCTA: true)
+            return .placeholder(
+                message: L10n.string("dashboard.github.enable_prompt",
+                                     defaultValue: "Enable GitHub in Features to compare your contributions."),
+                isCTA: true
+            )
         }
         switch env.github.status {
         case .disconnected:
-            return .placeholder(message: "Connect a GitHub account in Features to see your contribution graph.", isCTA: true)
+            return .placeholder(
+                message: L10n.string("dashboard.github.connect_prompt",
+                                     defaultValue: "Connect a GitHub account in Features to see your contribution graph."),
+                isCTA: true
+            )
         case .connecting:
-            return .placeholder(message: "Fetching contribution graph…", isCTA: false)
+            return .placeholder(
+                message: L10n.string("dashboard.github.fetching", defaultValue: "Fetching contribution graph…"),
+                isCTA: false
+            )
         case .connected, .failed:
             let total = githubCellsInRange.reduce(0) { $0 + $1.value }
             return .heatmap(cells: githubCellsInRange, totalInRange: total)
@@ -313,13 +335,13 @@ struct DashboardView: View {
     }
 
     private var githubSubtitle: String {
-        guard env.preferences.githubEnabled else { return "Disabled" }
+        guard env.preferences.githubEnabled else { return L10n.string("status.disabled", defaultValue: "Disabled") }
         switch env.github.status {
-        case .disconnected: return "Not connected"
-        case .connecting: return "Connecting…"
+        case .disconnected: return L10n.string("status.not_connected", defaultValue: "Not connected")
+        case .connecting: return L10n.string("status.connecting", defaultValue: "Connecting…")
         case .connected(let login, _, _):
             return "@\(login)"
-        case .failed: return "Error"
+        case .failed: return L10n.string("status.error", defaultValue: "Error")
         }
     }
 
@@ -348,20 +370,28 @@ struct DashboardView: View {
     // MARK: - Overlap formatting helpers
 
     private func overlapBreakdown(_ s: OverlapStats) -> String {
-        "\(s.bothCount) both · \(s.localOnlyCount) Claude · \(s.githubOnlyCount) GitHub · \(s.neitherCount) neither"
+        L10n.format("dashboard.overlap.breakdown",
+                    defaultValue: "%d both · %d Claude · %d GitHub · %d neither",
+                    s.bothCount,
+                    s.localOnlyCount,
+                    s.githubOnlyCount,
+                    s.neitherCount)
     }
 
     private func pearsonHelp(for s: OverlapStats) -> String {
-        guard let r = s.pearson else { return "Pearson correlation not defined (one series is constant)" }
+        guard let r = s.pearson else {
+            return L10n.string("dashboard.overlap.pearson_undefined",
+                               defaultValue: "Pearson correlation not defined (one series is constant)")
+        }
         return String(format: "Pearson r = %.2f", r)
     }
 
     private func overlapStateLabel(_ state: OverlapStats.DayState) -> String {
         switch state {
-        case .both: "Both Claude and GitHub activity"
-        case .localOnly: "Claude activity only"
-        case .githubOnly: "GitHub activity only"
-        case .neither: "No activity"
+        case .both: L10n.string("dashboard.overlap.state.both", defaultValue: "Both Claude and GitHub activity")
+        case .localOnly: L10n.string("dashboard.overlap.state.local_only", defaultValue: "Claude activity only")
+        case .githubOnly: L10n.string("dashboard.overlap.state.github_only", defaultValue: "GitHub activity only")
+        case .neither: L10n.string("dashboard.overlap.state.neither", defaultValue: "No activity")
         }
     }
 

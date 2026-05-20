@@ -93,12 +93,14 @@ struct UsageView: View {
         let costMode = env.preferences.costEstimationMode
         return Grid(horizontalSpacing: 10, verticalSpacing: 8) {
             GridRow {
-                statCell("Tokens", Format.tokens(s.totalTokens(includingCacheRead: includeCache)))
-                statCell("Est. cost", Format.cost(s.totalCost(for: costMode)))
+                statCell(L10n.string("usage.stat.tokens", defaultValue: "TOKENS"),
+                         Format.tokens(s.totalTokens(includingCacheRead: includeCache)))
+                statCell(L10n.string("usage.stat.estimated_cost", defaultValue: "EST. COST"),
+                         Format.cost(s.totalCost(for: costMode)))
             }
             GridRow {
-                statCell("Sessions", "\(s.sessionCount)")
-                statCell("Messages", Format.tokens(s.messageCount))
+                statCell(L10n.string("usage.stat.sessions", defaultValue: "SESSIONS"), "\(s.sessionCount)")
+                statCell(L10n.string("usage.stat.messages", defaultValue: "MESSAGES"), Format.tokens(s.messageCount))
             }
         }
     }
@@ -111,15 +113,15 @@ struct UsageView: View {
             .map(Format.percent) ?? "—"
         return Grid(horizontalSpacing: 10, verticalSpacing: 8) {
             GridRow {
-                statCell("Cache hit", hitText)
-                statCell("Cached", Format.tokens(usage.cacheReadTokens))
+                statCell(L10n.string("usage.stat.cache_hit", defaultValue: "CACHE HIT"), hitText)
+                statCell(L10n.string("usage.stat.cached", defaultValue: "CACHED"), Format.tokens(usage.cacheReadTokens))
             }
         }
     }
 
     private func statCell(_ title: String, _ value: String) -> some View {
         BracketBox(spacing: 7) {
-            Text(title.uppercased() + ":")
+            Text("\(title):")
                 .font(.sora(9))
                 .tracking(0.4)
                 .foregroundStyle(Color.stxMuted)
@@ -170,7 +172,9 @@ struct UsageView: View {
             UsageTrendChartView(
                 snapshot: snapshot,
                 chartHeight: 150,
-                emptyMessage: isHourly ? "No usage today yet." : "No usage for this period.",
+                emptyMessage: isHourly
+                    ? L10n.string("usage.empty.today", defaultValue: "No usage today yet.")
+                    : L10n.string("usage.empty.period", defaultValue: "No usage for this period."),
                 axisFontSize: 8,
                 barCornerRadius: 0
             ) {
@@ -186,13 +190,19 @@ struct UsageView: View {
     }
 
     private func captionText(isHourly: Bool, style: TrendChartStyle, useLog: Bool, stackByType: Bool, annotate: Bool) -> String {
-        var parts = [isHourly ? "TOKENS TODAY · HOURLY" : "TOKENS PER DAY"]
+        var parts = [
+            isHourly
+                ? L10n.string("usage.caption.tokens_today_hourly", defaultValue: "TOKENS TODAY · HOURLY")
+                : L10n.string("usage.caption.tokens_per_day", defaultValue: "TOKENS PER DAY")
+        ]
         if annotate {
-            parts.append(style == .bar ? "BARS" : "LINE")
-            if stackByType { parts.append("STACKED BY TYPE") }
-            if useLog { parts.append("LN SCALE") }
+            parts.append(style == .bar
+                         ? L10n.string("usage.caption.bars", defaultValue: "BARS")
+                         : L10n.string("usage.caption.line", defaultValue: "LINE"))
+            if stackByType { parts.append(L10n.string("usage.caption.stacked_by_type", defaultValue: "STACKED BY TYPE")) }
+            if useLog { parts.append(L10n.string("usage.caption.ln_scale", defaultValue: "LN SCALE")) }
         }
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: L10n.string("separator.dot", defaultValue: " · "))
     }
 
     private func legend(_ entries: [UsageTrendLegendEntry]) -> some View {
@@ -253,7 +263,7 @@ struct UsageView: View {
         var body: some View {
             Button(action: action) {
                 VStack(spacing: 4) {
-                    Text(period.displayName.uppercased())
+                    Text(period.displayName)
                         .font(.sora(10, weight: .semibold))
                         .tracking(0.8)
                         .foregroundStyle(textColor)

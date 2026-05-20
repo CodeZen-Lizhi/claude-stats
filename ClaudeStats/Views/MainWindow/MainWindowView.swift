@@ -12,14 +12,14 @@ enum MainPage: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .dashboard: "Dashboard"
-        case .configurations: "Switcher"
-        case .usage: "Usage"
-        case .leaderboards: "Leaderboards"
-        case .activity: "Activity"
-        case .git: "Git"
-        case .system: "System"
-        case .terminal: "Terminal"
+        case .dashboard: L10n.string("main_page.dashboard", defaultValue: "Dashboard")
+        case .configurations: L10n.string("main_page.switcher", defaultValue: "Switcher")
+        case .usage: L10n.string("main_page.usage", defaultValue: "Usage")
+        case .leaderboards: L10n.string("main_page.leaderboards", defaultValue: "Leaderboards")
+        case .activity: L10n.string("main_page.activity", defaultValue: "Activity")
+        case .git: L10n.string("main_page.git", defaultValue: "Git")
+        case .system: L10n.string("main_page.system", defaultValue: "System")
+        case .terminal: L10n.string("main_page.terminal", defaultValue: "Terminal")
         }
     }
 

@@ -11,11 +11,11 @@ struct SettingGroup<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(.sora(15, weight: .semibold))
                     .foregroundStyle(.primary)
                 if let caption {
-                    Text(caption)
+                    Text(LocalizedStringKey(caption))
                         .font(.sora(11))
                         .foregroundStyle(Color.stxMuted)
                         .fixedSize(horizontal: false, vertical: true)

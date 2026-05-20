@@ -18,18 +18,18 @@ enum PeriodSelection: Hashable, Sendable {
         }
     }
 
-    /// Short, upper-cased label for the readout that replaces the period picker
-    /// in an exported panel — e.g. `TODAY`, `LAST 7 DAYS`, `MAY 1 – MAY 12`.
+    /// Short label for the readout that replaces the period picker in an
+    /// exported panel — e.g. `TODAY`, `LAST 7 DAYS`, `MAY 1 – MAY 12`.
     func label(calendar: Calendar = .current) -> String {
         switch self {
         case .preset(let period):
-            return period.displayName.uppercased()
+            return period.displayName
         case .custom(let start, let end):
             let lo = min(start, end), hi = max(start, end)
             if calendar.isDate(lo, inSameDayAs: hi) {
-                return Format.day(lo).uppercased()
+                return Format.day(lo)
             }
-            return "\(Format.day(lo)) – \(Format.day(hi))".uppercased()
+            return "\(Format.day(lo)) – \(Format.day(hi))"
         }
     }
 }

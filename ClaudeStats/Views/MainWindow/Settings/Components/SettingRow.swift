@@ -11,11 +11,11 @@ struct SettingRow<Accessory: View>: View {
     var body: some View {
         HStack(alignment: .center, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(.sora(13, weight: .medium))
                     .foregroundStyle(.primary)
                 if let description {
-                    Text(description)
+                    Text(LocalizedStringKey(description))
                         .font(.sora(11))
                         .foregroundStyle(Color.stxMuted)
                         .fixedSize(horizontal: false, vertical: true)

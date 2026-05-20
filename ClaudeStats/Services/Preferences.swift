@@ -8,8 +8,8 @@ enum MenuBarMetric: String, CaseIterable, Sendable, Identifiable {
     var id: String { rawValue }
     var displayName: String {
         switch self {
-        case .tokens: "Tokens"
-        case .cost: "Cost"
+        case .tokens: L10n.string("menu_bar.metric.tokens", defaultValue: "Tokens")
+        case .cost: L10n.string("menu_bar.metric.cost", defaultValue: "Cost")
         }
     }
 }
@@ -23,7 +23,7 @@ enum APIProviderKeyStorageMode: String, CaseIterable, Sendable, Identifiable {
     var displayName: String {
         switch self {
         case .json: "JSON"
-        case .keychain: "Keychain"
+        case .keychain: L10n.string("api_key_storage.keychain", defaultValue: "Keychain")
         }
     }
 }
@@ -33,6 +33,12 @@ enum APIProviderKeyStorageMode: String, CaseIterable, Sendable, Identifiable {
 @MainActor
 @Observable
 final class Preferences {
+    var appLanguagePreference: AppLanguagePreference {
+        didSet {
+            defaults.set(appLanguagePreference.rawValue, forKey: Keys.appLanguagePreference)
+            appLanguagePreference.applyToAppleLanguages(defaults: defaults)
+        }
+    }
     var autoRefreshMinutes: Int {
         didSet { defaults.set(autoRefreshMinutes, forKey: Keys.autoRefreshMinutes) }
     }
@@ -363,6 +369,7 @@ final class Preferences {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        appLanguagePreference = AppLanguagePreference(rawValue: defaults.string(forKey: Keys.appLanguagePreference) ?? "") ?? .system
         autoRefreshMinutes = (defaults.object(forKey: Keys.autoRefreshMinutes) as? Int) ?? 5
         menuBarMetric = MenuBarMetric(rawValue: defaults.string(forKey: Keys.menuBarMetric) ?? "") ?? .tokens
         menuBarPeriod = StatsPeriod(rawValue: defaults.string(forKey: Keys.menuBarPeriod) ?? "") ?? .allTime
@@ -477,6 +484,7 @@ final class Preferences {
         } else {
             selectedProvider = firstEnabled
         }
+        appLanguagePreference.applyToAppleLanguages(defaults: defaults)
     }
 
     func resetNetworkTrafficAutoBreakpoint() {
@@ -484,6 +492,7 @@ final class Preferences {
     }
 
     private enum Keys {
+        static let appLanguagePreference = "appLanguagePreference"
         static let autoRefreshMinutes = "autoRefreshMinutes"
         static let menuBarMetric = "menuBarMetric"
         static let menuBarPeriod = "menuBarPeriod"

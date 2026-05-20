@@ -17,6 +17,11 @@ enum Theme {
     /// Family name of the bundled Sora variable font (`name` table id 1).
     static let fontFamily = "Sora"
 
+    enum AppFontKind: Equatable {
+        case sora
+        case system
+    }
+
     /// Register the bundled Sora font with the process. Safe to call repeatedly
     /// — a redundant registration just returns an error we ignore — and safe
     /// from SwiftUI previews, where the resource may be absent (we log and skip,
@@ -30,6 +35,40 @@ enum Theme {
         if !CTFontManagerRegisterFontsForURL(url as CFURL, .process, &error) {
             Log.app.debug("Sora font registration skipped: \(String(describing: error?.takeRetainedValue()))")
         }
+    }
+
+    static func appFontKind(for locale: Locale) -> AppFontKind {
+        appFontKind(forLanguageIdentifier: locale.identifier)
+    }
+
+    static func appFontKindForCurrentAppLanguage(defaults: UserDefaults = .standard) -> AppFontKind {
+        if let override = defaults.array(forKey: AppLanguagePreference.appleLanguagesDefaultsKey) as? [String],
+           let first = override.first {
+            return appFontKind(forLanguageIdentifier: first)
+        }
+        return appFontKind(forLanguageIdentifier: Locale.preferredLanguages.first ?? Locale.current.identifier)
+    }
+
+    static func appFont(_ size: CGFloat,
+                        weight: Font.Weight = .regular,
+                        monospacedDigit: Bool = false,
+                        locale: Locale? = nil) -> Font {
+        let kind = locale.map(appFontKind(for:)) ?? appFontKindForCurrentAppLanguage()
+        var font: Font = switch kind {
+        case .sora:
+            .custom(fontFamily, size: size).weight(weight)
+        case .system:
+            .system(size: size, weight: weight)
+        }
+        if monospacedDigit {
+            font = font.monospacedDigit()
+        }
+        return font
+    }
+
+    static func appFontKind(forLanguageIdentifier identifier: String) -> AppFontKind {
+        let normalized = identifier.replacingOccurrences(of: "_", with: "-").lowercased()
+        return normalized.hasPrefix("zh") ? .system : .sora
     }
 }
 
@@ -81,7 +120,26 @@ extension Font {
     /// The bundled Sora font at `size`/`weight`. Registered at launch via
     /// ``Theme/registerFonts()``; falls back to the system font if unavailable.
     static func sora(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .custom(Theme.fontFamily, size: size).weight(weight)
+        Theme.appFont(size, weight: weight)
+    }
+}
+
+private struct StxFontModifier: ViewModifier {
+    @Environment(\.locale) private var locale
+    let size: CGFloat
+    let weight: Font.Weight
+    let monospacedDigit: Bool
+
+    func body(content: Content) -> some View {
+        content.font(Theme.appFont(size, weight: weight, monospacedDigit: monospacedDigit, locale: locale))
+    }
+}
+
+extension View {
+    func stxFont(_ size: CGFloat,
+                 weight: Font.Weight = .regular,
+                 monospacedDigit: Bool = false) -> some View {
+        modifier(StxFontModifier(size: size, weight: weight, monospacedDigit: monospacedDigit))
     }
 }
 

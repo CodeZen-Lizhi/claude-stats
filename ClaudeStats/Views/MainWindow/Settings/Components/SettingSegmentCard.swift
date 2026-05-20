@@ -40,11 +40,11 @@ struct SettingSegmentCard<Value: Hashable>: View {
                         .frame(width: 22, height: 22)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(option.title)
+                    Text(LocalizedStringKey(option.title))
                         .font(.sora(13, weight: .medium))
                         .foregroundStyle(.primary)
                     if let subtitle = option.subtitle {
-                        Text(subtitle)
+                        Text(LocalizedStringKey(subtitle))
                             .font(.sora(11))
                             .foregroundStyle(Color.stxMuted)
                             .lineLimit(2)

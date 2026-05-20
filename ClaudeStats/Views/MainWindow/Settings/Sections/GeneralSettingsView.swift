@@ -3,6 +3,7 @@ import SwiftUI
 struct GeneralSettingsView: View {
     @Environment(AppEnvironment.self) private var env
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
+    @State private var languageRestartNoticeVisible = false
 
     private static let refreshOptions = [1, 2, 5, 10, 15, 30, 60]
 
@@ -23,13 +24,40 @@ struct GeneralSettingsView: View {
                 .settingCard()
             }
 
+            SettingGroup(title: "Language") {
+                VStack(spacing: 0) {
+                    SettingRow(title: "App language",
+                               description: "Choose the language Claude Stats uses after the next restart.") {
+                        Picker("", selection: $prefs.appLanguagePreference) {
+                            ForEach(AppLanguagePreference.allCases) { language in
+                                Text(language.displayName()).tag(language)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(maxWidth: 170)
+                    }
+                    .onChange(of: prefs.appLanguagePreference) { _, _ in
+                        languageRestartNoticeVisible = true
+                    }
+                    if languageRestartNoticeVisible {
+                        SettingRowDivider()
+                        Text(L10n.restartLanguageNotice())
+                            .font(.sora(11))
+                            .foregroundStyle(Color.stxAccent)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                    }
+                }
+                .settingCard()
+            }
+
             SettingGroup(title: "Refresh") {
                 VStack(spacing: 0) {
                     SettingRow(title: "Refresh every",
                                description: "How often Claude Stats re-scans your session logs in the background.") {
                         Picker("", selection: $prefs.autoRefreshMinutes) {
                             ForEach(Self.refreshOptions, id: \.self) { minutes in
-                                Text(minutes == 1 ? "1 minute" : "\(minutes) minutes").tag(minutes)
+                                Text(L10n.refreshInterval(minutes: minutes)).tag(minutes)
                             }
                         }
                         .labelsHidden()

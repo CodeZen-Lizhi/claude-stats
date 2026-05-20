@@ -8,8 +8,8 @@ enum CostEstimationMode: String, CaseIterable, Sendable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .standardAPI: "API estimate"
-        case .detailedBilling: "Detailed billing"
+        case .standardAPI: L10n.string("cost_mode.api_estimate", defaultValue: "API estimate")
+        case .detailedBilling: L10n.string("cost_mode.detailed_billing", defaultValue: "Detailed billing")
         }
     }
 }

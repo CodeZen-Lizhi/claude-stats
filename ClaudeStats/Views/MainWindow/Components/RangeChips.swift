@@ -52,10 +52,10 @@ struct RangeChips: View {
 
     private static func label(for period: StatsPeriod) -> String {
         switch period {
-        case .allTime: "All"
+        case .allTime: L10n.string("range.all", defaultValue: "All")
         case .last30Days: "30d"
         case .last7Days: "7d"
-        case .today: "Today"
+        case .today: L10n.string("stats.period.today", defaultValue: "Today")
         }
     }
 }

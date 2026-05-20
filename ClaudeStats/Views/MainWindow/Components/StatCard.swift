@@ -12,7 +12,7 @@ struct StatCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(label.uppercased())
+            Text(label)
                 .font(.sora(9, weight: .medium))
                 .tracking(0.4)
                 .foregroundStyle(Color.stxMuted)

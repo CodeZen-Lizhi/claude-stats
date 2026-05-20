@@ -31,7 +31,7 @@ struct SettingsSidebarColumn: View {
     }
 
     private func sectionHeader(_ title: String) -> some View {
-        Text(title)
+        Text(LocalizedStringKey(title))
             .font(.sora(10, weight: .semibold))
             .tracking(1.0)
             .foregroundStyle(Color.stxMuted)

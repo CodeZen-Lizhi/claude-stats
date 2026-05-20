@@ -25,7 +25,7 @@ struct OverviewTabs: View {
         Button {
             withAnimation(.easeOut(duration: 0.18)) { section = value }
         } label: {
-            Text(label)
+            Text(LocalizedStringKey(label))
                 .font(.sora(12, weight: .medium))
                 .foregroundStyle(isSelected ? .primary : Color.stxMuted)
                 .padding(.horizontal, 12)

@@ -7,36 +7,44 @@ struct ClaudeStatsApp: App {
     var body: some Scene {
         MenuBarExtra {
             MenuPanelView()
-                .environment(appDelegate.env)
+                .appEnvironment(appDelegate.env)
         } label: {
             MenuBarLabel()
-                .environment(appDelegate.env)
+                .appEnvironment(appDelegate.env)
                 .background(FloatingStatsCommandBridge())
         }
         .menuBarExtraStyle(.window)
 
         Window("Share Stats", id: ShareExportView.windowID) {
             ShareExportView()
-                .environment(appDelegate.env)
+                .appEnvironment(appDelegate.env)
         }
         .windowResizability(.contentSize)
 
         Window("Git Activity", id: GitActivityView.windowID) {
             GitActivityView()
-                .environment(appDelegate.env)
+                .appEnvironment(appDelegate.env)
                 .frame(minWidth: 460, idealWidth: 520, minHeight: 480, idealHeight: 640)
-                .font(.sora(13))
+                .stxFont(13)
                 .tint(.stxAccent)
         }
 
         Window("Claude Stats", id: MainWindowView.windowID) {
             MainWindowView()
-                .environment(appDelegate.env)
+                .appEnvironment(appDelegate.env)
                 .frame(minWidth: 900, idealWidth: 1040, minHeight: 600, idealHeight: 720)
-                .font(.sora(13))
+                .stxFont(13)
                 .tint(.stxAccent)
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
+    }
+}
+
+private extension View {
+    func appEnvironment(_ env: AppEnvironment) -> some View {
+        self
+            .environment(env)
+            .environment(\.locale, env.preferences.appLanguagePreference.locale)
     }
 }

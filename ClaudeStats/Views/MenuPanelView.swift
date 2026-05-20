@@ -7,10 +7,10 @@ enum StatsPane: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .sessions: "Sessions"
-        case .usage: "Usage"
-        case .activity: "Activity"
-        case .git: "Git"
+        case .sessions: L10n.string("stats.pane.sessions", defaultValue: "SESSIONS")
+        case .usage: L10n.string("stats.pane.usage", defaultValue: "USAGE")
+        case .activity: L10n.string("stats.pane.activity", defaultValue: "ACTIVITY")
+        case .git: L10n.string("stats.pane.git", defaultValue: "GIT")
         }
     }
 }
@@ -22,9 +22,9 @@ enum ExportStampPrecision: String, Hashable, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .monthOnly: "Month"
-        case .day: "Day"
-        case .minute: "Time"
+        case .monthOnly: L10n.string("export.stamp.month", defaultValue: "Month")
+        case .day: L10n.string("export.stamp.day", defaultValue: "Day")
+        case .minute: L10n.string("export.stamp.time", defaultValue: "Time")
         }
     }
     func string(for date: Date) -> String {
@@ -118,7 +118,7 @@ struct StatsPanelBody: View {
 
     private var paneBar: some View {
         HStack(spacing: 10) {
-            Text(effectivePane.title.uppercased())
+            Text(effectivePane.title)
                 .font(.sora(18, weight: .semibold))
                 .tracking(1.8)
                 .foregroundStyle(.primary)
@@ -137,18 +137,22 @@ struct StatsPanelBody: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            Text("\(env.preferences.selectedProvider.shortName.uppercased()) STATS")
+            Text(L10n.format("stats.header.provider_stats",
+                             defaultValue: "%@ STATS",
+                             env.preferences.selectedProvider.shortName))
                 .font(.sora(15, weight: .semibold))
                 .tracking(1.6)
                 .foregroundStyle(.primary)
             Spacer()
             if let export {
-                Text(export.stampPrecision.string(for: export.stampDate).uppercased())
+                Text(export.stampPrecision.string(for: export.stampDate))
                     .font(.sora(9))
                     .tracking(0.5)
                     .foregroundStyle(Color.stxMuted)
             } else if let last = env.store.lastRefreshedAt {
-                Text("UPD \(Format.relativeDate(last))".uppercased())
+                Text(L10n.format("stats.header.updated",
+                                 defaultValue: "UPD %@",
+                                 Format.relativeDate(last)))
                     .font(.sora(9))
                     .tracking(0.5)
                     .foregroundStyle(Color.stxMuted)
@@ -223,7 +227,7 @@ struct MenuPanelView: View {
         .fixedSize(horizontal: true, vertical: true)
         .clipped()
         .background(MenuPanelWindowSizeLock(size: Self.panelSize))
-        .font(.sora(13))
+        .stxFont(13)
         .tint(.stxAccent)
         .onAppear(perform: syncUpdateAvailability)
         .onReceive(NotificationCenter.default.publisher(for: UpdaterController.updateAvailabilityDidChange)) { _ in
@@ -263,7 +267,7 @@ struct MenuPanelView: View {
                 }
             }
             .buttonStyle(.plain)
-            .help("Export a snapshot as a PNG")
+            .help(L10n.string("menu.footer.share.help", defaultValue: "Export a snapshot as a PNG"))
             Spacer()
             Button {
                 NSApplication.shared.terminate(nil)
@@ -309,9 +313,11 @@ struct MenuPanelView: View {
 
     private var updateButtonHelp: String {
         if let availableUpdateVersion {
-            return "Install update \(availableUpdateVersion)"
+            return L10n.format("menu.footer.update.install_version",
+                               defaultValue: "Install update %@",
+                               availableUpdateVersion)
         }
-        return "Install update"
+        return L10n.string("menu.footer.update.install", defaultValue: "Install update")
     }
 
     private func syncUpdateAvailability() {
@@ -388,7 +394,7 @@ private struct PaneChip: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 3) {
-                Text(title.uppercased())
+                Text(title)
                     .font(.sora(10, weight: .semibold))
                     .tracking(0.8)
                     .foregroundStyle(isSelected ? .primary : (hovering ? Color.primary : Color.primary.opacity(0.40)))
