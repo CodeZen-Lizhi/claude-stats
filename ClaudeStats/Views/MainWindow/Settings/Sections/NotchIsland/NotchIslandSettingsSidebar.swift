@@ -6,7 +6,7 @@ struct NotchIslandSettingsSidebar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            FadingScrollView {
+            AppScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     ForEach(NotchIslandSettingsTab.grouped, id: \.group) { section in
                         if let title = section.group.title {

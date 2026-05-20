@@ -94,7 +94,7 @@ struct NetworkSidebarColumn: View {
                 .padding(.horizontal, 8)
             }
 
-            FadingScrollView {
+            AppScrollView {
                 VStack(alignment: .leading, spacing: 6) {
                     filterGroup(title: "Favorites", isExpanded: $favoritesExpanded) {
                         filterLeaf(

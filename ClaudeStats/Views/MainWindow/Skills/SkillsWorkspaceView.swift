@@ -367,7 +367,7 @@ private struct SkillsListColumn: View {
 
     private var installedList: some View {
         let rows = store.visibleLocalRows
-        return FadingScrollView(chrome: .plain) {
+        return AppScrollView {
             LazyVStack(alignment: .leading, spacing: 6) {
                 if rows.isEmpty {
                     SkillsEmptyState(
@@ -391,7 +391,7 @@ private struct SkillsListColumn: View {
     }
 
     private func remoteList(_ rows: [RemoteSkillRowModel]) -> some View {
-        FadingScrollView(chrome: .plain) {
+        AppScrollView {
             LazyVStack(alignment: .leading, spacing: 6) {
                 if !store.hasAPIKey {
                     SkillsEmptyState(
@@ -420,7 +420,7 @@ private struct SkillsListColumn: View {
     }
 
     private var curatedList: some View {
-        FadingScrollView(chrome: .plain) {
+        AppScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
                 if !store.hasAPIKey {
                     SkillsEmptyState(
@@ -642,7 +642,7 @@ private struct SkillsLocalDetail: View {
     }
 
     private var localOverview: some View {
-        FadingScrollView(chrome: .plain) {
+        AppScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 10) {
                     SkillsMetricCard(title: "Copies", value: "\(group.installedCopyCount)")
@@ -737,7 +737,7 @@ private struct SkillsRemoteDetail: View {
     }
 
     private var remoteOverview: some View {
-        FadingScrollView(chrome: .plain) {
+        AppScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 10) {
                     SkillsMetricCard(title: "Installs", value: skill.installs.map(String.init) ?? "-")
@@ -779,7 +779,7 @@ private struct SkillsRemoteDetail: View {
     }
 
     private var auditView: some View {
-        FadingScrollView(chrome: .plain) {
+        AppScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 if let audit = bundle?.audit, !audit.audits.isEmpty {
                     ForEach(audit.audits) { entry in
@@ -1030,7 +1030,7 @@ private struct SkillFilesList: View {
     let files: [SkillFileEntry]
 
     var body: some View {
-        FadingScrollView(chrome: .plain) {
+        AppScrollView {
             LazyVStack(alignment: .leading, spacing: 6) {
                 if files.isEmpty {
                     SkillsEmptyState(symbol: "folder", title: "No file snapshot", message: "No supporting files are available for this skill.")

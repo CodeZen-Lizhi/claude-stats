@@ -60,7 +60,7 @@ struct GitActivityView: View {
         @Bindable var vm = model
         let provider = env.preferences.selectedProvider
         let key = ReloadKey(token: vm.reloadToken, lastRefreshed: env.store.lastRefreshedAt, provider: provider)
-        return FadingScrollView {
+        return AppScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 headerRow
 

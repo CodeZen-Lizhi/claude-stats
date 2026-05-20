@@ -165,7 +165,7 @@ struct SessionSidebarColumn: View {
             )
             .frame(maxHeight: .infinity, alignment: .top)
         } else {
-            FadingScrollView(chrome: .plain) {
+            AppScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(groups) { group in
                         let isExpanded = vm.expandedProjects.contains(group.id)

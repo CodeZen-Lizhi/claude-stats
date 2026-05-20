@@ -36,7 +36,7 @@ struct DashboardView: View {
         let heatmapRange = vm.heatmapInterval()
         let trendSeriesID = dashboardTrendSeriesID
 
-        FadingScrollView {
+        AppScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
                 controls

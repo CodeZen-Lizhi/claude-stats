@@ -66,7 +66,7 @@ private struct NetworkToolScroll<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
-        FadingScrollView {
+        AppScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 content
             }

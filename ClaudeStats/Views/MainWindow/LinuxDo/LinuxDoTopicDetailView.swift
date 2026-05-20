@@ -162,7 +162,7 @@ private struct LinuxDoContentBlockView: View {
                 }
                 .textSelection(.enabled)
         case .code(let text):
-            ScrollView(.horizontal) {
+            ScrollView(.horizontal, showsIndicators: false) {
                 Text(text)
                     .font(.system(.caption, design: .monospaced))
                     .textSelection(.enabled)

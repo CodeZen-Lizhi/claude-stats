@@ -39,7 +39,7 @@ struct SettingsDetailView: View {
             if section == .notchIsland {
                 NotchIslandSettingsView(onSelectSection: onSelectSection)
             } else {
-                FadingScrollView {
+                AppScrollView {
                     VStack(alignment: .leading, spacing: 32) {
                         Text(section.title)
                             .font(.sora(28, weight: .semibold))

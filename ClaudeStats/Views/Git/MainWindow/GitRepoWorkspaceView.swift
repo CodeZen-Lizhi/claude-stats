@@ -145,7 +145,7 @@ struct GitRepoWorkspaceView: View {
     private var graphContent: some View {
         if let graph = vm.graph, let layout = vm.layout, graph.workingTree.isDirty || !layout.rows.isEmpty {
             let hasWorkingTree = graph.workingTree.isDirty
-            FadingScrollView {
+            AppScrollView {
                 LazyVStack(spacing: 0) {
                     if hasWorkingTree {
                         GitWorkingTreeRowView(
@@ -266,7 +266,7 @@ private struct GitCommitInspector: View {
     @ViewBuilder
     private var commitBody: some View {
         if let commit = vm.selectedCommit {
-            FadingScrollView {
+            AppScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     commitSummary(commit)
                     if let detail = vm.commitDetail {
@@ -418,7 +418,7 @@ private struct GitCommitInspector: View {
     @ViewBuilder
     private var workingTreeBody: some View {
         if let summary = vm.graph?.workingTree, summary.isDirty {
-            FadingScrollView {
+            AppScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     workingTreeSummary(summary)
                     workingTreeFiles(summary)
@@ -508,7 +508,7 @@ private struct GitCommitInspector: View {
     @ViewBuilder
     private var repoBody: some View {
         if let stats = vm.repoBaseStats {
-            FadingScrollView {
+            AppScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     if let warning = stats.code.warning {
                         GitWorkspaceInlineEmptyState(warning)
@@ -537,7 +537,7 @@ private struct GitCommitInspector: View {
 
     @ViewBuilder
     private var diffBody: some View {
-        FadingScrollView {
+        AppScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
                     GitBackButton(help: "Back to changed files") {

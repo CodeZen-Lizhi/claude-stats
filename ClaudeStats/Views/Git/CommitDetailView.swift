@@ -98,7 +98,7 @@ struct CommitDetailView: View {
     @ViewBuilder
     private var content: some View {
         if let detail {
-            FadingScrollView {
+            AppScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     metadataBlock(detail)
                     messageBlock(detail)

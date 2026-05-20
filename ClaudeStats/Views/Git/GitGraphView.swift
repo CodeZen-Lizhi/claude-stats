@@ -131,7 +131,7 @@ struct GitGraphView: View {
     private var content: some View {
         if let graph, let layout, graph.workingTree.isDirty || !layout.rows.isEmpty {
             let hasWorkingTree = graph.workingTree.isDirty
-            FadingScrollView {
+            AppScrollView {
                 LazyVStack(spacing: 0) {
                     if hasWorkingTree {
                         GitWorkingTreeRowView(

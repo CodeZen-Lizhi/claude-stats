@@ -117,7 +117,7 @@ struct SessionListView: View {
                     .font(.sora(12))
                 }
             } else {
-                FadingScrollView {
+                AppScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
                             let isExpanded = vm.expandedProjects.contains(group.id)

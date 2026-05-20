@@ -57,7 +57,7 @@ struct UsageView: View {
         .padding(14)
 
         if interactive {
-            FadingScrollView { content }
+            AppScrollView { content }
         } else {
             content
         }

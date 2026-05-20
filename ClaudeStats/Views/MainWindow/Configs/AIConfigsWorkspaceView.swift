@@ -165,7 +165,7 @@ private struct AIConfigsBrowserPane: View {
     }
 
     private var projectList: some View {
-        FadingScrollView(chrome: .plain) {
+        AppScrollView {
             LazyVStack(alignment: .leading, spacing: 4) {
                 if projects.isEmpty {
                     AIConfigsEmptyState(
@@ -189,7 +189,7 @@ private struct AIConfigsBrowserPane: View {
     }
 
     private var documentList: some View {
-        FadingScrollView(chrome: .plain) {
+        AppScrollView {
             LazyVStack(alignment: .leading, spacing: 6) {
                 if documents.isEmpty {
                     AIConfigsEmptyState(

@@ -90,7 +90,7 @@ struct NetworkWebSocketWorkspace: View {
         VStack(alignment: .leading, spacing: 0) {
             workspaceHeader("Connections", symbol: "point.3.connected.trianglepath.dotted")
             StxRule()
-            FadingScrollView {
+            AppScrollView {
                 VStack(spacing: 6) {
                     ForEach(store.webSocketSessions) { session in
                         Button {
@@ -177,7 +177,7 @@ struct NetworkWebSocketWorkspace: View {
 
             StxRule()
 
-            FadingScrollView {
+            AppScrollView {
                 VStack(spacing: 4) {
                     ForEach(store.filteredWebSocketMessages) { message in
                         Button {
@@ -262,7 +262,7 @@ struct NetworkWebSocketWorkspace: View {
             }
             .padding(.trailing, 10)
             StxRule()
-            FadingScrollView {
+            AppScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     if let message = store.selectedWebSocketMessage {
                         Text(inspectorText(message))
@@ -385,7 +385,7 @@ struct NetworkReplayWorkspace: View {
             }
             .padding(.trailing, 12)
             StxRule()
-            FadingScrollView {
+            AppScrollView {
                 VStack(spacing: 6) {
                     ForEach(store.replaySessions) { session in
                         Button {
@@ -490,7 +490,7 @@ struct NetworkReplayWorkspace: View {
     }
 
     private var requestEditor: some View {
-        FadingScrollView {
+        AppScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
                     TextField("Method", text: replayBinding(\.method))
@@ -538,7 +538,7 @@ struct NetworkReplayWorkspace: View {
     }
 
     private var resultList: some View {
-        FadingScrollView {
+        AppScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 Text("RESULTS")
                     .font(.sora(10, weight: .semibold))
@@ -651,7 +651,7 @@ struct NetworkInterceptWorkspace: View {
             }
             .padding(.trailing, 12)
             StxRule()
-            FadingScrollView {
+            AppScrollView {
                 VStack(spacing: 6) {
                     ForEach(store.breakpoints) { item in
                         Button {
@@ -714,7 +714,7 @@ struct NetworkInterceptWorkspace: View {
             .padding(.trailing, 14)
             StxRule()
             if store.selectedBreakpointID != nil {
-                FadingScrollView {
+                AppScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
                             TextField("Method", text: interceptBinding(\.method))
@@ -811,7 +811,7 @@ struct NetworkAutomateWorkspace: View {
             .padding(.trailing, 14)
             StxRule()
 
-            FadingScrollView {
+            AppScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     if store.automateDraft != nil {
                         HStack {
@@ -850,7 +850,7 @@ struct NetworkAutomateWorkspace: View {
         VStack(alignment: .leading, spacing: 0) {
             workspaceHeader("Results", symbol: "chart.bar")
             StxRule()
-            FadingScrollView {
+            AppScrollView {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(store.automateResults) { result in
                         HStack(spacing: 10) {

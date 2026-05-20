@@ -87,7 +87,7 @@ struct ConfigurationsView: View {
     }
 
     private func cliRail(vm: APIProviderSwitcherViewModel) -> some View {
-        ScrollView(.vertical) {
+        AppScrollView {
             VStack(spacing: 10) {
                 ForEach(APIProviderCLI.allCases) { cli in
                     Button {
@@ -118,7 +118,6 @@ struct ConfigurationsView: View {
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .top)
         }
-        .scrollIndicators(.automatic)
         .frame(width: railColumnWidth, alignment: .top)
         .frame(maxHeight: .infinity, alignment: .top)
         .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 8))
@@ -159,7 +158,7 @@ struct ConfigurationsView: View {
                 .help("New provider")
             }
 
-            ScrollView(.vertical) {
+            AppScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     VStack(spacing: 0) {
                         let providers = vm.providers(for: vm.selectedCLI)
@@ -207,7 +206,6 @@ struct ConfigurationsView: View {
                 }
                 .padding(.trailing, 2)
             }
-            .scrollIndicators(.automatic)
         }
         .frame(minWidth: providerColumnWidth, maxWidth: .infinity, alignment: .top)
         .frame(maxHeight: .infinity, alignment: .top)

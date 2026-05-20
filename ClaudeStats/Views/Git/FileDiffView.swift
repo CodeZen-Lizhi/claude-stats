@@ -91,7 +91,7 @@ struct FileDiffView: View {
                     .font(.sora(10)).foregroundStyle(Color.stxMuted.opacity(0.7))
                     .frame(maxWidth: .infinity, minHeight: 80)
             } else {
-                FadingScrollView {
+                AppScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(diff.lines) { line in
                             diffLineRow(line)

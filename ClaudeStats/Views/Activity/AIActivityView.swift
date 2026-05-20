@@ -53,7 +53,7 @@ struct AIActivityView: View {
                             cliHostBundleIDs: cliHostBundleIDs,
                             provider: provider)
 
-        return FadingScrollView {
+        return AppScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 headerRow
 

@@ -47,8 +47,7 @@ struct ConfigurationTextEditor: NSViewRepresentable {
         let scrollView = NSScrollView()
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
-        scrollView.hasVerticalScroller = true
-        scrollView.autohidesScrollers = true
+        AppScrollbars.configure(scrollView)
         scrollView.documentView = textView
         scrollView.contentView.postsBoundsChangedNotifications = true
         NotificationCenter.default.addObserver(
@@ -65,6 +64,7 @@ struct ConfigurationTextEditor: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         context.coordinator.parent = self
         guard let textView = scrollView.documentView as? NSTextView else { return }
+        AppScrollbars.configure(scrollView)
         textView.isEditable = isEditable
         if textView.string != text {
             context.coordinator.replaceText(in: textView, with: text, kind: fileKind)

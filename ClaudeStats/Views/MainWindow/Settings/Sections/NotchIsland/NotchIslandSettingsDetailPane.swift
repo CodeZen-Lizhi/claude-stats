@@ -46,7 +46,7 @@ struct NotchIslandSettingsDetailPane: View {
                     .frame(height: 1)
             }
 
-            FadingScrollView {
+            AppScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     if tab == .island {
                         islandDisplaySettings(prefs: preferences)

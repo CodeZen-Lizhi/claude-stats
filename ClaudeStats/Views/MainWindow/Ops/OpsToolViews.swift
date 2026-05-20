@@ -930,7 +930,7 @@ private struct OpsInspectorContainer<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
-        FadingScrollView {
+        AppScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 content
             }

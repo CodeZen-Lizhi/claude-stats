@@ -185,7 +185,7 @@ private struct GitRepoSelectionColumn: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             columnHeader
-            FadingScrollView(chrome: .plain) {
+            AppScrollView {
                 LazyVStack(alignment: .leading, spacing: 4) {
                     GitRepoSelectionRow(
                         title: "All Repos",
@@ -321,7 +321,7 @@ private struct GitOverviewContent: View {
     @State private var linesValueWidth: CGFloat = 0
 
     var body: some View {
-        FadingScrollView(chrome: .plain) {
+        AppScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 metricsGrid
                 GitCorrelationPanel(correlation: snapshot.correlation)

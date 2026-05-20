@@ -360,10 +360,7 @@ private struct NetworkNativeTrafficTable: NSViewRepresentable {
         let scrollView = NSScrollView()
         scrollView.borderType = .noBorder
         scrollView.drawsBackground = false
-        scrollView.scrollerStyle = .overlay
-        scrollView.hasVerticalScroller = true
-        scrollView.hasHorizontalScroller = true
-        scrollView.autohidesScrollers = true
+        AppScrollbars.configure(scrollView, axes: [.vertical, .horizontal])
         scrollView.documentView = tableView
         context.coordinator.tableView = tableView
         context.coordinator.applySelection()
@@ -373,8 +370,7 @@ private struct NetworkNativeTrafficTable: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         context.coordinator.parent = self
         guard let tableView = scrollView.documentView as? NSTableView else { return }
-        scrollView.scrollerStyle = .overlay
-        scrollView.autohidesScrollers = true
+        AppScrollbars.configure(scrollView, axes: [.vertical, .horizontal])
         context.coordinator.tableView = tableView
         context.coordinator.applyHeaderLayout()
         tableView.reloadData()
@@ -1165,7 +1161,7 @@ private struct NetworkPayloadPane: View {
     @ViewBuilder
     private var paneBody: some View {
         if let flow = store.selectedFlow {
-            FadingScrollView {
+            AppScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     payloadCard(flow)
                 }
@@ -1568,7 +1564,7 @@ private struct NetworkReplayEditor: View {
                     .tracking(0.8)
                     .foregroundStyle(Color.stxMuted)
 
-                FadingScrollView {
+                AppScrollView {
                     VStack(alignment: .leading, spacing: 6) {
                         ForEach(store.replayDraft?.headers ?? []) { header in
                             HStack(spacing: 8) {

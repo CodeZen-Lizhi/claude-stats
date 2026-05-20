@@ -80,7 +80,7 @@ struct LeaderboardsView: View {
             let contentWidth = LeaderboardLayout.contentWidth(for: proxy.size.width)
             let isWide = contentWidth >= LeaderboardLayout.wideMinimumWidth
 
-            FadingScrollView {
+            AppScrollView {
                 layout(contentWidth: contentWidth, isWide: isWide)
                     .frame(width: contentWidth, alignment: .topLeading)
                     .frame(maxWidth: .infinity)

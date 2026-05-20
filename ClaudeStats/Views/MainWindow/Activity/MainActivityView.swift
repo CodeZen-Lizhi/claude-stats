@@ -27,7 +27,7 @@ struct MainActivityView: View {
         let codingSurfaceBundleIDs = env.preferences.effectiveCodingSurfaceBundleIDs
         let cliHostBundleIDs = env.preferences.effectiveCLIHostBundleIDs
 
-        FadingScrollView {
+        AppScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header(provider: provider)
                 ActivityControls(

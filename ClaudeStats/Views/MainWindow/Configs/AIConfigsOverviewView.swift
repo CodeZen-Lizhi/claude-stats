@@ -6,7 +6,7 @@ struct AIConfigsOverviewView: View {
     @Environment(AppEnvironment.self) private var env
 
     var body: some View {
-        FadingScrollView {
+        AppScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 summaryGrid
                 planSummary

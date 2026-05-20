@@ -14,13 +14,13 @@ struct OpsNativeProcessTable: NSViewRepresentable {
         let tableView = NSTableView()
         tableView.delegate = context.coordinator
         tableView.dataSource = context.coordinator
-        tableView.headerView = NSTableHeaderView()
+        tableView.headerView = OpsTableHeaderView()
         tableView.usesAlternatingRowBackgroundColors = true
         tableView.allowsMultipleSelection = false
         tableView.allowsColumnResizing = true
         tableView.allowsColumnReordering = false
         tableView.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
-        tableView.rowHeight = 46
+        tableView.rowHeight = OpsTableMetrics.rowHeight
         tableView.intercellSpacing = NSSize(width: 0, height: 0)
         tableView.style = .fullWidth
         tableView.backgroundColor = .clear
@@ -32,10 +32,7 @@ struct OpsNativeProcessTable: NSViewRepresentable {
         let scrollView = NSScrollView()
         scrollView.borderType = .noBorder
         scrollView.drawsBackground = false
-        scrollView.scrollerStyle = .overlay
-        scrollView.hasVerticalScroller = true
-        scrollView.hasHorizontalScroller = true
-        scrollView.autohidesScrollers = true
+        AppScrollbars.configure(scrollView, axes: [.vertical, .horizontal])
         scrollView.documentView = tableView
         context.coordinator.tableView = tableView
         return scrollView
@@ -44,7 +41,9 @@ struct OpsNativeProcessTable: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         context.coordinator.parent = self
         guard let tableView = scrollView.documentView as? NSTableView else { return }
+        AppScrollbars.configure(scrollView, axes: [.vertical, .horizontal])
         context.coordinator.tableView = tableView
+        context.coordinator.applyHeaderLayout()
         if context.coordinator.rowsVersion != rowsVersion {
             context.coordinator.rowsVersion = rowsVersion
             tableView.reloadData()
@@ -85,8 +84,8 @@ struct OpsNativeProcessTable: NSViewRepresentable {
                 )
                 return cell
             case .process:
-                let cell = twoLineCell(in: tableView, for: column)
-                cell.configure(title: item.displayName, detail: item.commandLine, badge: item.isDeveloperProcess ? "dev" : nil)
+                let cell = processCell(in: tableView, for: column)
+                cell.configure(title: item.displayName, badge: item.isDeveloperProcess ? "dev" : nil)
                 return cell
             case .cpu:
                 let cell = textCell(in: tableView, for: column)
@@ -131,6 +130,10 @@ struct OpsNativeProcessTable: NSViewRepresentable {
             tableView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
         }
 
+        func applyHeaderLayout() {
+            OpsTableMetrics.applyHeaderLayout(to: tableView?.headerView)
+        }
+
         private func textCell(in tableView: NSTableView, for column: OpsProcessTableColumn) -> OpsTextTableCellView {
             if let cell = tableView.makeView(withIdentifier: column.identifier, owner: self) as? OpsTextTableCellView {
                 return cell
@@ -140,11 +143,11 @@ struct OpsNativeProcessTable: NSViewRepresentable {
             return cell
         }
 
-        private func twoLineCell(in tableView: NSTableView, for column: OpsProcessTableColumn) -> OpsTwoLineTableCellView {
-            if let cell = tableView.makeView(withIdentifier: column.identifier, owner: self) as? OpsTwoLineTableCellView {
+        private func processCell(in tableView: NSTableView, for column: OpsProcessTableColumn) -> OpsProcessNameTableCellView {
+            if let cell = tableView.makeView(withIdentifier: column.identifier, owner: self) as? OpsProcessNameTableCellView {
                 return cell
             }
-            let cell = OpsTwoLineTableCellView()
+            let cell = OpsProcessNameTableCellView()
             cell.identifier = column.identifier
             return cell
         }
@@ -164,13 +167,13 @@ struct OpsNativePortTable: NSViewRepresentable {
         let tableView = NSTableView()
         tableView.delegate = context.coordinator
         tableView.dataSource = context.coordinator
-        tableView.headerView = NSTableHeaderView()
+        tableView.headerView = OpsTableHeaderView()
         tableView.usesAlternatingRowBackgroundColors = true
         tableView.allowsMultipleSelection = false
         tableView.allowsColumnResizing = true
         tableView.allowsColumnReordering = false
         tableView.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
-        tableView.rowHeight = 38
+        tableView.rowHeight = OpsTableMetrics.rowHeight
         tableView.intercellSpacing = NSSize(width: 0, height: 0)
         tableView.style = .fullWidth
         tableView.backgroundColor = .clear
@@ -182,10 +185,7 @@ struct OpsNativePortTable: NSViewRepresentable {
         let scrollView = NSScrollView()
         scrollView.borderType = .noBorder
         scrollView.drawsBackground = false
-        scrollView.scrollerStyle = .overlay
-        scrollView.hasVerticalScroller = true
-        scrollView.hasHorizontalScroller = true
-        scrollView.autohidesScrollers = true
+        AppScrollbars.configure(scrollView, axes: [.vertical, .horizontal])
         scrollView.documentView = tableView
         context.coordinator.tableView = tableView
         return scrollView
@@ -194,7 +194,9 @@ struct OpsNativePortTable: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         context.coordinator.parent = self
         guard let tableView = scrollView.documentView as? NSTableView else { return }
+        AppScrollbars.configure(scrollView, axes: [.vertical, .horizontal])
         context.coordinator.tableView = tableView
+        context.coordinator.applyHeaderLayout()
         if context.coordinator.rowsVersion != rowsVersion {
             context.coordinator.rowsVersion = rowsVersion
             tableView.reloadData()
@@ -230,8 +232,8 @@ struct OpsNativePortTable: NSViewRepresentable {
                 cell.configure(item.portText, alignment: .right, font: .opsMonospaced(11))
                 return cell
             case .process:
-                let cell = twoLineCell(in: tableView, for: column)
-                cell.configure(title: item.processName, detail: item.commandLine, badge: nil)
+                let cell = processCell(in: tableView, for: column)
+                cell.configure(title: item.processName, badge: nil)
                 return cell
             case .address:
                 let cell = textCell(in: tableView, for: column)
@@ -281,6 +283,10 @@ struct OpsNativePortTable: NSViewRepresentable {
             tableView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
         }
 
+        func applyHeaderLayout() {
+            OpsTableMetrics.applyHeaderLayout(to: tableView?.headerView)
+        }
+
         private func textCell(in tableView: NSTableView, for column: OpsPortTableColumn) -> OpsTextTableCellView {
             if let cell = tableView.makeView(withIdentifier: column.identifier, owner: self) as? OpsTextTableCellView {
                 return cell
@@ -290,11 +296,11 @@ struct OpsNativePortTable: NSViewRepresentable {
             return cell
         }
 
-        private func twoLineCell(in tableView: NSTableView, for column: OpsPortTableColumn) -> OpsTwoLineTableCellView {
-            if let cell = tableView.makeView(withIdentifier: column.identifier, owner: self) as? OpsTwoLineTableCellView {
+        private func processCell(in tableView: NSTableView, for column: OpsPortTableColumn) -> OpsProcessNameTableCellView {
+            if let cell = tableView.makeView(withIdentifier: column.identifier, owner: self) as? OpsProcessNameTableCellView {
                 return cell
             }
-            let cell = OpsTwoLineTableCellView()
+            let cell = OpsProcessNameTableCellView()
             cell.identifier = column.identifier
             return cell
         }
@@ -354,10 +360,18 @@ private enum OpsProcessTableColumn: String, CaseIterable {
         }
     }
 
+    var alignment: NSTextAlignment {
+        switch self {
+        case .pid, .cpu, .memory: .right
+        case .process, .user: .left
+        }
+    }
+
     @MainActor
     func makeTableColumn() -> NSTableColumn {
         let column = NSTableColumn(identifier: identifier)
         column.title = title
+        column.headerCell = OpsTableHeaderCell(title: title, alignment: alignment)
         column.width = width
         column.minWidth = minWidth
         column.maxWidth = maxWidth
@@ -419,10 +433,18 @@ private enum OpsPortTableColumn: String, CaseIterable {
         }
     }
 
+    var alignment: NSTextAlignment {
+        switch self {
+        case .port, .pid: .right
+        case .process, .address, .user: .left
+        }
+    }
+
     @MainActor
     func makeTableColumn() -> NSTableColumn {
         let column = NSTableColumn(identifier: identifier)
         column.title = title
+        column.headerCell = OpsTableHeaderCell(title: title, alignment: alignment)
         column.width = width
         column.minWidth = minWidth
         column.maxWidth = maxWidth
@@ -431,29 +453,114 @@ private enum OpsPortTableColumn: String, CaseIterable {
     }
 }
 
-private final class OpsTextTableCellView: NSTableCellView {
-    private let label = NSTextField(labelWithString: "")
-    private var insets = NSEdgeInsets(top: 0, left: 8, bottom: 0, right: 8)
+private enum OpsTableMetrics {
+    static let headerHeight: CGFloat = 30
+    static let headerHorizontalInset: CGFloat = 6
+    static let headerBaselineOffset: CGFloat = -0.5
+    static let rowHeight: CGFloat = 28
 
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        label.lineBreakMode = .byTruncatingTail
-        label.usesSingleLineMode = true
-        addSubview(label)
+    @MainActor
+    static func applyHeaderLayout(to headerView: NSTableHeaderView?) {
+        guard let headerView else { return }
+        guard abs(headerView.frame.height - headerHeight) > 0.5 else { return }
+        headerView.frame.size.height = headerHeight
+        headerView.needsDisplay = true
+    }
+}
+
+private final class OpsTableHeaderView: NSTableHeaderView {
+    init() {
+        super.init(frame: NSRect(x: 0, y: 0, width: 0, height: OpsTableMetrics.headerHeight))
     }
 
     required init?(coder: NSCoder) {
-        return nil
+        super.init(coder: coder)
+        frame.size.height = OpsTableMetrics.headerHeight
+    }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: NSView.noIntrinsicMetric, height: OpsTableMetrics.headerHeight)
     }
 
     override func layout() {
         super.layout()
-        label.frame = NSRect(
-            x: insets.left,
-            y: 0,
-            width: max(bounds.width - insets.left - insets.right, 0),
-            height: bounds.height
+        OpsTableMetrics.applyHeaderLayout(to: self)
+    }
+
+    override func headerRect(ofColumn column: Int) -> NSRect {
+        var rect = super.headerRect(ofColumn: column)
+        rect.size.height = OpsTableMetrics.headerHeight
+        return rect
+    }
+}
+
+private final class OpsTableHeaderCell: NSTableHeaderCell {
+    init(title: String, alignment: NSTextAlignment) {
+        super.init(textCell: title)
+        configure(alignment: alignment)
+    }
+
+    required init(coder: NSCoder) {
+        super.init(coder: coder)
+        configure(alignment: alignment)
+    }
+
+    private func configure(alignment: NSTextAlignment) {
+        font = .opsFont(13, weight: .semibold)
+        textColor = .labelColor
+        self.alignment = alignment
+        lineBreakMode = .byTruncatingTail
+        usesSingleLineMode = true
+    }
+
+    override func drawInterior(withFrame cellFrame: NSRect, in controlView: NSView) {
+        guard !stringValue.isEmpty else { return }
+        let resolvedFont = font ?? .opsFont(13, weight: .semibold)
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.alignment = alignment
+        paragraphStyle.lineBreakMode = lineBreakMode
+
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: resolvedFont,
+            .foregroundColor: textColor ?? NSColor.labelColor,
+            .paragraphStyle: paragraphStyle,
+        ]
+        let attributedTitle = NSAttributedString(string: stringValue, attributes: attributes)
+        let textHeight = ceil(resolvedFont.ascender - resolvedFont.descender + resolvedFont.leading)
+        var textRect = cellFrame.insetBy(dx: OpsTableMetrics.headerHorizontalInset, dy: 0)
+        textRect.origin.y = max(
+            cellFrame.minY + 2,
+            floor(cellFrame.midY - textHeight / 2 + OpsTableMetrics.headerBaselineOffset)
         )
+        textRect.size.height = textHeight
+        attributedTitle.draw(
+            with: textRect,
+            options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine]
+        )
+    }
+}
+
+private final class OpsTextTableCellView: NSTableCellView {
+    private let label = NSTextField(labelWithString: "")
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.isSelectable = false
+        label.lineBreakMode = .byTruncatingTail
+        label.usesSingleLineMode = true
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        addSubview(label)
+
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+    }
+
+    required init?(coder: NSCoder) {
+        return nil
     }
 
     func configure(
@@ -466,26 +573,24 @@ private final class OpsTextTableCellView: NSTableCellView {
         label.alignment = alignment
         label.textColor = color
         label.font = font
-        needsLayout = true
     }
 }
 
-private final class OpsTwoLineTableCellView: NSTableCellView {
+private final class OpsProcessNameTableCellView: NSTableCellView {
     private let titleLabel = NSTextField(labelWithString: "")
-    private let detailLabel = NSTextField(labelWithString: "")
     private let badgeLabel = NSTextField(labelWithString: "")
+    private var titleBadgeGapConstraint: NSLayoutConstraint?
+    private var badgeWidthConstraint: NSLayoutConstraint?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.font = .opsFont(12, weight: .medium)
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.usesSingleLineMode = true
+        titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        detailLabel.font = .opsFont(10)
-        detailLabel.textColor = .secondaryLabelColor
-        detailLabel.lineBreakMode = .byTruncatingMiddle
-        detailLabel.usesSingleLineMode = true
-
+        badgeLabel.translatesAutoresizingMaskIntoConstraints = false
         badgeLabel.font = .opsFont(9, weight: .semibold)
         badgeLabel.textColor = .systemOrange
         badgeLabel.alignment = .center
@@ -494,47 +599,52 @@ private final class OpsTwoLineTableCellView: NSTableCellView {
         badgeLabel.layer?.backgroundColor = NSColor.systemOrange.withAlphaComponent(0.14).cgColor
 
         addSubview(titleLabel)
-        addSubview(detailLabel)
         addSubview(badgeLabel)
+
+        let titleBadgeGapConstraint = titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: badgeLabel.leadingAnchor, constant: -6)
+        let badgeWidthConstraint = badgeLabel.widthAnchor.constraint(equalToConstant: 28)
+        self.titleBadgeGapConstraint = titleBadgeGapConstraint
+        self.badgeWidthConstraint = badgeWidthConstraint
+
+        NSLayoutConstraint.activate([
+            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            titleBadgeGapConstraint,
+
+            badgeLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            badgeLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+            badgeWidthConstraint,
+            badgeLabel.heightAnchor.constraint(equalToConstant: 16),
+        ])
     }
 
     required init?(coder: NSCoder) {
         return nil
     }
 
-    override func layout() {
-        super.layout()
-        let left: CGFloat = 8
-        let right: CGFloat = 8
-        let availableWidth = max(bounds.width - left - right, 0)
-        let badgeWidth = badgeLabel.isHidden ? 0 : min(max(badgeLabel.intrinsicContentSize.width + 10, 28), 42)
-        let badgeGap: CGFloat = badgeLabel.isHidden ? 0 : 6
-        let titleWidth = max(availableWidth - badgeWidth - badgeGap, 0)
-
-        titleLabel.frame = NSRect(x: left, y: bounds.height - 22, width: titleWidth, height: 16)
-        if !badgeLabel.isHidden {
-            badgeLabel.frame = NSRect(x: left + titleWidth + badgeGap, y: bounds.height - 22, width: badgeWidth, height: 16)
-        }
-        detailLabel.frame = NSRect(x: left, y: 6, width: availableWidth, height: 14)
-    }
-
-    func configure(title: String, detail: String, badge: String?) {
+    func configure(title: String, badge: String?) {
         titleLabel.stringValue = title
-        detailLabel.stringValue = detail
         if let badge {
             badgeLabel.stringValue = badge
             badgeLabel.isHidden = false
+            titleBadgeGapConstraint?.constant = -6
+            badgeWidthConstraint?.constant = 28
         } else {
             badgeLabel.stringValue = ""
             badgeLabel.isHidden = true
+            titleBadgeGapConstraint?.constant = 0
+            badgeWidthConstraint?.constant = 0
         }
-        needsLayout = true
     }
 }
 
 private extension NSFont {
     static func opsFont(_ size: CGFloat, weight: NSFont.Weight = .regular) -> NSFont {
-        NSFont(name: "Sora", size: size) ?? .systemFont(ofSize: size, weight: weight)
+        let descriptor = NSFontDescriptor(fontAttributes: [
+            .family: Theme.fontFamily,
+            .traits: [NSFontDescriptor.TraitKey.weight: weight.rawValue],
+        ])
+        return NSFont(descriptor: descriptor, size: size) ?? .systemFont(ofSize: size, weight: weight)
     }
 
     static func opsMonospaced(_ size: CGFloat) -> NSFont {

@@ -232,3 +232,15 @@ shared code.
   `Array(rows.enumerated())`, `LazyVStack` for long stacked tables, `Equatable`
   row data/views when equality is cheap, and fixed widths for trailing numeric
   columns so text measurement does not churn on every drag tick.
+
+## UI Standards
+
+- Content scroll regions must use the app-standard native scrollbar helpers:
+  `AppScrollView` for SwiftUI content and `AppScrollbars.configure(_:axes:)` for
+  `NSScrollView` wrappers. Let macOS own scrollbar rendering and auto-hide
+  behavior; do not add custom-drawn scrollbar thumbs or suppress native
+  scrollers for normal content.
+- Compact horizontal affordances such as tab strips, ref pills, and short inline
+  code snippets may keep indicators hidden when the surrounding design depends
+  on that compactness. For full content panes, sidebars, lists, inspectors,
+  editors, and tables, use the standard helpers instead.

@@ -24,7 +24,7 @@ struct MainUsageView: View {
         let costMode = env.preferences.costEstimationMode
         let cacheHitRate = data.cacheHitRate
 
-        FadingScrollView {
+        AppScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header(provider: provider)
                 controls(period: $bvm.period)

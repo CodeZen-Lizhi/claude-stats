@@ -9,7 +9,7 @@ struct MainSystemMonitorView: View {
     }
 
     var body: some View {
-        FadingScrollView {
+        AppScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
                 controls

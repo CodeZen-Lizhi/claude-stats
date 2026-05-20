@@ -82,7 +82,7 @@ struct ShareExportView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            FadingScrollView {
+            AppScrollView {
                 exportPanel(paneBinding: $pane)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                     .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.separator, lineWidth: 1))

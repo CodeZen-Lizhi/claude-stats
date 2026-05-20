@@ -10,7 +10,7 @@ struct ReleaseHistoryPanel: View {
             Rectangle()
                 .fill(Color.stxStroke)
                 .frame(height: 1)
-            FadingScrollView {
+            AppScrollView {
                 timeline
                     .padding(.horizontal, 18)
                     .padding(.vertical, 18)

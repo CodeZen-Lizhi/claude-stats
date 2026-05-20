@@ -81,11 +81,10 @@ struct LeaderboardListColumn: View {
             .padding(.bottom, 10)
 
             if usesFixedScoreListHeight {
-                ScrollView(.vertical) {
+                AppScrollView {
                     scoreRows
                         .padding(.trailing, 4)
                 }
-                .scrollIndicators(.visible)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             } else {
                 scoreRows
