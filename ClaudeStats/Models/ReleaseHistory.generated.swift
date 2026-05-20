@@ -3,6 +3,18 @@
 extension ReleaseHistoryCatalog {
     static let generatedEntries: [ReleaseHistoryEntry] = [
         ReleaseHistoryEntry(
+            version: "1.5.10",
+            date: "May 20, 2026",
+            headline: "This commit adds full realtime leaderboard functionality:",
+            changes: [
+                "Adds CloudKit push notification entitlement and registration",
+                "Implements subscription management for leaderboard realtime updates",
+                "Adds local storage for realtime state tracking",
+                "Adds view model integration for realtime status and auto-refresh",
+                "Updates UI to show realtime sync status",
+            ]
+        ),
+        ReleaseHistoryEntry(
             version: "1.5.9",
             date: "May 20, 2026",
             headline: "新增AppLanguagePreference管理应用语言偏好，支持跟随系统、英文、简体中文",

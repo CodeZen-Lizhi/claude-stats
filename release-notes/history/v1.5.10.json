@@ -1,0 +1,10 @@
+{
+  "headline": "This commit adds full realtime leaderboard functionality:",
+  "changes": [
+    "Adds CloudKit push notification entitlement and registration",
+    "Implements subscription management for leaderboard realtime updates",
+    "Adds local storage for realtime state tracking",
+    "Adds view model integration for realtime status and auto-refresh",
+    "Updates UI to show realtime sync status"
+  ]
+}
