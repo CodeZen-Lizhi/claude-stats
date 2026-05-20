@@ -58,7 +58,7 @@ struct FeaturesSettingsView: View {
             title: "System Monitor",
             symbol: "cpu",
             description: "Shows read-only CPU, memory, disk, network, battery, GPU, and thermal sampling on demand.",
-            status: prefs.systemMonitorEnabled ? systemMonitorStatus(prefs: prefs) : "Hidden from Tools",
+            status: prefs.systemMonitorEnabled ? systemMonitorStatus(prefs: prefs) : "Hidden from Stats",
             isOn: $prefs.systemMonitorEnabled,
             onConfigure: { onSelectSection(.systemMonitor) }
         ) {

@@ -3,9 +3,6 @@ import SwiftUI
 
 /// Top-level page shown in the main window's detail column. Settings live in
 /// their own main-window mode, not as a `MainPage`.
-/// Sessions are no longer a top-level page — they live as a sidebar section
-/// whose project/session rows drive a separate ``Session`` selection that
-/// overrides the page detail.
 enum MainPage: String, CaseIterable, Identifiable, Sendable {
     case dashboard, configurations, usage, leaderboards, activity, git, system, skills, terminal
     var id: String { rawValue }
@@ -65,11 +62,9 @@ struct MainWindowView: View {
     @SceneStorage("mainWindow.networkSection") private var networkSectionRaw: String = NetworkSection.traffic.rawValue
     @SceneStorage("mainWindow.opsSection") private var opsSectionRaw: String = OpsSection.ports.rawValue
     @State private var page: MainPage = .dashboard
-    /// When non-nil, the detail pane shows session detail instead of the page.
-    /// Held here (not in the sidebar) because the detail view needs it too.
+    /// Held at the window level so the Sessions mode can preserve selection
+    /// while the user moves in and out of the secondary sidebar.
     @State private var selectedSessionID: String?
-    @State private var sessionsExpanded: Bool = false
-    @State private var sessionsExpansionInitialized: Bool = false
     @State private var toggleHovering = false
     @State private var trafficLights = TrafficLightPositioner()
 
@@ -87,7 +82,7 @@ struct MainWindowView: View {
     /// if the id was set but the session has since been removed.
     private var selectedSession: Session? {
         guard let id = selectedSessionID else { return nil }
-        return env.store.sessions.first { $0.id == id }
+        return env.store.sessions(for: env.preferences.selectedProvider).first { $0.id == id }
     }
 
     private var mode: MainWindowMode {
@@ -170,13 +165,17 @@ struct MainWindowView: View {
             ) {
                 SidebarColumn(
                     page: $page,
-                    selectedSessionID: $selectedSessionID,
-                    sessionsExpanded: $sessionsExpanded,
                     availablePages: availablePages,
                     onOpenSettings: openSettings,
+                    onOpenSessions: openSessions,
                     onOpenConfigs: openConfigs,
                     onOpenNetwork: openNetwork,
                     onOpenOps: openOps
+                )
+            } sessionsSidebar: {
+                SessionSidebarColumn(
+                    selectedSessionID: $selectedSessionID,
+                    onExit: closeSessions
                 )
             } configsSidebar: {
                 AIConfigsSidebarColumn(
@@ -192,6 +191,8 @@ struct MainWindowView: View {
                 OpsSidebarColumn(section: opsSectionBinding, onExit: closeOps)
             } appDetail: {
                 detail
+            } sessionsDetail: {
+                sessionsDetail
             } configsDetail: {
                 AIConfigsDetailView(
                     section: configsSection,
@@ -212,7 +213,7 @@ struct MainWindowView: View {
                     .onTapGesture { clearTextFocus() }
             }
 
-            if mode == .app || mode == .configs || mode == .network || mode == .ops {
+            if mode == .app || mode == .sessions || mode == .configs || mode == .network || mode == .ops {
                 sidebarToggle
                     .padding(.leading, 81)
                     .padding(.top, 11)
@@ -226,10 +227,7 @@ struct MainWindowView: View {
         .onAppear {
             page = MainPage(rawValue: pageRaw) ?? .dashboard
             if !availablePages.contains(page) { page = .dashboard }
-            if !sessionsExpansionInitialized {
-                sessionsExpanded = env.preferences.sessionsExpandedOnAppOpen
-                sessionsExpansionInitialized = true
-            }
+            if mode == .sessions { ensureSessionSelection() }
             DockVisibilityCoordinator.shared.acquire()
             Log.app.info("Main window opened on page \(page.rawValue, privacy: .public)")
         }
@@ -238,6 +236,12 @@ struct MainWindowView: View {
             Log.app.info("Main window closed")
         }
         .onChange(of: page) { _, new in pageRaw = new.rawValue }
+        .onChange(of: env.store.lastRefreshedAt) { _, _ in
+            if mode == .sessions { ensureSessionSelection() }
+        }
+        .onChange(of: env.preferences.selectedProvider) { _, _ in
+            if mode == .sessions { ensureSessionSelection() }
+        }
         .onChange(of: env.preferences.aiActivityAnalysisEnabled) { _, on in
             if !on && page == .activity { page = .dashboard }
         }
@@ -283,28 +287,42 @@ struct MainWindowView: View {
 
     @ViewBuilder
     private var detail: some View {
+        switch page {
+        case .dashboard:
+            DashboardView()
+        case .configurations:
+            ConfigurationsView()
+        case .usage:
+            MainUsageView()
+        case .leaderboards:
+            LeaderboardsView()
+        case .activity:
+            MainActivityView()
+        case .git:
+            MainGitActivityView()
+        case .system:
+            MainSystemMonitorView()
+        case .skills:
+            SkillsWorkspaceView(store: env.skills)
+        case .terminal:
+            TerminalWorkspaceView(store: env.terminalStore)
+        }
+    }
+
+    @ViewBuilder
+    private var sessionsDetail: some View {
         if let session = selectedSession {
             CenteredPaneContainer { SessionDetailView(session: session) }
         } else {
-            switch page {
-            case .dashboard:
-                DashboardView()
-            case .configurations:
-                ConfigurationsView()
-            case .usage:
-                MainUsageView()
-            case .leaderboards:
-                LeaderboardsView()
-            case .activity:
-                MainActivityView()
-            case .git:
-                MainGitActivityView()
-            case .system:
-                MainSystemMonitorView()
-            case .skills:
-                SkillsWorkspaceView(store: env.skills)
-            case .terminal:
-                TerminalWorkspaceView(store: env.terminalStore)
+            CenteredPaneContainer {
+                ContentUnavailableView {
+                    Label("No Sessions", systemImage: "tray")
+                } description: {
+                    Text(env.store.isLoading
+                         ? "Scanning sessions for \(env.preferences.selectedProvider.shortName)..."
+                         : "No sessions for \(env.preferences.selectedProvider.shortName) yet.")
+                }
+                .font(.sora(12))
             }
         }
     }
@@ -328,22 +346,28 @@ struct MainWindowView: View {
         settingsSectionRaw = section.rawValue
     }
 
+    private func openSessions() {
+        ensureSessionSelection()
+        transition(to: .sessions)
+    }
+
     private func openConfigs() {
-        selectedSessionID = nil
         transition(to: .configs)
     }
 
     private func openNetwork() {
-        selectedSessionID = nil
         transition(to: .network)
     }
 
     private func openOps() {
-        selectedSessionID = nil
         transition(to: .ops)
     }
 
     private func closeSettings() {
+        transition(to: .app)
+    }
+
+    private func closeSessions() {
         transition(to: .app)
     }
 
@@ -360,8 +384,6 @@ struct MainWindowView: View {
     }
 
     private func openFloatingStatsDestination(_ destination: FloatingStatsMainWindowDestination) {
-        selectedSessionID = nil
-
         switch destination {
         case .page(let nextPage):
             page = nextPage
@@ -369,6 +391,18 @@ struct MainWindowView: View {
         case .network:
             transition(to: .network)
         }
+    }
+
+    private func ensureSessionSelection() {
+        let sessions = env.store.sessions(for: env.preferences.selectedProvider)
+        if let id = selectedSessionID, sessions.contains(where: { $0.id == id }) { return }
+        selectedSessionID = sessions.max { lhs, rhs in
+            sessionActivityDate(lhs) < sessionActivityDate(rhs)
+        }?.id
+    }
+
+    private func sessionActivityDate(_ session: Session) -> Date {
+        session.stats?.lastActivity ?? session.lastModified
     }
 
     private func transition(to nextMode: MainWindowMode) {

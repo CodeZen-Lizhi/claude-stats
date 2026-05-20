@@ -2,6 +2,7 @@ import SwiftUI
 
 enum MainWindowMode: String, Sendable {
     case app
+    case sessions
     case configs
     case settings
     case network
@@ -10,6 +11,7 @@ enum MainWindowMode: String, Sendable {
 
 enum MainWindowMotion {
     static let appSidebarWidth: CGFloat = 240
+    static let sessionsSidebarWidth: CGFloat = 240
     static let configsSidebarWidth: CGFloat = 240
     static let settingsSidebarWidth: CGFloat = 220
     static let networkSidebarWidth: CGFloat = 240
@@ -29,6 +31,13 @@ enum MainWindowMotion {
     }
 
     static var settingsDetailTransition: AnyTransition {
+        .asymmetric(
+            insertion: .offset(x: detailOffset).combined(with: .opacity),
+            removal: .offset(x: detailOffset).combined(with: .opacity)
+        )
+    }
+
+    static var sessionsDetailTransition: AnyTransition {
         .asymmetric(
             insertion: .offset(x: detailOffset).combined(with: .opacity),
             removal: .offset(x: detailOffset).combined(with: .opacity)
@@ -58,19 +67,21 @@ enum MainWindowMotion {
 }
 
 /// Stable two-column shell for the main window. The sidebar column is a clipped
-/// deck that slides between app, configs, settings, network, and ops navigation while the detail panel
+/// deck that slides between app, sessions, configs, settings, network, and ops navigation while the detail panel
 /// stays mounted so its leading boundary can move with the sidebar width.
-struct MainWindowModeShell<AppSidebar: View, ConfigsSidebar: View, SettingsSidebar: View, NetworkSidebar: View, OpsSidebar: View, AppDetail: View, ConfigsDetail: View, SettingsDetail: View, NetworkDetail: View, OpsDetail: View>: View {
+struct MainWindowModeShell<AppSidebar: View, SessionsSidebar: View, ConfigsSidebar: View, SettingsSidebar: View, NetworkSidebar: View, OpsSidebar: View, AppDetail: View, SessionsDetail: View, ConfigsDetail: View, SettingsDetail: View, NetworkDetail: View, OpsDetail: View>: View {
     let mode: MainWindowMode
     let sidebarVisible: Bool
     let boundaryFalloffEnabled: Bool
 
     private let appSidebar: AppSidebar
+    private let sessionsSidebar: SessionsSidebar
     private let configsSidebar: ConfigsSidebar
     private let settingsSidebar: SettingsSidebar
     private let networkSidebar: NetworkSidebar
     private let opsSidebar: OpsSidebar
     private let appDetail: AppDetail
+    private let sessionsDetail: SessionsDetail
     private let configsDetail: ConfigsDetail
     private let settingsDetail: SettingsDetail
     private let networkDetail: NetworkDetail
@@ -81,11 +92,13 @@ struct MainWindowModeShell<AppSidebar: View, ConfigsSidebar: View, SettingsSideb
         sidebarVisible: Bool,
         boundaryFalloffEnabled: Bool,
         @ViewBuilder appSidebar: () -> AppSidebar,
+        @ViewBuilder sessionsSidebar: () -> SessionsSidebar,
         @ViewBuilder configsSidebar: () -> ConfigsSidebar,
         @ViewBuilder settingsSidebar: () -> SettingsSidebar,
         @ViewBuilder networkSidebar: () -> NetworkSidebar,
         @ViewBuilder opsSidebar: () -> OpsSidebar,
         @ViewBuilder appDetail: () -> AppDetail,
+        @ViewBuilder sessionsDetail: () -> SessionsDetail,
         @ViewBuilder configsDetail: () -> ConfigsDetail,
         @ViewBuilder settingsDetail: () -> SettingsDetail,
         @ViewBuilder networkDetail: () -> NetworkDetail,
@@ -95,11 +108,13 @@ struct MainWindowModeShell<AppSidebar: View, ConfigsSidebar: View, SettingsSideb
         self.sidebarVisible = sidebarVisible
         self.boundaryFalloffEnabled = boundaryFalloffEnabled
         self.appSidebar = appSidebar()
+        self.sessionsSidebar = sessionsSidebar()
         self.configsSidebar = configsSidebar()
         self.settingsSidebar = settingsSidebar()
         self.networkSidebar = networkSidebar()
         self.opsSidebar = opsSidebar()
         self.appDetail = appDetail()
+        self.sessionsDetail = sessionsDetail()
         self.configsDetail = configsDetail()
         self.settingsDetail = settingsDetail()
         self.networkDetail = networkDetail()
@@ -125,6 +140,8 @@ struct MainWindowModeShell<AppSidebar: View, ConfigsSidebar: View, SettingsSideb
         switch mode {
         case .app:
             sidebarVisible ? MainWindowMotion.appSidebarWidth : 0
+        case .sessions:
+            sidebarVisible ? MainWindowMotion.sessionsSidebarWidth : 0
         case .configs:
             sidebarVisible ? MainWindowMotion.configsSidebarWidth : 0
         case .settings:
@@ -140,20 +157,24 @@ struct MainWindowModeShell<AppSidebar: View, ConfigsSidebar: View, SettingsSideb
         switch mode {
         case .app:
             0
-        case .configs:
+        case .sessions:
             -MainWindowMotion.appSidebarWidth
+        case .configs:
+            -(MainWindowMotion.appSidebarWidth + MainWindowMotion.sessionsSidebarWidth)
         case .settings:
-            -(MainWindowMotion.appSidebarWidth + MainWindowMotion.configsSidebarWidth)
+            -(MainWindowMotion.appSidebarWidth + MainWindowMotion.sessionsSidebarWidth + MainWindowMotion.configsSidebarWidth)
         case .network:
-            -(MainWindowMotion.appSidebarWidth + MainWindowMotion.configsSidebarWidth + MainWindowMotion.settingsSidebarWidth)
+            -(MainWindowMotion.appSidebarWidth + MainWindowMotion.sessionsSidebarWidth + MainWindowMotion.configsSidebarWidth + MainWindowMotion.settingsSidebarWidth)
         case .ops:
-            -(MainWindowMotion.appSidebarWidth + MainWindowMotion.configsSidebarWidth + MainWindowMotion.settingsSidebarWidth + MainWindowMotion.networkSidebarWidth)
+            -(MainWindowMotion.appSidebarWidth + MainWindowMotion.sessionsSidebarWidth + MainWindowMotion.configsSidebarWidth + MainWindowMotion.settingsSidebarWidth + MainWindowMotion.networkSidebarWidth)
         }
     }
 
     private var detailRoundedLeading: Bool {
         switch mode {
         case .app:
+            return sidebarVisible
+        case .sessions:
             return sidebarVisible
         case .configs:
             return sidebarVisible
@@ -168,6 +189,10 @@ struct MainWindowModeShell<AppSidebar: View, ConfigsSidebar: View, SettingsSideb
 
     private var appSidebarIsActive: Bool {
         mode == .app && sidebarVisible
+    }
+
+    private var sessionsSidebarIsActive: Bool {
+        mode == .sessions && sidebarVisible
     }
 
     private var configsSidebarIsActive: Bool {
@@ -194,6 +219,12 @@ struct MainWindowModeShell<AppSidebar: View, ConfigsSidebar: View, SettingsSideb
                 .allowsHitTesting(appSidebarIsActive)
                 .accessibilityHidden(!appSidebarIsActive)
 
+            sessionsSidebar
+                .frame(width: MainWindowMotion.sessionsSidebarWidth)
+                .opacity(sidebarVisible ? 1 : 0)
+                .allowsHitTesting(sessionsSidebarIsActive)
+                .accessibilityHidden(!sessionsSidebarIsActive)
+
             configsSidebar
                 .frame(width: MainWindowMotion.configsSidebarWidth)
                 .opacity(sidebarVisible ? 1 : 0)
@@ -218,7 +249,7 @@ struct MainWindowModeShell<AppSidebar: View, ConfigsSidebar: View, SettingsSideb
                 .accessibilityHidden(!opsSidebarIsActive)
         }
         .frame(
-            width: MainWindowMotion.appSidebarWidth + MainWindowMotion.configsSidebarWidth + MainWindowMotion.settingsSidebarWidth + MainWindowMotion.networkSidebarWidth + MainWindowMotion.opsSidebarWidth,
+            width: MainWindowMotion.appSidebarWidth + MainWindowMotion.sessionsSidebarWidth + MainWindowMotion.configsSidebarWidth + MainWindowMotion.settingsSidebarWidth + MainWindowMotion.networkSidebarWidth + MainWindowMotion.opsSidebarWidth,
             alignment: .leading
         )
         .offset(x: sidebarDeckOffset)
@@ -231,6 +262,10 @@ struct MainWindowModeShell<AppSidebar: View, ConfigsSidebar: View, SettingsSideb
             case .app:
                 appDetail
                     .transition(MainWindowMotion.appDetailTransition)
+                    .zIndex(1)
+            case .sessions:
+                sessionsDetail
+                    .transition(MainWindowMotion.sessionsDetailTransition)
                     .zIndex(1)
             case .configs:
                 configsDetail
@@ -263,6 +298,13 @@ struct MainWindowModeShell<AppSidebar: View, ConfigsSidebar: View, SettingsSideb
             Text("Settings")
         }
         .padding()
+    } sessionsSidebar: {
+        VStack(alignment: .leading) {
+            Text("Back")
+            Text("Sessions")
+            Spacer()
+        }
+        .padding()
     } configsSidebar: {
         VStack(alignment: .leading) {
             Text("Back")
@@ -293,6 +335,8 @@ struct MainWindowModeShell<AppSidebar: View, ConfigsSidebar: View, SettingsSideb
         .padding()
     } appDetail: {
         Color.stxBackground.overlay(Text("App Detail"))
+    } sessionsDetail: {
+        Color.stxBackground.overlay(Text("Sessions Detail"))
     } configsDetail: {
         Color.stxBackground.overlay(Text("Configs Detail"))
     } settingsDetail: {
