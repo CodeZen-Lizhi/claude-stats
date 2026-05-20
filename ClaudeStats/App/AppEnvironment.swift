@@ -56,7 +56,11 @@ final class AppEnvironment {
         self.gitActivity = GitActivityViewModel()
         self.claudeStatus = ClaudeStatusViewModel(preferences: preferences)
         self.openAIStatus = OpenAIStatusViewModel(preferences: preferences)
-        self.leaderboards = LeaderboardSyncViewModel(preferences: preferences, store: store)
+        self.leaderboards = LeaderboardSyncViewModel(
+            preferences: preferences,
+            store: store,
+            remoteNotificationRegistrar: Self.isRunningUnitTests ? nil : AppKitLeaderboardRemoteNotificationRegistrar()
+        )
         self.usageLimits = usageLimits ?? UsageLimitStore(registry: providerRegistry)
         self.configurationProfiles = ConfigurationProfilesViewModel(registry: providerRegistry)
         self.apiProviders = APIProviderSwitcherViewModel()

@@ -31,7 +31,6 @@ struct LeaderboardOverviewPanel: View {
     let isLoadingScores: Bool
     let isSyncBusy: Bool
     let onRefresh: () -> Void
-    let onSync: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -76,22 +75,15 @@ struct LeaderboardOverviewPanel: View {
         HStack(spacing: 6) {
             LeaderboardIconActionButton(
                 systemName: "arrow.clockwise",
-                help: "Refresh",
-                isDisabled: isLoadingScores,
+                help: "Sync and refresh",
+                isDisabled: isLoadingScores || isSyncBusy,
                 action: onRefresh
             )
 
-            LeaderboardIconActionButton(
-                systemName: "icloud.and.arrow.up",
-                help: "Sync mine",
-                isDisabled: isSyncBusy,
-                action: onSync
-            )
-
-            if isLoadingScores {
+            if isLoadingScores || isSyncBusy {
                 ProgressView()
                     .controlSize(.small)
-                    .help("Loading leaderboard scores")
+                    .help(isSyncBusy ? "Syncing leaderboard scores" : "Loading leaderboard scores")
             }
         }
         .fixedSize(horizontal: true, vertical: false)

@@ -54,16 +54,23 @@ struct LeaderboardLocalStoreTests {
             lastUploadedAt: savedAt,
             lastSubmittedPeriodKeys: ["allTime:all"]
         )
+        let realtimeScope = LeaderboardRealtimeScope(metric: .tokensWithCache, period: .allTime, periodKey: "all")
+        let realtimeState = LeaderboardRealtimeState(
+            pendingScopes: [realtimeScope],
+            lastNotificationAt: savedAt
+        )
 
         await store.writeScores([score], for: scoreKey, savedAt: savedAt)
         await store.writeHistory([historyPoint], for: historyKey, savedAt: savedAt)
         await store.writeProfile(profile, savedAt: savedAt)
         await store.writeSyncState(syncState)
+        await store.writeRealtimeState(realtimeState)
 
         #expect(await store.readScores(for: scoreKey)?.scores == [score])
         #expect(await store.readHistory(for: historyKey)?.points == [historyPoint])
         #expect(await store.readProfile(userHash: "userhash")?.profile == profile)
         #expect(await store.readSyncState() == syncState)
+        #expect(await store.readRealtimeState() == realtimeState)
     }
 
     @Test("Schema, key, and JSON mismatches are ignored")

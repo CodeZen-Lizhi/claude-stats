@@ -38,6 +38,7 @@ final class LeaderboardSyncViewModel {
     private(set) var selectedUserHistory: [LeaderboardScoreHistoryPoint] = []
     private(set) var isLoadingSelectedUserHistory = false
     private(set) var selectedUserHistoryError: String?
+    private(set) var realtimeStatus: LeaderboardRealtimeStatus = .inactive
 
     var avatarSeed: String {
         preferences.leaderboardAvatarSeed.isEmpty
@@ -54,6 +55,16 @@ final class LeaderboardSyncViewModel {
         builder.favoriteModels(sessions: store.sessions)
     }
 
+    var leaderboardStatusText: String {
+        guard preferences.leaderboardsEnabled else { return SyncStatus.disabled.displayText }
+        switch realtimeStatus {
+        case .inactive:
+            return syncStatus.displayText
+        case .live, .pending, .historicalCache, .unavailable:
+            return realtimeStatus.displayText
+        }
+    }
+
     private let preferences: Preferences
     private let store: SessionStore
     private let client: any LeaderboardCloudServicing
@@ -63,14 +74,20 @@ final class LeaderboardSyncViewModel {
     private let scoreCacheTTL: TimeInterval
     private let silentSyncDebounceInterval: TimeInterval
     private let silentSyncMinimumInterval: TimeInterval
+    private let realtime: LeaderboardRealtimeCoordinator
+    private let remoteNotificationRegistrar: (any LeaderboardRemoteNotificationRegistering)?
+    private let realtimeRefreshDebounceInterval: TimeInterval
     private var syncTask: Task<Void, Never>?
     private var silentSyncTask: Task<Void, Never>?
+    private var realtimeRefreshTask: Task<Void, Never>?
     private var visibleScoreQuery: VisibleScoreQuery?
     private var visibleHistoryQuery: VisibleHistoryQuery?
+    private var activeRealtimeScope: LeaderboardRealtimeScope?
 
     private static let defaultScoreCacheTTL: TimeInterval = 60 * 60
-    private static let defaultSilentSyncDebounceInterval: TimeInterval = 10 * 60
-    private static let defaultSilentSyncMinimumInterval: TimeInterval = 30 * 60
+    private static let defaultSilentSyncDebounceInterval: TimeInterval = 60
+    private static let defaultSilentSyncMinimumInterval: TimeInterval = 5 * 60
+    private static let defaultRealtimeRefreshDebounceInterval: TimeInterval = 2
 
     private struct VisibleScoreQuery: Sendable {
         let metric: LeaderboardMetric
@@ -95,7 +112,10 @@ final class LeaderboardSyncViewModel {
          refreshBeforeSync: Bool = true,
          scoreCacheTTL: TimeInterval = LeaderboardSyncViewModel.defaultScoreCacheTTL,
          silentSyncDebounceInterval: TimeInterval = LeaderboardSyncViewModel.defaultSilentSyncDebounceInterval,
-         silentSyncMinimumInterval: TimeInterval = LeaderboardSyncViewModel.defaultSilentSyncMinimumInterval) {
+         silentSyncMinimumInterval: TimeInterval = LeaderboardSyncViewModel.defaultSilentSyncMinimumInterval,
+         realtimeCoordinator: LeaderboardRealtimeCoordinator? = nil,
+         remoteNotificationRegistrar: (any LeaderboardRemoteNotificationRegistering)? = nil,
+         realtimeRefreshDebounceInterval: TimeInterval = LeaderboardSyncViewModel.defaultRealtimeRefreshDebounceInterval) {
         self.preferences = preferences
         self.store = store
         self.client = client
@@ -105,6 +125,9 @@ final class LeaderboardSyncViewModel {
         self.scoreCacheTTL = scoreCacheTTL
         self.silentSyncDebounceInterval = silentSyncDebounceInterval
         self.silentSyncMinimumInterval = silentSyncMinimumInterval
+        self.realtime = realtimeCoordinator ?? LeaderboardRealtimeCoordinator(localStore: localStore)
+        self.remoteNotificationRegistrar = remoteNotificationRegistrar
+        self.realtimeRefreshDebounceInterval = realtimeRefreshDebounceInterval
         let storedUserHash = preferences.leaderboardProfileUserHash.trimmingCharacters(in: .whitespacesAndNewlines)
         currentUserHash = storedUserHash.isEmpty ? nil : storedUserHash
         syncStatus = preferences.leaderboardsEnabled ? .idle : .disabled
@@ -112,6 +135,9 @@ final class LeaderboardSyncViewModel {
 
     func start() {
         syncTask?.cancel()
+        if preferences.leaderboardsEnabled {
+            remoteNotificationRegistrar?.registerForLeaderboardRemoteNotifications()
+        }
         syncTask = Task { [weak self] in
             await self?.syncSilentlyIfNeeded()
         }
@@ -122,11 +148,64 @@ final class LeaderboardSyncViewModel {
         syncTask = nil
         silentSyncTask?.cancel()
         silentSyncTask = nil
+        realtimeRefreshTask?.cancel()
+        realtimeRefreshTask = nil
     }
 
     func scheduleSilentSyncAfterDataRefresh() {
         guard preferences.leaderboardsEnabled else { return }
         scheduleSilentSync(after: silentSyncDebounceInterval)
+    }
+
+    func activateRealtime(scope: LeaderboardRealtimeScope?) async {
+        guard preferences.leaderboardsEnabled else {
+            realtimeStatus = .inactive
+            activeRealtimeScope = nil
+            return
+        }
+
+        activeRealtimeScope = scope
+        if scope != nil {
+            remoteNotificationRegistrar?.registerForLeaderboardRemoteNotifications()
+        }
+        realtimeStatus = await realtime.activate(scope: scope)
+        await refreshIfPendingRealtimeChanges()
+    }
+
+    func deactivateRealtime() {
+        activeRealtimeScope = nil
+        realtimeStatus = .inactive
+        realtimeRefreshTask?.cancel()
+        realtimeRefreshTask = nil
+        Task { [realtime] in
+            await realtime.deactivate()
+        }
+    }
+
+    func handleRealtimeNotification(_ notification: LeaderboardRealtimeNotification) {
+        guard preferences.leaderboardsEnabled else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            let decision = await realtime.handle(notification)
+            await applyRealtimeDecision(decision)
+        }
+    }
+
+    func handleRemoteNotificationRegistrationFailure(_ error: Error) {
+        Log.network.error("Leaderboard remote notification registration failed: \(error.localizedDescription, privacy: .public)")
+        if activeRealtimeScope != nil {
+            realtimeStatus = .unavailable(error.localizedDescription)
+        }
+    }
+
+    func refreshIfPendingRealtimeChanges() async {
+        guard preferences.leaderboardsEnabled,
+              let scope = activeRealtimeScope,
+              await realtime.consumePending(for: scope) else {
+            return
+        }
+        realtimeStatus = .pending
+        await refreshVisibleScoresFromRealtime(scope: scope)
     }
 
     func checkAccountStatus() async {
@@ -157,6 +236,35 @@ final class LeaderboardSyncViewModel {
 
     func syncIfDue(force: Bool) async {
         await submitCurrentScores(force: force, showsStatus: true, refreshStoreBeforeSubmit: true)
+    }
+
+    func syncAndRefreshScores(metric: LeaderboardMetric,
+                              period: LeaderboardPeriod,
+                              now: Date = .now,
+                              allowsRecentDayFallback: Bool = true) async {
+        await submitCurrentScores(
+            force: true,
+            showsStatus: true,
+            refreshStoreBeforeSubmit: true,
+            refreshVisibleAfterSync: false
+        )
+        await loadScores(
+            metric: metric,
+            period: period,
+            now: now,
+            allowsRecentDayFallback: allowsRecentDayFallback,
+            forceRefresh: true
+        )
+        if let query = visibleHistoryQuery {
+            await loadScoreHistory(
+                userHash: query.userHash,
+                metric: query.metric,
+                period: query.period,
+                historyStartMonthKey: query.historyStartMonthKey,
+                forceRefresh: true,
+                now: query.now
+            )
+        }
     }
 
     func loadScores(metric: LeaderboardMetric,
@@ -301,11 +409,67 @@ final class LeaderboardSyncViewModel {
         }
     }
 
+    private func applyRealtimeDecision(_ decision: LeaderboardRealtimeDecision) async {
+        switch decision {
+        case .ignored:
+            return
+        case .markedPending:
+            if let activeRealtimeScope {
+                realtimeStatus = await realtime.currentStatus(for: activeRealtimeScope)
+            }
+        case .refresh(let scope):
+            scheduleRealtimeRefresh(for: scope)
+        }
+    }
+
+    private func scheduleRealtimeRefresh(for scope: LeaderboardRealtimeScope) {
+        guard activeRealtimeScope == scope else { return }
+        realtimeStatus = .pending
+        realtimeRefreshTask?.cancel()
+        realtimeRefreshTask = Task { [weak self] in
+            guard let self else { return }
+            if realtimeRefreshDebounceInterval > 0 {
+                try? await Task.sleep(for: .seconds(realtimeRefreshDebounceInterval))
+            }
+            guard !Task.isCancelled else { return }
+            await refreshVisibleScoresFromRealtime(scope: scope)
+        }
+    }
+
+    private func refreshVisibleScoresFromRealtime(scope: LeaderboardRealtimeScope) async {
+        guard let query = visibleScoreQuery,
+              activeRealtimeScope == scope,
+              visibleScoreQuery(query, matches: scope) else {
+            return
+        }
+
+        await loadScores(
+            metric: query.metric,
+            period: query.period,
+            now: query.now,
+            allowsRecentDayFallback: query.allowsRecentDayFallback,
+            forceRefresh: true
+        )
+
+        guard activeRealtimeScope == scope else { return }
+        realtimeStatus = await realtime.currentStatus(for: scope)
+    }
+
+    private func visibleScoreQuery(_ query: VisibleScoreQuery, matches scope: LeaderboardRealtimeScope) -> Bool {
+        let window = LeaderboardPeriodCalculator.window(for: query.period, now: query.now)
+        return query.metric == scope.metric
+            && query.period == scope.period
+            && window.periodKey == scope.periodKey
+    }
+
     private func syncSilentlyIfNeeded() async {
         await submitCurrentScores(force: false, showsStatus: false, refreshStoreBeforeSubmit: false)
     }
 
-    private func submitCurrentScores(force: Bool, showsStatus: Bool, refreshStoreBeforeSubmit: Bool) async {
+    private func submitCurrentScores(force: Bool,
+                                     showsStatus: Bool,
+                                     refreshStoreBeforeSubmit: Bool,
+                                     refreshVisibleAfterSync: Bool = true) async {
         guard preferences.leaderboardsEnabled else {
             if showsStatus { syncStatus = .disabled }
             return
@@ -407,7 +571,9 @@ final class LeaderboardSyncViewModel {
             preferences.leaderboardLastSyncError = ""
             preferences.leaderboardLastSubmittedPeriodKeys = submittedPeriodKeys
             syncStatus = .synced(syncedAt)
-            await refreshVisibleLeaderboardAfterSync()
+            if refreshVisibleAfterSync {
+                await refreshVisibleLeaderboardAfterSync()
+            }
         } catch let error as LeaderboardCloudError {
             if showsStatus {
                 preferences.leaderboardLastSyncError = error.description

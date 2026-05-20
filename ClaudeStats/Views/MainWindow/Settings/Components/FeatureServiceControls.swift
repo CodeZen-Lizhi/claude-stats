@@ -217,7 +217,7 @@ struct LeaderboardProfileSettings: View {
     private var syncRow: some View {
         SettingRow(
             title: "Sync",
-            description: "Runs once per day while the app is open. You can force a sync here."
+            description: "Runs in the background while the app is open. You can force a sync here."
         ) {
             HStack(spacing: 8) {
                 if let last = env.preferences.leaderboardLastSyncedAt {

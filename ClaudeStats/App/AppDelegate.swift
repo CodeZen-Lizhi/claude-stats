@@ -25,5 +25,17 @@ final class AppDelegate: GhosttyEmbed.AppDelegate {
         }
     }
 
+    @MainActor
+    func application(_ application: NSApplication, didReceiveRemoteNotification userInfo: [String: Any]) {
+        let bridgedUserInfo = Dictionary(uniqueKeysWithValues: userInfo.map { (AnyHashable($0.key), $0.value) })
+        guard let notification = LeaderboardRemoteNotificationParser.notification(from: bridgedUserInfo) else { return }
+        env.leaderboards.handleRealtimeNotification(notification)
+    }
+
+    @MainActor
+    func application(_ application: NSApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        env.leaderboards.handleRemoteNotificationRegistrationFailure(error)
+    }
+
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
 }

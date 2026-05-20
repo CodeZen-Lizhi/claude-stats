@@ -65,6 +65,10 @@ struct LeaderboardsView: View {
         LeaderboardPeriodCalculator.window(for: period, now: scoreAnchorDate)
     }
 
+    private var realtimeScope: LeaderboardRealtimeScope? {
+        LeaderboardRealtimeScope.liveScope(metric: metric, period: period, requestedWindow: requestedWindow)
+    }
+
     private var isSyncBusy: Bool {
         env.leaderboards.syncStatus == .syncing
             || env.leaderboards.syncStatus == .checkingAccount
@@ -97,6 +101,10 @@ struct LeaderboardsView: View {
                 now: scoreAnchorDate,
                 allowsRecentDayFallback: false
             )
+            await env.leaderboards.activateRealtime(scope: realtimeScope)
+        }
+        .onDisappear {
+            env.leaderboards.deactivateRealtime()
         }
         .onChange(of: metric) { _, new in
             metricRaw = new.rawValue
@@ -166,23 +174,17 @@ struct LeaderboardsView: View {
             scores: scores,
             topScore: topScore,
             currentUserHash: env.leaderboards.currentUserHash,
-            syncStatusText: env.leaderboards.syncStatus.displayText,
+            syncStatusText: env.leaderboards.leaderboardStatusText,
             isLoadingScores: env.leaderboards.isLoadingScores,
             isSyncBusy: isSyncBusy,
             onRefresh: {
                 Task {
-                    await env.leaderboards.loadScores(
+                    await env.leaderboards.syncAndRefreshScores(
                         metric: metric,
                         period: period,
                         now: scoreAnchorDate,
-                        allowsRecentDayFallback: false,
-                        forceRefresh: true
+                        allowsRecentDayFallback: false
                     )
-                }
-            },
-            onSync: {
-                Task {
-                    await env.leaderboards.syncNow()
                 }
             }
         )

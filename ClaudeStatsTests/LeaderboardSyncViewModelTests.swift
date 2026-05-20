@@ -241,6 +241,116 @@ struct LeaderboardSyncViewModelTests {
         #expect(await fixture.client.fetchedPeriodKeys() == ["all"])
     }
 
+    @Test("Combined leaderboard refresh uploads current scores and reloads visible scores")
+    func combinedRefreshUploadsAndFetches() async {
+        let fixture = makeFixture(enabled: true)
+        let now = dateUTC(2026, 5, 16, 8)
+        await fixture.client.setScores([
+            "all": [
+                score(id: "fresh", userHash: "freshhash", rank: 1, nickname: "Fresh", value: 200, now: now),
+            ],
+        ])
+
+        await fixture.viewModel.syncAndRefreshScores(metric: .tokensWithCache, period: .allTime, now: now)
+
+        #expect(await fixture.client.submittedCount() > 0)
+        #expect(await fixture.client.submittedHistoryCount() > 0)
+        #expect(fixture.viewModel.scores.first?.id == "fresh")
+        #expect(await fixture.client.fetchedPeriodKeys() == ["all"])
+    }
+
+    @Test("Current realtime notification debounces then force-refreshes visible scores")
+    func currentRealtimeNotificationRefreshesVisibleScores() async {
+        let fixture = makeFixture(enabled: true)
+        let now = dateUTC(2026, 5, 16, 8)
+        let scope = LeaderboardRealtimeScope.liveScope(metric: .tokensWithCache, period: .allTime, now: now)
+        await fixture.client.setScores([
+            "all": [
+                score(id: "initial", userHash: "initialhash", rank: 1, nickname: "Initial", value: 100, now: now),
+            ],
+        ])
+
+        await fixture.viewModel.loadScores(metric: .tokensWithCache, period: .allTime, now: now)
+        await fixture.viewModel.activateRealtime(scope: scope)
+        await fixture.client.setScores([
+            "all": [
+                score(id: "fresh", userHash: "freshhash", rank: 1, nickname: "Fresh", value: 300, now: now),
+            ],
+        ])
+
+        fixture.viewModel.handleRealtimeNotification(LeaderboardRealtimeNotification(subscriptionID: scope.subscriptionID, receivedAt: now))
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(fixture.viewModel.realtimeStatus == .live)
+        #expect(fixture.viewModel.scores.first?.id == "fresh")
+        #expect(await fixture.client.fetchedPeriodKeys() == ["all", "all"])
+    }
+
+    @Test("Non-current realtime notification only marks pending")
+    func nonCurrentRealtimeNotificationMarksPending() async {
+        let fixture = makeFixture(enabled: true)
+        let now = dateUTC(2026, 5, 16, 8)
+        let currentScope = LeaderboardRealtimeScope.liveScope(metric: .tokensWithCache, period: .allTime, now: now)
+        let pendingScope = LeaderboardRealtimeScope.liveScope(metric: .tokensWithCache, period: .day, now: now)
+
+        await fixture.viewModel.loadScores(metric: .tokensWithCache, period: .allTime, now: now)
+        await fixture.client.clearFetches()
+        await fixture.viewModel.activateRealtime(scope: currentScope)
+
+        fixture.viewModel.handleRealtimeNotification(LeaderboardRealtimeNotification(subscriptionID: pendingScope.subscriptionID, receivedAt: now))
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(fixture.viewModel.realtimeStatus == .live)
+        #expect(await fixture.client.fetchedPeriodKeys().isEmpty)
+        #expect(await fixture.localStore.readRealtimeState().pendingScopes == [pendingScope])
+    }
+
+    @Test("Historical day does not register a realtime subscription")
+    func historicalDayUsesCacheStatus() async {
+        let fixture = makeFixture(enabled: true)
+        let current = dateUTC(2026, 5, 16, 8)
+        let historicalWindow = LeaderboardPeriodCalculator.window(
+            for: .day,
+            now: current.addingTimeInterval(-2 * 86_400)
+        )
+        let scope = LeaderboardRealtimeScope.liveScope(
+            metric: .tokensWithCache,
+            period: .day,
+            requestedWindow: historicalWindow,
+            now: current
+        )
+
+        await fixture.viewModel.activateRealtime(scope: scope)
+
+        #expect(scope == nil)
+        #expect(fixture.viewModel.realtimeStatus == .historicalCache)
+        #expect(await fixture.realtimeCloud.ensuredScopes().isEmpty)
+    }
+
+    @Test("Realtime registration failure does not block manual refresh")
+    func realtimeFailureDoesNotBlockManualRefresh() async {
+        let fixture = makeFixture(enabled: true)
+        let now = dateUTC(2026, 5, 16, 8)
+        let scope = LeaderboardRealtimeScope.liveScope(metric: .tokensWithCache, period: .allTime, now: now)
+        await fixture.realtimeCloud.setEnsureError(LeaderboardCloudError.missingEntitlement("Missing push entitlement."))
+        await fixture.client.setScores([
+            "all": [
+                score(id: "fresh", userHash: "freshhash", rank: 1, nickname: "Fresh", value: 300, now: now),
+            ],
+        ])
+
+        await fixture.viewModel.activateRealtime(scope: scope)
+        await fixture.viewModel.syncAndRefreshScores(metric: .tokensWithCache, period: .allTime, now: now)
+
+        if case .unavailable = fixture.viewModel.realtimeStatus {
+            #expect(true)
+        } else {
+            Issue.record("Expected realtime unavailable status")
+        }
+        #expect(await fixture.client.submittedCount() > 0)
+        #expect(fixture.viewModel.scores.first?.id == "fresh")
+    }
+
     @Test("CloudKit score failure keeps cached scores visible")
     func scoreFailureKeepsCachedScoresVisible() async {
         let fixture = makeFixture(enabled: true)
@@ -482,7 +592,8 @@ struct LeaderboardSyncViewModelTests {
                              sessions: [Session]? = nil,
                              scoreCacheTTL: TimeInterval = 3_600,
                              silentSyncDebounceInterval: TimeInterval = 0,
-                             silentSyncMinimumInterval: TimeInterval = 0) -> Fixture {
+                             silentSyncMinimumInterval: TimeInterval = 0,
+                             realtimeRefreshDebounceInterval: TimeInterval = 0) -> Fixture {
         let suiteName = "com.claudestats.tests.leaderboards.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName) ?? .standard
         defaults.removePersistentDomain(forName: suiteName)
@@ -498,6 +609,8 @@ struct LeaderboardSyncViewModelTests {
         ])
         let client = FakeLeaderboardClient()
         let localStore = FakeLeaderboardLocalStore()
+        let realtimeCloud = FakeLeaderboardRealtimeCloudService()
+        let notificationRegistrar = FakeLeaderboardRemoteNotificationRegistrar()
         let viewModel = LeaderboardSyncViewModel(
             preferences: preferences,
             store: store,
@@ -506,9 +619,19 @@ struct LeaderboardSyncViewModelTests {
             refreshBeforeSync: false,
             scoreCacheTTL: scoreCacheTTL,
             silentSyncDebounceInterval: silentSyncDebounceInterval,
-            silentSyncMinimumInterval: silentSyncMinimumInterval
+            silentSyncMinimumInterval: silentSyncMinimumInterval,
+            realtimeCoordinator: LeaderboardRealtimeCoordinator(cloud: realtimeCloud, localStore: localStore),
+            remoteNotificationRegistrar: notificationRegistrar,
+            realtimeRefreshDebounceInterval: realtimeRefreshDebounceInterval
         )
-        return Fixture(preferences: preferences, viewModel: viewModel, client: client, localStore: localStore)
+        return Fixture(
+            preferences: preferences,
+            viewModel: viewModel,
+            client: client,
+            localStore: localStore,
+            realtimeCloud: realtimeCloud,
+            notificationRegistrar: notificationRegistrar
+        )
     }
 
     private func session(_ id: String,
@@ -572,6 +695,8 @@ struct LeaderboardSyncViewModelTests {
         let viewModel: LeaderboardSyncViewModel
         let client: FakeLeaderboardClient
         let localStore: FakeLeaderboardLocalStore
+        let realtimeCloud: FakeLeaderboardRealtimeCloudService
+        let notificationRegistrar: FakeLeaderboardRemoteNotificationRegistrar
     }
 }
 
@@ -642,6 +767,11 @@ private actor FakeLeaderboardClient: LeaderboardCloudServicing {
 
     func fetchedHistoryPeriodKeys() -> [String] {
         fetchedHistoryKeys
+    }
+
+    func clearFetches() {
+        fetchedKeys = []
+        fetchedHistoryKeys = []
     }
 
     func accountState() async -> LeaderboardCloudAccountState {
@@ -720,6 +850,7 @@ private actor FakeLeaderboardLocalStore: LeaderboardLocalStoring {
     private var historyByKey: [LeaderboardHistoryCacheKey: LeaderboardCachedHistory] = [:]
     private var profilesByHash: [String: LeaderboardCachedProfile] = [:]
     private var syncState: LeaderboardLocalSyncState = .empty
+    private var realtimeState: LeaderboardRealtimeState = .empty
 
     func readScores(for key: LeaderboardScoresCacheKey) async -> LeaderboardCachedScores? {
         scoresByKey[key]
@@ -752,5 +883,51 @@ private actor FakeLeaderboardLocalStore: LeaderboardLocalStoring {
 
     func writeSyncState(_ state: LeaderboardLocalSyncState) async {
         syncState = state
+    }
+
+    func readRealtimeState() async -> LeaderboardRealtimeState {
+        realtimeState
+    }
+
+    func writeRealtimeState(_ state: LeaderboardRealtimeState) async {
+        realtimeState = state
+    }
+}
+
+private actor FakeLeaderboardRealtimeCloudService: LeaderboardRealtimeCloudServicing {
+    private var ensured: [LeaderboardRealtimeScope] = []
+    private var cleanupScopes: [Set<LeaderboardRealtimeScope>] = []
+    private var ensureError: Error?
+
+    func setEnsureError(_ error: Error?) {
+        ensureError = error
+    }
+
+    func ensuredScopes() -> [LeaderboardRealtimeScope] {
+        ensured
+    }
+
+    func cleanupKeepScopes() -> [Set<LeaderboardRealtimeScope>] {
+        cleanupScopes
+    }
+
+    func ensureSubscription(for scope: LeaderboardRealtimeScope) async throws {
+        if let ensureError {
+            throw ensureError
+        }
+        ensured.append(scope)
+    }
+
+    func deleteManagedSubscriptions(except scopes: Set<LeaderboardRealtimeScope>) async {
+        cleanupScopes.append(scopes)
+    }
+}
+
+@MainActor
+private final class FakeLeaderboardRemoteNotificationRegistrar: LeaderboardRemoteNotificationRegistering {
+    private(set) var registrationCount = 0
+
+    func registerForLeaderboardRemoteNotifications() {
+        registrationCount += 1
     }
 }

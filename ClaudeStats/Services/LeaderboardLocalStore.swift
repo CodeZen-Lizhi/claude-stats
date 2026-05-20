@@ -10,6 +10,8 @@ protocol LeaderboardLocalStoring: Sendable {
     func writeProfile(_ profile: LeaderboardProfile, savedAt: Date) async
     func readSyncState() async -> LeaderboardLocalSyncState
     func writeSyncState(_ state: LeaderboardLocalSyncState) async
+    func readRealtimeState() async -> LeaderboardRealtimeState
+    func writeRealtimeState(_ state: LeaderboardRealtimeState) async
 }
 
 struct LeaderboardScoresCacheKey: Codable, Hashable, Sendable {
@@ -114,6 +116,11 @@ actor LeaderboardLocalStore: LeaderboardLocalStoring {
         let state: LeaderboardLocalSyncState
     }
 
+    private struct RealtimeStateEnvelope: Codable, Sendable {
+        let schemaVersion: Int
+        let state: LeaderboardRealtimeState
+    }
+
     private let directory: URL
     private let schemaVersion: Int
 
@@ -191,6 +198,32 @@ actor LeaderboardLocalStore: LeaderboardLocalStoring {
         }
     }
 
+    func readRealtimeState() async -> LeaderboardRealtimeState {
+        guard FileManager.default.fileExists(atPath: realtimeStateURL.path),
+              let data = try? Data(contentsOf: realtimeStateURL) else {
+            return .empty
+        }
+        do {
+            let envelope = try decoder.decode(RealtimeStateEnvelope.self, from: data)
+            guard envelope.schemaVersion == schemaVersion else { return .empty }
+            return envelope.state
+        } catch {
+            Log.network.error("Leaderboard realtime state decode failed: \(error.localizedDescription, privacy: .public)")
+            return .empty
+        }
+    }
+
+    func writeRealtimeState(_ state: LeaderboardRealtimeState) async {
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let envelope = RealtimeStateEnvelope(schemaVersion: schemaVersion, state: state)
+            let data = try encoder.encode(envelope)
+            try data.write(to: realtimeStateURL, options: .atomic)
+        } catch {
+            Log.network.error("Leaderboard realtime state write failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     private func read<Key: Codable & Equatable & Sendable, Payload: Codable & Sendable>(
         bucket: Bucket,
         key: Key
@@ -236,6 +269,10 @@ actor LeaderboardLocalStore: LeaderboardLocalStoring {
 
     private var syncStateURL: URL {
         directory.appendingPathComponent("sync-state.json", isDirectory: false)
+    }
+
+    private var realtimeStateURL: URL {
+        directory.appendingPathComponent("realtime-state.json", isDirectory: false)
     }
 
     private func digest<Key: Encodable>(for key: Key) -> String {
