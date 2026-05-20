@@ -85,6 +85,77 @@ enum AIConfigsFilter: String, CaseIterable, Sendable, Hashable, Identifiable {
     }
 }
 
+enum AIConfigsSection: String, CaseIterable, Sendable, Hashable, Identifiable {
+    case overview
+    case instructions
+    case provider
+    case plans
+    case plugins
+    case diagnostics
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .overview: "Overview"
+        case .instructions: "Instructions"
+        case .provider: "Provider"
+        case .plans: "Plans"
+        case .plugins: "Plugins"
+        case .diagnostics: "Diagnostics"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .overview: "square.grid.2x2"
+        case .instructions: AIConfigDocumentKind.instruction.symbol
+        case .provider: AIConfigDocumentKind.providerConfig.symbol
+        case .plans: AIConfigDocumentKind.plan.symbol
+        case .plugins: AIConfigDocumentKind.pluginConfig.symbol
+        case .diagnostics: "exclamationmark.triangle"
+        }
+    }
+
+    var detailTitle: String {
+        switch self {
+        case .overview: "AI configs"
+        case .instructions: "Instructions"
+        case .provider: "Provider configs"
+        case .plans: "Plans"
+        case .plugins: "Plugins"
+        case .diagnostics: "Diagnostics"
+        }
+    }
+
+    var detailDescription: String {
+        switch self {
+        case .overview:
+            "Review Claude and Codex configuration coverage, plan ownership, and file health."
+        case .instructions:
+            "Inspect global and project instruction files such as CLAUDE.md and AGENTS.md."
+        case .provider:
+            "Inspect provider settings and local configuration files without editing them."
+        case .plans:
+            "Review discovered markdown plans and their best-effort project assignment."
+        case .plugins:
+            "Inspect plugin manifests and configuration metadata discovered for AI tools."
+        case .diagnostics:
+            "Focus on malformed or skipped configuration files that need attention."
+        }
+    }
+
+    var documentKind: AIConfigDocumentKind? {
+        switch self {
+        case .instructions: .instruction
+        case .provider: .providerConfig
+        case .plans: .plan
+        case .plugins: .pluginConfig
+        case .overview, .diagnostics: nil
+        }
+    }
+}
+
 enum AIConfigSourceLocation: Sendable, Hashable {
     case global
     case project(path: String)

@@ -2,6 +2,7 @@ import SwiftUI
 
 enum MainWindowMode: String, Sendable {
     case app
+    case configs
     case settings
     case network
     case ops
@@ -9,6 +10,7 @@ enum MainWindowMode: String, Sendable {
 
 enum MainWindowMotion {
     static let appSidebarWidth: CGFloat = 240
+    static let configsSidebarWidth: CGFloat = 240
     static let settingsSidebarWidth: CGFloat = 220
     static let networkSidebarWidth: CGFloat = 240
     static let opsSidebarWidth: CGFloat = 240
@@ -33,6 +35,13 @@ enum MainWindowMotion {
         )
     }
 
+    static var configsDetailTransition: AnyTransition {
+        .asymmetric(
+            insertion: .offset(x: detailOffset).combined(with: .opacity),
+            removal: .offset(x: detailOffset).combined(with: .opacity)
+        )
+    }
+
     static var networkDetailTransition: AnyTransition {
         .asymmetric(
             insertion: .offset(x: detailOffset).combined(with: .opacity),
@@ -49,18 +58,20 @@ enum MainWindowMotion {
 }
 
 /// Stable two-column shell for the main window. The sidebar column is a clipped
-/// deck that slides between app, settings, network, and ops navigation while the detail panel
+/// deck that slides between app, configs, settings, network, and ops navigation while the detail panel
 /// stays mounted so its leading boundary can move with the sidebar width.
-struct MainWindowModeShell<AppSidebar: View, SettingsSidebar: View, NetworkSidebar: View, OpsSidebar: View, AppDetail: View, SettingsDetail: View, NetworkDetail: View, OpsDetail: View>: View {
+struct MainWindowModeShell<AppSidebar: View, ConfigsSidebar: View, SettingsSidebar: View, NetworkSidebar: View, OpsSidebar: View, AppDetail: View, ConfigsDetail: View, SettingsDetail: View, NetworkDetail: View, OpsDetail: View>: View {
     let mode: MainWindowMode
     let sidebarVisible: Bool
     let boundaryFalloffEnabled: Bool
 
     private let appSidebar: AppSidebar
+    private let configsSidebar: ConfigsSidebar
     private let settingsSidebar: SettingsSidebar
     private let networkSidebar: NetworkSidebar
     private let opsSidebar: OpsSidebar
     private let appDetail: AppDetail
+    private let configsDetail: ConfigsDetail
     private let settingsDetail: SettingsDetail
     private let networkDetail: NetworkDetail
     private let opsDetail: OpsDetail
@@ -70,10 +81,12 @@ struct MainWindowModeShell<AppSidebar: View, SettingsSidebar: View, NetworkSideb
         sidebarVisible: Bool,
         boundaryFalloffEnabled: Bool,
         @ViewBuilder appSidebar: () -> AppSidebar,
+        @ViewBuilder configsSidebar: () -> ConfigsSidebar,
         @ViewBuilder settingsSidebar: () -> SettingsSidebar,
         @ViewBuilder networkSidebar: () -> NetworkSidebar,
         @ViewBuilder opsSidebar: () -> OpsSidebar,
         @ViewBuilder appDetail: () -> AppDetail,
+        @ViewBuilder configsDetail: () -> ConfigsDetail,
         @ViewBuilder settingsDetail: () -> SettingsDetail,
         @ViewBuilder networkDetail: () -> NetworkDetail,
         @ViewBuilder opsDetail: () -> OpsDetail
@@ -82,10 +95,12 @@ struct MainWindowModeShell<AppSidebar: View, SettingsSidebar: View, NetworkSideb
         self.sidebarVisible = sidebarVisible
         self.boundaryFalloffEnabled = boundaryFalloffEnabled
         self.appSidebar = appSidebar()
+        self.configsSidebar = configsSidebar()
         self.settingsSidebar = settingsSidebar()
         self.networkSidebar = networkSidebar()
         self.opsSidebar = opsSidebar()
         self.appDetail = appDetail()
+        self.configsDetail = configsDetail()
         self.settingsDetail = settingsDetail()
         self.networkDetail = networkDetail()
         self.opsDetail = opsDetail()
@@ -110,6 +125,8 @@ struct MainWindowModeShell<AppSidebar: View, SettingsSidebar: View, NetworkSideb
         switch mode {
         case .app:
             sidebarVisible ? MainWindowMotion.appSidebarWidth : 0
+        case .configs:
+            sidebarVisible ? MainWindowMotion.configsSidebarWidth : 0
         case .settings:
             MainWindowMotion.settingsSidebarWidth
         case .network:
@@ -123,18 +140,22 @@ struct MainWindowModeShell<AppSidebar: View, SettingsSidebar: View, NetworkSideb
         switch mode {
         case .app:
             0
-        case .settings:
+        case .configs:
             -MainWindowMotion.appSidebarWidth
+        case .settings:
+            -(MainWindowMotion.appSidebarWidth + MainWindowMotion.configsSidebarWidth)
         case .network:
-            -(MainWindowMotion.appSidebarWidth + MainWindowMotion.settingsSidebarWidth)
+            -(MainWindowMotion.appSidebarWidth + MainWindowMotion.configsSidebarWidth + MainWindowMotion.settingsSidebarWidth)
         case .ops:
-            -(MainWindowMotion.appSidebarWidth + MainWindowMotion.settingsSidebarWidth + MainWindowMotion.networkSidebarWidth)
+            -(MainWindowMotion.appSidebarWidth + MainWindowMotion.configsSidebarWidth + MainWindowMotion.settingsSidebarWidth + MainWindowMotion.networkSidebarWidth)
         }
     }
 
     private var detailRoundedLeading: Bool {
         switch mode {
         case .app:
+            return sidebarVisible
+        case .configs:
             return sidebarVisible
         case .settings:
             return true
@@ -147,6 +168,10 @@ struct MainWindowModeShell<AppSidebar: View, SettingsSidebar: View, NetworkSideb
 
     private var appSidebarIsActive: Bool {
         mode == .app && sidebarVisible
+    }
+
+    private var configsSidebarIsActive: Bool {
+        mode == .configs && sidebarVisible
     }
 
     private var settingsSidebarIsActive: Bool {
@@ -169,6 +194,12 @@ struct MainWindowModeShell<AppSidebar: View, SettingsSidebar: View, NetworkSideb
                 .allowsHitTesting(appSidebarIsActive)
                 .accessibilityHidden(!appSidebarIsActive)
 
+            configsSidebar
+                .frame(width: MainWindowMotion.configsSidebarWidth)
+                .opacity(sidebarVisible ? 1 : 0)
+                .allowsHitTesting(configsSidebarIsActive)
+                .accessibilityHidden(!configsSidebarIsActive)
+
             settingsSidebar
                 .frame(width: MainWindowMotion.settingsSidebarWidth)
                 .allowsHitTesting(settingsSidebarIsActive)
@@ -187,7 +218,7 @@ struct MainWindowModeShell<AppSidebar: View, SettingsSidebar: View, NetworkSideb
                 .accessibilityHidden(!opsSidebarIsActive)
         }
         .frame(
-            width: MainWindowMotion.appSidebarWidth + MainWindowMotion.settingsSidebarWidth + MainWindowMotion.networkSidebarWidth + MainWindowMotion.opsSidebarWidth,
+            width: MainWindowMotion.appSidebarWidth + MainWindowMotion.configsSidebarWidth + MainWindowMotion.settingsSidebarWidth + MainWindowMotion.networkSidebarWidth + MainWindowMotion.opsSidebarWidth,
             alignment: .leading
         )
         .offset(x: sidebarDeckOffset)
@@ -200,6 +231,10 @@ struct MainWindowModeShell<AppSidebar: View, SettingsSidebar: View, NetworkSideb
             case .app:
                 appDetail
                     .transition(MainWindowMotion.appDetailTransition)
+                    .zIndex(1)
+            case .configs:
+                configsDetail
+                    .transition(MainWindowMotion.configsDetailTransition)
                     .zIndex(1)
             case .settings:
                 settingsDetail
@@ -228,6 +263,13 @@ struct MainWindowModeShell<AppSidebar: View, SettingsSidebar: View, NetworkSideb
             Text("Settings")
         }
         .padding()
+    } configsSidebar: {
+        VStack(alignment: .leading) {
+            Text("Back")
+            Text("Overview")
+            Spacer()
+        }
+        .padding()
     } settingsSidebar: {
         VStack(alignment: .leading) {
             Text("Back")
@@ -251,6 +293,8 @@ struct MainWindowModeShell<AppSidebar: View, SettingsSidebar: View, NetworkSideb
         .padding()
     } appDetail: {
         Color.stxBackground.overlay(Text("App Detail"))
+    } configsDetail: {
+        Color.stxBackground.overlay(Text("Configs Detail"))
     } settingsDetail: {
         Color.stxBackground.overlay(Text("Settings Detail"))
     } networkDetail: {

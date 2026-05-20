@@ -31,15 +31,21 @@ struct UsageSummary: Sendable, Hashable {
     /// approximation: a session straddling the boundary is counted whole).
     /// The timeline buckets come from the sessions that count, clipped to the
     /// period's lower bound.
-    static func make(period: StatsPeriod, sessions: [Session], pricing: ModelPricing, now: Date = .now) -> UsageSummary {
+    static func make(
+        period: StatsPeriod,
+        sessions: [Session],
+        pricing: ModelPricing,
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) -> UsageSummary {
         let inPeriod = sessions.filter { session in
             let when = session.stats?.lastActivity ?? session.lastModified
-            return period.contains(when, now: now)
+            return period.contains(when, now: now, calendar: calendar)
         }
         let allModels = inPeriod.flatMap { $0.stats?.models ?? [] }.merged(pricing: pricing)
         let messageCount = inPeriod.reduce(0) { $0 + ($1.stats?.messageCount ?? 0) }
-        let allTimeline = inPeriod.flatMap { $0.stats?.timeline ?? [] }
-            .filter { period.contains($0.start, now: now) }
+        let allTimeline = timelineBuckets(for: inPeriod, calendar: calendar)
+            .filter { period.contains($0.start, now: now, calendar: calendar) }
             .mergedByModelBucket()
         return UsageSummary(period: period, sessionCount: inPeriod.count, models: allModels, messageCount: messageCount, timeline: allTimeline)
     }
@@ -60,10 +66,26 @@ struct UsageSummary: Sendable, Hashable {
         }
         let allModels = inRange.flatMap { $0.stats?.models ?? [] }.merged(pricing: pricing)
         let messageCount = inRange.reduce(0) { $0 + ($1.stats?.messageCount ?? 0) }
-        let allTimeline = inRange.flatMap { $0.stats?.timeline ?? [] }
+        let allTimeline = timelineBuckets(for: inRange, calendar: calendar)
             .filter { $0.start >= lo && $0.start < hiExclusive }
             .mergedByModelBucket()
         return UsageSummary(period: .allTime, sessionCount: inRange.count, models: allModels, messageCount: messageCount, timeline: allTimeline)
+    }
+
+    private static func timelineBuckets(for sessions: [Session], calendar: Calendar) -> [ModelBucket] {
+        sessions.flatMap { timelineBuckets(for: $0, calendar: calendar) }
+    }
+
+    private static func timelineBuckets(for session: Session, calendar: Calendar) -> [ModelBucket] {
+        guard let stats = session.stats else { return [] }
+        guard stats.timeline.isEmpty else { return stats.timeline }
+
+        let activityDate = stats.lastActivity ?? session.lastModified
+        let bucketStart = calendar.dateInterval(of: .hour, for: activityDate)?.start ?? activityDate
+        return stats.models.compactMap { model in
+            guard model.usage.total > 0 else { return nil }
+            return ModelBucket(model: model.model, start: bucketStart, usage: model.usage)
+        }
     }
 
     /// Per-model series for the trend chart: hourly across *today* for

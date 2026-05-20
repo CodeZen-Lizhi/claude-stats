@@ -7,14 +7,13 @@ import SwiftUI
 /// whose project/session rows drive a separate ``Session`` selection that
 /// overrides the page detail.
 enum MainPage: String, CaseIterable, Identifiable, Sendable {
-    case dashboard, configurations, configs, usage, leaderboards, activity, git, system, skills, terminal
+    case dashboard, configurations, usage, leaderboards, activity, git, system, skills, terminal
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .dashboard: L10n.string("main_page.dashboard", defaultValue: "Dashboard")
         case .configurations: L10n.string("main_page.switcher", defaultValue: "Switcher")
-        case .configs: "Configs"
         case .usage: L10n.string("main_page.usage", defaultValue: "Usage")
         case .leaderboards: L10n.string("main_page.leaderboards", defaultValue: "Leaderboards")
         case .activity: L10n.string("main_page.activity", defaultValue: "Activity")
@@ -29,7 +28,6 @@ enum MainPage: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .dashboard: "square.grid.2x2"
         case .configurations: "slider.horizontal.3"
-        case .configs: "doc.text.magnifyingglass"
         case .usage: "chart.bar.xaxis"
         case .leaderboards: "trophy"
         case .activity: "waveform"
@@ -60,6 +58,10 @@ struct MainWindowView: View {
     @SceneStorage("mainWindow.sidebarVisible") private var sidebarVisible: Bool = true
     @SceneStorage("mainWindow.mode") private var modeRaw: String = MainWindowMode.app.rawValue
     @SceneStorage("mainWindow.settingsSection") private var settingsSectionRaw: String = SettingsSection.general.rawValue
+    @SceneStorage("mainWindow.configsSection") private var configsSectionRaw: String = AIConfigsSection.overview.rawValue
+    @SceneStorage("mainWindow.configsSearch") private var configsSearchText: String = ""
+    @SceneStorage("mainWindow.configsProjectID") private var configsProjectIDRaw: String = ""
+    @SceneStorage("mainWindow.configsDocumentID") private var configsDocumentIDRaw: String = ""
     @SceneStorage("mainWindow.networkSection") private var networkSectionRaw: String = NetworkSection.traffic.rawValue
     @SceneStorage("mainWindow.opsSection") private var opsSectionRaw: String = OpsSection.ports.rawValue
     @State private var page: MainPage = .dashboard
@@ -72,7 +74,7 @@ struct MainWindowView: View {
     @State private var trafficLights = TrafficLightPositioner()
 
     private var availablePages: [MainPage] {
-        var pages: [MainPage] = [.dashboard, .configurations, .configs, .usage, .leaderboards]
+        var pages: [MainPage] = [.dashboard, .configurations, .usage, .leaderboards]
         if env.preferences.aiActivityAnalysisEnabled { pages.append(.activity) }
         if env.preferences.gitTrackingEnabled { pages.append(.git) }
         if env.preferences.systemMonitorEnabled { pages.append(.system) }
@@ -96,6 +98,10 @@ struct MainWindowView: View {
         SettingsSection(rawValue: settingsSectionRaw) ?? .general
     }
 
+    private var configsSection: AIConfigsSection {
+        AIConfigsSection(rawValue: configsSectionRaw) ?? .overview
+    }
+
     private var networkSection: NetworkSection {
         NetworkSection(storedRawValue: networkSectionRaw)
     }
@@ -108,6 +114,34 @@ struct MainWindowView: View {
         Binding(
             get: { settingsSection },
             set: { settingsSectionRaw = $0.rawValue }
+        )
+    }
+
+    private var configsSectionBinding: Binding<AIConfigsSection> {
+        Binding(
+            get: { configsSection },
+            set: { configsSectionRaw = $0.rawValue }
+        )
+    }
+
+    private var configsSearchBinding: Binding<String> {
+        Binding(
+            get: { configsSearchText },
+            set: { configsSearchText = $0 }
+        )
+    }
+
+    private var configsProjectIDBinding: Binding<String> {
+        Binding(
+            get: { configsProjectIDRaw },
+            set: { configsProjectIDRaw = $0 }
+        )
+    }
+
+    private var configsDocumentIDBinding: Binding<String> {
+        Binding(
+            get: { configsDocumentIDRaw },
+            set: { configsDocumentIDRaw = $0 }
         )
     }
 
@@ -140,8 +174,15 @@ struct MainWindowView: View {
                     sessionsExpanded: $sessionsExpanded,
                     availablePages: availablePages,
                     onOpenSettings: openSettings,
+                    onOpenConfigs: openConfigs,
                     onOpenNetwork: openNetwork,
                     onOpenOps: openOps
+                )
+            } configsSidebar: {
+                AIConfigsSidebarColumn(
+                    section: configsSectionBinding,
+                    searchText: configsSearchBinding,
+                    onExit: closeConfigs
                 )
             } settingsSidebar: {
                 SettingsSidebarColumn(section: settingsSectionBinding, onExit: closeSettings)
@@ -151,6 +192,13 @@ struct MainWindowView: View {
                 OpsSidebarColumn(section: opsSectionBinding, onExit: closeOps)
             } appDetail: {
                 detail
+            } configsDetail: {
+                AIConfigsDetailView(
+                    section: configsSection,
+                    searchText: configsSearchText,
+                    selectedProjectID: configsProjectIDBinding,
+                    selectedDocumentID: configsDocumentIDBinding
+                )
             } settingsDetail: {
                 SettingsDetailView(section: settingsSection, onSelectSection: selectSettingsSection)
             } networkDetail: {
@@ -164,7 +212,7 @@ struct MainWindowView: View {
                     .onTapGesture { clearTextFocus() }
             }
 
-            if mode == .app || mode == .network || mode == .ops {
+            if mode == .app || mode == .configs || mode == .network || mode == .ops {
                 sidebarToggle
                     .padding(.leading, 81)
                     .padding(.top, 11)
@@ -243,8 +291,6 @@ struct MainWindowView: View {
                 DashboardView()
             case .configurations:
                 ConfigurationsView()
-            case .configs:
-                AIConfigsView()
             case .usage:
                 MainUsageView()
             case .leaderboards:
@@ -282,6 +328,11 @@ struct MainWindowView: View {
         settingsSectionRaw = section.rawValue
     }
 
+    private func openConfigs() {
+        selectedSessionID = nil
+        transition(to: .configs)
+    }
+
     private func openNetwork() {
         selectedSessionID = nil
         transition(to: .network)
@@ -293,6 +344,10 @@ struct MainWindowView: View {
     }
 
     private func closeSettings() {
+        transition(to: .app)
+    }
+
+    private func closeConfigs() {
         transition(to: .app)
     }
 

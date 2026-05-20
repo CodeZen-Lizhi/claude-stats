@@ -21,6 +21,7 @@ struct SidebarColumn: View {
     @Binding var sessionsExpanded: Bool
     var availablePages: [MainPage]
     var onOpenSettings: () -> Void
+    var onOpenConfigs: () -> Void
     var onOpenNetwork: () -> Void
     var onOpenOps: () -> Void
 
@@ -42,7 +43,16 @@ struct SidebarColumn: View {
 
             sectionHeader("TOOLS")
             navRow(.configurations)
-            navRow(.configs)
+            SidebarRow(
+                title: "Configs",
+                symbol: "doc.text.magnifyingglass",
+                isSelected: false,
+                trailingSymbol: "chevron.right",
+                showsTrailingOnHover: true
+            ) {
+                clearSearchFocus()
+                onOpenConfigs()
+            }
             if env.preferences.gitTrackingEnabled { navRow(.git) }
             if env.preferences.systemMonitorEnabled { navRow(.system) }
             navRow(.skills)
@@ -466,8 +476,9 @@ private struct HeaderIconButton: View {
         page: $page,
         selectedSessionID: $sessionID,
         sessionsExpanded: .constant(false),
-        availablePages: [.dashboard, .configurations, .configs, .usage, .activity, .git],
+        availablePages: [.dashboard, .configurations, .usage, .activity, .git],
         onOpenSettings: {},
+        onOpenConfigs: {},
         onOpenNetwork: {},
         onOpenOps: {}
     )

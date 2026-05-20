@@ -40,6 +40,31 @@ struct UsageSummaryTests {
                        filePath: "/\(id).jsonl", cwd: nil, lastModified: when, fileSize: 1, stats: stats)
     }
 
+    private func legacySession(
+        _ id: String,
+        daysAgo n: Int,
+        hour: Int,
+        models: [ModelUsage],
+        timeline: [ModelBucket] = []
+    ) -> Session {
+        let dayStart = cal.startOfDay(for: cal.date(byAdding: .day, value: -n, to: .now)!)
+        let when = cal.date(byAdding: .hour, value: hour, to: dayStart)!
+        let stats = SessionStats(
+            title: id,
+            messageCount: 1,
+            firstActivity: when,
+            lastActivity: when,
+            models: models,
+            timeline: timeline
+        )
+        return Session(id: id, externalID: id, provider: .claude, projectDirectoryName: "-p",
+                       filePath: "/\(id).jsonl", cwd: nil, lastModified: when, fileSize: 1, stats: stats)
+    }
+
+    private func model(_ name: String, count: Int) -> ModelUsage {
+        ModelUsage(model: name, messageCount: 1, usage: tokens(count), pricing: TestPricing.table)
+    }
+
     @Test("Only sessions inside the [start, end] day range count")
     func filtersByRange() {
         let sessions = [
@@ -104,6 +129,78 @@ struct UsageSummaryTests {
         #expect(summary.totalCost(for: .detailedBilling) == 3.5)
     }
 
+    @Test("Legacy sessions without timeline generate fallback trend buckets")
+    func legacySessionsWithoutTimelineGenerateFallbackBuckets() {
+        let sessions = [
+            legacySession("legacy", daysAgo: 1, hour: 13, models: [
+                model("model-a", count: 100),
+                model("model-b", count: 250),
+            ]),
+        ]
+
+        let summary = UsageSummary.make(period: .allTime, sessions: sessions, pricing: TestPricing.table)
+        let expectedStart = cal.dateInterval(of: .hour, for: sessions[0].lastModified)!.start
+        let series = summary.trendSeries()
+
+        #expect(summary.timeline.count == 2)
+        #expect(Set(summary.timeline.map(\.start)) == [expectedStart])
+        #expect(summary.timeline.totalTokens == 350)
+        #expect(series.models == ["model-b", "model-a"])
+        #expect(series.isEmpty == false)
+    }
+
+    @Test("Fallback buckets follow selected period filters")
+    func fallbackBucketsFollowSelectedPeriodFilters() {
+        let sessions = [
+            legacySession("today", daysAgo: 0, hour: 1, models: [model("model-a", count: 120)]),
+            legacySession("old", daysAgo: 2, hour: 1, models: [model("model-a", count: 900)]),
+        ]
+
+        let summary = UsageSummary.make(period: .today, sessions: sessions, pricing: TestPricing.table)
+
+        #expect(summary.sessionCount == 1)
+        #expect(summary.totalTokens == 120)
+        #expect(summary.timeline.totalTokens == 120)
+        #expect(summary.trendSeries().isEmpty == false)
+    }
+
+    @Test("Fallback buckets follow custom range filters")
+    func fallbackBucketsFollowCustomRangeFilters() {
+        let sessions = [
+            legacySession("inside", daysAgo: 3, hour: 1, models: [model("model-a", count: 120)]),
+            legacySession("outside", daysAgo: 9, hour: 1, models: [model("model-a", count: 900)]),
+        ]
+        let start = cal.date(byAdding: .day, value: -4, to: .now)!
+        let end = cal.date(byAdding: .day, value: -2, to: .now)!
+
+        let summary = UsageSummary.makeCustom(start: start, end: end, sessions: sessions, pricing: TestPricing.table)
+
+        #expect(summary.sessionCount == 1)
+        #expect(summary.totalTokens == 120)
+        #expect(summary.timeline.totalTokens == 120)
+        #expect(summary.trendSeries().isEmpty == false)
+    }
+
+    @Test("Existing timeline is not double counted by model fallback")
+    func existingTimelineIsNotDoubleCounted() {
+        let bucketStart = cal.date(byAdding: .hour, value: 9, to: cal.startOfDay(for: .now))!
+        let sessions = [
+            legacySession(
+                "timeline",
+                daysAgo: 0,
+                hour: 10,
+                models: [model("model-a", count: 999)],
+                timeline: [ModelBucket(model: "model-a", start: bucketStart, usage: tokens(100))]
+            ),
+        ]
+
+        let summary = UsageSummary.make(period: .allTime, sessions: sessions, pricing: TestPricing.table)
+
+        #expect(summary.totalTokens == 999)
+        #expect(summary.timeline.count == 1)
+        #expect(summary.timeline.totalTokens == 100)
+    }
+
     @MainActor
     @Test("Usage derived data is keyed by data inputs, not layout")
     func usageDerivedDataKeyedByDataInputs() {
@@ -124,5 +221,36 @@ struct UsageSummaryTests {
         #expect(key == UsageDerivedData.Key(period: .allTime, provider: .claude, lastRefreshedAt: store.lastRefreshedAt))
         #expect(key != UsageDerivedData.Key(period: .last7Days, provider: .claude, lastRefreshedAt: store.lastRefreshedAt))
         #expect(key != UsageDerivedData.Key(period: .allTime, provider: .codex, lastRefreshedAt: store.lastRefreshedAt))
+    }
+
+    @MainActor
+    @Test("Usage derived data and model breakdown handle legacy sessions without timeline")
+    func usageDerivedDataHandlesLegacySessionsWithoutTimeline() {
+        let store = SessionStore(registry: ProviderRegistry(pricing: TestPricing.table), pricing: TestPricing.table)
+        store.loadPreviewSessions([
+            legacySession("legacy-derived", daysAgo: 0, hour: 10, models: [model("model-a", count: 120)]),
+        ])
+        let key = UsageDerivedData.Key(
+            period: .allTime,
+            provider: .claude,
+            lastRefreshedAt: store.lastRefreshedAt
+        )
+
+        let data = UsageDerivedData.make(key: key, store: store)
+        let breakdown = UsageModelBreakdownSnapshot(
+            key: UsageModelBreakdownSnapshot.Key(
+                seriesID: data.key.chartSeriesID,
+                includeCacheInTokens: true,
+                costEstimationMode: .standardAPI
+            ),
+            models: data.summary.models,
+            series: data.series,
+            displayName: { $0 }
+        )
+
+        #expect(data.summary.totalTokens == 120)
+        #expect(data.series.models == ["model-a"])
+        #expect(data.series.isEmpty == false)
+        #expect(breakdown.rows.map(\.id) == ["model-a"])
     }
 }

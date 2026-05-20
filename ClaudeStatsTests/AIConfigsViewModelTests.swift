@@ -20,6 +20,8 @@ struct AIConfigsViewModelTests {
         try TempDir.write("Project path: \(alpha.path)\n- [ ] Alpha plan\n", to: claudeHome.appendingPathComponent("plans/alpha.md"))
         try TempDir.write("# Global\n", to: claudeHome.appendingPathComponent("CLAUDE.md"))
         try TempDir.write("model = \"gpt-5\"\n", to: codexHome.appendingPathComponent("config.toml"))
+        try TempDir.write(#"{"name":"fixture"}"#, to: codexHome.appendingPathComponent("plugins/fixture/plugin.json"))
+        try TempDir.write(#"{"broken": true"#, to: alpha.appendingPathComponent(".claude/settings.local.json"))
 
         let vm = AIConfigsViewModel(scanner: makeScanner(claudeHome: claudeHome, codexHome: codexHome))
         let sessions = [
@@ -35,12 +37,23 @@ struct AIConfigsViewModelTests {
         let planProjects = vm.filteredProjects(filter: .plans, query: "")
         #expect(planProjects.map(\.name) == ["Alpha"])
 
+        #expect(vm.count(for: .instructions) == 6)
+        #expect(vm.count(for: .provider) == 3)
+        #expect(vm.count(for: .plans) == 1)
+        #expect(vm.count(for: .plugins) == 1)
+        #expect(vm.count(for: .diagnostics) == 1)
+
+        let diagnosticProjects = vm.filteredProjects(section: .diagnostics, query: "settings.local")
+        #expect(diagnosticProjects.map(\.name) == ["Alpha"])
+
         let alphaID = try #require(alphaProjects.first?.id)
         #expect(vm.resolvedProjectID(current: alphaID, filter: .all, query: "alpha") == alphaID)
         #expect(vm.resolvedProjectID(current: alphaID, filter: .all, query: "beta") != alphaID)
+        #expect(vm.resolvedProjectID(current: alphaID, section: .diagnostics, query: "settings.local") == alphaID)
 
         let planID = try #require(vm.documents(in: planProjects.first, filter: .plans, query: "").first?.id)
         #expect(vm.resolvedDocumentID(current: planID, projectID: alphaID, filter: .plans, query: "") == planID)
+        #expect(vm.resolvedDocumentID(current: nil, projectID: alphaID, section: .plans, query: "") == planID)
 
         await vm.reload(sessions: sessions)
         #expect(vm.resolvedProjectID(current: alphaID, filter: .all, query: "alpha") == alphaID)
