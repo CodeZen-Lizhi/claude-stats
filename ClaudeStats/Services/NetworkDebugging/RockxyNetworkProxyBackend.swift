@@ -226,9 +226,11 @@ final class RockxyNetworkProxyBackend: NetworkProxyBackend, @unchecked Sendable 
         return NetworkFlow(
             id: transaction.id,
             number: transaction.sequenceNumber,
-            createdAt: transaction.timestamp,
+            createdAt: transaction.startedAt ?? transaction.timestamp,
             completedAt: completedAt(for: transaction),
-            clientName: transaction.clientApp ?? "Proxy Client",
+            clientName: transaction.clientApp ?? "",
+            sourcePort: transaction.sourcePort,
+            clientAttribution: clientAttribution(for: transaction),
             flowProtocol: flowProtocol(for: transaction),
             state: flowState(for: transaction),
             request: NetworkRequestCapture(
@@ -248,6 +250,7 @@ final class RockxyNetworkProxyBackend: NetworkProxyBackend, @unchecked Sendable 
                 kind: transaction.upstreamProxyKind ?? "Direct",
                 summary: transaction.upstreamProxySummary ?? "Direct"
             ),
+            establishmentDuration: transaction.establishmentDuration,
             matchedRuleName: transaction.matchedRuleName,
             matchedRuleSummary: transaction.matchedRuleActionSummary,
             matchedRulePattern: transaction.matchedRulePattern,
@@ -256,11 +259,27 @@ final class RockxyNetworkProxyBackend: NetworkProxyBackend, @unchecked Sendable 
     }
 
     private static func completedAt(for transaction: RockxyCapturedTransaction) -> Date? {
+        if let completedAt = transaction.completedAt {
+            return completedAt
+        }
         switch transaction.state {
         case .pending, .active:
-            nil
+            return nil
         case .completed, .failed, .blocked:
-            transaction.timestamp.addingTimeInterval(transaction.measuredDuration ?? 0)
+            return (transaction.startedAt ?? transaction.timestamp).addingTimeInterval(transaction.measuredDuration ?? 0)
+        }
+    }
+
+    private static func clientAttribution(for transaction: RockxyCapturedTransaction) -> NetworkClientAttribution {
+        switch transaction.clientAttribution {
+        case .process:
+            return .process
+        case .userAgent:
+            return .userAgent
+        case .unresolved:
+            return .unresolved
+        case nil:
+            return transaction.clientApp == nil ? .unresolved : .userAgent
         }
     }
 

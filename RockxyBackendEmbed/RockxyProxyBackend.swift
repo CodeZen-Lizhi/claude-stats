@@ -22,6 +22,7 @@ public actor RockxyProxyBackend {
         await stop()
         self.eventHandler = eventHandler
         sequenceCounter.reset()
+        ProcessResolver.shared.invalidateCache()
 
         var lastError: Error?
         for port in preferredPorts {
@@ -43,6 +44,7 @@ public actor RockxyProxyBackend {
         proxyServer = nil
         currentEndpoint = nil
         await server.stop()
+        ProcessResolver.shared.invalidateCache()
         eventHandler?(.stopped)
     }
 
@@ -84,19 +86,38 @@ public actor RockxyProxyBackend {
     private func start(on port: UInt16, eventHandler: @escaping EventHandler) async throws -> RockxyProxyEndpoint {
         let endpoint = RockxyProxyEndpoint(host: "127.0.0.1", port: port)
         let sequenceCounter = sequenceCounter
+        let proxyPort = Int(port)
         try? await ruleEngine.loadRules(from: ruleStore)
         await pluginManager.ensureLoadedOnce()
         let server = ProxyServer(
-            configuration: ProxyConfiguration(port: Int(port), listenAddress: endpoint.host, listenIPv6: false),
+            configuration: ProxyConfiguration(
+                port: Int(port),
+                listenAddress: endpoint.host,
+                listenIPv6: false,
+                upstreamProxy: currentUpstreamProxy.internalConfiguration(listenerEndpoint: endpoint)
+            ),
             certificateManager: .shared,
             ruleEngine: ruleEngine,
             scriptPluginManager: pluginManager.scriptManager,
             onTransactionComplete: { transaction in
-                let captured = RockxyTransactionMapper.captured(
-                    from: transaction,
-                    sequenceNumber: sequenceCounter.next()
-                )
+                let sequenceNumber = sequenceCounter.number(for: transaction.id)
+                let captured = RockxyTransactionMapper.captured(from: transaction, sequenceNumber: sequenceNumber)
                 eventHandler(.transaction(captured))
+                guard transaction.sourcePort != nil else {
+                    return
+                }
+                Task {
+                    guard let clientApp = await Self.resolveClientApp(for: transaction, proxyPort: proxyPort) else {
+                        return
+                    }
+                    guard transaction.clientApp != clientApp else {
+                        return
+                    }
+                    transaction.clientApp = clientApp
+                    transaction.clientAttribution = .process
+                    let enriched = RockxyTransactionMapper.captured(from: transaction, sequenceNumber: sequenceNumber)
+                    eventHandler(.transaction(enriched))
+                }
             },
             onBreakpointHit: { data in
                 await BreakpointManager.shared.enqueueAndWait(data)
@@ -117,6 +138,22 @@ public actor RockxyProxyBackend {
             eventHandler(.failed(error.localizedDescription))
             throw error
         }
+    }
+
+    private nonisolated static func resolveClientApp(
+        for transaction: HTTPTransaction,
+        proxyPort: Int
+    ) async -> String? {
+        guard let sourcePort = transaction.sourcePort else {
+            return nil
+        }
+        let portMap = await ProcessResolver.shared.resolveProcessesAsync(proxyPort: proxyPort)
+        guard let appName = portMap[sourcePort]?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !appName.isEmpty
+        else {
+            return nil
+        }
+        return appName
     }
 }
 
@@ -167,17 +204,23 @@ private extension RockxyUpstreamProxyKind {
 final class RockxySequenceCounter: @unchecked Sendable {
     private let lock = NSLock()
     private var value = 0
+    private var valueByTransactionID: [UUID: Int] = [:]
 
-    func next() -> Int {
+    func number(for transactionID: UUID) -> Int {
         lock.lock()
         defer { lock.unlock() }
+        if let existing = valueByTransactionID[transactionID] {
+            return existing
+        }
         value += 1
+        valueByTransactionID[transactionID] = value
         return value
     }
 
     func reset() {
         lock.lock()
         value = 0
+        valueByTransactionID.removeAll()
         lock.unlock()
     }
 }

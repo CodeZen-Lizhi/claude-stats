@@ -171,7 +171,7 @@ final class NetworkDebuggerStore: @unchecked Sendable {
 
     var trafficApps: [NetworkTrafficFilterGroup] {
         groupedFilters(
-            flows.map { $0.clientName.isEmpty ? "Unknown" : $0.clientName },
+            flows.map { $0.clientName.isEmpty ? "Proxy Client" : $0.clientName },
             symbol: "app"
         )
     }
@@ -228,7 +228,17 @@ final class NetworkDebuggerStore: @unchecked Sendable {
 
     var upstreamProxyMode: NetworkUpstreamProxyMode {
         get { preferences?.networkUpstreamProxyMode ?? .automatic }
-        set { preferences?.networkUpstreamProxyMode = newValue }
+        set {
+            let oldValue = upstreamProxyMode
+            preferences?.networkUpstreamProxyMode = newValue
+            guard oldValue != newValue else { return }
+            upstreamProxyTestResult = nil
+            upstreamRouteProbeResult = nil
+            if newValue == .off {
+                systemProxyStatus.upstreamProxySummary = nil
+            }
+            applyCurrentUpstreamProxy()
+        }
     }
 
     var askBeforeChainingExistingSystemProxy: Bool {
@@ -305,6 +315,11 @@ final class NetworkDebuggerStore: @unchecked Sendable {
                     }
                 }
                 captureStatus = .listening(endpoint)
+                do {
+                    try await applyResolvedUpstreamProxy(for: endpoint, statusPrefix: "Applied upstream")
+                } catch {
+                    upstreamProxyStatusMessage = error.localizedDescription
+                }
                 if preferences?.networkAutoEnableSystemProxyOnStart == true {
                     enableSystemProxy(autoTriggered: true)
                 }
@@ -955,12 +970,7 @@ final class NetworkDebuggerStore: @unchecked Sendable {
         Task { @MainActor in
             do {
                 let endpoint = listeningEndpoint ?? NetworkProxyEndpoint(host: "127.0.0.1", port: 9_090)
-                let settings = try await resolvedUpstreamProxySettings(endpoint: endpoint)
-                await proxyBackend.updateUpstreamProxy(settings)
-                systemProxyStatus.upstreamProxySummary = settings.isEnabled ? settings.summary : nil
-                upstreamProxyStatusMessage = settings.isEnabled
-                    ? "Applied upstream: \(settings.summary)"
-                    : "Upstream disabled. Rockxy will connect directly."
+                try await applyResolvedUpstreamProxy(for: endpoint, statusPrefix: "Applied upstream")
             } catch {
                 upstreamProxyStatusMessage = error.localizedDescription
             }
@@ -1225,7 +1235,7 @@ final class NetworkDebuggerStore: @unchecked Sendable {
         if trafficFilter.pinnedOnly, !flow.isPinned { return false }
         if trafficFilter.savedOnly, !flow.isSaved { return false }
         if !trafficFilter.protocols.isEmpty, !trafficFilter.protocols.contains(flow.flowProtocol) { return false }
-        if !trafficFilter.apps.isEmpty, !trafficFilter.apps.contains(flow.clientName.isEmpty ? "Unknown" : flow.clientName) { return false }
+        if !trafficFilter.apps.isEmpty, !trafficFilter.apps.contains(flow.clientName.isEmpty ? "Proxy Client" : flow.clientName) { return false }
         if !trafficFilter.domains.isEmpty, !trafficFilter.domains.contains(flow.domainDisplay) { return false }
         if !trafficFilter.methods.isEmpty, !trafficFilter.methods.contains(flow.methodDisplay) { return false }
         if !trafficFilter.statuses.isEmpty, !trafficFilter.statuses.contains(where: { $0.matches(flow) }) { return false }
@@ -1368,17 +1378,33 @@ final class NetworkDebuggerStore: @unchecked Sendable {
         autoTriggered: Bool,
         settings: NetworkUpstreamProxySettings
     ) async throws {
-        await proxyBackend.updateUpstreamProxy(settings)
+        await applyUpstreamProxySettings(settings, statusPrefix: "Chaining through")
         var status = try await systemProxyService.enable(endpoint: endpoint)
         status.upstreamProxySummary = settings.isEnabled ? settings.summary : nil
         systemProxyStatus = status
-        upstreamProxyStatusMessage = settings.isEnabled
-            ? "Chaining through \(settings.summary)"
-            : "No upstream proxy detected"
         if autoTriggered, status.isEnabled {
             autoEnabledSystemProxyForCurrentCapture = true
         }
         isSystemProxyWorking = false
+    }
+
+    private func applyResolvedUpstreamProxy(
+        for endpoint: NetworkProxyEndpoint,
+        statusPrefix: String
+    ) async throws {
+        let settings = try await resolvedUpstreamProxySettings(endpoint: endpoint)
+        await applyUpstreamProxySettings(settings, statusPrefix: statusPrefix)
+    }
+
+    private func applyUpstreamProxySettings(
+        _ settings: NetworkUpstreamProxySettings,
+        statusPrefix: String
+    ) async {
+        await proxyBackend.updateUpstreamProxy(settings)
+        systemProxyStatus.upstreamProxySummary = settings.isEnabled ? settings.summary : nil
+        upstreamProxyStatusMessage = settings.isEnabled
+            ? "\(statusPrefix) \(settings.summary)"
+            : "Upstream disabled. Rockxy will connect directly."
     }
 
     private func resolvedUpstreamProxySettings(endpoint: NetworkProxyEndpoint) async throws -> NetworkUpstreamProxySettings {
@@ -1388,9 +1414,6 @@ final class NetworkDebuggerStore: @unchecked Sendable {
         case .manual:
             return try await Self.loadPACScriptIfNeeded(manualUpstreamProxySettings())
         case .automatic:
-            if let profile = selectedUpstreamProfile, profile.settings.isEnabled {
-                return try await Self.loadPACScriptIfNeeded(materializedSettings(for: profile))
-            }
             guard let detected = try await systemProxyService.detectedUpstreamProxy(excluding: endpoint) else {
                 return .disabled
             }

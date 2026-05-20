@@ -661,7 +661,7 @@ struct NetworkUpstreamView: View {
     private var upstreamBadgeText: String {
         if store.upstreamProxyTestResult?.isReachable == true { return "Reachable" }
         if store.upstreamProxyTestResult?.isReachable == false { return "Failed" }
-        if store.systemProxyStatus.upstreamProxySummary != nil { return "Chained" }
+        if store.systemProxyStatus.isEnabled, store.systemProxyStatus.upstreamProxySummary != nil { return "Chained" }
         return store.upstreamProxyMode == .off ? "Direct" : "Ready"
     }
 
@@ -674,10 +674,11 @@ struct NetworkUpstreamView: View {
     private var upstreamBadgeTint: Color {
         if store.upstreamProxyTestResult?.isReachable == true { return .green }
         if store.upstreamProxyTestResult?.isReachable == false { return .red }
-        return store.systemProxyStatus.upstreamProxySummary != nil ? .green : Color.stxMuted
+        return store.systemProxyStatus.isEnabled && store.systemProxyStatus.upstreamProxySummary != nil ? .green : Color.stxMuted
     }
 
     private var routeSummary: String {
+        if store.upstreamProxyMode == .off { return "Direct" }
         if let summary = store.systemProxyStatus.upstreamProxySummary { return summary }
         switch store.upstreamProxyMode {
         case .automatic:

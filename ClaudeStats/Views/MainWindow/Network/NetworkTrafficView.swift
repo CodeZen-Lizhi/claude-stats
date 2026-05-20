@@ -443,6 +443,15 @@ private struct NetworkNativeTrafficTable: NSViewRepresentable {
         }
 
         private func reusableCell(in tableView: NSTableView, for column: NetworkTrafficColumn) -> NSTableCellView {
+            if column == .client {
+                if let cell = tableView.makeView(withIdentifier: column.identifier, owner: self) as? NetworkClientTableCellView {
+                    return cell
+                }
+                let cell = NetworkClientTableCellView()
+                cell.identifier = column.identifier
+                return cell
+            }
+
             if let cell = tableView.makeView(withIdentifier: column.identifier, owner: self) as? NSTableCellView {
                 return cell
             }
@@ -468,6 +477,15 @@ private struct NetworkNativeTrafficTable: NSViewRepresentable {
         }
 
         private func configure(_ cell: NSTableCellView, column: NetworkTrafficColumn, flow: NetworkFlow) {
+            if column == .client, let clientCell = cell as? NetworkClientTableCellView {
+                clientCell.configure(
+                    clientName: flow.clientName,
+                    font: column.font(for: flow),
+                    textColor: column.textColor(for: flow)
+                )
+                return
+            }
+
             guard let textField = cell.textField else { return }
             textField.stringValue = column.value(for: flow)
             textField.alignment = column.alignment
@@ -475,6 +493,228 @@ private struct NetworkNativeTrafficTable: NSViewRepresentable {
             textField.textColor = column.textColor(for: flow)
             textField.lineBreakMode = column == .url ? .byTruncatingMiddle : .byTruncatingTail
         }
+    }
+}
+
+private final class NetworkClientTableCellView: NSTableCellView {
+    private let iconView = NSImageView()
+    private let fallbackView = NSView()
+    private let initialsLabel = NSTextField(labelWithString: "")
+    private let nameLabel = NSTextField(labelWithString: "")
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        configureLayout()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        configureLayout()
+    }
+
+    func configure(clientName: String, font: NSFont, textColor: NSColor) {
+        let displayName = clientName.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty(or: "Proxy Client")
+        nameLabel.stringValue = displayName
+        nameLabel.font = font
+        nameLabel.textColor = textColor
+        toolTip = "Client: \(displayName)"
+
+        if let icon = NetworkClientIconProvider.icon(for: displayName) {
+            iconView.image = icon
+            iconView.isHidden = false
+            fallbackView.isHidden = true
+        } else {
+            iconView.image = nil
+            iconView.isHidden = true
+            fallbackView.isHidden = false
+            fallbackView.layer?.backgroundColor = NetworkClientIconProvider.badgeColor(for: displayName).cgColor
+            initialsLabel.stringValue = NetworkClientIconProvider.initials(for: displayName)
+        }
+    }
+
+    private func configureLayout() {
+        textField = nameLabel
+        imageView = iconView
+
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+        iconView.imageScaling = .scaleProportionallyUpOrDown
+        addSubview(iconView)
+
+        fallbackView.translatesAutoresizingMaskIntoConstraints = false
+        fallbackView.wantsLayer = true
+        fallbackView.layer?.cornerRadius = 4
+        addSubview(fallbackView)
+
+        initialsLabel.translatesAutoresizingMaskIntoConstraints = false
+        initialsLabel.font = .systemFont(ofSize: 7, weight: .bold)
+        initialsLabel.textColor = .white
+        initialsLabel.alignment = .center
+        fallbackView.addSubview(initialsLabel)
+
+        nameLabel.translatesAutoresizingMaskIntoConstraints = false
+        nameLabel.isSelectable = false
+        nameLabel.usesSingleLineMode = true
+        nameLabel.lineBreakMode = .byTruncatingTail
+        nameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        addSubview(nameLabel)
+
+        NSLayoutConstraint.activate([
+            iconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 6),
+            iconView.centerYAnchor.constraint(equalTo: centerYAnchor),
+            iconView.widthAnchor.constraint(equalToConstant: 16),
+            iconView.heightAnchor.constraint(equalToConstant: 16),
+
+            fallbackView.leadingAnchor.constraint(equalTo: iconView.leadingAnchor),
+            fallbackView.centerYAnchor.constraint(equalTo: iconView.centerYAnchor),
+            fallbackView.widthAnchor.constraint(equalTo: iconView.widthAnchor),
+            fallbackView.heightAnchor.constraint(equalTo: iconView.heightAnchor),
+
+            initialsLabel.leadingAnchor.constraint(equalTo: fallbackView.leadingAnchor),
+            initialsLabel.trailingAnchor.constraint(equalTo: fallbackView.trailingAnchor),
+            initialsLabel.topAnchor.constraint(equalTo: fallbackView.topAnchor),
+            initialsLabel.bottomAnchor.constraint(equalTo: fallbackView.bottomAnchor),
+
+            nameLabel.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 6),
+            nameLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
+            nameLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+    }
+}
+
+@MainActor
+private enum NetworkClientIconProvider {
+    private static var appIconCache: [String: NSImage] = [:]
+
+    private static let bundleIDByAppName: [String: String] = [
+        "Arc": "company.thebrowser.Browser",
+        "Brave Browser": "com.brave.Browser",
+        "Discord": "com.hnc.Discord",
+        "Figma": "com.figma.Desktop",
+        "Firefox": "org.mozilla.firefox",
+        "Google Chrome": "com.google.Chrome",
+        "Google Drive": "com.google.drivefs",
+        "Lark": "com.larksuite.lark",
+        "Microsoft Edge": "com.microsoft.edgemac",
+        "NetEase Music": "com.netease.163music",
+        "Opera": "com.operasoftware.Opera",
+        "Postman": "com.postmanlabs.mac",
+        "Safari": "com.apple.Safari",
+        "Slack": "com.tinyspeck.slackmacgap",
+        "Spotify": "com.spotify.client",
+        "Telegram": "ru.keepcoder.Telegram",
+        "Visual Studio Code": "com.microsoft.VSCode",
+        "Xcode": "com.apple.dt.Xcode",
+    ]
+
+    private static let badgePalette: [NSColor] = [
+        colorFromHex(0x4285F4),
+        colorFromHex(0x10A380),
+        colorFromHex(0xD9544F),
+        colorFromHex(0x9C59B5),
+        colorFromHex(0xE67D21),
+        colorFromHex(0x667F99),
+    ]
+
+    static func icon(for appName: String) -> NSImage? {
+        let normalizedName = normalized(appName)
+        guard !normalizedName.isEmpty else {
+            return nil
+        }
+        if let cached = appIconCache[normalizedName] {
+            return cached
+        }
+
+        if let runningIcon = runningApplicationIcon(for: normalizedName) {
+            appIconCache[normalizedName] = runningIcon
+            return runningIcon
+        }
+
+        if let bundleID = bundleIDByAppName[normalizedName],
+           let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
+        {
+            let icon = sizedIcon(forFile: appURL.path)
+            appIconCache[normalizedName] = icon
+            return icon
+        }
+
+        for candidate in appPathCandidates(for: normalizedName) where FileManager.default.fileExists(atPath: candidate) {
+            let icon = sizedIcon(forFile: candidate)
+            appIconCache[normalizedName] = icon
+            return icon
+        }
+
+        return nil
+    }
+
+    static func badgeColor(for appName: String) -> NSColor {
+        let hash = normalized(appName).unicodeScalars.reduce(0) { ($0 &* 31) &+ Int($1.value) }
+        return badgePalette[abs(hash) % badgePalette.count]
+    }
+
+    static func initials(for appName: String) -> String {
+        let words = normalized(appName)
+            .replacingOccurrences(of: ".", with: " ")
+            .replacingOccurrences(of: "-", with: " ")
+            .split(separator: " ")
+        let letters = words.prefix(2).compactMap(\.first)
+        if letters.isEmpty, let first = appName.first {
+            return String(first).uppercased()
+        }
+        return letters.map { String($0).uppercased() }.joined()
+    }
+
+    private static func runningApplicationIcon(for appName: String) -> NSImage? {
+        let app = NSWorkspace.shared.runningApplications.first { runningApp in
+            runningApp.localizedName == appName
+                || runningApp.bundleIdentifier == appName
+                || runningApp.localizedName == baseAppName(for: appName)
+        }
+        guard let icon = app?.icon else {
+            return nil
+        }
+        icon.size = NSSize(width: 16, height: 16)
+        icon.isTemplate = false
+        return icon
+    }
+
+    private static func appPathCandidates(for appName: String) -> [String] {
+        let baseName = baseAppName(for: appName)
+        return [
+            "/Applications/\(appName).app",
+            "/Applications/\(baseName).app",
+            "/System/Applications/\(appName).app",
+            "/System/Applications/\(baseName).app",
+            "/Applications/Utilities/\(appName).app",
+            "/Applications/Utilities/\(baseName).app",
+        ]
+    }
+
+    private static func sizedIcon(forFile path: String) -> NSImage {
+        let icon = NSWorkspace.shared.icon(forFile: path)
+        icon.size = NSSize(width: 16, height: 16)
+        icon.isTemplate = false
+        return icon
+    }
+
+    private static func normalized(_ appName: String) -> String {
+        appName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func baseAppName(for appName: String) -> String {
+        let suffixes = [" Helper", " Helper (Renderer)", " Helper (GPU)", " Helper (Plugin)"]
+        for suffix in suffixes where appName.hasSuffix(suffix) {
+            return String(appName.dropLast(suffix.count))
+        }
+        return appName
+    }
+
+    private static func colorFromHex(_ hex: UInt32) -> NSColor {
+        NSColor(
+            srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
+            green: CGFloat((hex >> 8) & 0xFF) / 255,
+            blue: CGFloat(hex & 0xFF) / 255,
+            alpha: 1
+        )
     }
 }
 
@@ -680,7 +920,7 @@ private enum NetworkTrafficColumn: String, CaseIterable {
         case .url:
             flow.urlDisplay
         case .client:
-            flow.clientName
+            flow.clientName.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty(or: "Proxy Client")
         case .upstream:
             flow.upstreamProxy.kind
         case .method:

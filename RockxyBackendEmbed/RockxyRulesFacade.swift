@@ -164,11 +164,15 @@ public extension RockxyProxyBackend {
             guard let name = key as? String else { return nil }
             return RockxyCapturedHeader(name: name, value: "\(value)")
         }
+        let transactionID = UUID()
+        let completed = Date()
         let captured = RockxyCapturedTransaction(
-            id: UUID(),
-            sequenceNumber: sequenceCounter.next(),
+            id: transactionID,
+            sequenceNumber: sequenceCounter.number(for: transactionID),
             timestamp: started,
-            measuredDuration: Date().timeIntervalSince(started),
+            startedAt: started,
+            completedAt: completed,
+            measuredDuration: completed.timeIntervalSince(started),
             request: RockxyCapturedRequest(
                 method: request.method,
                 url: request.url,

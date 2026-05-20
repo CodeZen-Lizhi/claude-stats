@@ -215,7 +215,10 @@ public struct RockxyCapturedTransaction: Identifiable, Sendable, Hashable {
     public let id: UUID
     public let sequenceNumber: Int
     public let timestamp: Date
+    public let startedAt: Date?
+    public let completedAt: Date?
     public let measuredDuration: TimeInterval?
+    public let establishmentDuration: TimeInterval?
     public let request: RockxyCapturedRequest
     public let response: RockxyCapturedResponse?
     public let state: RockxyCapturedTransactionState
@@ -223,6 +226,7 @@ public struct RockxyCapturedTransaction: Identifiable, Sendable, Hashable {
     public let isWebSocket: Bool
     public let sourcePort: UInt16?
     public let clientApp: String?
+    public let clientAttribution: RockxyClientAttribution?
     public let matchedRuleName: String?
     public let matchedRuleActionSummary: String?
     public let matchedRulePattern: String?
@@ -234,7 +238,10 @@ public struct RockxyCapturedTransaction: Identifiable, Sendable, Hashable {
         id: UUID,
         sequenceNumber: Int,
         timestamp: Date,
+        startedAt: Date? = nil,
+        completedAt: Date? = nil,
         measuredDuration: TimeInterval?,
+        establishmentDuration: TimeInterval? = nil,
         request: RockxyCapturedRequest,
         response: RockxyCapturedResponse?,
         state: RockxyCapturedTransactionState,
@@ -242,6 +249,7 @@ public struct RockxyCapturedTransaction: Identifiable, Sendable, Hashable {
         isWebSocket: Bool,
         sourcePort: UInt16?,
         clientApp: String?,
+        clientAttribution: RockxyClientAttribution? = nil,
         matchedRuleName: String?,
         matchedRuleActionSummary: String? = nil,
         matchedRulePattern: String? = nil,
@@ -252,7 +260,10 @@ public struct RockxyCapturedTransaction: Identifiable, Sendable, Hashable {
         self.id = id
         self.sequenceNumber = sequenceNumber
         self.timestamp = timestamp
+        self.startedAt = startedAt
+        self.completedAt = completedAt
         self.measuredDuration = measuredDuration
+        self.establishmentDuration = establishmentDuration
         self.request = request
         self.response = response
         self.state = state
@@ -260,6 +271,7 @@ public struct RockxyCapturedTransaction: Identifiable, Sendable, Hashable {
         self.isWebSocket = isWebSocket
         self.sourcePort = sourcePort
         self.clientApp = clientApp
+        self.clientAttribution = clientAttribution
         self.matchedRuleName = matchedRuleName
         self.matchedRuleActionSummary = matchedRuleActionSummary
         self.matchedRulePattern = matchedRulePattern
@@ -267,6 +279,12 @@ public struct RockxyCapturedTransaction: Identifiable, Sendable, Hashable {
         self.upstreamProxyKind = upstreamProxyKind
         self.webSocketFrames = webSocketFrames
     }
+}
+
+public enum RockxyClientAttribution: String, Sendable, Hashable, Codable {
+    case process
+    case userAgent
+    case unresolved
 }
 
 public enum RockxyProxyBackendError: LocalizedError, Sendable {

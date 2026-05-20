@@ -333,6 +333,12 @@ struct NetworkFlowUpstreamProxy: Sendable, Hashable {
     static let direct = NetworkFlowUpstreamProxy(kind: "Direct", summary: "Direct")
 }
 
+enum NetworkClientAttribution: String, Sendable, Hashable {
+    case process
+    case userAgent
+    case unresolved
+}
+
 struct NetworkHeaderPair: Identifiable, Sendable, Hashable {
     let id: String
     var name: String
@@ -440,6 +446,8 @@ struct NetworkFlow: Identifiable, Sendable, Hashable {
     var createdAt: Date
     var completedAt: Date?
     var clientName: String
+    var sourcePort: UInt16? = nil
+    var clientAttribution: NetworkClientAttribution = .unresolved
     var flowProtocol: NetworkFlowProtocol
     var state: NetworkFlowState
     var request: NetworkRequestCapture
@@ -450,6 +458,7 @@ struct NetworkFlow: Identifiable, Sendable, Hashable {
     var isEdited: Bool
     var errorDescription: String?
     var upstreamProxy: NetworkFlowUpstreamProxy = .direct
+    var establishmentDuration: TimeInterval?
     var matchedRuleName: String?
     var matchedRuleSummary: String?
     var matchedRulePattern: String?
