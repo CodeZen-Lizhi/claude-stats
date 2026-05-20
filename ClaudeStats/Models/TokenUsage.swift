@@ -48,6 +48,18 @@ struct TokenUsage: Sendable, Hashable {
         return Double(cacheReadTokens) / Double(denom)
     }
 
+    var dataRevisionID: String {
+        [
+            inputTokens,
+            outputTokens,
+            cacheReadTokens,
+            cacheCreation5mTokens,
+            cacheCreation1hTokens,
+        ]
+        .map(String.init)
+        .joined(separator: ",")
+    }
+
     static func + (lhs: TokenUsage, rhs: TokenUsage) -> TokenUsage {
         TokenUsage(
             inputTokens: lhs.inputTokens + rhs.inputTokens,

@@ -36,6 +36,19 @@ struct ModelUsage: Sendable, Hashable, Identifiable {
 }
 
 extension Array where Element == ModelUsage {
+    var dataRevisionID: String {
+        map { model in
+            [
+                model.model,
+                String(model.messageCount),
+                model.usage.dataRevisionID,
+                String(model.costEstimate.standardAPI.bitPattern),
+                String(model.costEstimate.detailedBilling.bitPattern),
+            ].joined(separator: ":")
+        }
+        .joined(separator: "|")
+    }
+
     /// Merge per-model entries by model id, preserving already-computed cost.
     /// Cost may be request-sensitive (for example long-context rates), so it
     /// must be summed rather than recomputed from aggregate tokens.

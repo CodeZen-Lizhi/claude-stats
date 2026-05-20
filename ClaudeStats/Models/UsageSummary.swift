@@ -148,7 +148,40 @@ struct TrendSeries: Sendable, Hashable {
 
     var isEmpty: Bool { buckets.allSatisfy { $0.tokens == 0 } }
 
+    var dataRevisionID: String {
+        var totalsByModel: [String: TokenUsage] = [:]
+        var firstStart: Date?
+        var lastStart: Date?
+        for bucket in buckets {
+            totalsByModel[bucket.model, default: .zero] += bucket.usage
+            firstStart = min(firstStart ?? bucket.start, bucket.start)
+            lastStart = max(lastStart ?? bucket.start, bucket.start)
+        }
+
+        let modelTotals = models.map { model in
+            "\(model):\(totalsByModel[model, default: .zero].dataRevisionID)"
+        }
+        return [
+            granularity.revisionID,
+            models.joined(separator: ","),
+            String(buckets.count),
+            firstStart.map { String(Int($0.timeIntervalSinceReferenceDate.rounded())) } ?? "nil",
+            lastStart.map { String(Int($0.timeIntervalSinceReferenceDate.rounded())) } ?? "nil",
+            modelTotals.joined(separator: "|"),
+        ]
+        .joined(separator: "#")
+    }
+
     func buckets(for model: String) -> [ModelBucket] {
         buckets.filter { $0.model == model }.sorted { $0.start < $1.start }
+    }
+}
+
+private extension TrendGranularity {
+    var revisionID: String {
+        switch self {
+        case .hour: "hour"
+        case .day: "day"
+        }
     }
 }

@@ -14,7 +14,9 @@ struct UsageModelBreakdown: View {
         let key = UsageModelBreakdownSnapshot.Key(
             seriesID: seriesID,
             includeCacheInTokens: includeCacheInTokens,
-            costEstimationMode: costEstimationMode
+            costEstimationMode: costEstimationMode,
+            modelsRevisionID: models.dataRevisionID,
+            seriesRevisionID: series.dataRevisionID
         )
         let snapshot = cachedSnapshotKey == key
             ? (cachedSnapshot ?? makeSnapshot(key: key))
@@ -138,6 +140,8 @@ struct UsageModelBreakdownSnapshot {
         let seriesID: String
         let includeCacheInTokens: Bool
         let costEstimationMode: CostEstimationMode
+        let modelsRevisionID: String
+        let seriesRevisionID: String
     }
 
     struct Row: Identifiable, Equatable {

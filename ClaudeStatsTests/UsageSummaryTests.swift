@@ -224,6 +224,76 @@ struct UsageSummaryTests {
     }
 
     @MainActor
+    @Test("Trend snapshot key changes when empty derived data is replaced by real data")
+    func trendSnapshotKeyIncludesSeriesRevision() {
+        let store = SessionStore(registry: ProviderRegistry(pricing: TestPricing.table), pricing: TestPricing.table)
+        store.loadPreviewSessions([
+            legacySession("real-trend", daysAgo: 0, hour: 10, models: [model("model-a", count: 120)]),
+        ])
+        let key = UsageDerivedData.Key(
+            period: .allTime,
+            provider: .claude,
+            lastRefreshedAt: store.lastRefreshedAt
+        )
+        let empty = UsageDerivedData.empty(for: key)
+        let real = UsageDerivedData.make(key: key, store: store)
+
+        let emptyKey = UsageTrendSnapshotKey(
+            seriesID: key.chartSeriesID,
+            rangeID: key.period.rawValue,
+            style: .line,
+            useLog: false,
+            stackByType: false,
+            seriesRevisionID: empty.series.dataRevisionID
+        )
+        let realKey = UsageTrendSnapshotKey(
+            seriesID: key.chartSeriesID,
+            rangeID: key.period.rawValue,
+            style: .line,
+            useLog: false,
+            stackByType: false,
+            seriesRevisionID: real.series.dataRevisionID
+        )
+
+        #expect(empty.key.chartSeriesID == real.key.chartSeriesID)
+        #expect(emptyKey != realKey)
+    }
+
+    @MainActor
+    @Test("Model breakdown key changes when empty derived data is replaced by real data")
+    func modelBreakdownKeyIncludesDataRevisions() {
+        let store = SessionStore(registry: ProviderRegistry(pricing: TestPricing.table), pricing: TestPricing.table)
+        store.loadPreviewSessions([
+            legacySession("real-models", daysAgo: 0, hour: 10, models: [model("model-a", count: 120)]),
+        ])
+        let key = UsageDerivedData.Key(
+            period: .allTime,
+            provider: .claude,
+            lastRefreshedAt: store.lastRefreshedAt
+        )
+        let empty = UsageDerivedData.empty(for: key)
+        let real = UsageDerivedData.make(key: key, store: store)
+
+        let emptyKey = UsageModelBreakdownSnapshot.Key(
+            seriesID: key.chartSeriesID,
+            includeCacheInTokens: true,
+            costEstimationMode: .standardAPI,
+            modelsRevisionID: empty.summary.models.dataRevisionID,
+            seriesRevisionID: empty.series.dataRevisionID
+        )
+        let realKey = UsageModelBreakdownSnapshot.Key(
+            seriesID: key.chartSeriesID,
+            includeCacheInTokens: true,
+            costEstimationMode: .standardAPI,
+            modelsRevisionID: real.summary.models.dataRevisionID,
+            seriesRevisionID: real.series.dataRevisionID
+        )
+
+        #expect(empty.key.chartSeriesID == real.key.chartSeriesID)
+        #expect(emptyKey != realKey)
+    }
+
+    @MainActor
     @Test("Usage derived data and model breakdown handle legacy sessions without timeline")
     func usageDerivedDataHandlesLegacySessionsWithoutTimeline() {
         let store = SessionStore(registry: ProviderRegistry(pricing: TestPricing.table), pricing: TestPricing.table)
@@ -241,7 +311,9 @@ struct UsageSummaryTests {
             key: UsageModelBreakdownSnapshot.Key(
                 seriesID: data.key.chartSeriesID,
                 includeCacheInTokens: true,
-                costEstimationMode: .standardAPI
+                costEstimationMode: .standardAPI,
+                modelsRevisionID: data.summary.models.dataRevisionID,
+                seriesRevisionID: data.series.dataRevisionID
             ),
             models: data.summary.models,
             series: data.series,

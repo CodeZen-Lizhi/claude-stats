@@ -9,24 +9,25 @@ struct UsageTrendPanel: View {
     @Binding var scaleMode: TrendScaleMode
     @Binding var stackByType: Bool
     let displayName: (String) -> String
-    @State private var cachedSnapshotKey: SnapshotKey?
+    @State private var cachedSnapshotKey: UsageTrendSnapshotKey?
     @State private var cachedSnapshot: UsageTrendChartSnapshot?
 
     private var isHourly: Bool { series.granularity == .hour }
     private var effectiveStyle: TrendChartStyle { isHourly ? .line : chartStyle }
     private var useLog: Bool { !isHourly && effectiveStyle == .line && !stackByType && scaleMode == .log }
 
-    private var snapshotKey: SnapshotKey {
-        SnapshotKey(
+    private var snapshotKey: UsageTrendSnapshotKey {
+        UsageTrendSnapshotKey(
             seriesID: seriesID,
             rangeID: rangeID,
             style: effectiveStyle,
             useLog: useLog,
-            stackByType: stackByType
+            stackByType: stackByType,
+            seriesRevisionID: series.dataRevisionID
         )
     }
 
-    private func makeSnapshot(for key: SnapshotKey) -> UsageTrendChartSnapshot {
+    private func makeSnapshot(for key: UsageTrendSnapshotKey) -> UsageTrendChartSnapshot {
         UsageTrendChartSnapshot(
             series: series,
             rangeID: key.rangeID,
@@ -160,19 +161,20 @@ struct UsageTrendPanel: View {
         }
     }
 
-    private func cacheSnapshotIfNeeded(_ key: SnapshotKey) {
+    private func cacheSnapshotIfNeeded(_ key: UsageTrendSnapshotKey) {
         guard cachedSnapshotKey != key else { return }
         cachedSnapshot = makeSnapshot(for: key)
         cachedSnapshotKey = key
     }
+}
 
-    private struct SnapshotKey: Equatable {
-        let seriesID: String
-        let rangeID: String
-        let style: TrendChartStyle
-        let useLog: Bool
-        let stackByType: Bool
-    }
+struct UsageTrendSnapshotKey: Equatable {
+    let seriesID: String
+    let rangeID: String
+    let style: TrendChartStyle
+    let useLog: Bool
+    let stackByType: Bool
+    let seriesRevisionID: String
 }
 
 private struct UsageIconButton: View {
