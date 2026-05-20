@@ -3,6 +3,18 @@
 extension ReleaseHistoryCatalog {
     static let generatedEntries: [ReleaseHistoryEntry] = [
         ReleaseHistoryEntry(
+            version: "1.6.0",
+            date: "May 21, 2026",
+            headline: "新增LocalSkillDetailModel和RemoteSkillDetailModel用于展示技能详情数据",
+            changes: [
+                "新增SkillFactModel、SkillMarkdownDocument等配套数据结构",
+                "重构MainWindowModeShell的侧边栏切换逻辑，使用transition替代offset动画",
+                "为SkillsStore添加selectedLocalDetail和selectedRemoteDetail计算属性",
+                "新增对应测试用例验证详情数据正确性",
+                "实现了LinuxDo侧边栏、工作区视图，将其加入主窗口导航系统，调整了主窗口布局适配新页面，修复了侧边栏切换偏移逻辑",
+            ]
+        ),
+        ReleaseHistoryEntry(
             version: "1.5.13",
             date: "May 20, 2026",
             headline: "新增ClaudeCLIInstallDetecting协议与实现类，检测Claude CLI安装状态",
