@@ -9,6 +9,14 @@ struct UsageLimitPanel: View {
     let onInstallClaudeBridge: (() -> Void)?
     let onCopyClaudeSettingsSnippet: (() -> Void)?
     let onOpenClaudeSettings: (() -> Void)?
+    let claudeDesktopPermissionIssue: ClaudeDesktopUsagePermissionIssue?
+    let claudeDesktopAutoMode: ClaudeDesktopUsageAutoMode?
+    let claudeDesktopTimedCaptureEnabled: Bool
+    let onReadClaudeDesktop: (() -> Void)?
+    let onSetClaudeDesktopAutoMode: ((ClaudeDesktopUsageAutoMode) -> Void)?
+    let onSetClaudeDesktopTimedCaptureEnabled: ((Bool) -> Void)?
+    let onOpenAccessibilitySettings: (() -> Void)?
+    let onOpenScreenRecordingSettings: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -77,18 +85,14 @@ struct UsageLimitPanel: View {
                 if let snapshot = report.snapshot {
                     limitWindows(snapshot.windows)
                     sourceFooter(snapshot: snapshot)
+                    if provider == .claude {
+                        claudeDesktopControls
+                    }
                 }
             case .setupRequired where provider == .claude:
                 setupRequiredContent(message: report.message)
             case .waitingForNextResponse:
-                stateContent(
-                    systemImage: "clock.arrow.circlepath",
-                    title: L10n.format("usage.limit.waiting_for_response",
-                                       defaultValue: "Waiting for the next %@ response",
-                                       provider.shortName),
-                    message: report.message,
-                    lastCapturedAt: report.lastCapturedAt
-                )
+                waitingContent(report: report)
             case .unavailable:
                 stateContent(
                     systemImage: "exclamationmark.triangle.fill",
@@ -144,39 +148,119 @@ struct UsageLimitPanel: View {
         VStack(alignment: .leading, spacing: 12) {
             stateContent(
                 systemImage: "terminal.fill",
-                title: L10n.string("usage.limit.connect_status_line",
-                                   defaultValue: "Connect Claude Code status line"),
+                title: L10n.string("usage.limit.connect_usage_sources",
+                                   defaultValue: "Connect Claude usage sources"),
                 message: message,
                 lastCapturedAt: nil
             )
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) {
-                    claudeSetupButtons
-                    Spacer(minLength: 0)
-                }
-                VStack(alignment: .leading, spacing: 8) {
-                    claudeSetupButtons
-                }
+            claudeDesktopControls
+            claudeBridgeButtons
+        }
+    }
+
+    @ViewBuilder
+    private func waitingContent(report: UsageLimitReport) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            stateContent(
+                systemImage: "clock.arrow.circlepath",
+                title: L10n.format("usage.limit.waiting_for_response",
+                                   defaultValue: "Waiting for the next %@ response",
+                                   provider.shortName),
+                message: report.message,
+                lastCapturedAt: report.lastCapturedAt
+            )
+            if provider == .claude {
+                claudeDesktopControls
             }
         }
     }
 
     @ViewBuilder
-    private var claudeSetupButtons: some View {
-        if let onInstallClaudeBridge {
-            Button("Install bridge", action: onInstallClaudeBridge)
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+    private var claudeBridgeButtons: some View {
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 132), spacing: 8, alignment: .leading)],
+            alignment: .leading,
+            spacing: 8
+        ) {
+            if let onInstallClaudeBridge {
+                Button("Install bridge", action: onInstallClaudeBridge)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            }
+            if let onCopyClaudeSettingsSnippet {
+                Button("Copy settings snippet", action: onCopyClaudeSettingsSnippet)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            }
+            if let onOpenClaudeSettings {
+                Button("Open Claude settings", action: onOpenClaudeSettings)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            }
         }
-        if let onCopyClaudeSettingsSnippet {
-            Button("Copy settings snippet", action: onCopyClaudeSettingsSnippet)
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+    }
+
+    @ViewBuilder
+    private var claudeDesktopControls: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                if let onReadClaudeDesktop {
+                    Button("Read Claude Desktop", action: onReadClaudeDesktop)
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
+                if let onSetClaudeDesktopAutoMode {
+                    Picker(
+                        L10n.string("usage.limit.desktop_auto.picker", defaultValue: "Claude Desktop auto capture"),
+                        selection: Binding(
+                            get: { claudeDesktopAutoMode ?? .off },
+                            set: { onSetClaudeDesktopAutoMode($0) }
+                        )
+                    ) {
+                        ForEach(ClaudeDesktopUsageAutoMode.allCases) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .controlSize(.small)
+                    .frame(width: 210)
+                }
+                if let onSetClaudeDesktopTimedCaptureEnabled {
+                    Toggle(
+                        "Timed",
+                        isOn: Binding(
+                            get: { claudeDesktopTimedCaptureEnabled },
+                            set: { onSetClaudeDesktopTimedCaptureEnabled($0) }
+                        )
+                    )
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                }
+                Spacer(minLength: 0)
+            }
+
+            permissionButtons
         }
-        if let onOpenClaudeSettings {
-            Button("Open Claude settings", action: onOpenClaudeSettings)
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+    }
+
+    @ViewBuilder
+    private var permissionButtons: some View {
+        switch claudeDesktopPermissionIssue {
+        case .accessibility:
+            if let onOpenAccessibilitySettings {
+                Button("Open Accessibility settings", action: onOpenAccessibilitySettings)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            }
+        case .screenRecording:
+            if let onOpenScreenRecordingSettings {
+                Button("Open Screen Recording settings", action: onOpenScreenRecordingSettings)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            }
+        case nil:
+            EmptyView()
         }
     }
 
@@ -540,7 +624,15 @@ private struct UsageLimitHatchedSwatch: View {
         onRefresh: {},
         onInstallClaudeBridge: nil,
         onCopyClaudeSettingsSnippet: nil,
-        onOpenClaudeSettings: nil
+        onOpenClaudeSettings: nil,
+        claudeDesktopPermissionIssue: nil,
+        claudeDesktopAutoMode: nil,
+        claudeDesktopTimedCaptureEnabled: false,
+        onReadClaudeDesktop: nil,
+        onSetClaudeDesktopAutoMode: nil,
+        onSetClaudeDesktopTimedCaptureEnabled: nil,
+        onOpenAccessibilitySettings: nil,
+        onOpenScreenRecordingSettings: nil
     )
     .padding(24)
     .frame(width: 760)

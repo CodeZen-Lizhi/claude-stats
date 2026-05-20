@@ -75,6 +75,9 @@ struct MainUsageView: View {
                 await env.usageLimits.refresh(provider: env.preferences.selectedProvider, force: true)
             }
         }
+        .task(id: claudeDesktopTimedCaptureKey) {
+            await runClaudeDesktopTimedCaptureLoop()
+        }
     }
 
     private func header(provider: ProviderKind) -> some View {
@@ -119,10 +122,29 @@ struct MainUsageView: View {
             } : nil,
             onOpenClaudeSettings: provider == .claude ? {
                 openClaudeSettings()
+            } : nil,
+            claudeDesktopPermissionIssue: provider == .claude ? env.usageLimits.claudeDesktopPermissionIssue : nil,
+            claudeDesktopAutoMode: provider == .claude ? env.preferences.claudeDesktopUsageAutoMode : nil,
+            claudeDesktopTimedCaptureEnabled: provider == .claude ? env.preferences.claudeDesktopUsageTimedCaptureEnabled : false,
+            onReadClaudeDesktop: provider == .claude ? {
+                Task { await env.usageLimits.captureClaudeDesktopUsage(trigger: .manual) }
+            } : nil,
+            onSetClaudeDesktopAutoMode: provider == .claude ? { mode in
+                env.preferences.claudeDesktopUsageAutoMode = mode
+            } : nil,
+            onSetClaudeDesktopTimedCaptureEnabled: provider == .claude ? { enabled in
+                env.preferences.claudeDesktopUsageTimedCaptureEnabled = enabled
+            } : nil,
+            onOpenAccessibilitySettings: provider == .claude ? {
+                openPrivacySettings(anchor: "Privacy_Accessibility")
+            } : nil,
+            onOpenScreenRecordingSettings: provider == .claude ? {
+                openPrivacySettings(anchor: "Privacy_ScreenCapture")
             } : nil
         )
         .task(id: provider) {
             await env.usageLimits.refresh(provider: provider)
+            await runVisibleClaudeDesktopCaptureIfNeeded(provider: provider)
         }
     }
 
@@ -164,6 +186,15 @@ struct MainUsageView: View {
         )
     }
 
+    private var claudeDesktopTimedCaptureKey: String {
+        let preferences = env.preferences
+        return [
+            preferences.selectedProvider.rawValue,
+            String(preferences.claudeDesktopUsageTimedCaptureEnabled),
+            String(preferences.claudeDesktopUsageTimedIntervalMinutes),
+        ].joined(separator: ":")
+    }
+
     private func syncFromSceneStorage() {
         vm.period = StatsPeriod(rawValue: periodRaw) ?? .allTime
         vm.chartStyle = ChartStyleStorage(rawValue: chartStyleRaw)?.chartStyle ?? .line
@@ -195,6 +226,36 @@ struct MainUsageView: View {
 
     private func openClaudeSettings() {
         NSWorkspace.shared.open(env.usageLimits.claudeSettingsURL())
+    }
+
+    private func runVisibleClaudeDesktopCaptureIfNeeded(provider: ProviderKind) async {
+        guard provider == .claude,
+              env.preferences.claudeDesktopUsageAutoMode == .visibleOnly else {
+            return
+        }
+        await env.usageLimits.captureClaudeDesktopUsage(trigger: .visibleAutomatic)
+    }
+
+    private func runClaudeDesktopTimedCaptureLoop() async {
+        guard env.preferences.selectedProvider == .claude,
+              env.preferences.claudeDesktopUsageTimedCaptureEnabled else {
+            return
+        }
+        while !Task.isCancelled {
+            let minutes = max(5, env.preferences.claudeDesktopUsageTimedIntervalMinutes)
+            try? await Task.sleep(nanoseconds: UInt64(minutes) * 60 * 1_000_000_000)
+            guard !Task.isCancelled,
+                  env.preferences.selectedProvider == .claude,
+                  env.preferences.claudeDesktopUsageTimedCaptureEnabled else {
+                return
+            }
+            await env.usageLimits.captureClaudeDesktopUsage(trigger: .timedAutomatic)
+        }
+    }
+
+    private func openPrivacySettings(anchor: String) {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)") else { return }
+        NSWorkspace.shared.open(url)
     }
 }
 

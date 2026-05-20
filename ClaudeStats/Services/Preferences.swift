@@ -271,6 +271,25 @@ final class Preferences {
     var claudeStatusLastNotificationFingerprint: String {
         didSet { defaults.set(claudeStatusLastNotificationFingerprint, forKey: Keys.claudeStatusLastNotificationFingerprint) }
     }
+    /// Claude Desktop UI usage capture. The default only tries when Claude is
+    /// already frontmost, so it never steals focus.
+    var claudeDesktopUsageAutoMode: ClaudeDesktopUsageAutoMode {
+        didSet { defaults.set(claudeDesktopUsageAutoMode.rawValue, forKey: Keys.claudeDesktopUsageAutoMode) }
+    }
+    /// Optional timed Claude Desktop usage capture. Disabled by default.
+    var claudeDesktopUsageTimedCaptureEnabled: Bool {
+        didSet { defaults.set(claudeDesktopUsageTimedCaptureEnabled, forKey: Keys.claudeDesktopUsageTimedCaptureEnabled) }
+    }
+    var claudeDesktopUsageTimedIntervalMinutes: Int {
+        didSet {
+            let clamped = min(240, max(5, claudeDesktopUsageTimedIntervalMinutes))
+            guard clamped == claudeDesktopUsageTimedIntervalMinutes else {
+                claudeDesktopUsageTimedIntervalMinutes = clamped
+                return
+            }
+            defaults.set(claudeDesktopUsageTimedIntervalMinutes, forKey: Keys.claudeDesktopUsageTimedIntervalMinutes)
+        }
+    }
     /// OpenAI Status product groups shown on the Dashboard and monitored for
     /// optional notifications. Defaults to ChatGPT and Codex.
     var openAIStatusVisibleGroupIDs: Set<String> {
@@ -433,6 +452,10 @@ final class Preferences {
             : Set(storedClaudeStatusComponentIDs)
         claudeStatusNotificationsEnabled = defaults.bool(forKey: Keys.claudeStatusNotificationsEnabled)
         claudeStatusLastNotificationFingerprint = defaults.string(forKey: Keys.claudeStatusLastNotificationFingerprint) ?? ""
+        claudeDesktopUsageAutoMode = ClaudeDesktopUsageAutoMode(rawValue: defaults.string(forKey: Keys.claudeDesktopUsageAutoMode) ?? "") ?? .visibleOnly
+        claudeDesktopUsageTimedCaptureEnabled = (defaults.object(forKey: Keys.claudeDesktopUsageTimedCaptureEnabled) as? Bool) ?? false
+        let storedClaudeDesktopUsageTimedInterval = (defaults.object(forKey: Keys.claudeDesktopUsageTimedIntervalMinutes) as? Int) ?? 30
+        claudeDesktopUsageTimedIntervalMinutes = min(240, max(5, storedClaudeDesktopUsageTimedInterval))
         let storedOpenAIStatusGroupIDs = (defaults.string(forKey: Keys.openAIStatusVisibleGroupIDs) ?? "")
             .split(separator: ",")
             .map { String($0) }
@@ -548,6 +571,9 @@ final class Preferences {
         static let claudeStatusVisibleComponentIDs = "claudeStatusVisibleComponentIDs"
         static let claudeStatusNotificationsEnabled = "claudeStatusNotificationsEnabled"
         static let claudeStatusLastNotificationFingerprint = "claudeStatusLastNotificationFingerprint"
+        static let claudeDesktopUsageAutoMode = "claudeDesktopUsageAutoMode"
+        static let claudeDesktopUsageTimedCaptureEnabled = "claudeDesktopUsageTimedCaptureEnabled"
+        static let claudeDesktopUsageTimedIntervalMinutes = "claudeDesktopUsageTimedIntervalMinutes"
         static let openAIStatusVisibleGroupIDs = "openAIStatusVisibleGroupIDs"
         static let openAIStatusNotificationsEnabled = "openAIStatusNotificationsEnabled"
         static let openAIStatusLastNotificationFingerprint = "openAIStatusLastNotificationFingerprint"

@@ -68,7 +68,7 @@ struct ClaudeUsageLimitLoader: Sendable {
             provider: .claude,
             windows: windows,
             capturedAt: capturedAt,
-            sourceLabel: sourceLabel(for: url),
+            sourceLabel: sourceLabel(for: url, payload: dictionary),
             sourcePath: url.path,
             planType: nil,
             limitID: nil
@@ -90,8 +90,11 @@ struct ClaudeUsageLimitLoader: Sendable {
         )
     }
 
-    private func sourceLabel(for url: URL) -> String {
-        switch url.path {
+    private func sourceLabel(for url: URL, payload: [String: Any]) -> String {
+        if payload["source"] as? String == "claude_desktop_ui" {
+            return "Claude Desktop UI"
+        }
+        return switch url.path {
         case UsageLimitCachePaths.claudeCacheURL().path:
             "Claude Stats cache"
         case "/tmp/open-island-rl.json":

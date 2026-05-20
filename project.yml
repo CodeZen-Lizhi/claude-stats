@@ -352,6 +352,9 @@ targets:
       - framework: ThirdParty/Atoll/Frameworks/MediaRemoteAdapter.framework
         embed: true
         codeSign: true
+      - sdk: ApplicationServices.framework
+      - sdk: ScreenCaptureKit.framework
+      - sdk: Vision.framework
       - sdk: IOKit.framework
       - sdk: SystemConfiguration.framework
       - sdk: CoreWLAN.framework

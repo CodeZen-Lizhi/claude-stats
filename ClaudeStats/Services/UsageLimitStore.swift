@@ -7,16 +7,20 @@ final class UsageLimitStore {
     private(set) var reports: [ProviderKind: UsageLimitReport] = [:]
     private(set) var loadingProviders: Set<ProviderKind> = []
     private(set) var actionMessages: [ProviderKind: String] = [:]
+    private(set) var claudeDesktopPermissionIssue: ClaudeDesktopUsagePermissionIssue?
 
     @ObservationIgnored private let registry: ProviderRegistry
     @ObservationIgnored private let claudeBridgeInstaller: any ClaudeUsageLimitBridgeInstalling
+    @ObservationIgnored private let claudeDesktopCaptureService: any ClaudeDesktopUsageCapturing
 
     init(
         registry: ProviderRegistry,
-        claudeBridgeInstaller: any ClaudeUsageLimitBridgeInstalling = ClaudeUsageLimitBridgeInstaller()
+        claudeBridgeInstaller: any ClaudeUsageLimitBridgeInstalling = ClaudeUsageLimitBridgeInstaller(),
+        claudeDesktopCaptureService: any ClaudeDesktopUsageCapturing = ClaudeDesktopUsageCaptureService()
     ) {
         self.registry = registry
         self.claudeBridgeInstaller = claudeBridgeInstaller
+        self.claudeDesktopCaptureService = claudeDesktopCaptureService
     }
 
     func report(for provider: ProviderKind) -> UsageLimitReport? {
@@ -57,6 +61,31 @@ final class UsageLimitStore {
             actionMessages[.claude] = "Bridge installed. Paste the settings snippet into \(configuration.settingsURL.path)."
         } catch {
             actionMessages[.claude] = "Could not install bridge: \(error.localizedDescription)"
+        }
+    }
+
+    func captureClaudeDesktopUsage(trigger: ClaudeDesktopUsageCaptureTrigger) async {
+        guard !loadingProviders.contains(.claude) else { return }
+        loadingProviders.insert(.claude)
+        let outcome = await claudeDesktopCaptureService.capture(trigger: trigger)
+        loadingProviders.remove(.claude)
+
+        switch outcome {
+        case .captured:
+            claudeDesktopPermissionIssue = nil
+            if trigger.shouldShowUserMessage {
+                actionMessages[.claude] = "Claude Desktop usage captured."
+            }
+            await refresh(provider: .claude, force: true)
+        case .skipped:
+            if trigger.shouldShowUserMessage {
+                actionMessages[.claude] = "Open Claude Desktop, then try reading usage again."
+            }
+        case .failed(let error):
+            claudeDesktopPermissionIssue = error.permissionIssue
+            if trigger.shouldShowUserMessage {
+                actionMessages[.claude] = error.localizedDescription
+            }
         }
     }
 

@@ -75,8 +75,8 @@
     },
     "NSScreenCaptureUsageDescription" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Notch Island can use screen recording for recording indicators and screen assistant modules when enabled." } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "启用后，Notch Island 可以为录制指示器和屏幕辅助模块使用屏幕录制。" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Claude Stats can use screen recording to read visible Claude Desktop usage limits when you choose Desktop usage capture. Notch Island can also use it for recording indicators and screen assistant modules when enabled." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "当你选择桌面用量采集时，Claude Stats 可以使用屏幕录制读取可见的 Claude Desktop 用量限制。启用后，Notch Island 也可以为录制指示器和屏幕辅助模块使用屏幕录制。" } }
       }
     },
     "NSSpeechRecognitionUsageDescription" : {

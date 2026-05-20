@@ -315,6 +315,36 @@ struct PreferencesTests {
         #expect(reloaded.claudeStatusVisibleComponentIDs == ClaudeStatusComponentCatalog.defaultVisibleComponentIDs)
     }
 
+    @Test("Claude Desktop usage capture preferences default to visible-only manual-safe mode")
+    func claudeDesktopUsageCaptureDefaults() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+
+        #expect(prefs.claudeDesktopUsageAutoMode == .visibleOnly)
+        #expect(prefs.claudeDesktopUsageTimedCaptureEnabled == false)
+        #expect(prefs.claudeDesktopUsageTimedIntervalMinutes == 30)
+    }
+
+    @Test("Claude Desktop usage capture preferences persist and interval clamps")
+    func claudeDesktopUsageCapturePersists() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+        prefs.claudeDesktopUsageAutoMode = .off
+        prefs.claudeDesktopUsageTimedCaptureEnabled = true
+        prefs.claudeDesktopUsageTimedIntervalMinutes = 1
+
+        let reloaded = Preferences(defaults: defaults)
+        #expect(reloaded.claudeDesktopUsageAutoMode == .off)
+        #expect(reloaded.claudeDesktopUsageTimedCaptureEnabled == true)
+        #expect(reloaded.claudeDesktopUsageTimedIntervalMinutes == 5)
+
+        defaults.set("always", forKey: "claudeDesktopUsageAutoMode")
+        defaults.set(999, forKey: "claudeDesktopUsageTimedIntervalMinutes")
+        let invalid = Preferences(defaults: defaults)
+        #expect(invalid.claudeDesktopUsageAutoMode == .visibleOnly)
+        #expect(invalid.claudeDesktopUsageTimedIntervalMinutes == 240)
+    }
+
     @Test("OpenAI Status preferences default to visible ChatGPT and Codex without alerts")
     func openAIStatusDefaults() {
         let defaults = makeDefaults()

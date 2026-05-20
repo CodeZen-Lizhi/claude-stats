@@ -1,0 +1,185 @@
+import Foundation
+import Testing
+@testable import ClaudeStats
+
+@Suite("Claude Desktop usage capture service")
+@MainActor
+struct ClaudeDesktopUsageCaptureServiceTests {
+    @Test("Accessibility success writes snapshot")
+    func accessibilitySuccessWritesSnapshot() async throws {
+        let locator = FakeClaudeDesktopLocator()
+        locator.state = Self.runningState(isVisible: true, isFrontmost: false)
+        let accessibility = FakeClaudeDesktopTextReader(text: "5h\n94% left\n6% used\n7d\n3% used")
+        let ocr = FakeClaudeDesktopTextReader(text: "unused")
+        let writer = FakeClaudeDesktopUsageCacheWriter()
+        let service = ClaudeDesktopUsageCaptureService(
+            appLocator: locator,
+            accessibilityReader: accessibility,
+            ocrReader: ocr,
+            cacheWriter: writer
+        )
+
+        let outcome = await service.capture(trigger: .manual)
+
+        guard case .captured(let snapshot) = outcome else {
+            Issue.record("Expected captured outcome, got \(String(describing: outcome))")
+            return
+        }
+        #expect(locator.activateCallCount == 1)
+        #expect(accessibility.callCount == 1)
+        #expect(ocr.callCount == 0)
+        #expect(snapshot.windows.first?.usedPercent == 6)
+        #expect(writer.snapshots.count == 1)
+    }
+
+    @Test("Accessibility permission stops before OCR")
+    func accessibilityPermissionStopsBeforeOCR() async {
+        let locator = FakeClaudeDesktopLocator()
+        locator.state = Self.runningState(isVisible: true, isFrontmost: true)
+        let accessibility = FakeClaudeDesktopTextReader(error: ClaudeDesktopUsageCaptureError.accessibilityPermissionRequired)
+        let ocr = FakeClaudeDesktopTextReader(text: "5h\n6% used")
+        let writer = FakeClaudeDesktopUsageCacheWriter()
+        let service = ClaudeDesktopUsageCaptureService(
+            appLocator: locator,
+            accessibilityReader: accessibility,
+            ocrReader: ocr,
+            cacheWriter: writer
+        )
+
+        let outcome = await service.capture(trigger: .manual)
+
+        #expect(outcome == .failed(.accessibilityPermissionRequired))
+        #expect(ocr.callCount == 0)
+        #expect(writer.snapshots.isEmpty)
+    }
+
+    @Test("OCR fallback writes snapshot")
+    func ocrFallbackWritesSnapshot() async throws {
+        let locator = FakeClaudeDesktopLocator()
+        locator.state = Self.runningState(isVisible: true, isFrontmost: true)
+        let accessibility = FakeClaudeDesktopTextReader(error: ClaudeDesktopUsageCaptureError.noUsageText)
+        let ocr = FakeClaudeDesktopTextReader(text: "5h\n94% left\n7d\n3% used")
+        let writer = FakeClaudeDesktopUsageCacheWriter()
+        let service = ClaudeDesktopUsageCaptureService(
+            appLocator: locator,
+            accessibilityReader: accessibility,
+            ocrReader: ocr,
+            cacheWriter: writer
+        )
+
+        let outcome = await service.capture(trigger: .manual)
+
+        guard case .captured(let snapshot) = outcome else {
+            Issue.record("Expected captured outcome, got \(String(describing: outcome))")
+            return
+        }
+        #expect(accessibility.callCount == 1)
+        #expect(ocr.callCount == 1)
+        #expect(snapshot.windows.map(\.usedPercent) == [6, 3])
+        #expect(writer.snapshots.count == 1)
+    }
+
+    @Test("Automatic capture skips when not visible and does not write")
+    func automaticSkipsWhenNotVisible() async {
+        let locator = FakeClaudeDesktopLocator()
+        locator.state = Self.runningState(isVisible: false, isFrontmost: false)
+        let accessibility = FakeClaudeDesktopTextReader(text: "5h\n6% used")
+        let writer = FakeClaudeDesktopUsageCacheWriter()
+        let service = ClaudeDesktopUsageCaptureService(
+            appLocator: locator,
+            accessibilityReader: accessibility,
+            ocrReader: FakeClaudeDesktopTextReader(text: "5h\n6% used"),
+            cacheWriter: writer
+        )
+
+        let outcome = await service.capture(trigger: .timedAutomatic)
+
+        #expect(outcome == .skipped(.notVisible))
+        #expect(locator.activateCallCount == 0)
+        #expect(accessibility.callCount == 0)
+        #expect(writer.snapshots.isEmpty)
+    }
+
+    @Test("Unparseable text does not write cache")
+    func unparseableTextDoesNotWriteCache() async {
+        let locator = FakeClaudeDesktopLocator()
+        locator.state = Self.runningState(isVisible: true, isFrontmost: true)
+        let writer = FakeClaudeDesktopUsageCacheWriter()
+        let service = ClaudeDesktopUsageCaptureService(
+            appLocator: locator,
+            accessibilityReader: FakeClaudeDesktopTextReader(text: "Projects\nSettings"),
+            ocrReader: FakeClaudeDesktopTextReader(text: "Still no quota text"),
+            cacheWriter: writer
+        )
+
+        let outcome = await service.capture(trigger: .manual)
+
+        #expect(outcome == .failed(.parseFailed))
+        #expect(writer.snapshots.isEmpty)
+    }
+
+    private static func runningState(isVisible: Bool, isFrontmost: Bool) -> ClaudeDesktopAppState {
+        ClaudeDesktopAppState(
+            isInstalled: true,
+            isRunning: true,
+            isVisible: isVisible,
+            isFrontmost: isFrontmost,
+            processIdentifier: 123,
+            localizedName: "Claude"
+        )
+    }
+}
+
+@MainActor
+private final class FakeClaudeDesktopLocator: ClaudeDesktopUsageAppLocating {
+    var state: ClaudeDesktopAppState = .missing
+    private(set) var activateCallCount = 0
+
+    func locate() -> ClaudeDesktopAppState {
+        state
+    }
+
+    func activateClaudeDesktop() -> Bool {
+        activateCallCount += 1
+        state = ClaudeDesktopAppState(
+            isInstalled: state.isInstalled,
+            isRunning: state.isRunning,
+            isVisible: true,
+            isFrontmost: true,
+            processIdentifier: state.processIdentifier,
+            localizedName: state.localizedName
+        )
+        return true
+    }
+}
+
+@MainActor
+private final class FakeClaudeDesktopTextReader: ClaudeDesktopUsageTextReading {
+    let text: String?
+    let error: Error?
+    private(set) var callCount = 0
+
+    init(text: String) {
+        self.text = text
+        self.error = nil
+    }
+
+    init(error: Error) {
+        self.text = nil
+        self.error = error
+    }
+
+    func readUsageText(app: ClaudeDesktopAppState, trigger: ClaudeDesktopUsageCaptureTrigger) async throws -> String {
+        callCount += 1
+        if let error { throw error }
+        return text ?? ""
+    }
+}
+
+private final class FakeClaudeDesktopUsageCacheWriter: ClaudeDesktopUsageCacheWriting, @unchecked Sendable {
+    private(set) var snapshots: [UsageLimitSnapshot] = []
+
+    func write(_ snapshot: UsageLimitSnapshot) throws {
+        snapshots.append(snapshot)
+    }
+}

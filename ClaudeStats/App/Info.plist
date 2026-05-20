@@ -85,7 +85,7 @@
 	<key>NSSystemAdministrationUsageDescription</key>
 	<string>A program running in the embedded terminal may request elevated privileges.</string>
 	<key>NSScreenCaptureUsageDescription</key>
-	<string>Notch Island can use screen recording for recording indicators and screen assistant modules when enabled.</string>
+	<string>Claude Stats can use screen recording to read visible Claude Desktop usage limits when you choose Desktop usage capture. Notch Island can also use it for recording indicators and screen assistant modules when enabled.</string>
 	<!--
 	  Sparkle auto-update. SUPublicEDKey is the EdDSA *public* key produced by
 	  Sparkle's `generate_keys` (the matching private key lives only in the
