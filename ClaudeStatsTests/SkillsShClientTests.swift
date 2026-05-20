@@ -80,8 +80,9 @@ struct SkillsShClientTests {
             )
         }
 
-        let detail = try await client.detail(id: "owner/repo/skill", apiKey: "sk_test")
-        let audit = try await client.audit(id: "owner/repo/skill", apiKey: "sk_test")
+        async let detailRequest = client.detail(id: "owner/repo/skill", apiKey: "sk_test")
+        async let auditRequest = client.audit(id: "owner/repo/skill", apiKey: "sk_test")
+        let (detail, audit) = try await (detailRequest, auditRequest)
 
         #expect(detail.hash == "abc")
         #expect(detail.skillMarkdown?.contains("name: Skill") == true)

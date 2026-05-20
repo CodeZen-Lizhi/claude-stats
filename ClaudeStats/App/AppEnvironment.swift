@@ -23,6 +23,7 @@ final class AppEnvironment {
     let dashboard: DashboardViewModel
     let gitActivity: GitActivityViewModel
     let github = GitHubViewModel()
+    let linuxDo: LinuxDoStore
     let claudeStatus: ClaudeStatusViewModel
     let openAIStatus: OpenAIStatusViewModel
     let leaderboards: LeaderboardSyncViewModel
@@ -46,7 +47,8 @@ final class AppEnvironment {
         cliEnvironment: CLIEnvironmentViewModel = CLIEnvironmentViewModel(),
         systemMonitor: SystemMonitorViewModel = SystemMonitorViewModel(),
         networkDebugger: NetworkDebuggerStore? = nil,
-        ops: OpsStore = OpsStore()
+        ops: OpsStore = OpsStore(),
+        linuxDo: LinuxDoStore? = nil
     ) {
         self.pricing = pricing
         self.preferences = preferences
@@ -57,6 +59,7 @@ final class AppEnvironment {
         self.systemMonitor = systemMonitor
         self.networkDebugger = networkDebugger ?? NetworkDebuggerStore(preferences: preferences)
         self.ops = ops
+        self.linuxDo = linuxDo ?? LinuxDoStore(preferences: preferences)
         self.dashboard = DashboardViewModel(pricing: pricing)
         self.gitActivity = GitActivityViewModel()
         self.claudeStatus = ClaudeStatusViewModel(preferences: preferences)
@@ -103,6 +106,7 @@ final class AppEnvironment {
         }
         claudeStatus.start()
         openAIStatus.start()
+        linuxDo.start()
         applyAutoRefreshSetting()
         updater.start()
         floatingStatsPanel.start(environment: self)

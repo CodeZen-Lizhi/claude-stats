@@ -40,6 +40,15 @@ struct SessionSidebarColumn: View {
                 .padding(.horizontal, 12)
                 .padding(.bottom, 8)
 
+            SidebarRow(
+                title: "Overview",
+                symbol: "chart.bar.xaxis",
+                isSelected: selectedSessionID == nil
+            ) {
+                showOverview()
+            }
+            .padding(.bottom, 4)
+
             sessionsTree(vm: vm)
         }
         .padding(.bottom, 10)
@@ -208,6 +217,11 @@ struct SessionSidebarColumn: View {
     private func selectSession(_ session: Session) {
         clearSearchFocus()
         selectedSessionID = session.id
+    }
+
+    private func showOverview() {
+        clearSearchFocus()
+        selectedSessionID = nil
     }
 
     private func refreshSessionGroups() {

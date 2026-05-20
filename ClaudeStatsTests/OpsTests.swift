@@ -82,6 +82,30 @@ struct OpsParserTests {
         #expect(cert?.contains("BEGIN CERTIFICATE") == true)
         #expect(Calendar(identifier: .gregorian).component(.year, from: expiry) == 2026)
     }
+
+    @Test("ps parser handles large axww lstart output without UI sorting")
+    func psParserHandlesLargeAxwwLstartOutputWithoutUISorting() {
+        let executable = "/Applications/Foo Bar.app/Contents/MacOS/Foo Bar"
+        let output = (0 ..< 10_000)
+            .map { index in
+                "\(index + 100) 1 alice 1.0 0.5 00:01 Wed May 20 17:23:00 2026 \(executable) --worker \(index) --long-argument value"
+            }
+            .joined(separator: "\n")
+
+        let processes = OpsParsers.parseProcessList(
+            output,
+            currentPID: 50_000,
+            currentUser: "alice",
+            executablePathResolver: { _, _ in executable }
+        )
+
+        #expect(processes.count == 10_000)
+        #expect(processes.first?.pid == 100)
+        #expect(processes.first?.startTime == "Wed May 20 17:23:00 2026")
+        #expect(processes.first?.executablePath == executable)
+        #expect(processes.first?.commandLine.contains("--worker 0") == true)
+        #expect(processes.last?.pid == 10_099)
+    }
 }
 
 struct OpsCommandRunnerTests {
@@ -290,6 +314,103 @@ struct OpsStoreTests {
         store.processQuery = "node"
 
         #expect(store.selectedProcess?.pid == 1)
+    }
+
+    @Test("process projection caches large visible list between reads")
+    func processProjectionCachesLargeVisibleListBetweenReads() {
+        let store = OpsStore(service: FakeOpsService())
+        store.processes = Self.makeProcesses(count: 5_000)
+
+        let generation = store.processProjectionGeneration
+        #expect(store.visibleProcessRows.count == 5_000)
+
+        for _ in 0 ..< 100 {
+            _ = store.visibleProcessRows.count
+            _ = store.selectedProcessRow?.id
+            _ = store.filteredProcesses.count
+        }
+
+        #expect(store.processProjectionGeneration == generation)
+
+        store.processQuery = "worker-4999"
+
+        #expect(store.processProjectionGeneration == generation + 1)
+        #expect(store.visibleProcessRows.map(\.id) == [4_999])
+        #expect(store.selectedProcessRow?.id == 4_999)
+    }
+
+    @Test("process projection sorts by cached row values")
+    func processProjectionSortsByCachedRowValues() {
+        let store = OpsStore(service: FakeOpsService())
+        store.processes = [
+            OpsProcessItem(pid: 10, ppid: 1, user: "alice", cpuPercent: 2, memoryPercent: 10, elapsed: "00:01", executablePath: "/usr/bin/git", commandLine: "git status", protection: .allowed),
+            OpsProcessItem(pid: 20, ppid: 1, user: "alice", cpuPercent: 9, memoryPercent: 3, elapsed: "00:01", executablePath: "/opt/homebrew/bin/node", commandLine: "node server.js", protection: .allowed),
+            OpsProcessItem(pid: 30, ppid: 1, user: "alice", cpuPercent: 4, memoryPercent: 50, elapsed: "00:01", executablePath: "/usr/bin/python3", commandLine: "python3 worker.py", protection: .allowed),
+        ]
+
+        #expect(store.visibleProcessRows.map(\.id) == [20, 30, 10])
+
+        store.processSort = .memory
+        #expect(store.visibleProcessRows.map(\.id) == [30, 10, 20])
+
+        store.processSort = .name
+        #expect(store.visibleProcessRows.map(\.displayName) == ["git", "node", "python3"])
+    }
+
+    @Test("port projection caches large visible list and repairs selection")
+    func portProjectionCachesLargeVisibleListAndRepairsSelection() {
+        let store = OpsStore(service: FakeOpsService())
+        store.ports = Self.makePorts(count: 1_000)
+        store.selectedPortID = store.ports[900].id
+
+        let generation = store.portProjectionGeneration
+        for _ in 0 ..< 100 {
+            _ = store.visiblePortRows.count
+            _ = store.selectedPortRow?.id
+            _ = store.filteredPorts.count
+        }
+        #expect(store.portProjectionGeneration == generation)
+
+        store.portQuery = "3001"
+
+        #expect(store.portProjectionGeneration == generation + 1)
+        #expect(store.visiblePortRows.map(\.item.port) == [3_001])
+        #expect(store.selectedPortRow?.item.port == 3_001)
+    }
+
+    private static func makeProcesses(count: Int) -> [OpsProcessItem] {
+        (0 ..< count).map { index in
+            let executable = index.isMultiple(of: 2) ? "/opt/homebrew/bin/node" : "/usr/bin/python3"
+            let command = index.isMultiple(of: 2) ? "node worker-\(index).js" : "python3 worker-\(index).py"
+            return OpsProcessItem(
+                pid: Int32(index),
+                ppid: 1,
+                user: "alice",
+                cpuPercent: Double(index % 100),
+                memoryPercent: Double((count - index) % 100),
+                elapsed: "00:01",
+                executablePath: executable,
+                commandLine: command,
+                protection: .allowed
+            )
+        }
+    }
+
+    private static func makePorts(count: Int) -> [OpsPortItem] {
+        (0 ..< count).map { index in
+            OpsPortItem(
+                id: "port-\(index)",
+                pid: Int32(index + 100),
+                processName: index.isMultiple(of: 2) ? "node" : "python3",
+                user: "alice",
+                protocolName: "TCP",
+                localAddress: "127.0.0.1",
+                port: 3_000 + index,
+                commandLine: "server --port \(3_000 + index)",
+                executablePath: "/usr/bin/env",
+                protection: .allowed
+            )
+        }
     }
 }
 

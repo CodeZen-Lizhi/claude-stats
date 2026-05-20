@@ -3,6 +3,7 @@ import SwiftUI
 /// Right-side content for main-window settings mode. The surrounding
 /// `MainWindowModeShell` owns the sidebar and `DetailPanel` chrome.
 struct SettingsDetailView: View {
+    @Environment(AppEnvironment.self) private var env
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let section: SettingsSection
     var onSelectSection: (SettingsSection) -> Void = { _ in }
@@ -66,6 +67,7 @@ struct SettingsDetailView: View {
         case .tracking: TrackingSettingsView(onSelectSection: onSelectSection)
         case .leaderboards: LeaderboardsSettingsView(onSelectSection: onSelectSection)
         case .github: GitHubSettingsView(onSelectSection: onSelectSection)
+        case .linuxDo: LinuxDoSettingsView(store: env.linuxDo)
         case .systemMonitor: SystemMonitorSettingsView(onSelectSection: onSelectSection)
         case .terminal: TerminalSettingsView()
         case .about: AboutSettingsView(onShowReleaseHistory: showReleaseHistory)

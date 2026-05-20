@@ -44,7 +44,6 @@ struct SkillsShClient: @unchecked Sendable, SkillsShClienting {
 
     private let baseURL: URL
     private let session: URLSession
-    private let decoder: JSONDecoder
 
     init(
         baseURL: URL = URL(string: "https://skills.sh")!,
@@ -52,17 +51,6 @@ struct SkillsShClient: @unchecked Sendable, SkillsShClienting {
     ) {
         self.baseURL = baseURL
         self.session = session
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .custom { decoder in
-            let value = try decoder.singleValueContainer().decode(String.self)
-            if let date = Self.parseISO8601Date(value) {
-                return date
-            }
-            throw DecodingError.dataCorrupted(
-                DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Invalid ISO8601 date")
-            )
-        }
-        self.decoder = decoder
     }
 
     func leaderboard(apiKey: String, view: String = "trending", limit: Int = 100) async throws -> [RemoteSkillSummary] {
@@ -163,6 +151,7 @@ struct SkillsShClient: @unchecked Sendable, SkillsShClienting {
         }
 
         do {
+            let decoder = Self.makeDecoder()
             return try decoder.decode(T.self, from: data)
         } catch {
             throw ClientError.decoding(String(describing: error))
@@ -182,10 +171,25 @@ struct SkillsShClient: @unchecked Sendable, SkillsShClienting {
     }
 
     private func errorMessage(from data: Data) -> String? {
+        let decoder = Self.makeDecoder()
         guard let response = try? decoder.decode(SkillsErrorResponse.self, from: data) else {
             return nil
         }
         return response.message
+    }
+
+    private static func makeDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let value = try decoder.singleValueContainer().decode(String.self)
+            if let date = Self.parseISO8601Date(value) {
+                return date
+            }
+            throw DecodingError.dataCorrupted(
+                DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Invalid ISO8601 date")
+            )
+        }
+        return decoder
     }
 
     private static let userAgent: String = {

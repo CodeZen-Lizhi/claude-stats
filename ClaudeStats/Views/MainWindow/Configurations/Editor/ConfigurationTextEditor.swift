@@ -68,8 +68,8 @@ struct ConfigurationTextEditor: NSViewRepresentable {
         textView.isEditable = isEditable
         if textView.string != text {
             context.coordinator.replaceText(in: textView, with: text, kind: fileKind)
-        } else {
-            context.coordinator.scheduleHighlighting(to: textView, kind: fileKind)
+        } else if context.coordinator.markKindIfChanged(fileKind) {
+            context.coordinator.scheduleHighlighting(to: textView, kind: fileKind, force: true)
         }
     }
 
@@ -94,6 +94,7 @@ struct ConfigurationTextEditor: NSViewRepresentable {
         private var highlightGeneration = 0
         private var highlightTask: Task<Void, Never>?
         private var lastAppliedHighlight: HighlightSignature?
+        private var configuredKind: ProviderConfigFileKind?
 
         private let jsonRules: [HighlightRule] = [
             HighlightRule(pattern: #""([^"\\]|\\.)*""#, color: .systemGreen),
@@ -158,9 +159,17 @@ struct ConfigurationTextEditor: NSViewRepresentable {
             isProgrammaticChange = false
             textRevision &+= 1
             lastAppliedHighlight = nil
+            configuredKind = kind
             textView.typingAttributes = baseAttributes
             textView.selectedRanges = clampedRanges(selectedRanges, textLength: (text as NSString).length)
             scheduleHighlighting(to: textView, kind: kind, force: true, delayNanoseconds: 35_000_000)
+        }
+
+        func markKindIfChanged(_ kind: ProviderConfigFileKind) -> Bool {
+            guard configuredKind != kind else { return false }
+            configuredKind = kind
+            lastAppliedHighlight = nil
+            return true
         }
 
         func scheduleHighlighting(

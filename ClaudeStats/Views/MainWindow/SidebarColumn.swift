@@ -25,6 +25,7 @@ struct SidebarColumn: View {
             Color.clear.frame(height: 44)
 
             navRow(.dashboard)
+            navRow(.linuxDo)
             sessionsEntryRow
 
             sectionHeader("STATS")

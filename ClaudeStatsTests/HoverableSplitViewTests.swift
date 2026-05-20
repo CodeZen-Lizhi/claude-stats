@@ -54,6 +54,43 @@ struct HoverableSplitViewTests {
         #expect(approximatelyEqual(range.lowerBound, range.upperBound))
     }
 
+    @Test("Configurations compare by effective values")
+    func configurationsCompareByEffectiveValues() {
+        let first = HoverableSplitViewConfiguration(
+            primaryMinimumPaneLength: 220,
+            secondaryMinimumPaneLength: 320,
+            dragUpdateInterval: 1.0 / 120.0
+        )
+        let matching = HoverableSplitViewConfiguration(
+            primaryMinimumPaneLength: 220,
+            secondaryMinimumPaneLength: 320,
+            dragUpdateInterval: 1.0 / 120.0
+        )
+        let changed = HoverableSplitViewConfiguration(
+            primaryMinimumPaneLength: 221,
+            secondaryMinimumPaneLength: 320,
+            dragUpdateInterval: 1.0 / 120.0
+        )
+
+        #expect(first == matching)
+        #expect(first != changed)
+    }
+
+    @Test("Maximum pane lengths constrain divider range")
+    func maximumPaneLengthsConstrainDividerRange() throws {
+        let configuration = HoverableSplitViewConfiguration(
+            primaryMinimumPaneLength: 120,
+            primaryMaximumPaneLength: 260,
+            secondaryMinimumPaneLength: 120,
+            secondaryMaximumPaneLength: 300
+        )
+
+        let range = try #require(configuration.dividerPositionRange(for: 800))
+
+        #expect(approximatelyEqual(range.lowerBound, 380))
+        #expect(approximatelyEqual(range.lowerBound, range.upperBound))
+    }
+
     private func approximatelyEqual(
         _ lhs: CGFloat,
         _ rhs: CGFloat,

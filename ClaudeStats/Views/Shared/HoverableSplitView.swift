@@ -145,7 +145,7 @@ enum HoverableSplitAxis: Equatable, Sendable {
     }
 }
 
-struct HoverableSplitViewConfiguration: @unchecked Sendable {
+struct HoverableSplitViewConfiguration: Equatable, @unchecked Sendable {
     var minimumPaneLength: CGFloat
     var primaryMinimumPaneLength: CGFloat?
     var primaryMaximumPaneLength: CGFloat?
@@ -238,6 +238,21 @@ struct HoverableSplitViewConfiguration: @unchecked Sendable {
 
     private func clampedPosition(_ value: CGFloat, length: CGFloat) -> CGFloat {
         min(max(value, 0), length)
+    }
+
+    static func == (lhs: HoverableSplitViewConfiguration, rhs: HoverableSplitViewConfiguration) -> Bool {
+        lhs.minimumPaneLength == rhs.minimumPaneLength
+            && lhs.primaryMinimumPaneLength == rhs.primaryMinimumPaneLength
+            && lhs.primaryMaximumPaneLength == rhs.primaryMaximumPaneLength
+            && lhs.secondaryMinimumPaneLength == rhs.secondaryMinimumPaneLength
+            && lhs.secondaryMaximumPaneLength == rhs.secondaryMaximumPaneLength
+            && lhs.hoverExpansion == rhs.hoverExpansion
+            && lhs.minimumPillInset == rhs.minimumPillInset
+            && lhs.verticalPillSize == rhs.verticalPillSize
+            && lhs.horizontalPillSize == rhs.horizontalPillSize
+            && lhs.pillColor.isEqual(rhs.pillColor)
+            && lhs.fadeDuration == rhs.fadeDuration
+            && lhs.dragUpdateInterval == rhs.dragUpdateInterval
     }
 }
 
@@ -400,19 +415,26 @@ final class HoverablePillSplitView: NSSplitView {
         configuration newConfiguration: HoverableSplitViewConfiguration
     ) {
         let clampedFraction = clamp(newPrimaryFraction, min: 0.1, max: 0.9)
-        if axis != newAxis {
+        let axisChanged = axis != newAxis
+        let fractionChanged = abs(primaryFraction - clampedFraction) > 0.001
+        let configurationChanged = configuration != newConfiguration
+        guard axisChanged || fractionChanged || configurationChanged else { return }
+
+        if axisChanged {
             axis = newAxis
             isVertical = newAxis.splitViewIsVertical
             hasAppliedInitialSplit = false
             hidePill(animated: false, force: true)
         }
-        if abs(primaryFraction - clampedFraction) > 0.001 {
+        if fractionChanged {
             primaryFraction = clampedFraction
             hasAppliedInitialSplit = false
         }
         configuration = newConfiguration
-        updateDividerLineLayerAppearance()
-        updatePillLayerAppearance()
+        if axisChanged || configurationChanged {
+            updateDividerLineLayerAppearance()
+            updatePillLayerAppearance()
+        }
         needsLayout = true
         window?.invalidateCursorRects(for: self)
     }

@@ -1,0 +1,387 @@
+import Foundation
+
+enum LinuxDoResponseMapper {
+    static func topicList(from response: TopicListResponse, page: Int, now: Date) -> LinuxDoTopicList {
+        LinuxDoTopicList(
+            topics: response.topicList.topics.map(\.model),
+            page: page,
+            nextPage: response.topicList.moreTopicsURL == nil ? nil : page + 1,
+            fetchedAt: now
+        )
+    }
+
+    static func topicList(from response: SearchResponse, page: Int, now: Date) -> LinuxDoTopicList {
+        LinuxDoTopicList(
+            topics: response.topics.map(\.model),
+            page: page,
+            nextPage: response.groupedSearchResult?.morePosts == true ? page + 1 : nil,
+            fetchedAt: now
+        )
+    }
+
+    static func topicDetail(from response: TopicDetailResponse, now: Date) -> LinuxDoTopicDetail {
+        LinuxDoTopicDetail(
+            id: response.id,
+            title: response.title,
+            fancyTitle: response.fancyTitle,
+            slug: response.slug,
+            categoryID: response.categoryID,
+            tags: response.tags ?? [],
+            postsCount: response.postsCount ?? response.postStream.posts.count,
+            stream: response.postStream.stream ?? response.postStream.posts.map(\.id),
+            posts: response.postStream.posts.map(\.model),
+            fetchedAt: now
+        )
+    }
+
+    static func posts(from response: TopicPostsResponse) -> [LinuxDoPost] {
+        response.postStream.posts.map(\.model)
+    }
+}
+
+struct TopicListResponse: Decodable, Sendable {
+    let topicList: TopicList
+
+    enum CodingKeys: String, CodingKey {
+        case topicList = "topic_list"
+    }
+
+    struct TopicList: Decodable, Sendable {
+        let topics: [TopicResponse]
+        let moreTopicsURL: String?
+
+        enum CodingKeys: String, CodingKey {
+            case topics
+            case moreTopicsURL = "more_topics_url"
+        }
+    }
+}
+
+struct CategoriesResponse: Decodable, Sendable {
+    let categoryList: CategoryList
+
+    enum CodingKeys: String, CodingKey {
+        case categoryList = "category_list"
+    }
+
+    var categories: [LinuxDoCategory] {
+        categoryList.categories.map(\.model)
+    }
+
+    struct CategoryList: Decodable, Sendable {
+        let categories: [CategoryResponse]
+    }
+}
+
+struct SearchResponse: Decodable, Sendable {
+    let topics: [TopicResponse]
+    let groupedSearchResult: GroupedSearchResult?
+
+    enum CodingKeys: String, CodingKey {
+        case topics
+        case groupedSearchResult = "grouped_search_result"
+    }
+
+    struct GroupedSearchResult: Decodable, Sendable {
+        let morePosts: Bool?
+
+        enum CodingKeys: String, CodingKey {
+            case morePosts = "more_posts"
+        }
+    }
+}
+
+struct TopicDetailResponse: Decodable, Sendable {
+    let id: Int
+    let title: String
+    let fancyTitle: String?
+    let slug: String?
+    let categoryID: Int?
+    let tags: [String]?
+    let postsCount: Int?
+    let postStream: PostStream
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case fancyTitle = "fancy_title"
+        case slug
+        case categoryID = "category_id"
+        case tags
+        case postsCount = "posts_count"
+        case postStream = "post_stream"
+    }
+}
+
+struct TopicPostsResponse: Decodable, Sendable {
+    let postStream: TopicDetailResponse.PostStream
+
+    enum CodingKeys: String, CodingKey {
+        case postStream = "post_stream"
+    }
+}
+
+extension TopicDetailResponse {
+    struct PostStream: Decodable, Sendable {
+        let posts: [PostResponse]
+        let stream: [Int]?
+    }
+}
+
+struct NotificationsResponse: Decodable, Sendable {
+    let notifications: [NotificationResponse]
+    let loadMoreNotifications: String?
+
+    enum CodingKeys: String, CodingKey {
+        case notifications
+        case loadMoreNotifications = "load_more_notifications"
+    }
+
+    var usernameFromPagination: String? {
+        guard let loadMoreNotifications,
+              let components = URLComponents(string: loadMoreNotifications) else {
+            return nil
+        }
+        return components.queryItems?.first(where: { $0.name == "username" })?.value
+    }
+}
+
+struct CurrentUserResponse: Decodable, Sendable {
+    let currentUser: UserResponse
+
+    enum CodingKeys: String, CodingKey {
+        case currentUser = "current_user"
+    }
+}
+
+struct TopicResponse: Decodable, Sendable {
+    let id: Int
+    let title: String
+    let fancyTitle: String?
+    let slug: String?
+    let categoryID: Int?
+    let tags: [String]?
+    let excerpt: String?
+    let postsCount: Int?
+    let replyCount: Int?
+    let views: Int?
+    let likeCount: Int?
+    let createdAt: Date?
+    let bumpedAt: Date?
+    let lastPostedAt: Date?
+    let imageURL: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case fancyTitle = "fancy_title"
+        case slug
+        case categoryID = "category_id"
+        case tags
+        case excerpt
+        case postsCount = "posts_count"
+        case replyCount = "reply_count"
+        case views
+        case likeCount = "like_count"
+        case createdAt = "created_at"
+        case bumpedAt = "bumped_at"
+        case lastPostedAt = "last_posted_at"
+        case imageURL = "image_url"
+    }
+
+    var model: LinuxDoTopicSummary {
+        LinuxDoTopicSummary(
+            id: id,
+            title: title,
+            fancyTitle: fancyTitle,
+            slug: slug,
+            categoryID: categoryID,
+            tags: tags ?? [],
+            excerpt: excerpt,
+            postsCount: postsCount ?? 0,
+            replyCount: replyCount ?? 0,
+            views: views ?? 0,
+            likeCount: likeCount ?? 0,
+            createdAt: createdAt,
+            bumpedAt: bumpedAt,
+            lastPostedAt: lastPostedAt,
+            imageURL: LinuxDoURLResolver.url(from: imageURL)
+        )
+    }
+}
+
+struct CategoryResponse: Decodable, Sendable {
+    let id: Int
+    let name: String
+    let slug: String
+    let color: String?
+    let textColor: String?
+    let topicCount: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case slug
+        case color
+        case textColor = "text_color"
+        case topicCount = "topic_count"
+    }
+
+    var model: LinuxDoCategory {
+        LinuxDoCategory(
+            id: id,
+            name: name,
+            slug: slug,
+            colorHex: color,
+            textColorHex: textColor,
+            topicCount: topicCount ?? 0
+        )
+    }
+}
+
+struct UserResponse: Decodable, Sendable {
+    let id: Int
+    let username: String
+    let name: String?
+    let avatarTemplate: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case username
+        case name
+        case avatarTemplate = "avatar_template"
+    }
+
+    var user: LinuxDoUser {
+        LinuxDoUser(
+            id: id,
+            username: username,
+            name: name,
+            avatarURL: LinuxDoURLResolver.avatarURL(from: avatarTemplate)
+        )
+    }
+
+    var currentUser: LinuxDoCurrentUser {
+        LinuxDoCurrentUser(
+            id: id,
+            username: username,
+            name: name,
+            avatarURL: LinuxDoURLResolver.avatarURL(from: avatarTemplate)
+        )
+    }
+}
+
+struct PostResponse: Decodable, Sendable {
+    let id: Int
+    let topicID: Int?
+    let postNumber: Int
+    let username: String
+    let name: String?
+    let avatarTemplate: String?
+    let cooked: String
+    let createdAt: Date?
+    let updatedAt: Date?
+    let likeCount: Int?
+    let replyCount: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case topicID = "topic_id"
+        case postNumber = "post_number"
+        case username
+        case name
+        case avatarTemplate = "avatar_template"
+        case cooked
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case likeCount = "like_count"
+        case replyCount = "reply_count"
+    }
+
+    var model: LinuxDoPost {
+        LinuxDoPost(
+            id: id,
+            topicID: topicID,
+            postNumber: postNumber,
+            username: username,
+            name: name,
+            avatarURL: LinuxDoURLResolver.avatarURL(from: avatarTemplate),
+            cookedHTML: cooked,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            likeCount: likeCount ?? 0,
+            replyCount: replyCount ?? 0
+        )
+    }
+}
+
+struct NotificationResponse: Decodable, Sendable {
+    let id: Int
+    let notificationType: Int
+    let read: Bool?
+    let createdAt: Date?
+    let topicID: Int?
+    let postNumber: Int?
+    let slug: String?
+    let data: DataNode?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case notificationType = "notification_type"
+        case read
+        case createdAt = "created_at"
+        case topicID = "topic_id"
+        case postNumber = "post_number"
+        case slug
+        case data
+    }
+
+    var model: LinuxDoNotification {
+        LinuxDoNotification(
+            id: id,
+            notificationType: notificationType,
+            read: read ?? false,
+            createdAt: createdAt,
+            topicID: topicID,
+            postNumber: postNumber,
+            slug: slug,
+            title: data?.topicTitle ?? data?.originalTitle,
+            excerpt: data?.excerpt ?? data?.displayUsername
+        )
+    }
+
+    struct DataNode: Decodable, Sendable {
+        let topicTitle: String?
+        let originalTitle: String?
+        let excerpt: String?
+        let displayUsername: String?
+
+        enum CodingKeys: String, CodingKey {
+            case topicTitle = "topic_title"
+            case originalTitle = "original_title"
+            case excerpt
+            case displayUsername = "display_username"
+        }
+    }
+}
+
+enum LinuxDoURLResolver {
+    static let baseURL = URL(string: "https://linux.do")!
+
+    static func url(from raw: String?) -> URL? {
+        guard let raw, !raw.isEmpty else { return nil }
+        if raw.hasPrefix("//") {
+            return URL(string: "https:\(raw)")
+        }
+        if raw.hasPrefix("/") {
+            return URL(string: raw, relativeTo: baseURL)?.absoluteURL
+        }
+        return URL(string: raw)
+    }
+
+    static func avatarURL(from template: String?) -> URL? {
+        guard let template else { return nil }
+        return url(from: template.replacingOccurrences(of: "{size}", with: "96"))
+    }
+}
+

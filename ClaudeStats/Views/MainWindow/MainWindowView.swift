@@ -4,12 +4,13 @@ import SwiftUI
 /// Top-level page shown in the main window's detail column. Settings live in
 /// their own main-window mode, not as a `MainPage`.
 enum MainPage: String, CaseIterable, Identifiable, Sendable {
-    case dashboard, configurations, usage, leaderboards, activity, git, system, skills, terminal
+    case dashboard, linuxDo, configurations, usage, leaderboards, activity, git, system, skills, terminal
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .dashboard: L10n.string("main_page.dashboard", defaultValue: "Dashboard")
+        case .linuxDo: "LinuxDo"
         case .configurations: L10n.string("main_page.switcher", defaultValue: "Switcher")
         case .usage: L10n.string("main_page.usage", defaultValue: "Usage")
         case .leaderboards: L10n.string("main_page.leaderboards", defaultValue: "Leaderboards")
@@ -24,6 +25,7 @@ enum MainPage: String, CaseIterable, Identifiable, Sendable {
     var symbol: String {
         switch self {
         case .dashboard: "square.grid.2x2"
+        case .linuxDo: "globe.asia.australia"
         case .configurations: "slider.horizontal.3"
         case .usage: "chart.bar.xaxis"
         case .leaderboards: "trophy"
@@ -69,7 +71,7 @@ struct MainWindowView: View {
     @State private var trafficLights = TrafficLightPositioner()
 
     private var availablePages: [MainPage] {
-        var pages: [MainPage] = [.dashboard, .configurations, .usage, .leaderboards]
+        var pages: [MainPage] = [.dashboard, .linuxDo, .configurations, .usage, .leaderboards]
         if env.preferences.aiActivityAnalysisEnabled { pages.append(.activity) }
         if env.preferences.gitTrackingEnabled { pages.append(.git) }
         if env.preferences.systemMonitorEnabled { pages.append(.system) }
@@ -227,7 +229,7 @@ struct MainWindowView: View {
         .onAppear {
             page = MainPage(rawValue: pageRaw) ?? .dashboard
             if !availablePages.contains(page) { page = .dashboard }
-            if mode == .sessions { ensureSessionSelection() }
+            if mode == .sessions { clearInvalidSessionSelection() }
             DockVisibilityCoordinator.shared.acquire()
             Log.app.info("Main window opened on page \(page.rawValue, privacy: .public)")
         }
@@ -237,10 +239,10 @@ struct MainWindowView: View {
         }
         .onChange(of: page) { _, new in pageRaw = new.rawValue }
         .onChange(of: env.store.lastRefreshedAt) { _, _ in
-            if mode == .sessions { ensureSessionSelection() }
+            if mode == .sessions { clearInvalidSessionSelection() }
         }
         .onChange(of: env.preferences.selectedProvider) { _, _ in
-            if mode == .sessions { ensureSessionSelection() }
+            if mode == .sessions { selectedSessionID = nil }
         }
         .onChange(of: env.preferences.aiActivityAnalysisEnabled) { _, on in
             if !on && page == .activity { page = .dashboard }
@@ -290,6 +292,8 @@ struct MainWindowView: View {
         switch page {
         case .dashboard:
             DashboardView()
+        case .linuxDo:
+            LinuxDoWorkspaceView(store: env.linuxDo)
         case .configurations:
             ConfigurationsView()
         case .usage:
@@ -314,16 +318,7 @@ struct MainWindowView: View {
         if let session = selectedSession {
             CenteredPaneContainer { SessionDetailView(session: session) }
         } else {
-            CenteredPaneContainer {
-                ContentUnavailableView {
-                    Label("No Sessions", systemImage: "tray")
-                } description: {
-                    Text(env.store.isLoading
-                         ? "Scanning sessions for \(env.preferences.selectedProvider.shortName)..."
-                         : "No sessions for \(env.preferences.selectedProvider.shortName) yet.")
-                }
-                .font(.sora(12))
-            }
+            SessionsOverviewDetailView()
         }
     }
 
@@ -347,7 +342,7 @@ struct MainWindowView: View {
     }
 
     private func openSessions() {
-        ensureSessionSelection()
+        selectedSessionID = nil
         transition(to: .sessions)
     }
 
@@ -393,16 +388,12 @@ struct MainWindowView: View {
         }
     }
 
-    private func ensureSessionSelection() {
+    private func clearInvalidSessionSelection() {
+        guard let id = selectedSessionID else { return }
         let sessions = env.store.sessions(for: env.preferences.selectedProvider)
-        if let id = selectedSessionID, sessions.contains(where: { $0.id == id }) { return }
-        selectedSessionID = sessions.max { lhs, rhs in
-            sessionActivityDate(lhs) < sessionActivityDate(rhs)
-        }?.id
-    }
-
-    private func sessionActivityDate(_ session: Session) -> Date {
-        session.stats?.lastActivity ?? session.lastModified
+        if !sessions.contains(where: { $0.id == id }) {
+            selectedSessionID = nil
+        }
     }
 
     private func transition(to nextMode: MainWindowMode) {

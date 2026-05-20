@@ -251,6 +251,26 @@ final class Preferences {
     var githubLogin: String {
         didSet { defaults.set(githubLogin, forKey: Keys.githubLogin) }
     }
+    var linuxDoNotificationsEnabled: Bool {
+        didSet { defaults.set(linuxDoNotificationsEnabled, forKey: Keys.linuxDoNotificationsEnabled) }
+    }
+    var linuxDoLastSeenNotificationID: Int {
+        didSet { defaults.set(linuxDoLastSeenNotificationID, forKey: Keys.linuxDoLastSeenNotificationID) }
+    }
+    var linuxDoNotificationDeliveredIDs: [Int] {
+        didSet {
+            defaults.set(
+                linuxDoNotificationDeliveredIDs.map(String.init).joined(separator: ","),
+                forKey: Keys.linuxDoNotificationDeliveredIDs
+            )
+        }
+    }
+    var linuxDoLastLoginUsername: String {
+        didSet { defaults.set(linuxDoLastLoginUsername, forKey: Keys.linuxDoLastLoginUsername) }
+    }
+    var linuxDoSelectedFeed: String {
+        didSet { defaults.set(linuxDoSelectedFeed, forKey: Keys.linuxDoSelectedFeed) }
+    }
     /// Claude Status components shown on the Dashboard and monitored for
     /// optional notifications. Defaults to `claude.ai` and `Claude Code`.
     var claudeStatusVisibleComponentIDs: Set<String> {
@@ -444,6 +464,13 @@ final class Preferences {
         gitStatsScope = GitStatsScope(rawValue: defaults.string(forKey: Keys.gitStatsScope) ?? "") ?? .head
         githubEnabled = defaults.bool(forKey: Keys.githubEnabled)
         githubLogin = defaults.string(forKey: Keys.githubLogin) ?? ""
+        linuxDoNotificationsEnabled = defaults.bool(forKey: Keys.linuxDoNotificationsEnabled)
+        linuxDoLastSeenNotificationID = (defaults.object(forKey: Keys.linuxDoLastSeenNotificationID) as? Int) ?? 0
+        linuxDoNotificationDeliveredIDs = (defaults.string(forKey: Keys.linuxDoNotificationDeliveredIDs) ?? "")
+            .split(separator: ",")
+            .compactMap { Int($0) }
+        linuxDoLastLoginUsername = defaults.string(forKey: Keys.linuxDoLastLoginUsername) ?? ""
+        linuxDoSelectedFeed = defaults.string(forKey: Keys.linuxDoSelectedFeed) ?? LinuxDoFeed.latest.storedValue
         let storedClaudeStatusComponentIDs = (defaults.string(forKey: Keys.claudeStatusVisibleComponentIDs) ?? "")
             .split(separator: ",")
             .map { String($0) }
@@ -568,6 +595,11 @@ final class Preferences {
         static let rememberSelectedProvider = "rememberSelectedProvider"
         static let githubEnabled = "githubEnabled"
         static let githubLogin = "githubLogin"
+        static let linuxDoNotificationsEnabled = "linuxDoNotificationsEnabled"
+        static let linuxDoLastSeenNotificationID = "linuxDoLastSeenNotificationID"
+        static let linuxDoNotificationDeliveredIDs = "linuxDoNotificationDeliveredIDs"
+        static let linuxDoLastLoginUsername = "linuxDoLastLoginUsername"
+        static let linuxDoSelectedFeed = "linuxDoSelectedFeed"
         static let claudeStatusVisibleComponentIDs = "claudeStatusVisibleComponentIDs"
         static let claudeStatusNotificationsEnabled = "claudeStatusNotificationsEnabled"
         static let claudeStatusLastNotificationFingerprint = "claudeStatusLastNotificationFingerprint"

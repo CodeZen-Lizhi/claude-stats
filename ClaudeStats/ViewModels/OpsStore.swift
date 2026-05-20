@@ -8,28 +8,71 @@ import Observation
 final class OpsStore {
     private let service: any OpsServicing
 
-    var ports: [OpsPortItem] = []
-    var processes: [OpsProcessItem] = []
+    var ports: [OpsPortItem] = [] {
+        didSet {
+            allPortRows = ports.map(OpsPortTableRow.init)
+            rebuildPortProjection()
+        }
+    }
+    var processes: [OpsProcessItem] = [] {
+        didSet {
+            allProcessRows = processes.map { OpsProcessTableRow(item: $0) }
+            rebuildProcessProjection()
+        }
+    }
     var brewSnapshot: OpsBrewSnapshot = .missing
     var environmentTools: [OpsEnvironmentTool] = []
     var cleanupItems: [OpsCleanupItem] = []
     var diagnostics = OpsDiagnosticsSnapshot(proxySummary: "Not loaded.", dnsSummary: "Not loaded.", hostsEntries: [])
     var urlDiagnosticResult: OpsURLDiagnosticResult?
 
-    var selectedPortID: String?
-    var selectedProcessID: Int32?
+    var selectedPortID: String? {
+        didSet {
+            guard oldValue != selectedPortID else { return }
+            updateSelectedPortRow()
+        }
+    }
+    var selectedProcessID: Int32? {
+        didSet {
+            guard oldValue != selectedProcessID else { return }
+            updateSelectedProcessRow()
+        }
+    }
     var selectedBrewPackageID: OpsBrewPackage.ID?
     var selectedCleanupKinds: Set<OpsCleanupKind> = []
 
-    var portQuery = ""
-    var processQuery = ""
+    var portQuery = "" {
+        didSet {
+            guard oldValue != portQuery else { return }
+            rebuildPortProjection()
+        }
+    }
+    var processQuery = "" {
+        didSet {
+            guard oldValue != processQuery else { return }
+            rebuildProcessProjection()
+        }
+    }
     var brewQuery = ""
     var urlInput = ""
-    var processSort: OpsProcessSort = .developer
+    var processSort: OpsProcessSort = .developer {
+        didSet {
+            guard oldValue != processSort else { return }
+            rebuildProcessProjection()
+        }
+    }
     var pendingConfirmation: OpsConfirmation?
     var lastError: String?
     var lastActionOutput: String?
+    private(set) var visiblePortRows: [OpsPortTableRow] = []
+    private(set) var selectedPortRow: OpsPortTableRow?
+    private(set) var visibleProcessRows: [OpsProcessTableRow] = []
+    private(set) var selectedProcessRow: OpsProcessTableRow?
 
+    @ObservationIgnored private var allPortRows: [OpsPortTableRow] = []
+    @ObservationIgnored private var allProcessRows: [OpsProcessTableRow] = []
+    @ObservationIgnored private(set) var portProjectionGeneration = 0
+    @ObservationIgnored private(set) var processProjectionGeneration = 0
     private var loadedSections: Set<OpsSection> = []
     private var loadingSections: Set<OpsSection> = []
     private var queuedRefreshSections: Set<OpsSection> = []
@@ -96,58 +139,19 @@ final class OpsStore {
     }
 
     var filteredPorts: [OpsPortItem] {
-        let query = portQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return ports }
-        return ports.filter { item in
-            item.processName.localizedCaseInsensitiveContains(query)
-                || item.user.localizedCaseInsensitiveContains(query)
-                || "\(item.port)".contains(query)
-                || item.commandLine.localizedCaseInsensitiveContains(query)
-                || item.localAddress.localizedCaseInsensitiveContains(query)
-        }
+        visiblePortRows.map(\.item)
     }
 
     var selectedPort: OpsPortItem? {
-        if let selectedPortID,
-           let match = filteredPorts.first(where: { $0.id == selectedPortID }) {
-            return match
-        }
-        return filteredPorts.first
+        selectedPortRow?.item
     }
 
     var filteredProcesses: [OpsProcessItem] {
-        let query = processQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        let matches = query.isEmpty ? processes : processes.filter { item in
-            item.displayName.localizedCaseInsensitiveContains(query)
-                || item.user.localizedCaseInsensitiveContains(query)
-                || "\(item.pid)".contains(query)
-                || item.commandLine.localizedCaseInsensitiveContains(query)
-        }
-
-        return matches.sorted { left, right in
-            switch processSort {
-            case .developer:
-                if left.isDeveloperProcess != right.isDeveloperProcess { return left.isDeveloperProcess && !right.isDeveloperProcess }
-                if left.cpuPercent != right.cpuPercent { return left.cpuPercent > right.cpuPercent }
-                return left.displayName.localizedCaseInsensitiveCompare(right.displayName) == .orderedAscending
-            case .cpu:
-                if left.cpuPercent != right.cpuPercent { return left.cpuPercent > right.cpuPercent }
-                return left.displayName < right.displayName
-            case .memory:
-                if left.memoryPercent != right.memoryPercent { return left.memoryPercent > right.memoryPercent }
-                return left.displayName < right.displayName
-            case .name:
-                return left.displayName.localizedCaseInsensitiveCompare(right.displayName) == .orderedAscending
-            }
-        }
+        visibleProcessRows.map(\.item)
     }
 
     var selectedProcess: OpsProcessItem? {
-        if let selectedProcessID,
-           let match = filteredProcesses.first(where: { $0.pid == selectedProcessID }) {
-            return match
-        }
-        return filteredProcesses.first
+        selectedProcessRow?.item
     }
 
     var filteredBrewPackages: [OpsBrewPackage] {
@@ -176,8 +180,16 @@ final class OpsStore {
         selectedPortID = item.id
     }
 
+    func selectPort(_ row: OpsPortTableRow) {
+        selectedPortID = row.id
+    }
+
     func selectProcess(_ item: OpsProcessItem) {
         selectedProcessID = item.pid
+    }
+
+    func selectProcess(_ row: OpsProcessTableRow) {
+        selectedProcessID = row.id
     }
 
     func selectBrewPackage(_ item: OpsBrewPackage) {
@@ -361,14 +373,66 @@ final class OpsStore {
         )
     }
 
+    private func rebuildPortProjection() {
+        let query = portQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if query.isEmpty {
+            visiblePortRows = allPortRows
+        } else {
+            visiblePortRows = allPortRows.filter { $0.searchText.contains(query) }
+        }
+        portProjectionGeneration += 1
+        keepPortSelectionValid()
+        updateSelectedPortRow()
+    }
+
+    private func rebuildProcessProjection() {
+        let query = processQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let matches = query.isEmpty ? allProcessRows : allProcessRows.filter { $0.searchText.contains(query) }
+        visibleProcessRows = matches.sorted { left, right in
+            switch processSort {
+            case .developer:
+                if left.isDeveloperProcess != right.isDeveloperProcess { return left.isDeveloperProcess && !right.isDeveloperProcess }
+                if left.cpuPercent != right.cpuPercent { return left.cpuPercent > right.cpuPercent }
+                return left.sortName < right.sortName
+            case .cpu:
+                if left.cpuPercent != right.cpuPercent { return left.cpuPercent > right.cpuPercent }
+                return left.sortName < right.sortName
+            case .memory:
+                if left.memoryPercent != right.memoryPercent { return left.memoryPercent > right.memoryPercent }
+                return left.sortName < right.sortName
+            case .name:
+                return left.sortName < right.sortName
+            }
+        }
+        processProjectionGeneration += 1
+        keepProcessSelectionValid()
+        updateSelectedProcessRow()
+    }
+
     private func keepPortSelectionValid() {
-        if let selectedPortID, ports.contains(where: { $0.id == selectedPortID }) { return }
-        selectedPortID = ports.first?.id
+        if let selectedPortID, visiblePortRows.contains(where: { $0.id == selectedPortID }) { return }
+        selectedPortID = visiblePortRows.first?.id
     }
 
     private func keepProcessSelectionValid() {
-        if let selectedProcessID, processes.contains(where: { $0.pid == selectedProcessID }) { return }
-        selectedProcessID = processes.first?.pid
+        if let selectedProcessID, visibleProcessRows.contains(where: { $0.id == selectedProcessID }) { return }
+        selectedProcessID = visibleProcessRows.first?.id
+    }
+
+    private func updateSelectedPortRow() {
+        guard let selectedPortID else {
+            selectedPortRow = nil
+            return
+        }
+        selectedPortRow = visiblePortRows.first { $0.id == selectedPortID }
+    }
+
+    private func updateSelectedProcessRow() {
+        guard let selectedProcessID else {
+            selectedProcessRow = nil
+            return
+        }
+        selectedProcessRow = visibleProcessRows.first { $0.id == selectedProcessID }
     }
 
     private func keepBrewSelectionValid() {

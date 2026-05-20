@@ -257,6 +257,8 @@ struct LocalSkillGroup: Identifiable, Sendable, Hashable {
     let name: String
     let description: String?
     let skills: [LocalSkillItem]
+    let providers: [String]
+    let scopes: [SkillScope]
 
     init(skills: [LocalSkillItem]) {
         let sorted = skills.sorted { lhs, rhs in
@@ -269,14 +271,8 @@ struct LocalSkillGroup: Identifiable, Sendable, Hashable {
         self.name = sorted.first?.name ?? "Untitled Skill"
         self.description = sorted.first(where: { !($0.description ?? "").isEmpty })?.description
         self.id = sorted.first?.normalizedName ?? UUID().uuidString
-    }
-
-    var providers: [String] {
-        Array(Set(skills.map(\.providerName))).sorted()
-    }
-
-    var scopes: [SkillScope] {
-        Array(Set(skills.map(\.scope))).sorted { $0.displayName < $1.displayName }
+        self.providers = Array(Set(sorted.map(\.providerName))).sorted()
+        self.scopes = Array(Set(sorted.map(\.scope))).sorted { $0.displayName < $1.displayName }
     }
 
     var primarySkill: LocalSkillItem? {
@@ -285,6 +281,22 @@ struct LocalSkillGroup: Identifiable, Sendable, Hashable {
 
     var installedCopyCount: Int {
         skills.count
+    }
+}
+
+struct LocalSkillRowModel: Identifiable, Sendable, Hashable {
+    let id: String
+    let name: String
+    let description: String
+    let copyCount: Int
+    let providerBadges: [String]
+
+    init(group: LocalSkillGroup) {
+        id = group.id
+        name = group.name
+        description = group.description ?? "No description"
+        copyCount = group.installedCopyCount
+        providerBadges = Array(group.providers.prefix(3))
     }
 }
 
@@ -400,6 +412,21 @@ struct RemoteSkillSummary: Identifiable, Sendable, Hashable, Decodable {
     }
 }
 
+struct RemoteSkillRowModel: Identifiable, Sendable, Hashable {
+    let skill: RemoteSkillSummary
+    let installState: SkillInstallState
+
+    var id: String { skill.id }
+}
+
+struct CuratedSkillOwnerRowModel: Identifiable, Sendable, Hashable {
+    let owner: String
+    let totalInstalls: Int?
+    let skills: [RemoteSkillRowModel]
+
+    var id: String { owner }
+}
+
 struct RemoteSkillFile: Identifiable, Sendable, Hashable, Decodable {
     let path: String
     let contents: String?
@@ -499,6 +526,22 @@ struct SkillsShAuditReport: Identifiable, Sendable, Hashable, Decodable {
 struct SkillRemoteDetailBundle: Sendable, Hashable {
     var detail: RemoteSkillDetail?
     var audit: SkillsShAuditReport?
+    var skillMarkdown: String?
+    var fileEntries: [SkillFileEntry]
+
+    init(
+        detail: RemoteSkillDetail? = nil,
+        audit: SkillsShAuditReport? = nil,
+        skillMarkdown: String? = nil,
+        fileEntries: [SkillFileEntry]? = nil
+    ) {
+        self.detail = detail
+        self.audit = audit
+        self.skillMarkdown = skillMarkdown ?? detail?.skillMarkdown
+        self.fileEntries = fileEntries ?? detail?.files.map {
+            SkillFileEntry(path: $0.path, byteCount: Int64($0.contents?.utf8.count ?? 0), modifiedAt: nil)
+        } ?? []
+    }
 }
 
 extension String {

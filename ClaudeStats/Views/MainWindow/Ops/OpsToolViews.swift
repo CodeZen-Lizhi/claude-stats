@@ -38,19 +38,21 @@ struct OpsPortsView: View {
                 refresh: { store.refresh(.ports) }
             )
             StxRule()
-            OpsPortHeader()
-            FadingScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    if store.filteredPorts.isEmpty {
-                        OpsInlineEmptyState("No listening ports.")
-                            .frame(maxWidth: .infinity, minHeight: 160)
-                    } else {
-                        ForEach(store.filteredPorts) { item in
-                            OpsPortRow(item: item, isSelected: store.selectedPort?.id == item.id) {
-                                store.selectPort(item)
-                            }
-                        }
-                    }
+            ZStack {
+                OpsNativePortTable(
+                    rows: store.visiblePortRows,
+                    rowsVersion: store.portProjectionGeneration,
+                    selectedID: Binding(
+                        get: { store.selectedPortID },
+                        set: { store.selectedPortID = $0 }
+                    )
+                )
+                .background(Color.primary.opacity(0.025))
+
+                if store.visiblePortRows.isEmpty {
+                    OpsInlineEmptyState(store.ports.isEmpty ? "No listening ports." : "No matching ports.")
+                        .padding(.top, 24)
+                        .allowsHitTesting(false)
                 }
             }
         }
@@ -58,8 +60,8 @@ struct OpsPortsView: View {
 
     private var portInspector: some View {
         OpsInspectorContainer {
-            if let port = store.selectedPort {
-                OpsInspectorTitle(symbol: OpsSection.ports.symbol, title: ":\(port.port)", subtitle: port.processName)
+            if let port = store.selectedPortRow {
+                OpsInspectorTitle(symbol: OpsSection.ports.symbol, title: port.portText, subtitle: port.processName)
 
                 OpsInspectorGroup("Connection") {
                     OpsKeyValue("Address", port.displayAddress)
@@ -68,8 +70,8 @@ struct OpsPortsView: View {
                 }
 
                 OpsInspectorGroup("Process") {
-                    OpsKeyValue("PID", "\(port.pid)")
-                    OpsKeyValue("User", port.user.isEmpty ? "--" : port.user)
+                    OpsKeyValue("PID", port.pidText)
+                    OpsKeyValue("User", port.user)
                     OpsKeyValue("Executable", port.executablePath ?? "--")
                     OpsCodeBlock(port.commandLine)
                 }
@@ -83,7 +85,7 @@ struct OpsPortsView: View {
                     .controlSize(.small)
 
                     Button {
-                        store.copyToClipboard("kill -TERM \(port.pid)")
+                        store.copyToClipboard("kill -TERM \(port.item.pid)")
                     } label: {
                         Label("Copy Kill", systemImage: "terminal")
                     }
@@ -92,13 +94,13 @@ struct OpsPortsView: View {
                     Spacer()
 
                     Button(role: .destructive) {
-                        store.requestTerminate(port)
+                        store.requestTerminate(port.item)
                     } label: {
                         Label("End", systemImage: "xmark.octagon")
                     }
                     .controlSize(.small)
-                    .disabled(port.protection.reason != nil || !store.canRunAction)
-                    .help(port.protection.reason ?? "End process")
+                    .disabled(port.protectionReason != nil || !store.canRunAction)
+                    .help(port.protectionReason ?? "End process")
                 }
             } else {
                 OpsInlineEmptyState("Select a port.")
@@ -162,19 +164,21 @@ struct OpsProcessesView: View {
             .padding(.vertical, 10)
 
             StxRule()
-            OpsProcessHeader()
-            FadingScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    if store.filteredProcesses.isEmpty {
-                        OpsInlineEmptyState("No matching processes.")
-                            .frame(maxWidth: .infinity, minHeight: 160)
-                    } else {
-                        ForEach(store.filteredProcesses) { item in
-                            OpsProcessRow(item: item, isSelected: store.selectedProcess?.pid == item.pid) {
-                                store.selectProcess(item)
-                            }
-                        }
-                    }
+            ZStack {
+                OpsNativeProcessTable(
+                    rows: store.visibleProcessRows,
+                    rowsVersion: store.processProjectionGeneration,
+                    selectedID: Binding(
+                        get: { store.selectedProcessID },
+                        set: { store.selectedProcessID = $0 }
+                    )
+                )
+                .background(Color.primary.opacity(0.025))
+
+                if store.visibleProcessRows.isEmpty {
+                    OpsInlineEmptyState(store.processes.isEmpty ? "No processes." : "No matching processes.")
+                        .padding(.top, 24)
+                        .allowsHitTesting(false)
                 }
             }
         }
@@ -182,19 +186,19 @@ struct OpsProcessesView: View {
 
     private var processInspector: some View {
         OpsInspectorContainer {
-            if let process = store.selectedProcess {
-                OpsInspectorTitle(symbol: OpsSection.processes.symbol, title: process.displayName, subtitle: "PID \(process.pid)")
+            if let process = store.selectedProcessRow {
+                OpsInspectorTitle(symbol: OpsSection.processes.symbol, title: process.displayName, subtitle: "PID \(process.pidText)")
 
                 OpsInspectorGroup("Usage") {
-                    OpsKeyValue("CPU", String(format: "%.1f%%", process.cpuPercent))
-                    OpsKeyValue("Memory", String(format: "%.1f%%", process.memoryPercent))
+                    OpsKeyValue("CPU", "\(process.cpuText)%")
+                    OpsKeyValue("Memory", "\(process.memoryText)%")
                     OpsKeyValue("Elapsed", process.elapsed)
                     OpsKeyValue("Developer", process.isDeveloperProcess ? "Yes" : "No")
                 }
 
                 OpsInspectorGroup("Process") {
                     OpsKeyValue("User", process.user)
-                    OpsKeyValue("Parent PID", "\(process.ppid)")
+                    OpsKeyValue("Parent PID", process.ppidText)
                     OpsKeyValue("Executable", process.executablePath)
                     OpsCodeBlock(process.commandLine)
                 }
@@ -213,18 +217,18 @@ struct OpsProcessesView: View {
                         Label("Reveal", systemImage: "folder")
                     }
                     .controlSize(.small)
-                    .disabled(!FileManager.default.fileExists(atPath: process.executablePath))
+                    .disabled(!process.canRevealExecutable)
 
                     Spacer()
 
                     Button(role: .destructive) {
-                        store.requestTerminate(process)
+                        store.requestTerminate(process.item)
                     } label: {
                         Label("End", systemImage: "xmark.octagon")
                     }
                     .controlSize(.small)
-                    .disabled(process.protection.reason != nil || !store.canRunAction)
-                    .help(process.protection.reason ?? "End process")
+                    .disabled(process.protectionReason != nil || !store.canRunAction)
+                    .help(process.protectionReason ?? "End process")
                 }
             } else {
                 OpsInlineEmptyState("Select a process.")

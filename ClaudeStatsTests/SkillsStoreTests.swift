@@ -42,12 +42,15 @@ struct SkillsStoreTests {
         store.searchText = "beta"
         store.syncLocalSelection()
         #expect(store.filteredLocalGroups.map(\.name) == ["Beta Skill"])
+        #expect(store.visibleLocalRows.map(\.name) == ["Beta Skill"])
+        #expect(store.visibleLocalRows.first?.providerBadges == ["Claude"])
         #expect(store.selectedLocalGroup?.name == "Beta Skill")
 
         store.selectedProviderID = "codex"
         store.searchText = ""
         store.syncLocalSelection()
         #expect(store.filteredLocalGroups.map(\.name) == ["Alpha Skill"])
+        #expect(store.groupsByID[store.selectedLocalGroupID ?? ""]?.name == "Alpha Skill")
     }
 
     @Test("Remote search uses saved API key, caches detail, and reports install state")
@@ -114,13 +117,77 @@ struct SkillsStoreTests {
         let remote = try #require(store.remoteResults.first)
         #expect(remote.id == "expo/skills/react-native")
         #expect(store.installState(for: remote) == .possiblyInstalled)
+        #expect(store.discoverRows.first?.installState == .possiblyInstalled)
 
         store.selectRemoteSkill(remote)
         await store.loadRemoteDetail(id: remote.id)
 
         #expect(store.remoteDetails[remote.id]?.detail?.hash == "remote-hash")
         #expect(store.remoteDetails[remote.id]?.audit?.audits.first?.provider == "Socket")
+        #expect(store.remoteDetails[remote.id]?.skillMarkdown?.contains("React Native") == true)
+        #expect(store.remoteDetails[remote.id]?.fileEntries.first?.path == "SKILL.md")
         #expect(store.installState(for: remote) == .outOfDate)
+        #expect(store.discoverRows.first?.installState == .outOfDate)
+    }
+
+    @Test("Curated rows cache remote lookup and selected skill")
+    func curatedRowsCacheRemoteLookup() async throws {
+        let root = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let remote = RemoteSkillSummary(
+            id: "owner/repo/skill",
+            slug: "skill",
+            name: "Skill",
+            source: "owner/repo",
+            installs: 42
+        )
+        let fakeClient = FakeSkillsShClient()
+        fakeClient.curatedOwners = [
+            SkillsShCuratedOwner(
+                owner: "owner",
+                totalInstalls: 42,
+                featuredRepo: nil,
+                featuredSkill: nil,
+                skills: [remote]
+            ),
+        ]
+        let store = SkillsStore(
+            scanner: SkillsLocalScanner(homeDirectory: root),
+            client: fakeClient,
+            credentials: InMemorySkillsShCredentialStore(apiKey: "sk_test")
+        )
+
+        store.selectedTab = .curated
+        await store.loadCurated()
+
+        #expect(store.curatedOwnerRows.first?.owner == "owner")
+        #expect(store.curatedOwnerRows.first?.skills.first?.skill.id == remote.id)
+        store.selectRemoteSkill(remote)
+        #expect(store.selectedRemoteSkill?.id == remote.id)
+    }
+
+    @Test("Remote operations use cached API key after startup")
+    func remoteOperationsUseCachedAPIKey() async throws {
+        let root = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let credentials = OneShotSkillsShCredentialStore(apiKey: "sk_cached")
+        let fakeClient = FakeSkillsShClient()
+        fakeClient.leaderboardResults = [
+            RemoteSkillSummary(id: "owner/repo/skill", slug: "skill", name: "Skill"),
+        ]
+        let store = SkillsStore(
+            scanner: SkillsLocalScanner(homeDirectory: root),
+            client: fakeClient,
+            credentials: credentials
+        )
+
+        store.selectedTab = .discover
+        await store.searchOrLoadTrending()
+
+        #expect(store.remoteResults.first?.id == "owner/repo/skill")
+        #expect(credentials.readCount == 1)
     }
 }
 
@@ -150,6 +217,32 @@ final class FakeSkillsShClient: SkillsShClienting, @unchecked Sendable {
 
     func audit(id: String, apiKey: String) async throws -> SkillsShAuditReport? {
         audits[id]
+    }
+}
+
+final class OneShotSkillsShCredentialStore: SkillsShCredentialStoring, @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: String?
+    private(set) var readCount = 0
+
+    init(apiKey: String) {
+        value = apiKey
+    }
+
+    func readAPIKey() -> String? {
+        lock.withLock {
+            readCount += 1
+            defer { value = nil }
+            return value
+        }
+    }
+
+    func saveAPIKey(_ apiKey: String) {
+        lock.withLock { value = apiKey }
+    }
+
+    func deleteAPIKey() {
+        lock.withLock { value = nil }
     }
 }
 

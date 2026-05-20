@@ -723,11 +723,6 @@ enum OpsParsers {
                 protection: protection(pid: pid, user: parts[2], displayName: URL(fileURLWithPath: executable).lastPathComponent, currentPID: currentPID, currentUser: currentUser)
             )
         }
-        .sorted {
-            if $0.isDeveloperProcess != $1.isDeveloperProcess { return $0.isDeveloperProcess && !$1.isDeveloperProcess }
-            if $0.cpuPercent != $1.cpuPercent { return $0.cpuPercent > $1.cpuPercent }
-            return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
-        }
     }
 
     static func parseLsofFieldOutput(_ output: String, processLookup: [Int32: OpsProcessItem]) -> [OpsPortItem] {

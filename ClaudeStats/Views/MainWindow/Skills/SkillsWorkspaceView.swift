@@ -22,50 +22,50 @@ struct SkillsWorkspaceView: View {
     @Environment(AppEnvironment.self) private var env
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
             SkillsHeader(store: store, refreshLocal: refreshLocal)
+            StxRule()
+            SkillsWorkspaceBar(store: store)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
             StxRule()
-            HoverableSplitView(
-                axis: .vertical,
-                primaryFraction: 0.22,
-                configuration: SkillsPaneMetrics.outerConfiguration
-            ) {
-                SkillsSourceColumn(store: store)
-                    .frame(minWidth: 0, idealWidth: 240, maxWidth: .infinity, maxHeight: .infinity)
-            } secondary: {
-                HoverableSplitView(
-                    axis: .vertical,
-                    primaryFraction: 0.42,
-                    configuration: SkillsPaneMetrics.detailConfiguration
-                ) {
-                    SkillsListColumn(store: store)
-                        .frame(minWidth: 0, idealWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
-                } secondary: {
-                    SkillsDetailPane(store: store)
-                        .frame(minWidth: 0, idealWidth: 520, maxWidth: .infinity, maxHeight: .infinity)
-                }
-            }
+            workspace
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .task {
             await store.loadIfNeeded(sessions: env.store.sessions)
         }
         .onChange(of: env.store.lastRefreshedAt) { _, _ in
-            refreshLocal()
+            refreshLocalIfNeeded()
         }
         .onChange(of: store.selectedTab) { _, tab in
             if tab != .installed {
                 Task { await store.refreshRemote() }
             }
         }
-        .onChange(of: store.searchText) { _, _ in
-            if store.selectedTab == .installed {
-                store.syncLocalSelection()
+    }
+
+    private var workspace: some View {
+        HoverableSplitView(
+            axis: .vertical,
+            primaryFraction: 0.22,
+            configuration: SkillsPaneMetrics.outerConfiguration
+        ) {
+            SkillsSourceColumn(store: store)
+                .frame(minWidth: 0, idealWidth: 240, maxWidth: .infinity, maxHeight: .infinity)
+        } secondary: {
+            HoverableSplitView(
+                axis: .vertical,
+                primaryFraction: 0.42,
+                configuration: SkillsPaneMetrics.detailConfiguration
+            ) {
+                SkillsListColumn(store: store)
+                    .frame(minWidth: 0, idealWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
+            } secondary: {
+                SkillsDetailPane(store: store)
+                    .frame(minWidth: 0, idealWidth: 520, maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .onChange(of: store.selectedProviderID) { _, _ in store.syncLocalSelection() }
-        .onChange(of: store.scopeFilter) { _, _ in store.syncLocalSelection() }
     }
 
     private func refreshLocal() {
@@ -73,53 +73,129 @@ struct SkillsWorkspaceView: View {
             await store.reloadLocal(sessions: env.store.sessions)
         }
     }
+
+    private func refreshLocalIfNeeded() {
+        Task {
+            await store.reloadLocalIfProjectRootsChanged(sessions: env.store.sessions)
+        }
+    }
 }
 
 private struct SkillsHeader: View {
     @Bindable var store: SkillsStore
     let refreshLocal: () -> Void
+    private let horizontalInset: CGFloat = 20
 
     var body: some View {
-        HStack(alignment: .center, spacing: 14) {
+        HStack(alignment: .bottom, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
+                Text("SKILLS")
+                    .font(.sora(11, weight: .semibold))
+                    .tracking(1.2)
+                    .foregroundStyle(Color.stxMuted)
                 Text("Skills")
-                    .font(.sora(22, weight: .semibold))
-                HStack(spacing: 8) {
-                    Text("\(store.snapshot.summary.groupCount) skills")
-                    Text(".")
-                    Text("\(store.snapshot.summary.providerCount) providers")
-                    if store.snapshot.summary.projectRootCount > 0 {
-                        Text(".")
-                        Text("\(store.snapshot.summary.projectRootCount) projects")
-                    }
-                    if let scannedAt = store.snapshot.scannedAt {
-                        Text(".")
-                        Text("Updated \(Format.relativeDate(scannedAt))")
-                    }
-                }
-                .font(.sora(10))
-                .foregroundStyle(Color.stxMuted)
+                    .font(.sora(24, weight: .semibold))
+                    .lineLimit(1)
+                Text("Browse local SKILL.md directories and inspect skills.sh metadata.")
+                    .font(.sora(12))
+                    .foregroundStyle(Color.stxMuted)
+                    .lineLimit(1)
             }
 
             Spacer(minLength: 12)
 
-            if store.isScanning || store.isRemoteLoading {
-                ProgressView()
-                    .controlSize(.small)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    summaryText
+                    loadingIndicator
+                    refreshButton
+                }
+                VStack(alignment: .trailing, spacing: 8) {
+                    summaryText
+                    HStack(spacing: 8) {
+                        loadingIndicator
+                        refreshButton
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, horizontalInset)
+        .padding(.top, 50)
+        .padding(.bottom, 16)
+    }
+
+    private var summaryText: some View {
+        Text(summaryItems.joined(separator: " . "))
+            .font(.sora(11))
+            .foregroundStyle(Color.stxMuted)
+            .lineLimit(1)
+    }
+
+    @ViewBuilder
+    private var loadingIndicator: some View {
+        if store.isScanning || store.isRemoteLoading {
+            ProgressView()
+                .controlSize(.small)
+        }
+    }
+
+    private var refreshButton: some View {
+        Button {
+            if store.selectedTab == .installed {
+                refreshLocal()
+            } else {
+                Task { await store.refreshRemote() }
+            }
+        } label: {
+            Label("Refresh", systemImage: "arrow.clockwise")
+        }
+        .controlSize(.small)
+        .disabled(store.isScanning || store.isRemoteLoading)
+        .help("Refresh current Skills view")
+    }
+
+    private var summaryItems: [String] {
+        var items = [
+            "\(store.snapshot.summary.groupCount) skills",
+            "\(store.snapshot.summary.providerCount) providers",
+        ]
+        if store.snapshot.summary.projectRootCount > 0 {
+            items.append("\(store.snapshot.summary.projectRootCount) projects")
+        }
+        if let scannedAt = store.snapshot.scannedAt {
+            items.append("Updated \(Format.relativeDate(scannedAt))")
+        }
+        return items
+    }
+}
+
+private struct SkillsWorkspaceBar: View {
+    @Bindable var store: SkillsStore
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(SkillsWorkspaceTab.allCases) { tab in
+                Button {
+                    store.selectedTab = tab
+                } label: {
+                    Label(tab.title, systemImage: tab.symbol)
+                        .font(.sora(11, weight: store.selectedTab == tab ? .semibold : .medium))
+                        .foregroundStyle(store.selectedTab == tab ? Color.stxAccent : Color.stxMuted)
+                        .lineLimit(1)
+                        .padding(.horizontal, 10)
+                        .frame(height: 28)
+                        .background {
+                            if store.selectedTab == tab {
+                                RoundedRectangle(cornerRadius: 7)
+                                    .fill(Color.stxAccent.opacity(0.13))
+                            }
+                        }
+                }
+                .buttonStyle(.plain)
+                .help(tab.title)
             }
 
-            Button {
-                if store.selectedTab == .installed {
-                    refreshLocal()
-                } else {
-                    Task { await store.refreshRemote() }
-                }
-            } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
-            }
-            .controlSize(.small)
-            .disabled(store.isScanning || store.isRemoteLoading)
-            .help("Refresh current Skills view")
+            Spacer(minLength: 8)
         }
     }
 }
@@ -129,9 +205,6 @@ private struct SkillsSourceColumn: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            workspaceTabs
-                .padding(10)
-            StxRule()
             filters
                 .padding(12)
             if store.selectedTab != .installed {
@@ -144,35 +217,6 @@ private struct SkillsSourceColumn: View {
                 .padding(12)
         }
         .background(Color.primary.opacity(0.025))
-    }
-
-    private var workspaceTabs: some View {
-        VStack(spacing: 6) {
-            ForEach(SkillsWorkspaceTab.allCases) { tab in
-                Button {
-                    store.selectedTab = tab
-                } label: {
-                    HStack(spacing: 9) {
-                        Image(systemName: tab.symbol)
-                            .font(.system(size: 13, weight: .medium))
-                            .frame(width: 18)
-                        Text(tab.title)
-                            .font(.sora(12, weight: store.selectedTab == tab ? .semibold : .medium))
-                        Spacer(minLength: 0)
-                    }
-                    .foregroundStyle(store.selectedTab == tab ? Color.stxAccent : Color.stxMuted)
-                    .padding(.horizontal, 10)
-                    .frame(height: 32)
-                    .background {
-                        if store.selectedTab == tab {
-                            RoundedRectangle(cornerRadius: 7).fill(Color.stxAccent.opacity(0.13))
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-                .help(tab.title)
-            }
-        }
     }
 
     private var filters: some View {
@@ -315,29 +359,29 @@ private struct SkillsListColumn: View {
         case .installed:
             installedList
         case .discover:
-            remoteList(store.remoteResults)
+            remoteList(store.discoverRows)
         case .curated:
             curatedList
         }
     }
 
     private var installedList: some View {
-        let groups = store.filteredLocalGroups
-        return FadingScrollView {
+        let rows = store.visibleLocalRows
+        return FadingScrollView(chrome: .plain) {
             LazyVStack(alignment: .leading, spacing: 6) {
-                if groups.isEmpty {
+                if rows.isEmpty {
                     SkillsEmptyState(
                         symbol: "sparkles",
                         title: store.isScanning ? "Scanning..." : "No skills found",
                         message: "Refresh or adjust filters to inspect local SKILL.md directories."
                     )
                 } else {
-                    ForEach(groups) { group in
+                    ForEach(rows) { row in
                         SkillsLocalRow(
-                            group: group,
-                            isSelected: store.selectedLocalGroupID == group.id
+                            row: row,
+                            isSelected: store.selectedLocalGroupID == row.id
                         ) {
-                            store.selectLocalGroup(group)
+                            store.selectLocalGroup(id: row.id)
                         }
                     }
                 }
@@ -346,8 +390,8 @@ private struct SkillsListColumn: View {
         }
     }
 
-    private func remoteList(_ skills: [RemoteSkillSummary]) -> some View {
-        FadingScrollView {
+    private func remoteList(_ rows: [RemoteSkillRowModel]) -> some View {
+        FadingScrollView(chrome: .plain) {
             LazyVStack(alignment: .leading, spacing: 6) {
                 if !store.hasAPIKey {
                     SkillsEmptyState(
@@ -357,16 +401,16 @@ private struct SkillsListColumn: View {
                     )
                 } else if let remoteError = store.remoteError {
                     SkillsEmptyState(symbol: "exclamationmark.triangle", title: "Could not load skills", message: remoteError)
-                } else if skills.isEmpty {
+                } else if rows.isEmpty {
                     SkillsEmptyState(symbol: "magnifyingglass", title: "No remote skills", message: "Search skills.sh or refresh trending results.")
                 } else {
-                    ForEach(skills) { skill in
+                    ForEach(rows) { row in
                         SkillsRemoteRow(
-                            skill: skill,
-                            state: store.installState(for: skill),
-                            isSelected: store.selectedRemoteSkillID == skill.id
+                            skill: row.skill,
+                            state: row.installState,
+                            isSelected: store.selectedRemoteSkillID == row.skill.id
                         ) {
-                            store.selectRemoteSkill(skill)
+                            store.selectRemoteSkill(row.skill)
                         }
                     }
                 }
@@ -376,7 +420,7 @@ private struct SkillsListColumn: View {
     }
 
     private var curatedList: some View {
-        FadingScrollView {
+        FadingScrollView(chrome: .plain) {
             LazyVStack(alignment: .leading, spacing: 12) {
                 if !store.hasAPIKey {
                     SkillsEmptyState(
@@ -386,10 +430,10 @@ private struct SkillsListColumn: View {
                     )
                 } else if let remoteError = store.remoteError {
                     SkillsEmptyState(symbol: "exclamationmark.triangle", title: "Could not load curated skills", message: remoteError)
-                } else if store.curatedOwners.isEmpty {
+                } else if store.curatedOwnerRows.isEmpty {
                     SkillsEmptyState(symbol: "sparkles", title: "No curated skills", message: "Refresh to load official skills from skills.sh.")
                 } else {
-                    ForEach(store.curatedOwners) { owner in
+                    ForEach(store.curatedOwnerRows) { owner in
                         VStack(alignment: .leading, spacing: 6) {
                             HStack(spacing: 6) {
                                 Text(owner.owner)
@@ -397,16 +441,16 @@ private struct SkillsListColumn: View {
                                 if let total = owner.totalInstalls {
                                     Text("\(total) installs")
                                         .font(.sora(9))
-                                        .foregroundStyle(Color.stxMuted)
+                                    .foregroundStyle(Color.stxMuted)
                                 }
                             }
                             ForEach(owner.skills) { skill in
                                 SkillsRemoteRow(
-                                    skill: skill,
-                                    state: store.installState(for: skill),
-                                    isSelected: store.selectedRemoteSkillID == skill.id
+                                    skill: skill.skill,
+                                    state: skill.installState,
+                                    isSelected: store.selectedRemoteSkillID == skill.skill.id
                                 ) {
-                                    store.selectRemoteSkill(skill)
+                                    store.selectRemoteSkill(skill.skill)
                                 }
                             }
                         }
@@ -430,26 +474,137 @@ private struct SkillsDetailPane: View {
     @Bindable var store: SkillsStore
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            switch store.selectedTab {
-            case .installed:
-                if let group = store.selectedLocalGroup {
-                    SkillsLocalDetail(store: store, group: group)
-                } else {
-                    SkillsEmptyDetail()
-                }
-            case .discover, .curated:
-                if let skill = store.selectedRemoteSkill {
-                    SkillsRemoteDetail(store: store, skill: skill)
-                        .task(id: skill.id) {
-                            await store.loadRemoteDetail(id: skill.id)
-                        }
-                } else {
-                    SkillsEmptyDetail()
-                }
-            }
+        Group {
+            detailContent
         }
         .background(Color.primary.opacity(0.015))
+    }
+
+    @ViewBuilder
+    private var detailContent: some View {
+        switch store.selectedTab {
+        case .installed:
+            if let group = store.selectedLocalGroup {
+                SkillsInspectorShell(
+                    selection: $store.selectedDetailTab,
+                    symbol: "sparkles",
+                    title: group.name,
+                    subtitle: group.description ?? "Local SKILL.md directory"
+                ) {
+                    if let primary = group.primarySkill {
+                        SkillsLocalActions(skill: primary)
+                    }
+                } content: {
+                    SkillsLocalDetail(store: store, group: group)
+                }
+            } else {
+                emptyInspector
+            }
+        case .discover, .curated:
+            if let skill = store.selectedRemoteSkill {
+                SkillsInspectorShell(
+                    selection: $store.selectedDetailTab,
+                    symbol: "bag",
+                    title: skill.name,
+                    subtitle: skill.displaySource
+                ) {
+                    SkillsRemoteActions(skill: skill)
+                } content: {
+                    SkillsRemoteDetail(store: store, skill: skill)
+                }
+                .task(id: skill.id) {
+                    await store.loadRemoteDetail(id: skill.id)
+                }
+            } else {
+                emptyInspector
+            }
+        }
+    }
+
+    private var emptyInspector: some View {
+        SkillsInspectorShell(
+            selection: $store.selectedDetailTab,
+            symbol: "sidebar.right",
+            title: "Inspector",
+            subtitle: "Select a skill to inspect metadata, files, and SKILL.md.",
+            showsTabs: false
+        ) {
+            EmptyView()
+        } content: {
+            SkillsEmptyDetail()
+        }
+    }
+}
+
+private struct SkillsInspectorShell<Actions: View, Content: View>: View {
+    @Binding var selection: SkillsDetailTab
+    let symbol: String
+    let title: String
+    let subtitle: String
+    let showsTabs: Bool
+    let actions: Actions
+    let content: Content
+
+    init(
+        selection: Binding<SkillsDetailTab>,
+        symbol: String,
+        title: String,
+        subtitle: String,
+        showsTabs: Bool = true,
+        @ViewBuilder actions: () -> Actions,
+        @ViewBuilder content: () -> Content
+    ) {
+        self._selection = selection
+        self.symbol = symbol
+        self.title = title
+        self.subtitle = subtitle
+        self.showsTabs = showsTabs
+        self.actions = actions()
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            StxRule()
+            if showsTabs {
+                SkillsDetailTabs(selection: $selection)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                StxRule()
+            }
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private var header: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Image(systemName: symbol)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color.stxAccent)
+                .frame(width: 18)
+
+            VStack(alignment: .leading, spacing: 2) {
+                FadingLineText(
+                    title,
+                    font: .sora(12, weight: .semibold),
+                    foregroundStyle: Color.primary,
+                    fadeWidth: 28
+                )
+                Text(subtitle)
+                    .font(.sora(10))
+                    .foregroundStyle(Color.stxMuted)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+
+            actions
+        }
+        .frame(minHeight: 34)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
     }
 }
 
@@ -462,55 +617,7 @@ private struct SkillsLocalDetail: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            detailHeader
-            StxRule()
-            SkillsDetailTabs(selection: $store.selectedDetailTab)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-            StxRule()
-            detailBody
-        }
-    }
-
-    private var detailHeader: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 18, weight: .medium))
-                .foregroundStyle(Color.stxAccent)
-                .frame(width: 24)
-            VStack(alignment: .leading, spacing: 5) {
-                Text(group.name)
-                    .font(.sora(17, weight: .semibold))
-                    .lineLimit(1)
-                Text(group.description ?? "Local SKILL.md directory")
-                    .font(.sora(11))
-                    .foregroundStyle(Color.stxMuted)
-                    .lineLimit(2)
-            }
-            Spacer(minLength: 12)
-            if let primary {
-                ViewThatFits(in: .horizontal) {
-                    actionButtons(primary, showLabels: true)
-                    actionButtons(primary, showLabels: false)
-                }
-            }
-        }
-        .padding(14)
-    }
-
-    private func actionButtons(_ skill: LocalSkillItem, showLabels: Bool) -> some View {
-        HStack(spacing: 8) {
-            SkillsToolbarButton("Copy Path", systemImage: "doc.on.doc", showLabel: showLabels) {
-                SkillsClipboard.copy(skill.folderPath)
-            }
-            SkillsToolbarButton("Reveal", systemImage: "finder", showLabel: showLabels) {
-                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: skill.skillMarkdownPath)])
-            }
-            SkillsToolbarButton("Open", systemImage: "arrow.up.right.square", showLabel: showLabels) {
-                NSWorkspace.shared.open(URL(fileURLWithPath: skill.skillMarkdownPath))
-            }
-        }
+        detailBody
     }
 
     @ViewBuilder
@@ -535,7 +642,7 @@ private struct SkillsLocalDetail: View {
     }
 
     private var localOverview: some View {
-        FadingScrollView {
+        FadingScrollView(chrome: .plain) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 10) {
                     SkillsMetricCard(title: "Copies", value: "\(group.installedCopyCount)")
@@ -608,54 +715,7 @@ private struct SkillsRemoteDetail: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            detailHeader
-            StxRule()
-            SkillsDetailTabs(selection: $store.selectedDetailTab)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-            StxRule()
-            detailBody
-        }
-    }
-
-    private var detailHeader: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "bag")
-                .font(.system(size: 18, weight: .medium))
-                .foregroundStyle(Color.stxAccent)
-                .frame(width: 24)
-            VStack(alignment: .leading, spacing: 5) {
-                Text(skill.name)
-                    .font(.sora(17, weight: .semibold))
-                    .lineLimit(1)
-                Text(skill.displaySource)
-                    .font(.sora(11))
-                    .foregroundStyle(Color.stxMuted)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 12)
-            ViewThatFits(in: .horizontal) {
-                remoteActionButtons(showLabels: true)
-                remoteActionButtons(showLabels: false)
-            }
-        }
-        .padding(14)
-    }
-
-    private func remoteActionButtons(showLabels: Bool) -> some View {
-        HStack(spacing: 8) {
-            SkillsToolbarButton("Copy Install", systemImage: "doc.on.doc", showLabel: showLabels, disabled: skill.installCommand == nil) {
-                if let command = skill.installCommand {
-                    SkillsClipboard.copy(command)
-                }
-            }
-            SkillsToolbarButton("Open", systemImage: "arrow.up.right.square", showLabel: showLabels, disabled: remoteURL == nil) {
-                if let remoteURL {
-                    NSWorkspace.shared.open(remoteURL)
-                }
-            }
-        }
+        detailBody
     }
 
     @ViewBuilder
@@ -664,22 +724,20 @@ private struct SkillsRemoteDetail: View {
         case .overview:
             remoteOverview
         case .skill:
-            if let markdown = bundle?.detail?.skillMarkdown {
+            if let markdown = bundle?.skillMarkdown {
                 SkillMarkdownViewer(markdown: markdown)
             } else {
                 SkillsLoadingState(message: store.isRemoteLoading ? "Loading SKILL.md..." : "No SKILL.md snapshot available.")
             }
         case .files:
-            SkillFilesList(files: (bundle?.detail?.files ?? []).map {
-                SkillFileEntry(path: $0.path, byteCount: Int64($0.contents?.utf8.count ?? 0), modifiedAt: nil)
-            })
+            SkillFilesList(files: bundle?.fileEntries ?? [])
         case .market:
             auditView
         }
     }
 
     private var remoteOverview: some View {
-        FadingScrollView {
+        FadingScrollView(chrome: .plain) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 10) {
                     SkillsMetricCard(title: "Installs", value: skill.installs.map(String.init) ?? "-")
@@ -721,7 +779,7 @@ private struct SkillsRemoteDetail: View {
     }
 
     private var auditView: some View {
-        FadingScrollView {
+        FadingScrollView(chrome: .plain) {
             VStack(alignment: .leading, spacing: 10) {
                 if let audit = bundle?.audit, !audit.audits.isEmpty {
                     ForEach(audit.audits) { entry in
@@ -760,13 +818,6 @@ private struct SkillsRemoteDetail: View {
         }
     }
 
-    private var remoteURL: URL? {
-        if let url = skill.url.flatMap({ URL(string: $0) }) {
-            return url
-        }
-        return skill.installURL.flatMap { URL(string: $0) }
-    }
-
     private func auditColor(_ status: String) -> Color {
         switch status.lowercased() {
         case "pass": Color.stxAccent
@@ -777,8 +828,66 @@ private struct SkillsRemoteDetail: View {
     }
 }
 
+private struct SkillsLocalActions: View {
+    let skill: LocalSkillItem
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            actionButtons(showLabels: true)
+            actionButtons(showLabels: false)
+        }
+    }
+
+    private func actionButtons(showLabels: Bool) -> some View {
+        HStack(spacing: 8) {
+            SkillsToolbarButton("Copy Path", systemImage: "doc.on.doc", showLabel: showLabels) {
+                SkillsClipboard.copy(skill.folderPath)
+            }
+            SkillsToolbarButton("Reveal", systemImage: "finder", showLabel: showLabels) {
+                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: skill.skillMarkdownPath)])
+            }
+            SkillsToolbarButton("Open", systemImage: "arrow.up.right.square", showLabel: showLabels) {
+                NSWorkspace.shared.open(URL(fileURLWithPath: skill.skillMarkdownPath))
+            }
+        }
+    }
+}
+
+private struct SkillsRemoteActions: View {
+    let skill: RemoteSkillSummary
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            actionButtons(showLabels: true)
+            actionButtons(showLabels: false)
+        }
+    }
+
+    private func actionButtons(showLabels: Bool) -> some View {
+        HStack(spacing: 8) {
+            SkillsToolbarButton("Copy Install", systemImage: "doc.on.doc", showLabel: showLabels, disabled: skill.installCommand == nil) {
+                if let command = skill.installCommand {
+                    SkillsClipboard.copy(command)
+                }
+            }
+            SkillsToolbarButton("Open", systemImage: "arrow.up.right.square", showLabel: showLabels, disabled: remoteURL == nil) {
+                if let remoteURL {
+                    NSWorkspace.shared.open(remoteURL)
+                }
+            }
+        }
+    }
+
+    private var remoteURL: URL? {
+        if let url = skill.url.flatMap({ URL(string: $0) }) {
+            return url
+        }
+        return skill.installURL.flatMap { URL(string: $0) }
+    }
+}
+
 private struct SkillsLocalRow: View {
-    let group: LocalSkillGroup
+    let row: LocalSkillRowModel
     let isSelected: Bool
     let action: () -> Void
 
@@ -786,20 +895,20 @@ private struct SkillsLocalRow: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 7) {
                 HStack(spacing: 8) {
-                    Text(group.name)
+                    Text(row.name)
                         .font(.sora(12, weight: .semibold))
                         .lineLimit(1)
                     Spacer(minLength: 0)
-                    if group.installedCopyCount > 1 {
-                        SkillsBadge(text: "\(group.installedCopyCount)", color: Color.stxAccent)
+                    if row.copyCount > 1 {
+                        SkillsBadge(text: "\(row.copyCount)", color: Color.stxAccent)
                     }
                 }
-                Text(group.description ?? "No description")
+                Text(row.description)
                     .font(.sora(10))
                     .foregroundStyle(Color.stxMuted)
                     .lineLimit(2)
                 HStack(spacing: 5) {
-                    ForEach(group.providers.prefix(3), id: \.self) { provider in
+                    ForEach(row.providerBadges, id: \.self) { provider in
                         SkillsBadge(text: provider, color: Color.stxMuted)
                     }
                     Spacer(minLength: 0)
@@ -818,7 +927,7 @@ private struct SkillsLocalRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(group.name), \(group.installedCopyCount) installed copies")
+        .accessibilityLabel("\(row.name), \(row.copyCount) installed copies")
     }
 }
 
@@ -921,7 +1030,7 @@ private struct SkillFilesList: View {
     let files: [SkillFileEntry]
 
     var body: some View {
-        FadingScrollView {
+        FadingScrollView(chrome: .plain) {
             LazyVStack(alignment: .leading, spacing: 6) {
                 if files.isEmpty {
                     SkillsEmptyState(symbol: "folder", title: "No file snapshot", message: "No supporting files are available for this skill.")
