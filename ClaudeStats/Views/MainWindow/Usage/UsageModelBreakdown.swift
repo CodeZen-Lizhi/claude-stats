@@ -3,11 +3,23 @@ import SwiftUI
 struct UsageModelBreakdown: View {
     let models: [ModelUsage]
     let series: TrendSeries
+    let seriesID: String
     let includeCacheInTokens: Bool
     let costEstimationMode: CostEstimationMode
     let displayName: (String) -> String
+    @State private var cachedSnapshotKey: UsageModelBreakdownSnapshot.Key?
+    @State private var cachedSnapshot: UsageModelBreakdownSnapshot?
 
     var body: some View {
+        let key = UsageModelBreakdownSnapshot.Key(
+            seriesID: seriesID,
+            includeCacheInTokens: includeCacheInTokens,
+            costEstimationMode: costEstimationMode
+        )
+        let snapshot = cachedSnapshotKey == key
+            ? (cachedSnapshot ?? makeSnapshot(key: key))
+            : makeSnapshot(key: key)
+
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 Text("BY MODEL")
@@ -20,25 +32,16 @@ struct UsageModelBreakdown: View {
                     .lineLimit(1)
             }
 
-            if models.isEmpty {
+            if snapshot.rows.isEmpty {
                 Text("No model data in this range.")
                     .font(.sora(12))
                     .foregroundStyle(Color.stxMuted)
                     .frame(maxWidth: .infinity, minHeight: 98, alignment: .center)
             } else {
                 LazyVStack(spacing: 0) {
-                    ForEach(Array(models.enumerated()), id: \.element.id) { index, model in
-                        UsageModelRow(
-                            model: model,
-                            color: color(for: model, fallback: index),
-                            totalTokens: totalTokens(for: model),
-                            maxTokens: maxTokens,
-                            allTokens: allTokens,
-                            includeCacheInTokens: includeCacheInTokens,
-                            costEstimationMode: costEstimationMode,
-                            displayName: displayName(model.model)
-                        )
-                        if model.id != models.last?.id {
+                    ForEach(Array(snapshot.rows.enumerated()), id: \.element.id) { index, row in
+                        UsageModelRow(row: row)
+                        if index < snapshot.rows.count - 1 {
                             StxRule()
                         }
                     }
@@ -46,87 +49,74 @@ struct UsageModelBreakdown: View {
             }
         }
         .mainUsagePanel(padding: 16)
+        .onAppear { cacheSnapshotIfNeeded(key) }
+        .onChange(of: key) { _, newKey in cacheSnapshotIfNeeded(newKey) }
     }
 
-    private var allTokens: Int {
-        max(1, models.reduce(0) { $0 + totalTokens(for: $1) })
+    private func makeSnapshot(key: UsageModelBreakdownSnapshot.Key) -> UsageModelBreakdownSnapshot {
+        UsageModelBreakdownSnapshot(
+            key: key,
+            models: models,
+            series: series,
+            displayName: displayName
+        )
     }
 
-    private var maxTokens: Int {
-        max(1, models.map(totalTokens(for:)).max() ?? 1)
-    }
-
-    private func totalTokens(for model: ModelUsage) -> Int {
-        model.usage.total(includingCacheRead: includeCacheInTokens)
-    }
-
-    private func color(for model: ModelUsage, fallback: Int) -> Color {
-        ModelPalette.color(at: series.models.firstIndex(of: model.model) ?? fallback)
+    private func cacheSnapshotIfNeeded(_ key: UsageModelBreakdownSnapshot.Key) {
+        guard cachedSnapshotKey != key else { return }
+        cachedSnapshot = makeSnapshot(key: key)
+        cachedSnapshotKey = key
     }
 }
 
 private struct UsageModelRow: View {
-    let model: ModelUsage
-    let color: Color
-    let totalTokens: Int
-    let maxTokens: Int
-    let allTokens: Int
-    let includeCacheInTokens: Bool
-    let costEstimationMode: CostEstimationMode
-    let displayName: String
-
-    private var share: Double {
-        Double(totalTokens) / Double(max(1, allTokens))
-    }
+    let row: UsageModelBreakdownSnapshot.Row
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
                 RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(color)
+                    .fill(ModelPalette.color(at: row.colorIndex))
                     .frame(width: 10, height: 10)
-                Text(displayName)
+                Text(row.displayName)
                     .font(.sora(13, weight: .medium))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: 12)
-                Text(Format.tokens(totalTokens))
+                Text(row.totalText)
                     .font(.sora(12, weight: .semibold).monospacedDigit())
-                    .stxNumericValueTransition(value: Format.tokens(totalTokens))
+                    .stxNumericValueTransition(value: row.totalText)
                     .foregroundStyle(.primary)
                     .frame(minWidth: 72, alignment: .trailing)
-                Text(Format.cost(model.estimatedCost(for: costEstimationMode)))
+                Text(row.costText)
                     .font(.sora(12).monospacedDigit())
-                    .stxNumericValueTransition(value: Format.cost(model.estimatedCost(for: costEstimationMode)))
+                    .stxNumericValueTransition(value: row.costText)
                     .foregroundStyle(Color.stxMuted)
                     .frame(minWidth: 70, alignment: .trailing)
-                Text(Format.percent(share))
+                Text(row.shareText)
                     .font(.sora(12, weight: .semibold).monospacedDigit())
-                    .stxNumericValueTransition(value: Format.percent(share))
+                    .stxNumericValueTransition(value: row.shareText)
                     .foregroundStyle(.primary)
                     .frame(minWidth: 50, alignment: .trailing)
             }
 
             GeometryReader { proxy in
                 let totalWidth = proxy.size.width
-                let solid = max(0, model.usage.total - model.usage.cacheReadTokens)
-                let solidWidth = totalWidth * CGFloat(solid) / CGFloat(maxTokens)
-                let cachedWidth = includeCacheInTokens
-                    ? totalWidth * CGFloat(model.usage.cacheReadTokens) / CGFloat(maxTokens)
-                    : 0
+                let solidWidth = totalWidth * CGFloat(row.solidTokens) / CGFloat(row.maxTokens)
+                let cachedWidth = totalWidth * CGFloat(row.cacheReadTokens) / CGFloat(row.maxTokens)
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
                         .fill(Color.primary.opacity(0.08))
                     HStack(spacing: 0) {
                         if solidWidth > 0 {
                             Rectangle()
-                                .fill(color)
+                                .fill(ModelPalette.color(at: row.colorIndex))
                                 .frame(width: solidWidth)
                         }
                         if cachedWidth > 0 {
                             ZStack {
-                                Rectangle().fill(color.opacity(0.68))
+                                Rectangle().fill(ModelPalette.color(at: row.colorIndex).opacity(0.68))
                                 DiagonalStripes(spacing: 4)
                                     .stroke(Color.white.opacity(0.55), lineWidth: 1)
                             }
@@ -140,6 +130,60 @@ private struct UsageModelRow: View {
             .frame(height: 7)
         }
         .padding(.vertical, 10)
+    }
+}
+
+struct UsageModelBreakdownSnapshot {
+    struct Key: Equatable {
+        let seriesID: String
+        let includeCacheInTokens: Bool
+        let costEstimationMode: CostEstimationMode
+    }
+
+    struct Row: Identifiable, Equatable {
+        let id: String
+        let displayName: String
+        let colorIndex: Int
+        let totalText: String
+        let costText: String
+        let shareText: String
+        let solidTokens: Int
+        let cacheReadTokens: Int
+        let maxTokens: Int
+    }
+
+    let key: Key
+    let rows: [Row]
+
+    init(
+        key: Key,
+        models: [ModelUsage],
+        series: TrendSeries,
+        displayName: (String) -> String
+    ) {
+        self.key = key
+
+        let totals = models.map { $0.usage.total(includingCacheRead: key.includeCacheInTokens) }
+        let allTokens = max(1, totals.reduce(0, +))
+        let maxTokens = max(1, totals.max() ?? 1)
+        let seriesIndexByModel = Dictionary(uniqueKeysWithValues: series.models.enumerated().map { ($0.element, $0.offset) })
+
+        self.rows = models.enumerated().map { index, model in
+            let total = totals[index]
+            let share = Double(total) / Double(allTokens)
+            let solidTokens = max(0, model.usage.total - model.usage.cacheReadTokens)
+            return Row(
+                id: model.id,
+                displayName: displayName(model.model),
+                colorIndex: seriesIndexByModel[model.model] ?? index,
+                totalText: Format.tokens(total),
+                costText: Format.cost(model.estimatedCost(for: key.costEstimationMode)),
+                shareText: Format.percent(share),
+                solidTokens: solidTokens,
+                cacheReadTokens: key.includeCacheInTokens ? max(0, model.usage.cacheReadTokens) : 0,
+                maxTokens: maxTokens
+            )
+        }
     }
 }
 

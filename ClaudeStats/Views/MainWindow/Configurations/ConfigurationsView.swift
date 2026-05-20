@@ -443,6 +443,38 @@ private struct APIProviderWorkspaceLayout: Layout {
     let editorMinWidth: CGFloat
     let spacing: CGFloat
 
+    struct Cache {
+        private var measuredSizes: [MeasurementKey: CGSize] = [:]
+
+        mutating func size(
+            for index: Int,
+            width: CGFloat,
+            measure: () -> CGSize
+        ) -> CGSize {
+            let key = MeasurementKey(index: index, width: width)
+            if let size = measuredSizes[key] {
+                return size
+            }
+            let size = measure()
+            measuredSizes[key] = size
+            return size
+        }
+
+        mutating func reset() {
+            measuredSizes.removeAll(keepingCapacity: true)
+        }
+    }
+
+    private struct MeasurementKey: Hashable {
+        let index: Int
+        let width: Int
+
+        init(index: Int, width: CGFloat) {
+            self.index = index
+            self.width = Int((width * 2).rounded())
+        }
+    }
+
     private var stackedSpacing: CGFloat {
         min(spacing, 8)
     }
@@ -455,13 +487,21 @@ private struct APIProviderWorkspaceLayout: Layout {
         railWidth + providerWidth + spacing
     }
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    func makeCache(subviews _: Subviews) -> Cache {
+        Cache()
+    }
+
+    func updateCache(_ cache: inout Cache, subviews _: Subviews) {
+        cache.reset()
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) -> CGSize {
         guard subviews.count == 3 else { return .zero }
 
         let availableWidth = proposal.width ?? wideMinimumWidth
         if availableWidth >= wideMinimumWidth {
             let editorWidth = max(editorMinWidth, availableWidth - railWidth - providerWidth - spacing * 2)
-            let editorSize = subviews[2].sizeThatFits(ProposedViewSize(width: editorWidth, height: nil))
+            let editorSize = measuredSize(index: 2, width: editorWidth, subviews: subviews, cache: &cache)
             return CGSize(
                 width: railWidth + providerWidth + editorWidth + spacing * 2,
                 height: editorSize.height
@@ -469,26 +509,26 @@ private struct APIProviderWorkspaceLayout: Layout {
         } else {
             let layoutWidth = max(availableWidth, narrowWidth)
             let detailWidth = max(providerWidth, layoutWidth - railWidth - spacing)
-            let editorSize = subviews[2].sizeThatFits(ProposedViewSize(width: detailWidth, height: nil))
-            let providerHeight = narrowProviderHeight(subviews: subviews, width: detailWidth, maxHeight: editorSize.height)
+            let editorSize = measuredSize(index: 2, width: detailWidth, subviews: subviews, cache: &cache)
+            let providerHeight = narrowProviderHeight(subviews: subviews, width: detailWidth, maxHeight: editorSize.height, cache: &cache)
             let stackedHeight = providerHeight + stackedSpacing + editorSize.height
             return CGSize(width: layoutWidth, height: stackedHeight)
         }
     }
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) {
         guard subviews.count == 3 else { return }
 
         if bounds.width >= wideMinimumWidth {
-            placeWide(in: bounds, subviews: subviews)
+            placeWide(in: bounds, subviews: subviews, cache: &cache)
         } else {
-            placeNarrow(in: bounds, subviews: subviews)
+            placeNarrow(in: bounds, subviews: subviews, cache: &cache)
         }
     }
 
-    private func placeWide(in bounds: CGRect, subviews: Subviews) {
+    private func placeWide(in bounds: CGRect, subviews: Subviews, cache: inout Cache) {
         let editorWidth = max(editorMinWidth, bounds.width - railWidth - providerWidth - spacing * 2)
-        let editorSize = subviews[2].sizeThatFits(ProposedViewSize(width: editorWidth, height: nil))
+        let editorSize = measuredSize(index: 2, width: editorWidth, subviews: subviews, cache: &cache)
         let columnHeight = editorSize.height
 
         var x = bounds.minX
@@ -513,10 +553,10 @@ private struct APIProviderWorkspaceLayout: Layout {
         )
     }
 
-    private func placeNarrow(in bounds: CGRect, subviews: Subviews) {
+    private func placeNarrow(in bounds: CGRect, subviews: Subviews, cache: inout Cache) {
         let detailWidth = max(providerWidth, bounds.width - railWidth - spacing)
-        let editorSize = subviews[2].sizeThatFits(ProposedViewSize(width: detailWidth, height: nil))
-        let providerHeight = narrowProviderHeight(subviews: subviews, width: detailWidth, maxHeight: editorSize.height)
+        let editorSize = measuredSize(index: 2, width: detailWidth, subviews: subviews, cache: &cache)
+        let providerHeight = narrowProviderHeight(subviews: subviews, width: detailWidth, maxHeight: editorSize.height, cache: &cache)
         let stackedHeight = providerHeight + stackedSpacing + editorSize.height
         let originX = bounds.minX
         let rightX = originX + railWidth + spacing
@@ -538,9 +578,15 @@ private struct APIProviderWorkspaceLayout: Layout {
         )
     }
 
-    private func narrowProviderHeight(subviews: Subviews, width: CGFloat, maxHeight: CGFloat) -> CGFloat {
-        let naturalHeight = subviews[1].sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+    private func narrowProviderHeight(subviews: Subviews, width: CGFloat, maxHeight: CGFloat, cache: inout Cache) -> CGFloat {
+        let naturalHeight = measuredSize(index: 1, width: width, subviews: subviews, cache: &cache).height
         return min(naturalHeight, maxHeight)
+    }
+
+    private func measuredSize(index: Int, width: CGFloat, subviews: Subviews, cache: inout Cache) -> CGSize {
+        cache.size(for: index, width: width) {
+            subviews[index].sizeThatFits(ProposedViewSize(width: width, height: nil))
+        }
     }
 }
 
@@ -672,28 +718,19 @@ private struct CLIEnvironmentSection: View {
                 .disabled(vm.isLoading || vm.isCleaning)
             }
 
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top, spacing: 12) {
-                    ForEach(APIProviderCLI.allCases) { cli in
-                        CLIEnvironmentStatusCard(
-                            cli: cli,
-                            status: vm.status(for: cli),
-                            isLoading: vm.isLoading,
-                            copyText: copyText,
-                            openURL: openURL
-                        )
-                    }
-                }
-                VStack(alignment: .leading, spacing: 12) {
-                    ForEach(APIProviderCLI.allCases) { cli in
-                        CLIEnvironmentStatusCard(
-                            cli: cli,
-                            status: vm.status(for: cli),
-                            isLoading: vm.isLoading,
-                            copyText: copyText,
-                            openURL: openURL
-                        )
-                    }
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 300), spacing: 12)],
+                alignment: .leading,
+                spacing: 12
+            ) {
+                ForEach(APIProviderCLI.allCases) { cli in
+                    CLIEnvironmentStatusCard(
+                        cli: cli,
+                        status: vm.status(for: cli),
+                        isLoading: vm.isLoading,
+                        copyText: copyText,
+                        openURL: openURL
+                    )
                 }
             }
 

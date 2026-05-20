@@ -268,6 +268,27 @@ struct APIProviderSwitcherTests {
     }
 
     @MainActor
+    @Test("Provider list cache invalidates after library mutation")
+    func providerListCacheInvalidatesAfterMutation() async throws {
+        let temp = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let store = makeStore(temp: temp)
+        let vm = APIProviderSwitcherViewModel(store: store)
+
+        await vm.reload(keyStorageMode: .json)
+        let initial = vm.providers(for: .claude)
+        #expect(vm.providers(for: .claude).map(\.id) == initial.map(\.id))
+
+        await vm.addProvider(keyStorageMode: .json)
+
+        let selectedID = try #require(vm.selectedProviderID)
+        let updated = vm.providers(for: .claude)
+        #expect(updated.count == initial.count + 1)
+        #expect(updated.contains { $0.id == selectedID })
+    }
+
+    @MainActor
     @Test("Switching a provider away from Keychain removes the old stored key")
     func switchingProviderAwayFromKeychainRemovesOldStoredKey() async throws {
         let temp = try TempDir.make()

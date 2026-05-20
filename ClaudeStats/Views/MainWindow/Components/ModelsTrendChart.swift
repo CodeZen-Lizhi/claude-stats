@@ -11,44 +11,216 @@ import SwiftUI
 /// `ModelTable` next to the chart doubles as the legend.
 struct ModelsTrendChart: View {
     let series: TrendSeries
+    let seriesID: String
     var includeCacheInTotals: Bool = false
     /// Resolves a canonical model id (e.g. `claude-opus-4-7`) to its display
     /// name. Passed in so the chart stays provider-agnostic.
     let displayName: (String) -> String
+    @State private var cachedSnapshotKey: ModelsTrendChartSnapshot.Key?
+    @State private var cachedSnapshot: ModelsTrendChartSnapshot?
 
     private static let chartHeight: CGFloat = 180
     private static let yAxisWidth: CGFloat = 44
-    private static let yTickCount: Int = 4   // 4 intervals → 5 labels incl. zero
-    private static let targetXLabelCount: Int = 8
 
     var body: some View {
+        let key = ModelsTrendChartSnapshot.Key(seriesID: seriesID, includeCacheInTotals: includeCacheInTotals)
+        let snapshot = cachedSnapshotKey == key
+            ? (cachedSnapshot ?? makeSnapshot(key: key))
+            : makeSnapshot(key: key)
+
         VStack(alignment: .leading, spacing: 0) {
-            if days.isEmpty {
+            if snapshot.days.isEmpty {
                 placeholder
             } else {
-                chart
+                chart(snapshot)
             }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.stxStroke, lineWidth: 1))
+        .onAppear { cacheSnapshotIfNeeded(key) }
+        .onChange(of: key) { _, newKey in cacheSnapshotIfNeeded(newKey) }
     }
 
-    // MARK: - Derived data
+    // MARK: - Subviews
 
-    /// Ordered list of days with at least one non-zero model bucket, plus the
-    /// per-model usage for that day (kept in the chart's stacking order —
-    /// busiest model first, which becomes the bottom segment when rendered).
-    private var days: [DayColumn] {
-        // Group buckets by day-start.
-        var byDay: [Date: [String: TokenUsage]] = [:]
-        for b in series.buckets {
-            let total = b.usage.total(includingCacheRead: includeCacheInTotals)
-            guard total > 0 else { continue }
-            byDay[b.start, default: [:]][b.model] = b.usage
+    private func chart(_ snapshot: ModelsTrendChartSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 8) {
+                yAxis(snapshot)
+                plotArea(snapshot)
+            }
+            .frame(height: Self.chartHeight)
+            xAxis(snapshot)
         }
-        let modelOrder = series.models   // already sorted by total desc
+    }
+
+    private func yAxis(_ snapshot: ModelsTrendChartSnapshot) -> some View {
+        VStack(alignment: .trailing, spacing: 0) {
+            ForEach(Array(snapshot.yTicks.enumerated()), id: \.offset) { index, value in
+                Text(Format.tokens(value))
+                    .font(.sora(8).monospacedDigit())
+                    .foregroundStyle(Color.stxMuted)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                if index < snapshot.yTicks.count - 1 {
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .frame(width: Self.yAxisWidth)
+    }
+
+    private func plotArea(_ snapshot: ModelsTrendChartSnapshot) -> some View {
+        GeometryReader { geo in
+            ZStack(alignment: .bottom) {
+                gridlines(in: geo.size)
+                HStack(alignment: .bottom, spacing: 1) {
+                    ForEach(snapshot.days) { day in
+                        column(for: day, plotHeight: geo.size.height, yMax: snapshot.yMax)
+                    }
+                }
+            }
+        }
+    }
+
+    private func gridlines(in size: CGSize) -> some View {
+        ZStack(alignment: .top) {
+            ForEach(0...ModelsTrendChartSnapshot.yTickCount, id: \.self) { i in
+                let y = size.height * CGFloat(i) / CGFloat(ModelsTrendChartSnapshot.yTickCount)
+                Rectangle()
+                    .fill(Color.stxStroke.opacity(0.5))
+                    .frame(height: 0.5)
+                    .offset(y: y - 0.25)
+            }
+        }
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
+    }
+
+    private func column(for day: ModelsTrendChartSnapshot.DayColumn, plotHeight: CGFloat, yMax: Int) -> some View {
+        // VStack of segments, smallest model first (top) so the busiest model
+        // ends up at the base. Within each segment, the cache portion is
+        // drawn above the solid portion (same colour, striped overlay).
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            ForEach(day.segments.reversed()) { segment in
+                let color = ModelPalette.color(at: segment.colorIndex)
+                if segment.cache > 0 {
+                    stripedRect(color: color)
+                        .frame(height: barHeight(segment.cache, plotHeight: plotHeight, yMax: yMax))
+                }
+                if segment.solid > 0 {
+                    Rectangle()
+                        .fill(color)
+                        .frame(height: barHeight(segment.solid, plotHeight: plotHeight, yMax: yMax))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func stripedRect(color: Color) -> some View {
+        ZStack {
+            Rectangle().fill(color)
+            DiagonalStripes(spacing: 4)
+                .stroke(Color.white.opacity(0.5), lineWidth: 1)
+        }
+        .clipped()
+    }
+
+    private func barHeight(_ tokens: Int, plotHeight: CGFloat, yMax: Int) -> CGFloat {
+        guard yMax > 0 else { return 0 }
+        return plotHeight * CGFloat(tokens) / CGFloat(yMax)
+    }
+
+    private func xAxis(_ snapshot: ModelsTrendChartSnapshot) -> some View {
+        HStack(alignment: .top, spacing: 0) {
+            // Spacer matching the Y-axis column width so labels align with bars.
+            Color.clear.frame(width: Self.yAxisWidth + 8)
+            HStack(alignment: .top, spacing: 1) {
+                ForEach(Array(snapshot.days.enumerated()), id: \.element.id) { index, day in
+                    Text(snapshot.xLabelIndices.contains(index) ? Format.day(day.date) : "")
+                        .font(.sora(8).monospacedDigit())
+                        .foregroundStyle(Color.stxMuted)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+            }
+        }
+    }
+
+    private var placeholder: some View {
+        Text("No model activity in this range.")
+            .font(.sora(11))
+            .foregroundStyle(Color.stxMuted)
+            .frame(maxWidth: .infinity, minHeight: Self.chartHeight, alignment: .center)
+    }
+
+    private func makeSnapshot(key: ModelsTrendChartSnapshot.Key) -> ModelsTrendChartSnapshot {
+        ModelsTrendChartSnapshot(key: key, series: series)
+    }
+
+    private func cacheSnapshotIfNeeded(_ key: ModelsTrendChartSnapshot.Key) {
+        guard cachedSnapshotKey != key else { return }
+        cachedSnapshot = makeSnapshot(key: key)
+        cachedSnapshotKey = key
+    }
+}
+
+struct ModelsTrendChartSnapshot: Equatable {
+    struct Key: Equatable {
+        let seriesID: String
+        let includeCacheInTotals: Bool
+    }
+
+    static let yTickCount = 4
+    private static let targetXLabelCount = 8
+
+    let key: Key
+    let days: [DayColumn]
+    let yMax: Int
+    let yTicks: [Int]
+    let xLabelIndices: Set<Int>
+
+    init(key: Key, series: TrendSeries) {
+        let days = Self.makeDays(series: series, includeCacheInTotals: key.includeCacheInTotals)
+        let yMax = Self.niceCeiling(days.map(\.total).max() ?? 0)
+        let step = max(1, yMax / Self.yTickCount)
+
+        self.key = key
+        self.days = days
+        self.yMax = yMax
+        self.yTicks = (0...Self.yTickCount).map { yMax - $0 * step }
+        self.xLabelIndices = Self.makeXLabelIndices(dayCount: days.count)
+    }
+
+    /// Round `value` up to a "nice" number suitable as a chart's Y maximum
+    /// (1, 2, 2.5, 5, or 10 × a power of ten). Returns at least 1.
+    static func niceCeiling(_ value: Int) -> Int {
+        guard value > 0 else { return 1 }
+        let magnitude = pow(10.0, floor(log10(Double(value))))
+        let normalized = Double(value) / magnitude
+        let nice: Double
+        switch normalized {
+        case ...1: nice = 1
+        case ...2: nice = 2
+        case ...2.5: nice = 2.5
+        case ...5: nice = 5
+        default: nice = 10
+        }
+        return Int((nice * magnitude).rounded(.up))
+    }
+
+    private static func makeDays(series: TrendSeries, includeCacheInTotals: Bool) -> [DayColumn] {
+        var byDay: [Date: [String: TokenUsage]] = [:]
+        for bucket in series.buckets {
+            let total = bucket.usage.total(includingCacheRead: includeCacheInTotals)
+            guard total > 0 else { continue }
+            byDay[bucket.start, default: [:]][bucket.model] = bucket.usage
+        }
+
+        let modelOrder = series.models
         let indexByModel = Dictionary(uniqueKeysWithValues: modelOrder.enumerated().map { ($0.element, $0.offset) })
         return byDay
             .map { date, usagesByModel in
@@ -70,171 +242,20 @@ struct ModelsTrendChart: View {
             .sorted { $0.date < $1.date }
     }
 
-    /// Rounded "nice" Y maximum across the visible days.
-    private var yMax: Int {
-        let perDayMax = days.map { $0.total }.max() ?? 0
-        return Self.niceCeiling(perDayMax)
+    private static func makeXLabelIndices(dayCount: Int) -> Set<Int> {
+        guard dayCount > 0 else { return [] }
+        if dayCount <= targetXLabelCount { return Set(0..<dayCount) }
+        let step = Double(dayCount - 1) / Double(targetXLabelCount - 1)
+        return Set((0..<targetXLabelCount).map { Int((Double($0) * step).rounded()) })
     }
 
-    /// Y-axis tick values, descending so a top-to-bottom `ForEach` renders
-    /// `yMax` first.
-    private var yTicks: [Int] {
-        let step = max(1, yMax / Self.yTickCount)
-        return (0...Self.yTickCount).map { yMax - $0 * step }
-    }
-
-    /// Indices into `days` that should carry an X-axis label. Picks ~8 evenly
-    /// spaced columns so labels never overlap regardless of period.
-    private var xLabelIndices: Set<Int> {
-        let n = days.count
-        guard n > 0 else { return [] }
-        if n <= Self.targetXLabelCount { return Set(0..<n) }
-        let step = Double(n - 1) / Double(Self.targetXLabelCount - 1)
-        return Set((0..<Self.targetXLabelCount).map { Int((Double($0) * step).rounded()) })
-    }
-
-    // MARK: - Subviews
-
-    private var chart: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .top, spacing: 8) {
-                yAxis
-                plotArea
-            }
-            .frame(height: Self.chartHeight)
-            xAxis
-        }
-    }
-
-    private var yAxis: some View {
-        VStack(alignment: .trailing, spacing: 0) {
-            ForEach(Array(yTicks.enumerated()), id: \.offset) { index, value in
-                Text(Format.tokens(value))
-                    .font(.sora(8).monospacedDigit())
-                    .foregroundStyle(Color.stxMuted)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                if index < yTicks.count - 1 {
-                    Spacer(minLength: 0)
-                }
-            }
-        }
-        .frame(width: Self.yAxisWidth)
-    }
-
-    private var plotArea: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .bottom) {
-                gridlines(in: geo.size)
-                HStack(alignment: .bottom, spacing: 1) {
-                    ForEach(Array(days.enumerated()), id: \.element.id) { _, day in
-                        column(for: day, plotHeight: geo.size.height)
-                    }
-                }
-            }
-        }
-    }
-
-    private func gridlines(in size: CGSize) -> some View {
-        ZStack(alignment: .top) {
-            ForEach(0...Self.yTickCount, id: \.self) { i in
-                let y = size.height * CGFloat(i) / CGFloat(Self.yTickCount)
-                Rectangle()
-                    .fill(Color.stxStroke.opacity(0.5))
-                    .frame(height: 0.5)
-                    .offset(y: y - 0.25)
-            }
-        }
-        .frame(width: size.width, height: size.height, alignment: .topLeading)
-    }
-
-    private func column(for day: DayColumn, plotHeight: CGFloat) -> some View {
-        // VStack of segments, smallest model first (top) so the busiest model
-        // ends up at the base. Within each segment, the cache portion is
-        // drawn above the solid portion (same colour, striped overlay).
-        VStack(spacing: 0) {
-            Spacer(minLength: 0)
-            ForEach(day.segments.reversed()) { segment in
-                let color = ModelPalette.color(at: segment.colorIndex)
-                if segment.cache > 0 {
-                    stripedRect(color: color)
-                        .frame(height: barHeight(segment.cache, plotHeight: plotHeight))
-                }
-                if segment.solid > 0 {
-                    Rectangle()
-                        .fill(color)
-                        .frame(height: barHeight(segment.solid, plotHeight: plotHeight))
-                }
-            }
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private func stripedRect(color: Color) -> some View {
-        ZStack {
-            Rectangle().fill(color)
-            DiagonalStripes(spacing: 4)
-                .stroke(Color.white.opacity(0.5), lineWidth: 1)
-        }
-        .clipped()
-    }
-
-    private func barHeight(_ tokens: Int, plotHeight: CGFloat) -> CGFloat {
-        guard yMax > 0 else { return 0 }
-        return plotHeight * CGFloat(tokens) / CGFloat(yMax)
-    }
-
-    private var xAxis: some View {
-        HStack(alignment: .top, spacing: 0) {
-            // Spacer matching the Y-axis column width so labels align with bars.
-            Color.clear.frame(width: Self.yAxisWidth + 8)
-            HStack(alignment: .top, spacing: 1) {
-                ForEach(Array(days.enumerated()), id: \.element.id) { index, day in
-                    Text(xLabelIndices.contains(index) ? Format.day(day.date) : "")
-                        .font(.sora(8).monospacedDigit())
-                        .foregroundStyle(Color.stxMuted)
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                }
-            }
-        }
-    }
-
-    private var placeholder: some View {
-        Text("No model activity in this range.")
-            .font(.sora(11))
-            .foregroundStyle(Color.stxMuted)
-            .frame(maxWidth: .infinity, minHeight: Self.chartHeight, alignment: .center)
-    }
-
-    // MARK: - Helpers
-
-    /// Round `value` up to a "nice" number suitable as a chart's Y maximum
-    /// (1, 2, 2.5, 5, or 10 × a power of ten). Returns at least 1.
-    private static func niceCeiling(_ value: Int) -> Int {
-        guard value > 0 else { return 1 }
-        let magnitude = pow(10.0, floor(log10(Double(value))))
-        let normalized = Double(value) / magnitude
-        let nice: Double
-        switch normalized {
-        case ...1: nice = 1
-        case ...2: nice = 2
-        case ...2.5: nice = 2.5
-        case ...5: nice = 5
-        default: nice = 10
-        }
-        return Int((nice * magnitude).rounded(.up))
-    }
-
-    // MARK: - Models
-
-    private struct DayColumn: Identifiable {
+    struct DayColumn: Identifiable, Equatable {
         let date: Date
         let segments: [Segment]
         var id: Date { date }
         var total: Int { segments.reduce(0) { $0 + $1.solid + $1.cache } }
 
-        struct Segment: Identifiable {
+        struct Segment: Identifiable, Equatable {
             let model: String
             let colorIndex: Int
             let solid: Int
@@ -268,6 +289,7 @@ struct ModelsTrendChart: View {
     let series = TrendSeries(granularity: .day, models: models, buckets: buckets)
     return ModelsTrendChart(
         series: series,
+        seriesID: "preview",
         includeCacheInTotals: true,
         displayName: { ClaudeProvider.prettyName(for: $0) }
     )

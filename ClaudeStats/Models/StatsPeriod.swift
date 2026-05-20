@@ -1,7 +1,7 @@
 import Foundation
 
 /// Time windows the Usage screen and menu-bar label can be scoped to.
-enum StatsPeriod: String, CaseIterable, Sendable, Identifiable {
+enum StatsPeriod: String, CaseIterable, Sendable, Identifiable, Hashable {
     case today
     case last7Days
     case last30Days

@@ -18,7 +18,7 @@ enum LeaderboardMetric: String, CaseIterable, Sendable, Identifiable, Codable {
     var shortLabel: String {
         switch self {
         case .tokensWithCache: "With cache"
-        case .tokensWithoutCacheRead: "No cache reads"
+        case .tokensWithoutCacheRead: "No cache"
         case .activityMinutes: "Activity"
         }
     }

@@ -1,6 +1,6 @@
 import Foundation
 
-enum CostEstimationMode: String, CaseIterable, Sendable, Identifiable {
+enum CostEstimationMode: String, CaseIterable, Sendable, Identifiable, Hashable {
     case standardAPI
     case detailedBilling
 

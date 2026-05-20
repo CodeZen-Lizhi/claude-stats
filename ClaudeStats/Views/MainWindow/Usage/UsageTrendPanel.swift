@@ -3,27 +3,46 @@ import Charts
 
 struct UsageTrendPanel: View {
     let series: TrendSeries
+    let seriesID: String
     let rangeID: String
     @Binding var chartStyle: TrendChartStyle
     @Binding var scaleMode: TrendScaleMode
     @Binding var stackByType: Bool
     let displayName: (String) -> String
+    @State private var cachedSnapshotKey: SnapshotKey?
+    @State private var cachedSnapshot: UsageTrendChartSnapshot?
 
     private var isHourly: Bool { series.granularity == .hour }
     private var effectiveStyle: TrendChartStyle { isHourly ? .line : chartStyle }
     private var useLog: Bool { !isHourly && effectiveStyle == .line && !stackByType && scaleMode == .log }
-    private var snapshot: UsageTrendChartSnapshot {
-        UsageTrendChartSnapshot(
-            series: series,
+
+    private var snapshotKey: SnapshotKey {
+        SnapshotKey(
+            seriesID: seriesID,
             rangeID: rangeID,
             style: effectiveStyle,
             useLog: useLog,
-            stackByType: stackByType,
+            stackByType: stackByType
+        )
+    }
+
+    private func makeSnapshot(for key: SnapshotKey) -> UsageTrendChartSnapshot {
+        UsageTrendChartSnapshot(
+            series: series,
+            rangeID: key.rangeID,
+            style: key.style,
+            useLog: key.useLog,
+            stackByType: key.stackByType,
             displayName: displayName
         )
     }
 
     var body: some View {
+        let key = snapshotKey
+        let chartSnapshot = cachedSnapshotKey == key
+            ? (cachedSnapshot ?? makeSnapshot(for: key))
+            : makeSnapshot(for: key)
+
         VStack(alignment: .leading, spacing: 12) {
             header
             Text(caption)
@@ -32,14 +51,16 @@ struct UsageTrendPanel: View {
                 .foregroundStyle(Color.stxMuted)
 
             UsageTrendChartView(
-                snapshot: snapshot,
+                snapshot: chartSnapshot,
                 chartHeight: 220,
                 emptyMessage: emptyMessage
             ) {
-                legend(snapshot.legendEntries)
+                legend(chartSnapshot.legendEntries)
             }
         }
         .mainUsagePanel(padding: 16)
+        .onAppear { cacheSnapshotIfNeeded(key) }
+        .onChange(of: key) { _, newKey in cacheSnapshotIfNeeded(newKey) }
     }
 
     private var header: some View {
@@ -138,6 +159,20 @@ struct UsageTrendPanel: View {
             }
         }
     }
+
+    private func cacheSnapshotIfNeeded(_ key: SnapshotKey) {
+        guard cachedSnapshotKey != key else { return }
+        cachedSnapshot = makeSnapshot(for: key)
+        cachedSnapshotKey = key
+    }
+
+    private struct SnapshotKey: Equatable {
+        let seriesID: String
+        let rangeID: String
+        let style: TrendChartStyle
+        let useLog: Bool
+        let stackByType: Bool
+    }
 }
 
 private struct UsageIconButton: View {
@@ -176,6 +211,7 @@ private struct UsageIconButton: View {
         var body: some View {
             UsageTrendPanel(
                 series: UsageSummary.empty(period: .last30Days).trendSeries(),
+                seriesID: "preview",
                 rangeID: StatsPeriod.last30Days.rawValue,
                 chartStyle: $style,
                 scaleMode: $scale,

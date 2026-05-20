@@ -33,14 +33,17 @@ struct DashboardView: View {
     }
 
     var body: some View {
+        let heatmapRange = vm.heatmapInterval()
+        let trendSeriesID = dashboardTrendSeriesID
+
         FadingScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
                 controls
                 Group {
                     switch vm.section {
-                    case .overview: overviewBody
-                    case .models: modelsBody
+                    case .overview: overviewBody(heatmapRange: heatmapRange)
+                    case .models: modelsBody(trendSeriesID: trendSeriesID)
                     }
                 }
                 Spacer(minLength: 0)
@@ -139,7 +142,7 @@ struct DashboardView: View {
 
     // MARK: - Overview body
 
-    private var overviewBody: some View {
+    private func overviewBody(heatmapRange: DateInterval) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             statsGrid
             if env.preferences.selectedProvider == .claude {
@@ -147,8 +150,8 @@ struct DashboardView: View {
             } else if env.preferences.selectedProvider == .codex {
                 OpenAIStatusCard(status: env.openAIStatus)
             }
-            heatmapsRow
-            overlapSection
+            heatmapsRow(range: heatmapRange)
+            overlapSection(range: heatmapRange)
             ComparisonFooter(totalTokens: vm.stats.totalTokens)
         }
     }
@@ -176,15 +179,15 @@ struct DashboardView: View {
 
     // MARK: - Heatmap row (Claude + GitHub side-by-side, no card chrome)
 
-    private var heatmapsRow: some View {
+    private func heatmapsRow(range: DateInterval) -> some View {
         HStack(alignment: .top, spacing: 32) {
-            claudeHeatmapSection
-            githubHeatmapSection
+            claudeHeatmapSection(range: range)
+            githubHeatmapSection(range: range)
         }
         .padding(.top, 4)
     }
 
-    private var claudeHeatmapSection: some View {
+    private func claudeHeatmapSection(range: DateInterval) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             heatmapHeader(
                 title: L10n.string("dashboard.heatmap.claude_activity", defaultValue: "CLAUDE ACTIVITY"),
@@ -194,7 +197,7 @@ struct DashboardView: View {
             )
             CompactHeatmap(
                 cells: vm.heatmapCells,
-                range: vm.heatmapInterval(),
+                range: range,
                 valueLabel: {
                     L10n.format("dashboard.heatmap.tokens_value",
                                 defaultValue: "%@ tokens",
@@ -206,7 +209,7 @@ struct DashboardView: View {
     }
 
     @ViewBuilder
-    private var githubHeatmapSection: some View {
+    private func githubHeatmapSection(range: DateInterval) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             heatmapHeader(title: "GITHUB", subtitle: githubSubtitle)
             switch githubDisplay {
@@ -215,7 +218,7 @@ struct DashboardView: View {
             case .heatmap(let cells, _):
                 CompactHeatmap(
                     cells: cells,
-                    range: vm.heatmapInterval(),
+                    range: range,
                     valueLabel: { L10n.contributionCount($0) }
                 )
             }
@@ -239,16 +242,16 @@ struct DashboardView: View {
     // MARK: - Overlap section
 
     @ViewBuilder
-    private var overlapSection: some View {
+    private func overlapSection(range: DateInterval) -> some View {
         if env.preferences.githubEnabled,
            case .connected = env.github.status,
            !env.github.cells.isEmpty,
            let overlap {
-            overlapCard(overlap: overlap)
+            overlapCard(overlap: overlap, range: range)
         }
     }
 
-    private func overlapCard(overlap: OverlapStats) -> some View {
+    private func overlapCard(overlap: OverlapStats, range: DateInterval) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text("OVERLAP")
@@ -268,7 +271,7 @@ struct DashboardView: View {
             }
             OverlapHeatmapView(
                 stats: overlap,
-                range: vm.heatmapInterval(),
+                range: range,
                 palette: env.preferences.overlapPalette,
                 valueLabel: overlapStateLabel
             )
@@ -281,10 +284,11 @@ struct DashboardView: View {
 
     // MARK: - Models body
 
-    private var modelsBody: some View {
+    private func modelsBody(trendSeriesID: String) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             ModelsTrendChart(
                 series: vm.modelTrend,
+                seriesID: trendSeriesID,
                 includeCacheInTotals: env.preferences.includeCacheInTokens,
                 displayName: modelDisplayName
             )
@@ -294,6 +298,13 @@ struct DashboardView: View {
                 displayName: modelDisplayName
             )
         }
+    }
+
+    private var dashboardTrendSeriesID: String {
+        let refreshID = env.store.lastRefreshedAt
+            .map { String(Int(($0.timeIntervalSinceReferenceDate * 1_000).rounded())) }
+            ?? "never"
+        return "\(env.preferences.selectedProvider.rawValue)|\(vm.period.rawValue)|\(refreshID)|\(vm.reloadToken)"
     }
 
     /// Pretty label for a canonical model id, scoped to the active provider.

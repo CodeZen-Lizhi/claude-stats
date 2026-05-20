@@ -16,11 +16,12 @@ struct MainUsageView: View {
     var body: some View {
         @Bindable var bvm = vm
         let provider = env.preferences.selectedProvider
-        let summary = vm.summary(from: env.store, provider: provider)
-        let series = summary.trendSeries()
+        let data = vm.displayedDerivedData(provider: provider, lastRefreshedAt: env.store.lastRefreshedAt)
+        let summary = data.summary
+        let series = data.series
         let includeCache = env.preferences.includeCacheInTokens
         let costMode = env.preferences.costEstimationMode
-        let cacheHitRate = env.store.cacheHitRate(for: summary.totalUsage, provider: provider)
+        let cacheHitRate = data.cacheHitRate
 
         FadingScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -37,13 +38,21 @@ struct MainUsageView: View {
                 }
                 UsageTrendPanel(
                     series: series,
+                    seriesID: data.key.chartSeriesID,
                     rangeID: vm.period.rawValue,
                     chartStyle: $bvm.chartStyle,
                     scaleMode: $bvm.scaleMode,
                     stackByType: $bvm.stackByType,
                     displayName: modelDisplayName
                 )
-                lowerPanels(summary: summary, series: series, includeCache: includeCache, costMode: costMode, cacheHitRate: cacheHitRate)
+                lowerPanels(
+                    summary: summary,
+                    series: series,
+                    seriesID: data.key.chartSeriesID,
+                    includeCache: includeCache,
+                    costMode: costMode,
+                    cacheHitRate: cacheHitRate
+                )
             }
             .padding(.horizontal, 20)
             .padding(.top, 52)
@@ -51,11 +60,15 @@ struct MainUsageView: View {
             .frame(maxWidth: 980, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
-        .onAppear(perform: syncFromSceneStorage)
+        .onAppear {
+            syncFromSceneStorage()
+            refreshDerivedData()
+        }
         .onChange(of: vm.period) { _, new in periodRaw = new.rawValue }
         .onChange(of: vm.chartStyle) { _, new in chartStyleRaw = ChartStyleStorage(new).rawValue }
         .onChange(of: vm.scaleMode) { _, new in scaleModeRaw = ScaleModeStorage(new).rawValue }
         .onChange(of: vm.stackByType) { _, new in stackByTypeRaw = new }
+        .onChange(of: usageDataKey) { _, _ in refreshDerivedData() }
         .onChange(of: env.store.lastRefreshedAt) { _, _ in
             guard env.preferences.selectedProvider.supportsUsageLimits else { return }
             Task {
@@ -114,41 +127,41 @@ struct MainUsageView: View {
     }
 
     @ViewBuilder
-    private func lowerPanels(summary: UsageSummary, series: TrendSeries, includeCache: Bool, costMode: CostEstimationMode, cacheHitRate: Double?) -> some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .top, spacing: 12) {
-                UsageModelBreakdown(
-                    models: summary.models,
-                    series: series,
-                    includeCacheInTokens: includeCache,
-                    costEstimationMode: costMode,
-                    displayName: modelDisplayName
-                )
-                .frame(minWidth: 560, maxWidth: .infinity)
-
-                UsageTokenCompositionPanel(
-                    usage: summary.totalUsage,
-                    includeCacheInTokens: includeCache,
-                    cacheHitRate: cacheHitRate
-                )
-                .frame(width: 300)
-            }
-
-            VStack(alignment: .leading, spacing: 12) {
-                UsageModelBreakdown(
-                    models: summary.models,
-                    series: series,
-                    includeCacheInTokens: includeCache,
-                    costEstimationMode: costMode,
-                    displayName: modelDisplayName
-                )
-                UsageTokenCompositionPanel(
-                    usage: summary.totalUsage,
-                    includeCacheInTokens: includeCache,
-                    cacheHitRate: cacheHitRate
-                )
-            }
+    private func lowerPanels(
+        summary: UsageSummary,
+        series: TrendSeries,
+        seriesID: String,
+        includeCache: Bool,
+        costMode: CostEstimationMode,
+        cacheHitRate: Double?
+    ) -> some View {
+        UsageLowerPanelsLayout(
+            modelMinimumWidth: 560,
+            compositionWidth: 300,
+            spacing: 12
+        ) {
+            UsageModelBreakdown(
+                models: summary.models,
+                series: series,
+                seriesID: seriesID,
+                includeCacheInTokens: includeCache,
+                costEstimationMode: costMode,
+                displayName: modelDisplayName
+            )
+            UsageTokenCompositionPanel(
+                usage: summary.totalUsage,
+                includeCacheInTokens: includeCache,
+                cacheHitRate: cacheHitRate
+            )
         }
+    }
+
+    private var usageDataKey: UsageDerivedData.Key {
+        UsageDerivedData.Key(
+            period: vm.period,
+            provider: env.preferences.selectedProvider,
+            lastRefreshedAt: env.store.lastRefreshedAt
+        )
     }
 
     private func syncFromSceneStorage() {
@@ -156,6 +169,14 @@ struct MainUsageView: View {
         vm.chartStyle = ChartStyleStorage(rawValue: chartStyleRaw)?.chartStyle ?? .line
         vm.scaleMode = ScaleModeStorage(rawValue: scaleModeRaw)?.scaleMode ?? .linear
         vm.stackByType = stackByTypeRaw
+    }
+
+    private func refreshDerivedData() {
+        vm.refreshDerivedData(
+            from: env.store,
+            provider: env.preferences.selectedProvider,
+            lastRefreshedAt: env.store.lastRefreshedAt
+        )
     }
 
     private func modelDisplayName(_ id: String) -> String {
@@ -228,6 +249,66 @@ private struct UsagePeriodChips: View {
         case .last7Days: "7d"
         case .last30Days: "30d"
         case .allTime: L10n.string("usage.period_chip.all", defaultValue: "All")
+        }
+    }
+}
+
+private struct UsageLowerPanelsLayout: Layout {
+    let modelMinimumWidth: CGFloat
+    let compositionWidth: CGFloat
+    let spacing: CGFloat
+
+    private var horizontalMinimumWidth: CGFloat {
+        modelMinimumWidth + compositionWidth + spacing
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache _: inout ()) -> CGSize {
+        guard subviews.count == 2 else { return .zero }
+
+        let availableWidth = proposal.width ?? horizontalMinimumWidth
+        if availableWidth >= horizontalMinimumWidth {
+            let modelWidth = max(modelMinimumWidth, availableWidth - compositionWidth - spacing)
+            let modelSize = subviews[0].sizeThatFits(ProposedViewSize(width: modelWidth, height: nil))
+            let compositionSize = subviews[1].sizeThatFits(ProposedViewSize(width: compositionWidth, height: nil))
+            return CGSize(width: availableWidth, height: max(modelSize.height, compositionSize.height))
+        }
+
+        let stackedWidth = max(0, availableWidth)
+        let modelSize = subviews[0].sizeThatFits(ProposedViewSize(width: stackedWidth, height: nil))
+        let compositionSize = subviews[1].sizeThatFits(ProposedViewSize(width: stackedWidth, height: nil))
+        return CGSize(
+            width: stackedWidth,
+            height: modelSize.height + spacing + compositionSize.height
+        )
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal _: ProposedViewSize, subviews: Subviews, cache _: inout ()) {
+        guard subviews.count == 2 else { return }
+
+        if bounds.width >= horizontalMinimumWidth {
+            let modelWidth = max(modelMinimumWidth, bounds.width - compositionWidth - spacing)
+            subviews[0].place(
+                at: bounds.origin,
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: modelWidth, height: nil)
+            )
+            subviews[1].place(
+                at: CGPoint(x: bounds.minX + modelWidth + spacing, y: bounds.minY),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: compositionWidth, height: nil)
+            )
+        } else {
+            let modelSize = subviews[0].sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
+            subviews[0].place(
+                at: bounds.origin,
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: bounds.width, height: nil)
+            )
+            subviews[1].place(
+                at: CGPoint(x: bounds.minX, y: bounds.minY + modelSize.height + spacing),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: bounds.width, height: nil)
+            )
         }
     }
 }

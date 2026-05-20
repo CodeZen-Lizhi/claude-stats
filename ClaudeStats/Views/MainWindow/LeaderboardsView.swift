@@ -140,7 +140,7 @@ struct LeaderboardsView: View {
                 headerSpacing: LeaderboardLayout.headerContentSpacing
             ) {
                 titleHeader
-                    .frame(width: LeaderboardLayout.leftColumnWidth, alignment: .topLeading)
+                    .frame(width: contentWidth, alignment: .topLeading)
 
                 listColumn(usesFixedScoreListHeight: true)
                     .frame(width: LeaderboardLayout.leftColumnWidth, alignment: .top)
@@ -163,18 +163,7 @@ struct LeaderboardsView: View {
     }
 
     private var titleHeader: some View {
-        LeaderboardTitleHeader()
-    }
-
-    private var overviewPanel: some View {
-        LeaderboardOverviewPanel(
-            metric: $metric,
-            period: $period,
-            selectedDailyDate: $selectedDailyDate,
-            scores: scores,
-            topScore: topScore,
-            currentUserHash: env.leaderboards.currentUserHash,
-            syncStatusText: env.leaderboards.leaderboardStatusText,
+        LeaderboardTitleHeader(
             isLoadingScores: env.leaderboards.isLoadingScores,
             isSyncBusy: isSyncBusy,
             onRefresh: {
@@ -187,6 +176,18 @@ struct LeaderboardsView: View {
                     )
                 }
             }
+        )
+    }
+
+    private var overviewPanel: some View {
+        LeaderboardOverviewPanel(
+            metric: $metric,
+            period: $period,
+            selectedDailyDate: $selectedDailyDate,
+            scores: scores,
+            topScore: topScore,
+            currentUserHash: env.leaderboards.currentUserHash,
+            syncStatusText: env.leaderboards.leaderboardStatusText
         )
     }
 

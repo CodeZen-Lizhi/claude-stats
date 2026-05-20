@@ -103,4 +103,26 @@ struct UsageSummaryTests {
         #expect(summary.totalCost(for: .standardAPI) == 1.25)
         #expect(summary.totalCost(for: .detailedBilling) == 3.5)
     }
+
+    @MainActor
+    @Test("Usage derived data is keyed by data inputs, not layout")
+    func usageDerivedDataKeyedByDataInputs() {
+        let store = SessionStore(registry: ProviderRegistry(pricing: TestPricing.table), pricing: TestPricing.table)
+        store.loadPreviewSessions([
+            session("derived", daysAgo: 0, hour: 10, model: "model-a", count: 120),
+        ])
+
+        let key = UsageDerivedData.Key(
+            period: .allTime,
+            provider: .claude,
+            lastRefreshedAt: store.lastRefreshedAt
+        )
+        let snapshot = UsageDerivedData.make(key: key, store: store)
+
+        #expect(snapshot.summary.totalTokens == 120)
+        #expect(snapshot.series.models == ["model-a"])
+        #expect(key == UsageDerivedData.Key(period: .allTime, provider: .claude, lastRefreshedAt: store.lastRefreshedAt))
+        #expect(key != UsageDerivedData.Key(period: .last7Days, provider: .claude, lastRefreshedAt: store.lastRefreshedAt))
+        #expect(key != UsageDerivedData.Key(period: .allTime, provider: .codex, lastRefreshedAt: store.lastRefreshedAt))
+    }
 }

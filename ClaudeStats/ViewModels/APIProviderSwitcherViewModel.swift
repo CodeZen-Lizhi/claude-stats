@@ -6,8 +6,11 @@ import Observation
 final class APIProviderSwitcherViewModel {
     private let store: ConfigurationProviderStore
     private var isOpeningDraft = false
+    @ObservationIgnored private var sortedProvidersByCLI: [APIProviderCLI: [CLIAPIProvider]] = [:]
 
-    private(set) var library = ConfigurationProviderLibrary()
+    private(set) var library = ConfigurationProviderLibrary() {
+        didSet { sortedProvidersByCLI.removeAll() }
+    }
     private(set) var isLoaded = false
     private(set) var isWorking = false
     private(set) var lastError: String?
@@ -57,7 +60,11 @@ final class APIProviderSwitcherViewModel {
     }
 
     func providers(for cli: APIProviderCLI) -> [CLIAPIProvider] {
-        library.cliProviders
+        if let cached = sortedProvidersByCLI[cli] {
+            return cached
+        }
+
+        let providers = library.cliProviders
             .filter { $0.cli == cli }
             .sorted { lhs, rhs in
                 let lhsRank = Self.sortRank(lhs)
@@ -66,6 +73,8 @@ final class APIProviderSwitcherViewModel {
                 if lhs.updatedAt != rhs.updatedAt { return lhs.updatedAt > rhs.updatedAt }
                 return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
             }
+        sortedProvidersByCLI[cli] = providers
+        return providers
     }
 
     func activeProvider(for cli: APIProviderCLI) -> CLIAPIProvider? {

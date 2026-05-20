@@ -114,10 +114,10 @@ struct UsageSummary: Sendable, Hashable {
 }
 
 /// Time grain used by the Usage trend chart.
-enum TrendGranularity: Sendable { case hour, day }
+enum TrendGranularity: Sendable, Hashable { case hour, day }
 
 /// The trend chart's data: a continuous, zero-filled per-model series.
-struct TrendSeries: Sendable {
+struct TrendSeries: Sendable, Hashable {
     let granularity: TrendGranularity
     /// Models present, ordered by total tokens descending.
     let models: [String]
