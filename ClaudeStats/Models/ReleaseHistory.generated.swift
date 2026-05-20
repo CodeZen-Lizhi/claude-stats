@@ -3,6 +3,18 @@
 extension ReleaseHistoryCatalog {
     static let generatedEntries: [ReleaseHistoryEntry] = [
         ReleaseHistoryEntry(
+            version: "1.5.13",
+            date: "May 20, 2026",
+            headline: "新增ClaudeCLIInstallDetecting协议与实现类，检测Claude CLI安装状态",
+            changes: [
+                "新增桌面辅助功能权限检查器，重构权限检测逻辑",
+                "添加.permissionRecheck触发类型，支持权限重检查流程",
+                "新增UsageLimitStore权限状态自动清理与权限重检查循环",
+                "新增主窗口激活时自动触发权限重检查的逻辑",
+                "重构ClaudeProvider的使用限额报告逻辑，根据CLI安装状态展示不同引导文案",
+            ]
+        ),
+        ReleaseHistoryEntry(
             version: "1.5.12",
             date: "May 20, 2026",
             headline: "为各类使用统计数据模型添加数据修订ID，用于生成唯一缓存键，确保数据变更时正确刷新视图缓存。",

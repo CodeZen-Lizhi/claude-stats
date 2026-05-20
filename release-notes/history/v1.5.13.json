@@ -1,0 +1,10 @@
+{
+  "headline": "新增ClaudeCLIInstallDetecting协议与实现类，检测Claude CLI安装状态",
+  "changes": [
+    "新增桌面辅助功能权限检查器，重构权限检测逻辑",
+    "添加.permissionRecheck触发类型，支持权限重检查流程",
+    "新增UsageLimitStore权限状态自动清理与权限重检查循环",
+    "新增主窗口激活时自动触发权限重检查的逻辑",
+    "重构ClaudeProvider的使用限额报告逻辑，根据CLI安装状态展示不同引导文案"
+  ]
+}
