@@ -41,6 +41,7 @@ class ReleaseGroup:
     ref: str
     commit: str
     is_virtual: bool = False
+    is_skipped: bool = False
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,7 @@ class HistoryOverride:
 
 @dataclass(frozen=True)
 class HistoryEntry:
+    tags: tuple[str, ...]
     version: str
     date: str
     headline: str
@@ -83,17 +85,39 @@ def tags_for_release(repo: Path, current_tag: str) -> tuple[list[str], set[str]]
 def release_groups(repo: Path, current_tag: str) -> list[ReleaseGroup]:
     tags, virtual_tags = tags_for_release(repo, current_tag)
     groups: list[ReleaseGroup] = []
+    previous_key: tuple[int, int, int] | None = None
 
     for tag in tags:
+        key = semver_key(tag)
         is_virtual = tag in virtual_tags and not tag_exists(repo, tag)
         ref = "HEAD" if is_virtual else tag
         commit = commit_for_ref(repo, ref)
 
-        if groups and not is_virtual and not groups[-1].is_virtual and groups[-1].commit == commit:
+        if previous_key and previous_key[:2] == key[:2] and key[2] > previous_key[2] + 1:
+            for missing_patch in range(previous_key[2] + 1, key[2]):
+                missing_tag = f"v{key[0]}.{key[1]}.{missing_patch}"
+                groups.append(
+                    ReleaseGroup(
+                        tags=[missing_tag],
+                        ref=ref,
+                        commit=commit,
+                        is_virtual=True,
+                        is_skipped=True,
+                    )
+                )
+
+        if (
+            groups
+            and not is_virtual
+            and not groups[-1].is_virtual
+            and not groups[-1].is_skipped
+            and groups[-1].commit == commit
+        ):
             groups[-1].tags.append(tag)
             groups[-1].ref = ref
         else:
             groups.append(ReleaseGroup(tags=[tag], ref=ref, commit=commit, is_virtual=is_virtual))
+        previous_key = key
 
     return groups
 
@@ -144,9 +168,25 @@ def read_history_override(repo: Path, tags: list[str], override_dir: Path) -> Hi
     return None
 
 
+def previous_real_ref(groups: list[ReleaseGroup], index: int) -> str | None:
+    for group in reversed(groups[:index]):
+        if not group.is_skipped:
+            return group.ref
+    return None
+
+
 def entry_for_group(repo: Path, groups: list[ReleaseGroup], index: int, override_dir: Path) -> HistoryEntry:
     group = groups[index]
-    previous_ref = groups[index - 1].ref if index > 0 else None
+    if group.is_skipped:
+        return HistoryEntry(
+            tags=tuple(group.tags),
+            version=" / ".join(tag.removeprefix("v") for tag in group.tags),
+            date=commit_date(repo, group.ref),
+            headline="skip",
+            changes=("skip",),
+        )
+
+    previous_ref = previous_real_ref(groups, index)
     notes = read_commits(repo, group.ref, previous_ref)
     generated_changes = visible_changes(notes)
     override = read_history_override(repo, group.tags, override_dir)
@@ -160,6 +200,7 @@ def entry_for_group(repo: Path, groups: list[ReleaseGroup], index: int, override
         changes = remaining or generated_changes[:1] or [FALLBACK_CHANGE]
 
     return HistoryEntry(
+        tags=tuple(group.tags),
         version=" / ".join(tag.removeprefix("v") for tag in group.tags),
         date=commit_date(repo, group.ref),
         headline=headline,
@@ -224,6 +265,36 @@ def write_text(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def render_history_json(entry: HistoryEntry) -> str:
+    return json.dumps(
+        {
+            "headline": entry.headline,
+            "changes": list(entry.changes),
+        },
+        ensure_ascii=False,
+        indent=2,
+    ) + "\n"
+
+
+def write_history_json_files(
+    repo: Path,
+    entries: list[HistoryEntry],
+    override_dir: Path,
+    overwrite: bool = False,
+) -> list[Path]:
+    base_dir = override_dir if override_dir.is_absolute() else repo / override_dir
+    written: list[Path] = []
+    for entry in entries:
+        payload = render_history_json(entry)
+        for tag in entry.tags:
+            path = base_dir / f"{tag}.json"
+            if path.exists() and not overwrite:
+                continue
+            write_text(path, payload)
+            written.append(path)
+    return written
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--tag", required=True, help="current release tag, e.g. v1.5.0")
@@ -231,6 +302,8 @@ def main() -> int:
     parser.add_argument("--output", default=DEFAULT_OUTPUT, type=Path)
     parser.add_argument("--repo", default=Path.cwd(), type=Path)
     parser.add_argument("--override-dir", default=DEFAULT_OVERRIDE_DIR, type=Path)
+    parser.add_argument("--write-history-json", action="store_true", help="write missing per-tag history JSON files")
+    parser.add_argument("--overwrite-history-json", action="store_true", help="replace existing per-tag history JSON files")
     args = parser.parse_args()
 
     repo = args.repo.resolve()
@@ -240,7 +313,12 @@ def main() -> int:
 
     output = args.output if args.output.is_absolute() else repo / args.output
     write_text(output, render_swift(entries))
+    written_json: list[Path] = []
+    if args.write_history_json or args.overwrite_history_json:
+        written_json = write_history_json_files(repo, entries, args.override_dir, overwrite=args.overwrite_history_json)
     print(f"generated {output}")
+    if written_json:
+        print(f"wrote history json: {', '.join(str(path) for path in written_json)}")
     print(f"entries: {', '.join(entry.version for entry in entries)}")
     return 0
 

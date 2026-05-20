@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import sys
@@ -45,7 +46,12 @@ class GenerateReleaseHistoryTests(unittest.TestCase):
     def tag(self, name: str) -> None:
         self.run_git("tag", name)
 
-    def run_generator(self, tag: str, start_tag: str = "v1.0.0") -> subprocess.CompletedProcess[str]:
+    def run_generator(
+        self,
+        tag: str,
+        start_tag: str = "v1.0.0",
+        *extra_args: str,
+    ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [
                 sys.executable,
@@ -58,6 +64,7 @@ class GenerateReleaseHistoryTests(unittest.TestCase):
                 str(self.repo),
                 "--output",
                 str(self.output),
+                *extra_args,
             ],
             cwd=self.repo,
             text=True,
@@ -139,6 +146,49 @@ class GenerateReleaseHistoryTests(unittest.TestCase):
         self.assertIn("Polished release headline.", swift)
         self.assertIn("Curated first item.", swift)
         self.assertNotIn("generated copy should not ship", swift)
+
+    def test_writes_history_json_without_overwriting_overrides(self) -> None:
+        self.seed_baseline()
+        self.commit("feat: generated release note")
+        self.tag("v1.0.1")
+        override_dir = self.repo / "release-notes" / "history"
+        override_dir.mkdir(parents=True)
+        (override_dir / "v1.0.0.json").write_text(
+            '{\n'
+            '  "headline": "Curated baseline.",\n'
+            '  "changes": ["Keep this hand-written baseline."]\n'
+            '}\n',
+            encoding="utf-8",
+        )
+
+        result = self.run_generator("v1.0.1", "v1.0.0", "--write-history-json")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        generated = json.loads((override_dir / "v1.0.1.json").read_text(encoding="utf-8"))
+        preserved = json.loads((override_dir / "v1.0.0.json").read_text(encoding="utf-8"))
+        self.assertEqual(generated["headline"], "generated release note")
+        self.assertEqual(generated["changes"], ["generated release note"])
+        self.assertEqual(preserved["headline"], "Curated baseline.")
+        self.assertEqual(preserved["changes"], ["Keep this hand-written baseline."])
+
+    def test_missing_patch_versions_are_recorded_as_skip(self) -> None:
+        self.seed_baseline()
+        self.commit("feat: first patch")
+        self.tag("v1.0.1")
+        self.commit("feat: third patch")
+        self.tag("v1.0.3")
+
+        result = self.run_generator("v1.0.3", "v1.0.0", "--write-history-json")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        swift = self.read_output()
+        self.assertLess(swift.index('version: "1.0.3"'), swift.index('version: "1.0.2"'))
+        self.assertIn("third patch", swift)
+        self.assertIn('version: "1.0.2"', swift)
+        self.assertIn('headline: "skip"', swift)
+        skip_json = json.loads((self.repo / "release-notes" / "history" / "v1.0.2.json").read_text(encoding="utf-8"))
+        self.assertEqual(skip_json["headline"], "skip")
+        self.assertEqual(skip_json["changes"], ["skip"])
 
     def test_missing_current_tag_uses_head_for_dry_run(self) -> None:
         self.seed_baseline()

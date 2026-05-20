@@ -118,16 +118,14 @@ struct UsageLimitPanel: View {
     }
 
     private func limitWindows(_ windows: [UsageLimitWindow]) -> some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 12) {
-                ForEach(windows) { window in
-                    UsageLimitWindowCard(window: window)
-                }
-            }
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(windows) { window in
-                    UsageLimitWindowCard(window: window)
-                }
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 320), spacing: 24, alignment: .top)],
+            alignment: .leading,
+            spacing: 12
+        ) {
+            ForEach(windows.map(UsageLimitWindowCardModel.init(window:))) { model in
+                UsageLimitWindowCard(model: model)
+                    .equatable()
             }
         }
     }
@@ -252,57 +250,126 @@ struct UsageLimitPanel: View {
     }
 }
 
-private struct UsageLimitWindowCard: View {
-    let window: UsageLimitWindow
+struct UsageLimitSegmentLayout: Equatable, Sendable {
+    static let defaultSegmentCount = 28
 
-    private var tint: Color {
-        switch window.remainingPercent {
+    let usedPercent: Double
+    let segmentCount: Int
+
+    init(usedPercent: Double, segmentCount: Int = Self.defaultSegmentCount) {
+        self.usedPercent = usedPercent
+        self.segmentCount = max(1, segmentCount)
+    }
+
+    var clampedUsedPercent: Double {
+        min(100, max(0, usedPercent))
+    }
+
+    var usedSegmentCount: Int {
+        guard clampedUsedPercent > 0 else { return 0 }
+        let rawCount = (clampedUsedPercent / 100) * Double(segmentCount)
+        return min(segmentCount, max(1, Int(rawCount.rounded(.up))))
+    }
+
+    var remainingSegmentCount: Int {
+        segmentCount - usedSegmentCount
+    }
+}
+
+struct UsageLimitWindowCardModel: Equatable, Identifiable, Sendable {
+    let id: String
+    let label: String
+    let resetText: String
+    let remainingText: String
+    let usedText: String
+    let accessibilityValue: String
+    let segmentLayout: UsageLimitSegmentLayout
+    let tintLevel: UsageLimitTintLevel
+
+    init(window: UsageLimitWindow) {
+        let remainingText = Format.percentPoints(window.remainingPercent)
+        let usedText = Format.percentPoints(window.clampedUsedPercent)
+        let resetText = window.resetAt.map { "Resets \(Format.relativeDate($0))" } ?? "Reset unknown"
+
+        self.id = window.id
+        self.label = window.label.uppercased()
+        self.resetText = resetText
+        self.remainingText = remainingText
+        self.usedText = "\(usedText) used"
+        self.accessibilityValue = "\(remainingText) remaining, \(usedText) used, \(resetText)"
+        self.segmentLayout = UsageLimitSegmentLayout(usedPercent: window.clampedUsedPercent)
+        self.tintLevel = UsageLimitTintLevel(remainingPercent: window.remainingPercent)
+    }
+}
+
+enum UsageLimitTintLevel: Equatable, Sendable {
+    case healthy
+    case warning
+    case critical
+
+    init(remainingPercent: Double) {
+        switch remainingPercent {
         case let remaining where remaining > 50:
-            Color.green
+            self = .healthy
         case 20...50:
-            Color.orange
+            self = .warning
         default:
+            self = .critical
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .healthy:
+            Color.green
+        case .warning:
+            Color.orange
+        case .critical:
             Color.red
         }
     }
+}
+
+private struct UsageLimitWindowCard: View, Equatable {
+    let model: UsageLimitWindowCardModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(alignment: .firstTextBaseline) {
-                Text(window.label.uppercased())
+                Text(model.label)
                     .font(.sora(10, weight: .semibold))
                     .foregroundStyle(Color.stxMuted)
                 Spacer(minLength: 8)
-                Text(resetLabel)
+                Text(model.resetText)
                     .font(.sora(10))
                     .foregroundStyle(Color.stxMuted)
                     .lineLimit(1)
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(Format.percentPoints(window.remainingPercent))
+                Text(model.remainingText)
                     .font(.sora(24, weight: .semibold).monospacedDigit())
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
-                    .stxNumericValueTransition(value: Format.percentPoints(window.remainingPercent))
+                    .stxNumericValueTransition(value: model.remainingText)
                 Text("left")
                     .font(.sora(11, weight: .medium))
                     .foregroundStyle(Color.stxMuted)
                 Spacer(minLength: 8)
-                Text("\(Format.percentPoints(window.clampedUsedPercent)) used")
+                Text(model.usedText)
                     .font(.sora(10))
                     .foregroundStyle(Color.stxMuted)
                     .lineLimit(1)
             }
 
             UsageLimitSegmentStrip(
-                usedPercent: window.clampedUsedPercent,
-                remainingTint: tint
+                layout: model.segmentLayout,
+                remainingTint: model.tintLevel.color
             )
 
             HStack(spacing: 10) {
-                UsageLimitSegmentLegendItem(label: "Left", tint: tint, style: .solid)
+                UsageLimitSegmentLegendItem(label: "Left", tint: model.tintLevel.color, style: .solid)
                 UsageLimitSegmentLegendItem(label: "Used", tint: Color.primary.opacity(0.34), style: .hatched)
                 Spacer(minLength: 0)
             }
@@ -310,35 +377,38 @@ private struct UsageLimitWindowCard: View {
         .padding(.vertical, 4)
         .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(window.label) usage limit")
-        .accessibilityValue("\(Format.percentPoints(window.remainingPercent)) remaining, \(Format.percentPoints(window.clampedUsedPercent)) used, \(resetLabel)")
-    }
-
-    private var resetLabel: String {
-        guard let resetAt = window.resetAt else { return "Reset unknown" }
-        return "Resets \(Format.relativeDate(resetAt))"
+        .accessibilityLabel("\(model.label) usage limit")
+        .accessibilityValue(model.accessibilityValue)
     }
 }
 
 private struct UsageLimitSegmentStrip: View {
-    let usedPercent: Double
+    let layout: UsageLimitSegmentLayout
     let remainingTint: Color
 
-    private let segmentCount = 28
+    private let segmentSpacing: CGFloat = 4
     private let segmentHeight: CGFloat = 34
+    private let segmentCornerRadius: CGFloat = 1.5
+    private let usedBaseTint = Color.primary.opacity(0.12)
+    private let usedStripeTint = Color.primary.opacity(0.34)
 
     var body: some View {
-        HStack(spacing: 4) {
-            ForEach(0..<segmentCount, id: \.self) { index in
-                if index < remainingSegmentCount {
-                    RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                        .fill(remainingTint)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: segmentHeight)
+        Canvas { context, size in
+            let totalSpacing = CGFloat(layout.segmentCount - 1) * segmentSpacing
+            let segmentWidth = (size.width - totalSpacing) / CGFloat(layout.segmentCount)
+            guard segmentWidth > 0, size.height > 0 else { return }
+
+            for index in 0..<layout.segmentCount {
+                let origin = CGPoint(x: CGFloat(index) * (segmentWidth + segmentSpacing), y: 0)
+                let rect = CGRect(origin: origin, size: CGSize(width: segmentWidth, height: size.height))
+                let cornerRadius = min(segmentCornerRadius, segmentWidth / 2, size.height / 2)
+                let path = Path(roundedRect: rect, cornerRadius: cornerRadius)
+
+                if index < layout.remainingSegmentCount {
+                    context.fill(path, with: .color(remainingTint))
                 } else {
-                    UsageLimitHatchedSegment()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: segmentHeight)
+                    context.fill(path, with: .color(usedBaseTint))
+                    drawUsedStripes(in: rect, clippedTo: path, context: context)
                 }
             }
         }
@@ -347,14 +417,23 @@ private struct UsageLimitSegmentStrip: View {
         .accessibilityHidden(true)
     }
 
-    private var usedSegmentCount: Int {
-        let clamped = min(100, max(0, usedPercent))
-        guard clamped > 0 else { return 0 }
-        return min(segmentCount, max(1, Int((clamped / 100 * Double(segmentCount)).rounded(.up))))
-    }
+    private func drawUsedStripes(in rect: CGRect, clippedTo clippingPath: Path, context: GraphicsContext) {
+        var stripeContext = context
+        stripeContext.clip(to: clippingPath)
 
-    private var remainingSegmentCount: Int {
-        segmentCount - usedSegmentCount
+        var stripePath = Path()
+        var startX = rect.minX - rect.height
+        while startX < rect.maxX {
+            stripePath.move(to: CGPoint(x: startX, y: rect.maxY))
+            stripePath.addLine(to: CGPoint(x: startX + rect.height, y: rect.minY))
+            startX += 6
+        }
+
+        stripeContext.stroke(
+            stripePath,
+            with: .color(usedStripeTint),
+            style: StrokeStyle(lineWidth: 1.2, lineCap: .round)
+        )
     }
 }
 
@@ -376,7 +455,7 @@ private struct UsageLimitSegmentLegendItem: View {
                     Rectangle()
                         .fill(tint)
                 case .hatched:
-                    UsageLimitHatchedSegment()
+                    UsageLimitHatchedSwatch()
                 }
             }
             .frame(width: 8, height: 8)
@@ -388,36 +467,29 @@ private struct UsageLimitSegmentLegendItem: View {
     }
 }
 
-private struct UsageLimitHatchedSegment: View {
+private struct UsageLimitHatchedSwatch: View {
     private let baseTint = Color.primary.opacity(0.12)
     private let stripeTint = Color.primary.opacity(0.34)
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-            .fill(baseTint)
-            .overlay {
-                DiagonalStripeShape(spacing: 6)
-                    .stroke(stripeTint, style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
-                    .clipShape(RoundedRectangle(cornerRadius: 1.5, style: .continuous))
+        Canvas { context, size in
+            let rect = CGRect(origin: .zero, size: size)
+            let path = Path(roundedRect: rect, cornerRadius: 1.5)
+            context.fill(path, with: .color(baseTint))
+
+            var stripeContext = context
+            stripeContext.clip(to: path)
+
+            var stripes = Path()
+            var startX = rect.minX - rect.height
+            while startX < rect.maxX {
+                stripes.move(to: CGPoint(x: startX, y: rect.maxY))
+                stripes.addLine(to: CGPoint(x: startX + rect.height, y: rect.minY))
+                startX += 5
             }
-    }
-}
 
-private struct DiagonalStripeShape: Shape {
-    let spacing: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let stride = max(2, spacing)
-        var startX = rect.minX - rect.height
-
-        while startX < rect.maxX {
-            path.move(to: CGPoint(x: startX, y: rect.maxY))
-            path.addLine(to: CGPoint(x: startX + rect.height, y: rect.minY))
-            startX += stride
+            stripeContext.stroke(stripes, with: .color(stripeTint), style: StrokeStyle(lineWidth: 1.1, lineCap: .round))
         }
-
-        return path
     }
 }
 

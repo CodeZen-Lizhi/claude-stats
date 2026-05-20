@@ -5,13 +5,18 @@ extension ReleaseHistoryCatalog {
         ReleaseHistoryEntry(
             version: "1.5.7",
             date: "May 20, 2026",
-            headline: "更新Rockxy子模块到最新版本",
+            headline: "同时在源仓库和公共附属仓库创建GitHub Release，补充说明源仓库的发布用于项目内部记录",
             changes: [
-                "重构事务模型，拆分开始/完成时间，新增连接建立时长",
-                "添加客户端归因枚举，优化客户端名称识别逻辑",
-                "实现带图标的客户端列表展示，支持常见应用图标匹配",
-                "修复上游代理状态判断逻辑，新增代理模式变更处理",
-                "优化序列号生成逻辑，修复事务重复计数问题",
+                "调整权限说明，明确内置GITHUB_TOKEN可完成源仓库发布",
+                "在工作流中新增源仓库发布的步骤",
+            ]
+        ),
+        ReleaseHistoryEntry(
+            version: "1.5.6",
+            date: "May 20, 2026",
+            headline: "skip",
+            changes: [
+                "skip",
             ]
         ),
         ReleaseHistoryEntry(
@@ -135,6 +140,14 @@ extension ReleaseHistoryCatalog {
                 "Added new app icon assets and configuration.",
                 "Added cost estimation mode and Claude status monitoring.",
                 "Added long-context pricing support and improved activity analysis structure.",
+            ]
+        ),
+        ReleaseHistoryEntry(
+            version: "1.4.3",
+            date: "May 17, 2026",
+            headline: "skip",
+            changes: [
+                "skip",
             ]
         ),
         ReleaseHistoryEntry(

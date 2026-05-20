@@ -19,7 +19,7 @@ name: Release
 #   4. If SPARKLE_PRIVATE_ED_KEY is set, EdDSA-signs the archive and publishes an
 #      updated appcast.xml to the gh-pages branch of the public releases repo
 #      (served at SUFeedURL by GitHub Pages) so existing installs can auto-update.
-#   5. Commits the bumped project.yml back to master.
+#   5. Commits the bumped project.yml and release history files back to master.
 #
 # Optional repository secrets (Settings ▸ Secrets and variables ▸ Actions) — set
 # ALL of these to get a notarized DMG; leave them unset for the zip/un-notarized DMG path:
@@ -205,7 +205,7 @@ jobs:
         run: bash scripts/bump-version.sh "${{ steps.version.outputs.version }}" "${{ steps.version.outputs.build }}"
 
       - name: Generate in-app release history
-        run: python3 scripts/generate-release-history.py --tag "$GITHUB_REF_NAME"
+        run: python3 scripts/generate-release-history.py --tag "$GITHUB_REF_NAME" --write-history-json
 
       - name: Build GitTools runtime
         run: |
@@ -281,13 +281,13 @@ jobs:
 
       - name: Commit version bump back to master
         run: |
-          if git diff --quiet -- project.yml ClaudeStats/Models/ReleaseHistory.generated.swift; then
-            echo "project.yml and release history unchanged — nothing to commit."
+          if git diff --quiet -- project.yml ClaudeStats/Models/ReleaseHistory.generated.swift release-notes/history; then
+            echo "project.yml, release history, and release history JSON unchanged — nothing to commit."
             exit 0
           fi
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add project.yml ClaudeStats/Models/ReleaseHistory.generated.swift
+          git add project.yml ClaudeStats/Models/ReleaseHistory.generated.swift release-notes/history
           git commit -m "chore(release): v${{ steps.version.outputs.version }} [skip ci]"
           git push origin HEAD:master
 

@@ -1,0 +1,10 @@
+{
+  "headline": "This commit adds a full suite of network debugging features:",
+  "changes": [
+    "New network proxy event types and breakpoint management APIs",
+    "Network body store for persisting request/response data",
+    "Upstream environment and credential management with Keychain support",
+    "Full request/response export/import support (cURL, HAR, raw formats)",
+    "Replay, batch automate and WebSocket debugging workflows"
+  ]
+}

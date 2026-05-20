@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import ClaudeStats
 
@@ -8,7 +9,9 @@ struct ReleaseHistoryCatalogTests {
         let entries = ReleaseHistoryCatalog.entries
 
         #expect(!entries.isEmpty)
-        #expect(entries.first?.version == "1.5.4")
+        #expect(entries.first?.version == Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)
+        #expect(entries.first { $0.version == "1.5.6" }?.headline == "skip")
+        #expect(entries.first { $0.version == "1.5.6" }?.changes == ["skip"])
         #expect(entries.last?.version.contains("1.4.0") == true)
         #expect(Set(entries.map(\.id)).count == entries.count)
         #expect(entries.allSatisfy { entry in
