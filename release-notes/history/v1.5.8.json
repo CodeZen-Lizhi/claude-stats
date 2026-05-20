@@ -1,0 +1,10 @@
+{
+  "headline": "add UsageLimitSegmentLayout for usage segment calculation",
+  "changes": [
+    "refactor UsageLimitWindowCard to use view model",
+    "rewrite UsageLimitSegmentStrip with Canvas for better performance",
+    "add new unit tests for layout logic",
+    "add release history files for versions 1.4.3, 1.5.2~1.5.7",
+    "update release workflow to handle new release note files"
+  ]
+}

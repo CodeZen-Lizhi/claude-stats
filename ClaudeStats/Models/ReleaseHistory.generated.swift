@@ -3,6 +3,30 @@
 extension ReleaseHistoryCatalog {
     static let generatedEntries: [ReleaseHistoryEntry] = [
         ReleaseHistoryEntry(
+            version: "1.5.9",
+            date: "May 20, 2026",
+            headline: "新增AppLanguagePreference管理应用语言偏好，支持跟随系统、英文、简体中文",
+            changes: [
+                "重构字体加载逻辑，根据语言自动切换Sora或系统字体",
+                "全量替换硬编码字符串为本地化宏L10n",
+                "新增本地化测试用例与InfoPlist多语言配置",
+                "新增设置页面语言切换选项，支持重启后生效",
+                "将项目中所有直接写死的文本替换为L10n本地化字符串宏，统一管理应用文案，方便后续多语言适配和修改，同时保持原有默认值保证功能正常运行。",
+            ]
+        ),
+        ReleaseHistoryEntry(
+            version: "1.5.8",
+            date: "May 20, 2026",
+            headline: "add UsageLimitSegmentLayout for usage segment calculation",
+            changes: [
+                "refactor UsageLimitWindowCard to use view model",
+                "rewrite UsageLimitSegmentStrip with Canvas for better performance",
+                "add new unit tests for layout logic",
+                "add release history files for versions 1.4.3, 1.5.2~1.5.7",
+                "update release workflow to handle new release note files",
+            ]
+        ),
+        ReleaseHistoryEntry(
             version: "1.5.7",
             date: "May 20, 2026",
             headline: "同时在源仓库和公共附属仓库创建GitHub Release，补充说明源仓库的发布用于项目内部记录",
