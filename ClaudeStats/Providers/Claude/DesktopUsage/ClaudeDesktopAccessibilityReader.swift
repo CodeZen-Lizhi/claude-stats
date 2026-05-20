@@ -10,12 +10,20 @@ protocol ClaudeDesktopUsageTextReading: AnyObject {
 final class ClaudeDesktopAccessibilityReader: ClaudeDesktopUsageTextReading {
     private let maxDepth = 12
     private let maxNodes = 900
+    private let permissionChecker: any ClaudeDesktopAccessibilityPermissionChecking
+
+    init(permissionChecker: any ClaudeDesktopAccessibilityPermissionChecking = SystemClaudeDesktopAccessibilityPermissionChecker()) {
+        self.permissionChecker = permissionChecker
+    }
 
     func readUsageText(app: ClaudeDesktopAppState, trigger: ClaudeDesktopUsageCaptureTrigger) async throws -> String {
         guard let pid = app.processIdentifier else {
             throw ClaudeDesktopUsageCaptureError.appNotRunning
         }
-        guard isTrusted(prompt: trigger.promptsForPermissions) else {
+        guard permissionChecker.isTrusted(prompt: trigger.promptsForPermissions) else {
+            if trigger.promptsForPermissions {
+                ClaudeDesktopAccessibilityPermissionDiagnostics.logNotTrusted(context: "manual capture")
+            }
             throw ClaudeDesktopUsageCaptureError.accessibilityPermissionRequired
         }
 
@@ -34,11 +42,6 @@ final class ClaudeDesktopAccessibilityReader: ClaudeDesktopUsageTextReading {
         }
 
         throw ClaudeDesktopUsageCaptureError.noUsageText
-    }
-
-    private func isTrusted(prompt: Bool) -> Bool {
-        let options = ["AXTrustedCheckOptionPrompt": prompt] as CFDictionary
-        return AXIsProcessTrustedWithOptions(options)
     }
 
     private func collectText(from root: AXUIElement) -> String {

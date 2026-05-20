@@ -69,6 +69,62 @@ struct UsageLimitStoreTests {
         #expect(store.claudeDesktopPermissionIssue == .accessibility)
     }
 
+    @MainActor
+    @Test("Claude Desktop capture success clears stale permission issue and message")
+    func claudeDesktopCaptureSuccessClearsStalePermissionState() async {
+        let capture = FakeClaudeDesktopUsageCapture(result: .failed(.accessibilityPermissionRequired))
+        let store = UsageLimitStore(
+            registry: ProviderRegistry(providers: []),
+            claudeDesktopCaptureService: capture
+        )
+
+        await store.captureClaudeDesktopUsage(trigger: .manual)
+        #expect(store.claudeDesktopPermissionIssue == .accessibility)
+        #expect(store.actionMessage(for: .claude) == ClaudeDesktopUsageCaptureError.accessibilityPermissionRequired.localizedDescription)
+
+        capture.result = .captured(Self.snapshot(provider: .claude, used: 12))
+        await store.captureClaudeDesktopUsage(trigger: .visibleAutomatic)
+
+        #expect(store.claudeDesktopPermissionIssue == nil)
+        #expect(store.actionMessage(for: .claude) == nil)
+    }
+
+    @MainActor
+    @Test("Post-settings accessibility recheck retries Claude Desktop capture after trust is granted")
+    func postSettingsAccessibilityRecheckRetriesCaptureAfterTrust() async {
+        let capture = FakeClaudeDesktopUsageCapture(result: .captured(Self.snapshot(provider: .claude, used: 18)))
+        let permission = FakeAccessibilityPermissionChecker(results: [false, true])
+        let store = UsageLimitStore(
+            registry: ProviderRegistry(providers: []),
+            claudeDesktopCaptureService: capture,
+            claudeDesktopAccessibilityPermissionChecker: permission
+        )
+
+        store.beginClaudeDesktopAccessibilityPermissionRecheck()
+        await store.runPendingClaudeDesktopAccessibilityPermissionRecheck(maxAttempts: 2, intervalNanoseconds: 0)
+
+        #expect(store.claudeDesktopAccessibilityRecheckPending == false)
+        #expect(capture.triggers == [.permissionRecheck])
+        #expect(store.claudeDesktopPermissionIssue == nil)
+    }
+
+    @MainActor
+    @Test("Claude Desktop capture maps only permission errors to permission issues")
+    func claudeDesktopCaptureMapsOnlyPermissionErrorsToPermissionIssues() async {
+        let capture = FakeClaudeDesktopUsageCapture(result: .failed(.noUsageText))
+        let store = UsageLimitStore(
+            registry: ProviderRegistry(providers: []),
+            claudeDesktopCaptureService: capture
+        )
+
+        await store.captureClaudeDesktopUsage(trigger: .manual)
+        #expect(store.claudeDesktopPermissionIssue == nil)
+
+        capture.result = .failed(.screenRecordingPermissionRequired)
+        await store.captureClaudeDesktopUsage(trigger: .manual)
+        #expect(store.claudeDesktopPermissionIssue == .screenRecording)
+    }
+
     private static func report(provider: ProviderKind = .codex, used: Double) -> UsageLimitReport {
         .fresh(
             provider: provider,
@@ -111,8 +167,9 @@ private final class FakeUsageLimitProvider: Provider, @unchecked Sendable {
 
 @MainActor
 private final class FakeClaudeDesktopUsageCapture: ClaudeDesktopUsageCapturing {
-    let result: ClaudeDesktopUsageCaptureOutcome
+    var result: ClaudeDesktopUsageCaptureOutcome
     private(set) var callCount = 0
+    private(set) var triggers: [ClaudeDesktopUsageCaptureTrigger] = []
 
     init(result: ClaudeDesktopUsageCaptureOutcome) {
         self.result = result
@@ -120,6 +177,21 @@ private final class FakeClaudeDesktopUsageCapture: ClaudeDesktopUsageCapturing {
 
     func capture(trigger: ClaudeDesktopUsageCaptureTrigger) async -> ClaudeDesktopUsageCaptureOutcome {
         callCount += 1
+        triggers.append(trigger)
         return result
+    }
+}
+
+@MainActor
+private final class FakeAccessibilityPermissionChecker: ClaudeDesktopAccessibilityPermissionChecking {
+    private var results: [Bool]
+
+    init(results: [Bool]) {
+        self.results = results
+    }
+
+    func isTrusted(prompt: Bool) -> Bool {
+        guard !results.isEmpty else { return false }
+        return results.removeFirst()
     }
 }

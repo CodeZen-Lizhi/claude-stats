@@ -64,7 +64,7 @@ final class ClaudeDesktopUsageCaptureService: ClaudeDesktopUsageCapturing {
 
     private func shouldSkipNonStealingCapture(app: ClaudeDesktopAppState, trigger: ClaudeDesktopUsageCaptureTrigger) -> Bool {
         switch trigger {
-        case .manual:
+        case .manual, .permissionRecheck:
             false
         case .visibleAutomatic:
             !app.isFrontmost

@@ -4,6 +4,20 @@ import Foundation
 struct ClaudeProvider: Provider {
     let paths: ClaudePaths
     let pricing: ModelPricing
+    let cliInstallDetector: any ClaudeCLIInstallDetecting
+    let usageLimitCacheURLs: [URL]?
+
+    init(
+        paths: ClaudePaths,
+        pricing: ModelPricing,
+        cliInstallDetector: any ClaudeCLIInstallDetecting = ClaudeCLIInstallDetector(),
+        usageLimitCacheURLs: [URL]? = nil
+    ) {
+        self.paths = paths
+        self.pricing = pricing
+        self.cliInstallDetector = cliInstallDetector
+        self.usageLimitCacheURLs = usageLimitCacheURLs
+    }
 
     var kind: ProviderKind { .claude }
 
@@ -55,7 +69,18 @@ struct ClaudeProvider: Provider {
     }
 
     func usageLimitReport(now: Date) async -> UsageLimitReport {
-        ClaudeUsageLimitLoader(paths: paths).report(now: now)
+        let report = ClaudeUsageLimitLoader(paths: paths, cacheURLs: usageLimitCacheURLs).report(now: now)
+        guard report.status == .setupRequired || report.status == .waitingForNextResponse else {
+            return report
+        }
+        let isClaudeCLIInstalled = await cliInstallDetector.isClaudeCLIInstalled()
+        guard !isClaudeCLIInstalled else {
+            return report
+        }
+        return .setupRequired(
+            provider: .claude,
+            message: "Install Claude Code and sign in, then connect the status line bridge to capture 5h and weekly limits. You can also read visible Claude Desktop usage from this panel."
+        )
     }
 
     func projectConfigurationLocations(for projectURL: URL) -> [ProviderConfigLocation] {

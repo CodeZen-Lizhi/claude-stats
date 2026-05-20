@@ -5,6 +5,7 @@ import SwiftUI
 /// `UsageView`; this view owns the larger-window layout and scene persistence.
 struct MainUsageView: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(\.scenePhase) private var scenePhase
 
     @SceneStorage("mainWindow.usage.period") private var periodRaw: String = StatsPeriod.allTime.rawValue
     @SceneStorage("mainWindow.usage.chartStyle") private var chartStyleRaw: String = MainUsageView.ChartStyleStorage.line.rawValue
@@ -78,6 +79,13 @@ struct MainUsageView: View {
         .task(id: claudeDesktopTimedCaptureKey) {
             await runClaudeDesktopTimedCaptureLoop()
         }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await env.usageLimits.runPendingClaudeDesktopAccessibilityPermissionRecheck() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await env.usageLimits.runPendingClaudeDesktopAccessibilityPermissionRecheck() }
+        }
     }
 
     private func header(provider: ProviderKind) -> some View {
@@ -136,7 +144,7 @@ struct MainUsageView: View {
                 env.preferences.claudeDesktopUsageTimedCaptureEnabled = enabled
             } : nil,
             onOpenAccessibilitySettings: provider == .claude ? {
-                openPrivacySettings(anchor: "Privacy_Accessibility")
+                openClaudeAccessibilitySettings()
             } : nil,
             onOpenScreenRecordingSettings: provider == .claude ? {
                 openPrivacySettings(anchor: "Privacy_ScreenCapture")
@@ -226,6 +234,11 @@ struct MainUsageView: View {
 
     private func openClaudeSettings() {
         NSWorkspace.shared.open(env.usageLimits.claudeSettingsURL())
+    }
+
+    private func openClaudeAccessibilitySettings() {
+        env.usageLimits.beginClaudeDesktopAccessibilityPermissionRecheck()
+        openPrivacySettings(anchor: "Privacy_Accessibility")
     }
 
     private func runVisibleClaudeDesktopCaptureIfNeeded(provider: ProviderKind) async {

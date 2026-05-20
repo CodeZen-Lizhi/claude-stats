@@ -2,10 +2,11 @@ import Foundation
 
 enum ClaudeDesktopUsageCaptureTrigger: String, Sendable, Hashable {
     case manual
+    case permissionRecheck
     case visibleAutomatic
     case timedAutomatic
 
-    var allowsActivation: Bool { self == .manual }
+    var allowsActivation: Bool { self == .manual || self == .permissionRecheck }
     var promptsForPermissions: Bool { self == .manual }
     var shouldShowUserMessage: Bool { self == .manual }
 }
