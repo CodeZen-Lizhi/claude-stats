@@ -30,6 +30,8 @@ final class AppEnvironment {
     let configurationProfiles: ConfigurationProfilesViewModel
     let apiProviders: APIProviderSwitcherViewModel
     let cliEnvironment: CLIEnvironmentViewModel
+    let aiConfigs: AIConfigsViewModel
+    let skills: SkillsStore
     let systemMonitor: SystemMonitorViewModel
     let networkDebugger: NetworkDebuggerStore
     let ops: OpsStore
@@ -67,6 +69,8 @@ final class AppEnvironment {
         self.usageLimits = usageLimits ?? UsageLimitStore(registry: providerRegistry)
         self.configurationProfiles = ConfigurationProfilesViewModel(registry: providerRegistry)
         self.apiProviders = APIProviderSwitcherViewModel()
+        self.aiConfigs = AIConfigsViewModel(scanner: AIConfigScanner(registry: providerRegistry))
+        self.skills = SkillsStore()
     }
 
     convenience init() {

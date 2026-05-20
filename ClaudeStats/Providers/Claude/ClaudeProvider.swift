@@ -69,6 +69,79 @@ struct ClaudeProvider: Provider {
         ]
     }
 
+    func globalAIConfigSources() -> [AIConfigSource] {
+        [
+            AIConfigSource(
+                provider: kind,
+                title: "settings.json",
+                url: paths.configDirectory.appendingPathComponent("settings.json", isDirectory: false),
+                kind: .providerConfig,
+                fileKind: .json,
+                location: .global,
+                isExpected: true
+            ),
+            AIConfigSource(
+                provider: kind,
+                title: "settings.local.json",
+                url: paths.configDirectory.appendingPathComponent("settings.local.json", isDirectory: false),
+                kind: .providerConfig,
+                fileKind: .json,
+                location: .global
+            ),
+            AIConfigSource(
+                provider: kind,
+                title: "CLAUDE.md",
+                url: paths.configDirectory.appendingPathComponent("CLAUDE.md", isDirectory: false),
+                kind: .instruction,
+                fileKind: .markdown,
+                location: .global,
+                isExpected: true
+            ),
+            AIConfigSource(
+                provider: kind,
+                title: "Plans",
+                url: paths.configDirectory.appendingPathComponent("plans", isDirectory: true),
+                kind: .plan,
+                fileKind: .markdown,
+                location: .planStore,
+                target: .directory(extensions: ["md", "markdown"], maxDepth: 1)
+            ),
+            AIConfigSource(
+                provider: kind,
+                title: "Plugins",
+                url: paths.configDirectory.appendingPathComponent("plugins", isDirectory: true),
+                kind: .pluginConfig,
+                fileKind: .json,
+                location: .pluginStore,
+                target: .directory(extensions: ["json"], maxDepth: 1)
+            ),
+        ]
+    }
+
+    func projectAIConfigSources(for projectURL: URL) -> [AIConfigSource] {
+        [
+            AIConfigSource(
+                provider: kind,
+                title: "Project CLAUDE.md",
+                url: projectURL.appendingPathComponent("CLAUDE.md", isDirectory: false),
+                kind: .instruction,
+                fileKind: .markdown,
+                location: .project(path: projectURL.path),
+                isExpected: true
+            ),
+            AIConfigSource(
+                provider: kind,
+                title: "Project settings.local.json",
+                url: projectURL
+                    .appendingPathComponent(".claude", isDirectory: true)
+                    .appendingPathComponent("settings.local.json", isDirectory: false),
+                kind: .providerConfig,
+                fileKind: .json,
+                location: .project(path: projectURL.path)
+            ),
+        ]
+    }
+
     static func prettyName(for id: String) -> String {
         if id == "<synthetic>" { return "Claude internal" }
 

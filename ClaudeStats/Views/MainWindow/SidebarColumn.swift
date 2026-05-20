@@ -42,8 +42,10 @@ struct SidebarColumn: View {
 
             sectionHeader("TOOLS")
             navRow(.configurations)
+            navRow(.configs)
             if env.preferences.gitTrackingEnabled { navRow(.git) }
             if env.preferences.systemMonitorEnabled { navRow(.system) }
+            navRow(.skills)
             SidebarRow(
                 title: "Ops",
                 symbol: "wrench.and.screwdriver",
@@ -464,7 +466,7 @@ private struct HeaderIconButton: View {
         page: $page,
         selectedSessionID: $sessionID,
         sessionsExpanded: .constant(false),
-        availablePages: [.dashboard, .configurations, .usage, .activity, .git],
+        availablePages: [.dashboard, .configurations, .configs, .usage, .activity, .git],
         onOpenSettings: {},
         onOpenNetwork: {},
         onOpenOps: {}

@@ -7,18 +7,20 @@ import SwiftUI
 /// whose project/session rows drive a separate ``Session`` selection that
 /// overrides the page detail.
 enum MainPage: String, CaseIterable, Identifiable, Sendable {
-    case dashboard, configurations, usage, leaderboards, activity, git, system, terminal
+    case dashboard, configurations, configs, usage, leaderboards, activity, git, system, skills, terminal
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .dashboard: L10n.string("main_page.dashboard", defaultValue: "Dashboard")
         case .configurations: L10n.string("main_page.switcher", defaultValue: "Switcher")
+        case .configs: "Configs"
         case .usage: L10n.string("main_page.usage", defaultValue: "Usage")
         case .leaderboards: L10n.string("main_page.leaderboards", defaultValue: "Leaderboards")
         case .activity: L10n.string("main_page.activity", defaultValue: "Activity")
         case .git: L10n.string("main_page.git", defaultValue: "Git")
         case .system: L10n.string("main_page.system", defaultValue: "System")
+        case .skills: "Skills"
         case .terminal: L10n.string("main_page.terminal", defaultValue: "Terminal")
         }
     }
@@ -27,11 +29,13 @@ enum MainPage: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .dashboard: "square.grid.2x2"
         case .configurations: "slider.horizontal.3"
+        case .configs: "doc.text.magnifyingglass"
         case .usage: "chart.bar.xaxis"
         case .leaderboards: "trophy"
         case .activity: "waveform"
         case .git: "arrow.triangle.branch"
         case .system: "cpu"
+        case .skills: "sparkles"
         case .terminal: "terminal"
         }
     }
@@ -68,10 +72,11 @@ struct MainWindowView: View {
     @State private var trafficLights = TrafficLightPositioner()
 
     private var availablePages: [MainPage] {
-        var pages: [MainPage] = [.dashboard, .configurations, .usage, .leaderboards]
+        var pages: [MainPage] = [.dashboard, .configurations, .configs, .usage, .leaderboards]
         if env.preferences.aiActivityAnalysisEnabled { pages.append(.activity) }
         if env.preferences.gitTrackingEnabled { pages.append(.git) }
         if env.preferences.systemMonitorEnabled { pages.append(.system) }
+        pages.append(.skills)
         pages.append(.terminal)
         return pages
     }
@@ -238,6 +243,8 @@ struct MainWindowView: View {
                 DashboardView()
             case .configurations:
                 ConfigurationsView()
+            case .configs:
+                AIConfigsView()
             case .usage:
                 MainUsageView()
             case .leaderboards:
@@ -248,6 +255,8 @@ struct MainWindowView: View {
                 MainGitActivityView()
             case .system:
                 MainSystemMonitorView()
+            case .skills:
+                SkillsWorkspaceView(store: env.skills)
             case .terminal:
                 TerminalWorkspaceView(store: env.terminalStore)
             }
