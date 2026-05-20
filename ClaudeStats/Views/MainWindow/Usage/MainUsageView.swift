@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Wide Usage page for the main window. The menu-bar panel still uses
@@ -31,6 +32,9 @@ struct MainUsageView: View {
                     costEstimationMode: costMode,
                     cacheHitRate: cacheHitRate
                 )
+                if provider.supportsUsageLimits {
+                    usageLimitPanel(provider: provider)
+                }
                 UsageTrendPanel(
                     series: series,
                     rangeID: vm.period.rawValue,
@@ -52,6 +56,12 @@ struct MainUsageView: View {
         .onChange(of: vm.chartStyle) { _, new in chartStyleRaw = ChartStyleStorage(new).rawValue }
         .onChange(of: vm.scaleMode) { _, new in scaleModeRaw = ScaleModeStorage(new).rawValue }
         .onChange(of: vm.stackByType) { _, new in stackByTypeRaw = new }
+        .onChange(of: env.store.lastRefreshedAt) { _, _ in
+            guard env.preferences.selectedProvider.supportsUsageLimits else { return }
+            Task {
+                await env.usageLimits.refresh(provider: env.preferences.selectedProvider, force: true)
+            }
+        }
     }
 
     private func header(provider: ProviderKind) -> some View {
@@ -74,6 +84,30 @@ struct MainUsageView: View {
         HStack(alignment: .center, spacing: 12) {
             UsagePeriodChips(period: period)
             Spacer(minLength: 0)
+        }
+    }
+
+    private func usageLimitPanel(provider: ProviderKind) -> some View {
+        UsageLimitPanel(
+            provider: provider,
+            report: env.usageLimits.report(for: provider),
+            isLoading: env.usageLimits.isLoading(provider),
+            actionMessage: env.usageLimits.actionMessage(for: provider),
+            onRefresh: {
+                Task { await env.usageLimits.refresh(provider: provider, force: true) }
+            },
+            onInstallClaudeBridge: provider == .claude ? {
+                env.usageLimits.installClaudeBridge()
+            } : nil,
+            onCopyClaudeSettingsSnippet: provider == .claude ? {
+                copyClaudeSettingsSnippet()
+            } : nil,
+            onOpenClaudeSettings: provider == .claude ? {
+                openClaudeSettings()
+            } : nil
+        )
+        .task(id: provider) {
+            await env.usageLimits.refresh(provider: provider)
         }
     }
 
@@ -124,6 +158,16 @@ struct MainUsageView: View {
 
     private func modelDisplayName(_ id: String) -> String {
         env.store.displayName(forModel: id, provider: env.preferences.selectedProvider)
+    }
+
+    private func copyClaudeSettingsSnippet() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(env.usageLimits.claudeSettingsSnippet(), forType: .string)
+        env.usageLimits.recordActionMessage("Claude settings snippet copied.", for: .claude)
+    }
+
+    private func openClaudeSettings() {
+        NSWorkspace.shared.open(env.usageLimits.claudeSettingsURL())
     }
 }
 

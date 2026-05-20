@@ -33,6 +33,10 @@ struct CodexProvider: Provider {
         usage.cachedInputRate
     }
 
+    func usageLimitReport(now: Date) async -> UsageLimitReport {
+        CodexUsageLimitLoader(paths: paths).report(now: now)
+    }
+
     func globalConfigurationLocations() -> [ProviderConfigLocation] {
         [
             ProviderConfigLocation(

@@ -59,4 +59,9 @@ enum Format {
     static func percent(_ ratio: Double) -> String {
         "\(Int((ratio * 100).rounded()))%"
     }
+
+    /// `0%`, `48%`, `100%` from percentage points.
+    static func percentPoints(_ percent: Double) -> String {
+        "\(Int(percent.rounded()))%"
+    }
 }

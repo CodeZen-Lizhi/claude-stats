@@ -26,6 +26,7 @@ final class AppEnvironment {
     let claudeStatus: ClaudeStatusViewModel
     let openAIStatus: OpenAIStatusViewModel
     let leaderboards: LeaderboardSyncViewModel
+    let usageLimits: UsageLimitStore
     let configurationProfiles: ConfigurationProfilesViewModel
     let apiProviders: APIProviderSwitcherViewModel
     let cliEnvironment: CLIEnvironmentViewModel
@@ -38,6 +39,7 @@ final class AppEnvironment {
         providerRegistry: ProviderRegistry,
         store: SessionStore,
         terminalStore: EmbeddedTerminalStore = EmbeddedTerminalStore(),
+        usageLimits: UsageLimitStore? = nil,
         cliEnvironment: CLIEnvironmentViewModel = CLIEnvironmentViewModel(),
         systemMonitor: SystemMonitorViewModel = SystemMonitorViewModel(),
         networkDebugger: NetworkDebuggerStore? = nil
@@ -55,6 +57,7 @@ final class AppEnvironment {
         self.claudeStatus = ClaudeStatusViewModel(preferences: preferences)
         self.openAIStatus = OpenAIStatusViewModel(preferences: preferences)
         self.leaderboards = LeaderboardSyncViewModel(preferences: preferences, store: store)
+        self.usageLimits = usageLimits ?? UsageLimitStore(registry: providerRegistry)
         self.configurationProfiles = ConfigurationProfilesViewModel(registry: providerRegistry)
         self.apiProviders = APIProviderSwitcherViewModel()
     }

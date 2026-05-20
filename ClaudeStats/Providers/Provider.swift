@@ -47,6 +47,11 @@ protocol Provider: Sendable {
     /// Project-local configuration files owned by this CLI for a given working
     /// directory.
     func projectConfigurationLocations(for projectURL: URL) -> [ProviderConfigLocation]
+
+    /// Optional provider-owned usage-limit snapshot. Providers that expose
+    /// rate-limit windows keep file formats and source-specific fallback logic
+    /// behind this boundary so shared UI can remain provider-agnostic.
+    func usageLimitReport(now: Date) async -> UsageLimitReport
 }
 
 extension Provider {
@@ -56,4 +61,5 @@ extension Provider {
     func cacheHitRate(for usage: TokenUsage) -> Double? { usage.cacheHitRate }
     func globalConfigurationLocations() -> [ProviderConfigLocation] { [] }
     func projectConfigurationLocations(for projectURL: URL) -> [ProviderConfigLocation] { [] }
+    func usageLimitReport(now: Date) async -> UsageLimitReport { .unsupported(provider: kind) }
 }

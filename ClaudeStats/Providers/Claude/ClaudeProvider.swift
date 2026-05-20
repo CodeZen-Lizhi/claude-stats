@@ -54,6 +54,10 @@ struct ClaudeProvider: Provider {
         ]
     }
 
+    func usageLimitReport(now: Date) async -> UsageLimitReport {
+        ClaudeUsageLimitLoader(paths: paths).report(now: now)
+    }
+
     func projectConfigurationLocations(for projectURL: URL) -> [ProviderConfigLocation] {
         [
             ProviderConfigLocation(
