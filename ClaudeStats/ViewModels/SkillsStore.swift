@@ -6,8 +6,34 @@ import Observation
 final class SkillsStore {
     var selectedTab: SkillsWorkspaceTab = .installed
     var selectedDetailTab: SkillsDetailTab = .overview
-    var searchText = "" {
+    var localSearchText = "" {
         didSet { rebuildLocalDerivedState() }
+    }
+    var discoverSearchText = ""
+    var curatedSearchText = "" {
+        didSet {
+            rebuildRemoteDerivedState()
+            selectedRemoteSkillID = resolvedRemoteID(current: selectedRemoteSkillID)
+        }
+    }
+    var searchText: String {
+        get {
+            switch selectedTab {
+            case .installed: localSearchText
+            case .discover: discoverSearchText
+            case .curated: curatedSearchText
+            }
+        }
+        set {
+            switch selectedTab {
+            case .installed:
+                localSearchText = newValue
+            case .discover:
+                discoverSearchText = newValue
+            case .curated:
+                curatedSearchText = newValue
+            }
+        }
     }
     var selectedProviderID: String? {
         didSet { rebuildLocalDerivedState() }
@@ -15,19 +41,26 @@ final class SkillsStore {
     var scopeFilter: SkillScopeFilter = .all {
         didSet { rebuildLocalDerivedState() }
     }
-    var selectedLocalGroupID: String?
-    var selectedRemoteSkillID: String?
+    var selectedLocalGroupID: String? {
+        didSet { rebuildSelectedLocalDetailState() }
+    }
+    var selectedRemoteSkillID: String? {
+        didSet { rebuildSelectedRemoteDetailState() }
+    }
     var apiKeyDraft = ""
 
     private(set) var snapshot: SkillsSnapshot = .empty {
         didSet {
             rebuildInstalledIndex()
+            rebuildHeaderSummaryText()
             rebuildLocalDerivedState()
             rebuildRemoteDerivedState()
         }
     }
     private(set) var isScanning = false
-    private(set) var isRemoteLoading = false
+    private(set) var isRemoteLoading = false {
+        didSet { rebuildSelectedRemoteDetailState() }
+    }
     private(set) var lastError: String?
     private(set) var remoteError: String?
     private(set) var hasAPIKey = false
@@ -38,14 +71,20 @@ final class SkillsStore {
         didSet { rebuildRemoteDerivedState() }
     }
     private(set) var remoteDetails: [String: SkillRemoteDetailBundle] = [:] {
-        didSet { rebuildRemoteDerivedState() }
+        didSet {
+            rebuildRemoteDerivedState()
+            rebuildSelectedRemoteDetailState()
+        }
     }
+    private(set) var headerSummaryText = ""
     private(set) var visibleLocalGroups: [LocalSkillGroup] = []
     private(set) var visibleLocalRows: [LocalSkillRowModel] = []
     private(set) var groupsByID: [String: LocalSkillGroup] = [:]
     private(set) var discoverRows: [RemoteSkillRowModel] = []
     private(set) var curatedOwnerRows: [CuratedSkillOwnerRowModel] = []
     private(set) var remoteSkillsByID: [String: RemoteSkillSummary] = [:]
+    private(set) var selectedLocalDetailModel: LocalSkillDetailModel?
+    private(set) var selectedRemoteDetailModel: RemoteSkillDetailModel?
 
     @ObservationIgnored private let scanner: SkillsLocalScanner
     @ObservationIgnored private let client: any SkillsShClienting
@@ -67,6 +106,7 @@ final class SkillsStore {
         let key = credentials.readAPIKey()?.trimmingCharacters(in: .whitespacesAndNewlines)
         cachedAPIKey = key?.isEmpty == false ? key : nil
         hasAPIKey = cachedAPIKey != nil
+        rebuildHeaderSummaryText()
     }
 
     var filteredLocalGroups: [LocalSkillGroup] {
@@ -95,18 +135,11 @@ final class SkillsStore {
     }
 
     var selectedLocalDetail: LocalSkillDetailModel? {
-        guard let selectedLocalGroup else { return nil }
-        return LocalSkillDetailModel(group: selectedLocalGroup)
+        selectedLocalDetailModel
     }
 
     var selectedRemoteDetail: RemoteSkillDetailModel? {
-        guard let skill = selectedRemoteSkill else { return nil }
-        return RemoteSkillDetailModel(
-            skill: skill,
-            bundle: remoteDetails[skill.id],
-            installState: computedInstallState(for: skill),
-            isDetailLoading: isRemoteLoading
-        )
+        selectedRemoteDetailModel
     }
 
     func loadIfNeeded(sessions: [Session]) async {
@@ -174,7 +207,7 @@ final class SkillsStore {
         defer { isRemoteLoading = false }
 
         do {
-            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let query = discoverSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
             if query.count >= 2 {
                 remoteResults = try await client.search(query: query, apiKey: apiKey, limit: 75)
             } else {
@@ -280,7 +313,7 @@ final class SkillsStore {
 
     private func rebuildLocalDerivedState() {
         groupsByID = Dictionary(uniqueKeysWithValues: snapshot.groups.map { ($0.id, $0) })
-        let normalizedQuery = normalized(searchText)
+        let normalizedQuery = normalized(localSearchText)
         visibleLocalGroups = snapshot.groups.filter { group in
             let providerMatches = selectedProviderID.map { providerID in
                 group.skills.contains { $0.providerID == providerID }
@@ -292,6 +325,7 @@ final class SkillsStore {
         }
         visibleLocalRows = visibleLocalGroups.map(LocalSkillRowModel.init(group:))
         syncLocalSelection()
+        rebuildSelectedLocalDetailState()
     }
 
     private func rebuildInstalledIndex() {
@@ -303,13 +337,21 @@ final class SkillsStore {
         discoverRows = remoteResults.map { skill in
             RemoteSkillRowModel(skill: skill, installState: computedInstallState(for: skill))
         }
-        curatedOwnerRows = curatedOwners.map { owner in
+        let curatedQuery = normalized(curatedSearchText)
+        curatedOwnerRows = curatedOwners.compactMap { owner in
+            let skills = owner.skills
+                .filter { skill in
+                    guard !curatedQuery.isEmpty else { return true }
+                    return remoteMatches(skill: skill, owner: owner.owner, query: curatedQuery)
+                }
+                .map { skill in
+                    RemoteSkillRowModel(skill: skill, installState: computedInstallState(for: skill))
+                }
+            guard !skills.isEmpty || curatedQuery.isEmpty && owner.skills.isEmpty else { return nil }
             CuratedSkillOwnerRowModel(
                 owner: owner.owner,
                 totalInstalls: owner.totalInstalls,
-                skills: owner.skills.map { skill in
-                    RemoteSkillRowModel(skill: skill, installState: computedInstallState(for: skill))
-                }
+                skills: skills
             )
         }
 
@@ -323,6 +365,56 @@ final class SkillsStore {
             }
         }
         remoteSkillsByID = nextRemoteSkillsByID
+        rebuildSelectedRemoteDetailState()
+    }
+
+    private func rebuildHeaderSummaryText() {
+        var items = [
+            "\(snapshot.summary.groupCount) skills",
+            "\(snapshot.summary.skillCount) copies",
+            "\(snapshot.summary.providerCount) providers",
+        ]
+        if snapshot.summary.pluginSkillCount > 0 {
+            items.append("\(snapshot.summary.pluginSkillCount) plugin skills")
+        }
+        if snapshot.summary.projectRootCount > 0 {
+            items.append("\(snapshot.summary.projectRootCount) projects")
+        }
+        if let scannedAt = snapshot.scannedAt {
+            items.append("Updated \(Format.relativeDate(scannedAt))")
+        }
+        headerSummaryText = items.joined(separator: " . ")
+    }
+
+    private func rebuildSelectedLocalDetailState() {
+        guard let selectedLocalGroup else {
+            selectedLocalDetailModel = nil
+            return
+        }
+        selectedLocalDetailModel = LocalSkillDetailModel(group: selectedLocalGroup)
+    }
+
+    private func rebuildSelectedRemoteDetailState() {
+        guard let skill = selectedRemoteSkill else {
+            selectedRemoteDetailModel = nil
+            return
+        }
+        selectedRemoteDetailModel = RemoteSkillDetailModel(
+            skill: skill,
+            bundle: remoteDetails[skill.id],
+            installState: computedInstallState(for: skill),
+            isDetailLoading: isRemoteLoading
+        )
+    }
+
+    private func remoteMatches(skill: RemoteSkillSummary, owner: String, query: String) -> Bool {
+        if owner.lowercased().contains(query) { return true }
+        if skill.id.lowercased().contains(query) { return true }
+        if skill.name.lowercased().contains(query) { return true }
+        if skill.slug?.lowercased().contains(query) == true { return true }
+        if skill.source?.lowercased().contains(query) == true { return true }
+        if skill.sourceType?.lowercased().contains(query) == true { return true }
+        return false
     }
 
     private func computedInstallState(for remote: RemoteSkillSummary) -> SkillInstallState {

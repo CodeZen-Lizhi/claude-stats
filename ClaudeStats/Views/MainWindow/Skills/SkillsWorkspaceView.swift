@@ -9,16 +9,7 @@ private enum SkillsPaneMetrics {
     static let stackedBreakpoint: CGFloat = 800
     static let listMinHeight: CGFloat = 220
     static let detailMinHeight: CGFloat = 300
-
-    static let sideBySideConfiguration = HoverableSplitViewConfiguration(
-        primaryMinimumPaneLength: listMinWidth,
-        primaryMaximumPaneLength: 480,
-        secondaryMinimumPaneLength: detailMinWidth
-    )
-    static let stackedConfiguration = HoverableSplitViewConfiguration(
-        primaryMinimumPaneLength: listMinHeight,
-        secondaryMinimumPaneLength: detailMinHeight
-    )
+    static let listMaxWidth: CGFloat = 480
 }
 
 struct SkillsWorkspaceView: View {
@@ -27,9 +18,26 @@ struct SkillsWorkspaceView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SkillsHeader(store: store, refreshLocal: refreshLocal)
+            SkillsHeader(
+                summaryText: store.headerSummaryText,
+                isLoading: store.isScanning || store.isRemoteLoading,
+                selectedTab: store.selectedTab,
+                refreshLocal: refreshLocal,
+                refreshRemote: refreshRemote
+            )
             StxRule()
-            SkillsWorkspaceBar(store: store)
+            SkillsWorkspaceBar(
+                selectedTab: store.selectedTab,
+                providers: store.snapshot.providers,
+                selectedProviderID: $store.selectedProviderID,
+                scopeFilter: $store.scopeFilter,
+                hasAPIKey: store.hasAPIKey,
+                apiKeyDraft: $store.apiKeyDraft,
+                remoteError: store.remoteError,
+                selectTab: selectTab(_:),
+                saveAPIKey: store.saveAPIKey,
+                deleteAPIKey: store.deleteAPIKey
+            )
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
             StxRule()
@@ -60,22 +68,17 @@ struct SkillsWorkspaceView: View {
     }
 
     private var sideBySideWorkspace: some View {
-        HoverableSplitView(
-            axis: .vertical,
-            primaryFraction: 0.36,
-            configuration: SkillsPaneMetrics.sideBySideConfiguration
-        ) {
-            SkillsListColumn(store: store)
+        HSplitView {
+            listColumn
                 .frame(
-                    minWidth: 0,
+                    minWidth: SkillsPaneMetrics.listMinWidth,
                     idealWidth: SkillsPaneMetrics.listIdealWidth,
-                    maxWidth: .infinity,
+                    maxWidth: SkillsPaneMetrics.listMaxWidth,
                     maxHeight: .infinity
                 )
-        } secondary: {
-            SkillsDetailPane(store: store)
+            detailPane
                 .frame(
-                    minWidth: 0,
+                    minWidth: SkillsPaneMetrics.detailMinWidth,
                     idealWidth: SkillsPaneMetrics.detailIdealWidth,
                     maxWidth: .infinity,
                     maxHeight: .infinity
@@ -84,22 +87,68 @@ struct SkillsWorkspaceView: View {
     }
 
     private var stackedWorkspace: some View {
-        HoverableSplitView(
-            axis: .horizontal,
-            primaryFraction: 0.46,
-            configuration: SkillsPaneMetrics.stackedConfiguration
-        ) {
-            SkillsListColumn(store: store)
-                .frame(minHeight: 0, maxHeight: .infinity)
-        } secondary: {
-            SkillsDetailPane(store: store)
-                .frame(minHeight: 0, maxHeight: .infinity)
+        VSplitView {
+            listColumn
+                .frame(minHeight: SkillsPaneMetrics.listMinHeight, maxHeight: .infinity)
+            detailPane
+                .frame(minHeight: SkillsPaneMetrics.detailMinHeight, maxHeight: .infinity)
         }
+    }
+
+    private var listColumn: some View {
+        SkillsListColumn(
+            selectedTab: store.selectedTab,
+            searchText: searchTextBinding,
+            isLoading: store.isScanning || store.isRemoteLoading,
+            localRows: store.visibleLocalRows,
+            selectedLocalID: store.selectedLocalGroupID,
+            remoteRows: store.discoverRows,
+            selectedRemoteID: store.selectedRemoteSkillID,
+            curatedOwners: store.curatedOwnerRows,
+            hasAPIKey: store.hasAPIKey,
+            remoteError: store.remoteError,
+            selectLocal: store.selectLocalGroup(id:),
+            selectRemote: store.selectRemoteSkill(_:),
+            searchRemote: searchRemote
+        )
+    }
+
+    private var detailPane: some View {
+        SkillsDetailPane(
+            selectedTab: store.selectedTab,
+            selectedDetailTab: $store.selectedDetailTab,
+            localDetail: store.selectedLocalDetailModel,
+            remoteDetail: store.selectedRemoteDetailModel,
+            loadRemoteDetail: store.loadRemoteDetail(id:)
+        )
+    }
+
+    private var searchTextBinding: Binding<String> {
+        Binding(
+            get: { store.searchText },
+            set: { store.searchText = $0 }
+        )
+    }
+
+    private func selectTab(_ tab: SkillsWorkspaceTab) {
+        store.selectedTab = tab
     }
 
     private func refreshLocal() {
         Task {
             await store.reloadLocal(sessions: env.store.sessions)
+        }
+    }
+
+    private func refreshRemote() {
+        Task {
+            await store.refreshRemote()
+        }
+    }
+
+    private func searchRemote() {
+        Task {
+            await store.searchOrLoadTrending()
         }
     }
 
@@ -111,8 +160,11 @@ struct SkillsWorkspaceView: View {
 }
 
 private struct SkillsHeader: View {
-    @Bindable var store: SkillsStore
+    let summaryText: String
+    let isLoading: Bool
+    let selectedTab: SkillsWorkspaceTab
     let refreshLocal: () -> Void
+    let refreshRemote: () -> Void
     private let horizontalInset: CGFloat = 20
 
     var body: some View {
@@ -135,12 +187,12 @@ private struct SkillsHeader: View {
 
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 10) {
-                    summaryText
+                    summaryLabel
                     loadingIndicator
                     refreshButton
                 }
                 VStack(alignment: .trailing, spacing: 8) {
-                    summaryText
+                    summaryLabel
                     HStack(spacing: 8) {
                         loadingIndicator
                         refreshButton
@@ -153,8 +205,8 @@ private struct SkillsHeader: View {
         .padding(.bottom, 16)
     }
 
-    private var summaryText: some View {
-        Text(summaryItems.joined(separator: " . "))
+    private var summaryLabel: some View {
+        Text(summaryText)
             .font(.sora(11))
             .foregroundStyle(Color.stxMuted)
             .lineLimit(1)
@@ -162,7 +214,7 @@ private struct SkillsHeader: View {
 
     @ViewBuilder
     private var loadingIndicator: some View {
-        if store.isScanning || store.isRemoteLoading {
+        if isLoading {
             ProgressView()
                 .controlSize(.small)
         }
@@ -170,56 +222,47 @@ private struct SkillsHeader: View {
 
     private var refreshButton: some View {
         Button {
-            if store.selectedTab == .installed {
+            if selectedTab == .installed {
                 refreshLocal()
             } else {
-                Task { await store.refreshRemote() }
+                refreshRemote()
             }
         } label: {
             Label("Refresh", systemImage: "arrow.clockwise")
         }
         .controlSize(.small)
-        .disabled(store.isScanning || store.isRemoteLoading)
+        .disabled(isLoading)
         .help("Refresh current Skills view")
-    }
-
-    private var summaryItems: [String] {
-        var items = [
-            "\(store.snapshot.summary.groupCount) skills",
-            "\(store.snapshot.summary.skillCount) copies",
-            "\(store.snapshot.summary.providerCount) providers",
-        ]
-        if store.snapshot.summary.pluginSkillCount > 0 {
-            items.append("\(store.snapshot.summary.pluginSkillCount) plugin skills")
-        }
-        if store.snapshot.summary.projectRootCount > 0 {
-            items.append("\(store.snapshot.summary.projectRootCount) projects")
-        }
-        if let scannedAt = store.snapshot.scannedAt {
-            items.append("Updated \(Format.relativeDate(scannedAt))")
-        }
-        return items
     }
 }
 
 private struct SkillsWorkspaceBar: View {
-    @Bindable var store: SkillsStore
+    let selectedTab: SkillsWorkspaceTab
+    let providers: [SkillProviderDefinition]
+    @Binding var selectedProviderID: String?
+    @Binding var scopeFilter: SkillScopeFilter
+    let hasAPIKey: Bool
+    @Binding var apiKeyDraft: String
+    let remoteError: String?
+    let selectTab: (SkillsWorkspaceTab) -> Void
+    let saveAPIKey: () -> Void
+    let deleteAPIKey: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
             HStack(spacing: 6) {
                 ForEach(SkillsWorkspaceTab.allCases) { tab in
                     Button {
-                        store.selectedTab = tab
+                        selectTab(tab)
                     } label: {
                         Label(tab.title, systemImage: tab.symbol)
-                            .font(.sora(11, weight: store.selectedTab == tab ? .semibold : .medium))
-                            .foregroundStyle(store.selectedTab == tab ? Color.stxAccent : Color.stxMuted)
+                            .font(.sora(11, weight: selectedTab == tab ? .semibold : .medium))
+                            .foregroundStyle(selectedTab == tab ? Color.stxAccent : Color.stxMuted)
                             .lineLimit(1)
                             .padding(.horizontal, 10)
                             .frame(height: 28)
                             .background {
-                                if store.selectedTab == tab {
+                                if selectedTab == tab {
                                     RoundedRectangle(cornerRadius: 7)
                                         .fill(Color.stxAccent.opacity(0.13))
                                 }
@@ -231,13 +274,31 @@ private struct SkillsWorkspaceBar: View {
             }
 
             Spacer(minLength: 8)
-            SkillsWorkspaceControls(store: store)
+            SkillsWorkspaceControls(
+                selectedTab: selectedTab,
+                providers: providers,
+                selectedProviderID: $selectedProviderID,
+                scopeFilter: $scopeFilter,
+                hasAPIKey: hasAPIKey,
+                apiKeyDraft: $apiKeyDraft,
+                remoteError: remoteError,
+                saveAPIKey: saveAPIKey,
+                deleteAPIKey: deleteAPIKey
+            )
         }
     }
 }
 
 private struct SkillsWorkspaceControls: View {
-    @Bindable var store: SkillsStore
+    let selectedTab: SkillsWorkspaceTab
+    let providers: [SkillProviderDefinition]
+    @Binding var selectedProviderID: String?
+    @Binding var scopeFilter: SkillScopeFilter
+    let hasAPIKey: Bool
+    @Binding var apiKeyDraft: String
+    let remoteError: String?
+    let saveAPIKey: () -> Void
+    let deleteAPIKey: () -> Void
     @State private var showingFilters = false
 
     var body: some View {
@@ -249,22 +310,29 @@ private struct SkillsWorkspaceControls: View {
 
     @ViewBuilder
     private var inlineControls: some View {
-        switch store.selectedTab {
+        switch selectedTab {
         case .installed:
             HStack(spacing: 8) {
-                SkillsProviderPicker(store: store)
+                SkillsProviderPicker(providers: providers, selectedProviderID: $selectedProviderID)
                     .frame(width: 160)
-                SkillsScopePicker(store: store)
+                SkillsScopePicker(scopeFilter: $scopeFilter)
                     .frame(width: 126)
             }
         case .discover, .curated:
-            SkillsAPIKeyButton(store: store, showLabel: true)
+            SkillsAPIKeyButton(
+                hasAPIKey: hasAPIKey,
+                apiKeyDraft: $apiKeyDraft,
+                remoteError: remoteError,
+                showLabel: true,
+                saveAPIKey: saveAPIKey,
+                deleteAPIKey: deleteAPIKey
+            )
         }
     }
 
     @ViewBuilder
     private var compactControls: some View {
-        switch store.selectedTab {
+        switch selectedTab {
         case .installed:
             Button {
                 showingFilters.toggle()
@@ -279,25 +347,33 @@ private struct SkillsWorkspaceControls: View {
                         .font(.sora(9, weight: .semibold))
                         .tracking(1.0)
                         .foregroundStyle(Color.stxMuted)
-                    SkillsProviderPicker(store: store)
-                    SkillsScopePicker(store: store)
+                    SkillsProviderPicker(providers: providers, selectedProviderID: $selectedProviderID)
+                    SkillsScopePicker(scopeFilter: $scopeFilter)
                 }
                 .padding(14)
                 .frame(width: 240)
             }
         case .discover, .curated:
-            SkillsAPIKeyButton(store: store, showLabel: false)
+            SkillsAPIKeyButton(
+                hasAPIKey: hasAPIKey,
+                apiKeyDraft: $apiKeyDraft,
+                remoteError: remoteError,
+                showLabel: false,
+                saveAPIKey: saveAPIKey,
+                deleteAPIKey: deleteAPIKey
+            )
         }
     }
 }
 
 private struct SkillsProviderPicker: View {
-    @Bindable var store: SkillsStore
+    let providers: [SkillProviderDefinition]
+    @Binding var selectedProviderID: String?
 
     var body: some View {
         Picker("Provider", selection: providerBinding) {
             Text("All providers").tag("all")
-            ForEach(store.snapshot.providers) { provider in
+            ForEach(providers) { provider in
                 Label(provider.displayName, systemImage: provider.symbol).tag(provider.id)
             }
         }
@@ -308,17 +384,17 @@ private struct SkillsProviderPicker: View {
 
     private var providerBinding: Binding<String> {
         Binding(
-            get: { store.selectedProviderID ?? "all" },
-            set: { store.selectedProviderID = $0 == "all" ? nil : $0 }
+            get: { selectedProviderID ?? "all" },
+            set: { selectedProviderID = $0 == "all" ? nil : $0 }
         )
     }
 }
 
 private struct SkillsScopePicker: View {
-    @Bindable var store: SkillsStore
+    @Binding var scopeFilter: SkillScopeFilter
 
     var body: some View {
-        Picker("Scope", selection: $store.scopeFilter) {
+        Picker("Scope", selection: $scopeFilter) {
             ForEach(SkillScopeFilter.allCases) { scope in
                 Text(scope.title).tag(scope)
             }
@@ -330,8 +406,12 @@ private struct SkillsScopePicker: View {
 }
 
 private struct SkillsAPIKeyButton: View {
-    @Bindable var store: SkillsStore
+    let hasAPIKey: Bool
+    @Binding var apiKeyDraft: String
+    let remoteError: String?
     let showLabel: Bool
+    let saveAPIKey: () -> Void
+    let deleteAPIKey: () -> Void
     @State private var showingPopover = false
 
     var body: some View {
@@ -339,16 +419,22 @@ private struct SkillsAPIKeyButton: View {
             showingPopover.toggle()
         } label: {
             if showLabel {
-                Label(store.hasAPIKey ? "API key saved" : "Set API key", systemImage: store.hasAPIKey ? "key.fill" : "key")
+                Label(hasAPIKey ? "API key saved" : "Set API key", systemImage: hasAPIKey ? "key.fill" : "key")
             } else {
-                Image(systemName: store.hasAPIKey ? "key.fill" : "key")
+                Image(systemName: hasAPIKey ? "key.fill" : "key")
             }
         }
         .controlSize(.small)
-        .foregroundStyle(store.hasAPIKey ? Color.stxAccent : Color.stxMuted)
-        .help(store.hasAPIKey ? "skills.sh API key saved" : "Set skills.sh API key")
+        .foregroundStyle(hasAPIKey ? Color.stxAccent : Color.stxMuted)
+        .help(hasAPIKey ? "skills.sh API key saved" : "Set skills.sh API key")
         .popover(isPresented: $showingPopover, arrowEdge: .bottom) {
-            SkillsAPIKeyPopover(store: store)
+            SkillsAPIKeyPopover(
+                hasAPIKey: hasAPIKey,
+                apiKeyDraft: $apiKeyDraft,
+                remoteError: remoteError,
+                saveAPIKey: saveAPIKey,
+                deleteAPIKey: deleteAPIKey
+            )
                 .padding(14)
                 .frame(width: 300)
         }
@@ -356,38 +442,42 @@ private struct SkillsAPIKeyButton: View {
 }
 
 private struct SkillsAPIKeyPopover: View {
-    @Bindable var store: SkillsStore
+    let hasAPIKey: Bool
+    @Binding var apiKeyDraft: String
+    let remoteError: String?
+    let saveAPIKey: () -> Void
+    let deleteAPIKey: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 7) {
-                Image(systemName: store.hasAPIKey ? "key.fill" : "key")
-                    .foregroundStyle(store.hasAPIKey ? Color.stxAccent : Color.stxMuted)
-                Text(store.hasAPIKey ? "API key saved" : "skills.sh API key")
+                Image(systemName: hasAPIKey ? "key.fill" : "key")
+                    .foregroundStyle(hasAPIKey ? Color.stxAccent : Color.stxMuted)
+                Text(hasAPIKey ? "API key saved" : "skills.sh API key")
                     .font(.sora(12, weight: .semibold))
             }
 
-            SecureField("sk_live_...", text: $store.apiKeyDraft)
+            SecureField("sk_live_...", text: $apiKeyDraft)
                 .textFieldStyle(.roundedBorder)
                 .font(.sora(11))
-                .onSubmit { store.saveAPIKey() }
+                .onSubmit { saveAPIKey() }
 
             HStack(spacing: 8) {
                 Button("Save") {
-                    store.saveAPIKey()
+                    saveAPIKey()
                 }
                 .controlSize(.small)
-                .disabled(store.apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
-                if store.hasAPIKey {
+                if hasAPIKey {
                     Button("Clear") {
-                        store.deleteAPIKey()
+                        deleteAPIKey()
                     }
                     .controlSize(.small)
                 }
             }
 
-            if let remoteError = store.remoteError {
+            if let remoteError {
                 Text(remoteError)
                     .font(.sora(10))
                     .foregroundStyle(Color.stxMuted)
@@ -402,7 +492,19 @@ private struct SkillsAPIKeyPopover: View {
 }
 
 private struct SkillsListColumn: View {
-    @Bindable var store: SkillsStore
+    let selectedTab: SkillsWorkspaceTab
+    @Binding var searchText: String
+    let isLoading: Bool
+    let localRows: [LocalSkillRowModel]
+    let selectedLocalID: String?
+    let remoteRows: [RemoteSkillRowModel]
+    let selectedRemoteID: String?
+    let curatedOwners: [CuratedSkillOwnerRowModel]
+    let hasAPIKey: Bool
+    let remoteError: String?
+    let selectLocal: (String) -> Void
+    let selectRemote: (RemoteSkillSummary) -> Void
+    let searchRemote: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -417,10 +519,10 @@ private struct SkillsListColumn: View {
     private var listHeader: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 8) {
-                Text(store.selectedTab.title)
+                Text(selectedTab.title)
                     .font(.sora(14, weight: .semibold))
                 Spacer(minLength: 8)
-                if store.isScanning || store.isRemoteLoading {
+                if isLoading {
                     ProgressView()
                         .controlSize(.mini)
                 }
@@ -430,17 +532,17 @@ private struct SkillsListColumn: View {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 11))
                     .foregroundStyle(Color.stxMuted)
-                TextField(searchPlaceholder, text: $store.searchText)
+                TextField(searchPlaceholder, text: $searchText)
                     .textFieldStyle(.plain)
                     .font(.sora(11))
                     .onSubmit {
-                        if store.selectedTab == .discover {
-                            Task { await store.searchOrLoadTrending() }
+                        if selectedTab == .discover {
+                            searchRemote()
                         }
                     }
-                if store.selectedTab == .discover {
+                if selectedTab == .discover {
                     Button {
-                        Task { await store.searchOrLoadTrending() }
+                        searchRemote()
                     } label: {
                         Image(systemName: "arrow.right")
                     }
@@ -456,40 +558,40 @@ private struct SkillsListColumn: View {
 
     @ViewBuilder
     private var content: some View {
-        switch store.selectedTab {
+        switch selectedTab {
         case .installed:
             SkillsInstalledList(
-                rows: store.visibleLocalRows,
-                selectedID: store.selectedLocalGroupID,
-                isScanning: store.isScanning
+                rows: localRows,
+                selectedID: selectedLocalID,
+                isScanning: isLoading
             ) { id in
-                store.selectLocalGroup(id: id)
+                selectLocal(id)
             }
         case .discover:
             SkillsRemoteList(
-                rows: store.discoverRows,
-                selectedID: store.selectedRemoteSkillID,
-                hasAPIKey: store.hasAPIKey,
-                remoteError: store.remoteError,
+                rows: remoteRows,
+                selectedID: selectedRemoteID,
+                hasAPIKey: hasAPIKey,
+                remoteError: remoteError,
                 missingKeyMessage: "Save a skills.sh API key from the top-right key control to browse the market.",
                 emptyMessage: "Search skills.sh or refresh trending results."
             ) { skill in
-                store.selectRemoteSkill(skill)
+                selectRemote(skill)
             }
         case .curated:
             SkillsCuratedList(
-                owners: store.curatedOwnerRows,
-                selectedID: store.selectedRemoteSkillID,
-                hasAPIKey: store.hasAPIKey,
-                remoteError: store.remoteError
+                owners: curatedOwners,
+                selectedID: selectedRemoteID,
+                hasAPIKey: hasAPIKey,
+                remoteError: remoteError
             ) { skill in
-                store.selectRemoteSkill(skill)
+                selectRemote(skill)
             }
         }
     }
 
     private var searchPlaceholder: String {
-        switch store.selectedTab {
+        switch selectedTab {
         case .installed: "Search local skills"
         case .discover: "Search skills.sh"
         case .curated: "Filter curated skills"
@@ -618,7 +720,11 @@ private struct SkillsCuratedList: View {
 }
 
 private struct SkillsDetailPane: View {
-    @Bindable var store: SkillsStore
+    let selectedTab: SkillsWorkspaceTab
+    @Binding var selectedDetailTab: SkillsDetailTab
+    let localDetail: LocalSkillDetailModel?
+    let remoteDetail: RemoteSkillDetailModel?
+    let loadRemoteDetail: (String) async -> Void
 
     var body: some View {
         Group {
@@ -629,11 +735,11 @@ private struct SkillsDetailPane: View {
 
     @ViewBuilder
     private var detailContent: some View {
-        switch store.selectedTab {
+        switch selectedTab {
         case .installed:
-            if let detail = store.selectedLocalDetail {
+            if let detail = localDetail {
                 SkillsInspectorShell(
-                    selection: $store.selectedDetailTab,
+                    selection: $selectedDetailTab,
                     symbol: "sparkles",
                     title: detail.title,
                     subtitle: detail.subtitle
@@ -642,25 +748,25 @@ private struct SkillsDetailPane: View {
                         SkillsLocalActions(actions: actions)
                     }
                 } content: {
-                    SkillsLocalDetail(selectedTab: store.selectedDetailTab, detail: detail)
+                    SkillsLocalDetail(selectedTab: selectedDetailTab, detail: detail)
                 }
             } else {
                 emptyInspector
             }
         case .discover, .curated:
-            if let detail = store.selectedRemoteDetail {
+            if let detail = remoteDetail {
                 SkillsInspectorShell(
-                    selection: $store.selectedDetailTab,
+                    selection: $selectedDetailTab,
                     symbol: "bag",
                     title: detail.title,
                     subtitle: detail.subtitle
                 ) {
                     SkillsRemoteActions(actions: detail.actions)
                 } content: {
-                    SkillsRemoteDetail(selectedTab: store.selectedDetailTab, detail: detail)
+                    SkillsRemoteDetail(selectedTab: selectedDetailTab, detail: detail)
                 }
                 .task(id: detail.id) {
-                    await store.loadRemoteDetail(id: detail.id)
+                    await loadRemoteDetail(detail.id)
                 }
             } else {
                 emptyInspector
@@ -670,7 +776,7 @@ private struct SkillsDetailPane: View {
 
     private var emptyInspector: some View {
         SkillsInspectorShell(
-            selection: $store.selectedDetailTab,
+            selection: $selectedDetailTab,
             symbol: "sidebar.right",
             title: "Inspector",
             subtitle: "Select a skill to inspect metadata, files, and SKILL.md.",
@@ -923,8 +1029,8 @@ private struct SkillsRemoteDetail: View {
                                     .font(.sora(11))
                                     .foregroundStyle(Color.stxMuted)
                             }
-                            if let auditedAt = entry.auditedAt {
-                                Text(Format.shortDate(auditedAt))
+                            if let auditedAtText = entry.auditedAtText {
+                                Text(auditedAtText)
                                     .font(.sora(9))
                                     .foregroundStyle(Color.stxMuted)
                             }
@@ -1170,19 +1276,85 @@ private struct SkillMarkdownViewer: View, Equatable {
     }
 
     var body: some View {
-        ConfigurationTextEditor(
-            text: .constant(document.text),
-            fileKind: .markdown,
-            isEditable: false,
-            onCursorChange: { _, _ in }
-        )
+        SkillMarkdownTextView(document: document)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.primary.opacity(0.03))
     }
 }
 
+private struct SkillMarkdownTextView: NSViewRepresentable {
+    let document: SkillMarkdownDocument
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let textView = NSTextView(frame: .zero)
+        textView.drawsBackground = false
+        textView.allowsUndo = false
+        textView.isRichText = false
+        textView.importsGraphics = false
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.isHorizontallyResizable = false
+        textView.isVerticallyResizable = true
+        textView.minSize = NSSize(width: 0, height: 0)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.autoresizingMask = [.width]
+        textView.textContainerInset = NSSize(width: 14, height: 12)
+        textView.font = Self.editorFont
+        textView.textColor = .labelColor
+        textView.usesFindPanel = true
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
+        textView.isAutomaticTextReplacementEnabled = false
+        textView.isAutomaticSpellingCorrectionEnabled = false
+        textView.smartInsertDeleteEnabled = false
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
+
+        let scrollView = NSScrollView()
+        scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+        AppScrollbars.configure(scrollView)
+        scrollView.documentView = textView
+        context.coordinator.apply(document, to: textView)
+        return scrollView
+    }
+
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        AppScrollbars.configure(scrollView)
+        guard let textView = scrollView.documentView as? NSTextView else { return }
+        context.coordinator.apply(document, to: textView)
+    }
+
+    private static var editorFont: NSFont {
+        NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+    }
+
+    @MainActor
+    final class Coordinator {
+        private var appliedID: String?
+        private var appliedContentHash: String?
+
+        func apply(_ document: SkillMarkdownDocument, to textView: NSTextView) {
+            guard appliedID != document.id || appliedContentHash != document.contentHash else { return }
+            textView.string = document.text
+            textView.font = SkillMarkdownTextView.editorFont
+            textView.textColor = .labelColor
+            textView.typingAttributes = [
+                .font: SkillMarkdownTextView.editorFont,
+                .foregroundColor: NSColor.labelColor,
+            ]
+            appliedID = document.id
+            appliedContentHash = document.contentHash
+        }
+    }
+}
+
 private struct SkillFilesList: View {
-    let files: [SkillFileEntry]
+    let files: [SkillFileRowModel]
 
     var body: some View {
         AppScrollView {
@@ -1200,8 +1372,8 @@ private struct SkillFilesList: View {
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                             Spacer(minLength: 8)
-                            if let byteCount = file.byteCount {
-                                Text(Format.bytes(Int(byteCount)))
+                            if let byteCountText = file.byteCountText {
+                                Text(byteCountText)
                                     .font(.sora(9))
                                     .foregroundStyle(Color.stxMuted)
                             }

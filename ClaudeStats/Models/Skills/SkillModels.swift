@@ -207,6 +207,18 @@ struct SkillFileEntry: Identifiable, Sendable, Hashable {
     var id: String { path }
 }
 
+struct SkillFileRowModel: Identifiable, Sendable, Hashable {
+    let id: String
+    let path: String
+    let byteCountText: String?
+
+    init(entry: SkillFileEntry) {
+        id = entry.id
+        path = entry.path
+        byteCountText = entry.byteCount.map { Format.bytes(Int($0)) }
+    }
+}
+
 struct SkillMarkdownDocument: Identifiable, Sendable, Hashable {
     let id: String
     let contentHash: String
@@ -365,7 +377,7 @@ struct LocalSkillDetailModel: Identifiable, Sendable, Hashable {
     let tokenCount: Int
     let primaryFacts: [SkillFactModel]
     let installedCopies: [LocalSkillCopyRowModel]
-    let files: [SkillFileEntry]
+    let files: [SkillFileRowModel]
     let markdownDocument: SkillMarkdownDocument?
     let actions: LocalSkillActionModel?
 
@@ -378,7 +390,7 @@ struct LocalSkillDetailModel: Identifiable, Sendable, Hashable {
         fileCount = primary?.stats.fileCount ?? 0
         tokenCount = primary?.stats.tokenCount ?? 0
         installedCopies = group.skills.map(LocalSkillCopyRowModel.init(skill:))
-        files = primary?.files ?? []
+        files = primary?.files.map(SkillFileRowModel.init(entry:)) ?? []
         actions = primary.map {
             LocalSkillActionModel(folderPath: $0.folderPath, skillMarkdownPath: $0.skillMarkdownPath)
         }
@@ -541,6 +553,24 @@ struct RemoteSkillActionModel: Sendable, Hashable {
     let remoteURLString: String?
 }
 
+struct RemoteSkillAuditRowModel: Identifiable, Sendable, Hashable {
+    let id: String
+    let provider: String
+    let status: String
+    let summary: String?
+    let auditedAtText: String?
+    let riskLevel: String?
+
+    init(entry: SkillsShAuditEntry) {
+        id = entry.id
+        provider = entry.provider
+        status = entry.status
+        summary = entry.summary
+        auditedAtText = entry.auditedAt.map(Format.shortDate)
+        riskLevel = entry.riskLevel
+    }
+}
+
 struct RemoteSkillDetailModel: Identifiable, Sendable, Hashable {
     let id: String
     let title: String
@@ -550,8 +580,8 @@ struct RemoteSkillDetailModel: Identifiable, Sendable, Hashable {
     let installStateTitle: String
     let facts: [SkillFactModel]
     let installCommand: String?
-    let files: [SkillFileEntry]
-    let audits: [SkillsShAuditEntry]
+    let files: [SkillFileRowModel]
+    let audits: [RemoteSkillAuditRowModel]
     let markdownDocument: SkillMarkdownDocument?
     let isDetailLoading: Bool
     let actions: RemoteSkillActionModel
@@ -562,11 +592,11 @@ struct RemoteSkillDetailModel: Identifiable, Sendable, Hashable {
         subtitle = skill.displaySource
         installsText = skill.installs.map(String.init) ?? "-"
         let fileEntries = bundle?.fileEntries ?? []
-        files = fileEntries
+        files = fileEntries.map(SkillFileRowModel.init(entry:))
         fileCount = fileEntries.count
         installStateTitle = installState.title
         installCommand = skill.installCommand
-        audits = bundle?.audit?.audits ?? []
+        audits = bundle?.audit?.audits.map(RemoteSkillAuditRowModel.init(entry:)) ?? []
         self.isDetailLoading = isDetailLoading
 
         let remoteURLString = skill.url ?? skill.installURL

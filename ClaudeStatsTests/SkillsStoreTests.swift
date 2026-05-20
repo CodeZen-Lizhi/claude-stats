@@ -37,12 +37,14 @@ struct SkillsStoreTests {
 
         await store.loadIfNeeded(sessions: [])
         #expect(store.snapshot.summary.groupCount == 2)
+        #expect(store.headerSummaryText.contains("2 skills"))
         #expect(store.selectedLocalGroup?.name == "Alpha Skill")
         let initialDetail = try #require(store.selectedLocalDetail)
         #expect(initialDetail.title == "Alpha Skill")
         #expect(initialDetail.copyCount == 1)
         #expect(initialDetail.primaryFacts.contains { $0.label == "Provider" && $0.value == "Codex" })
         #expect(initialDetail.markdownDocument?.text.contains("Alpha Skill") == true)
+        #expect(store.selectedLocalDetailModel == initialDetail)
 
         store.searchText = "beta"
         store.syncLocalSelection()
@@ -57,6 +59,12 @@ struct SkillsStoreTests {
         store.syncLocalSelection()
         #expect(store.filteredLocalGroups.map(\.name) == ["Alpha Skill"])
         #expect(store.groupsByID[store.selectedLocalGroupID ?? ""]?.name == "Alpha Skill")
+
+        store.selectedTab = .discover
+        store.searchText = "react"
+        #expect(store.discoverSearchText == "react")
+        #expect(store.localSearchText.isEmpty)
+        #expect(store.visibleLocalRows.map(\.name) == ["Alpha Skill"])
     }
 
     @Test("Remote search uses saved API key, caches detail, and reports install state")
@@ -139,8 +147,11 @@ struct SkillsStoreTests {
         #expect(remoteDetail.installStateTitle == SkillInstallState.outOfDate.title)
         #expect(remoteDetail.markdownDocument?.text.contains("React Native") == true)
         #expect(remoteDetail.files.first?.path == "SKILL.md")
+        #expect(remoteDetail.files.first?.byteCountText?.isEmpty == false)
         #expect(remoteDetail.audits.first?.provider == "Socket")
+        #expect(remoteDetail.audits.first?.auditedAtText == nil)
         #expect(remoteDetail.actions.installCommand?.contains("npx skills add") == true)
+        #expect(store.selectedRemoteDetailModel == remoteDetail)
     }
 
     @Test("Curated rows cache remote lookup and selected skill")
@@ -155,6 +166,13 @@ struct SkillsStoreTests {
             source: "owner/repo",
             installs: 42
         )
+        let hiddenRemote = RemoteSkillSummary(
+            id: "owner/repo/hidden",
+            slug: "hidden",
+            name: "Hidden",
+            source: "owner/repo",
+            installs: 1
+        )
         let fakeClient = FakeSkillsShClient()
         fakeClient.curatedOwners = [
             SkillsShCuratedOwner(
@@ -162,7 +180,7 @@ struct SkillsStoreTests {
                 totalInstalls: 42,
                 featuredRepo: nil,
                 featuredSkill: nil,
-                skills: [remote]
+                skills: [remote, hiddenRemote]
             ),
         ]
         let store = SkillsStore(
@@ -178,6 +196,11 @@ struct SkillsStoreTests {
         #expect(store.curatedOwnerRows.first?.skills.first?.skill.id == remote.id)
         store.selectRemoteSkill(remote)
         #expect(store.selectedRemoteSkill?.id == remote.id)
+
+        store.searchText = "hidden"
+        #expect(store.curatedSearchText == "hidden")
+        #expect(store.curatedOwnerRows.first?.skills.map(\.skill.id) == [hiddenRemote.id])
+        #expect(store.selectedRemoteSkill?.id == hiddenRemote.id)
     }
 
     @Test("Remote operations use cached API key after startup")
