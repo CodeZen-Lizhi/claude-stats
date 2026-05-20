@@ -3,6 +3,30 @@
 extension ReleaseHistoryCatalog {
     static let generatedEntries: [ReleaseHistoryEntry] = [
         ReleaseHistoryEntry(
+            version: "1.5.12",
+            date: "May 20, 2026",
+            headline: "为各类使用统计数据模型添加数据修订ID，用于生成唯一缓存键，确保数据变更时正确刷新视图缓存。",
+            changes: [
+                "为TokenUsage、ModelUsage数组、TrendSeries添加dataRevisionID计算属性",
+                "更新UsageModelBreakdownSnapshot和UsageTrendSnapshotKey，加入修订ID参数",
+                "补充对应测试用例验证缓存键随数据变更而变化",
+                "新增完整的AI配置浏览详情页，支持按分类查看配置文件",
+                "新增侧边栏导航和搜索功能，支持筛选配置文件",
+            ]
+        ),
+        ReleaseHistoryEntry(
+            version: "1.5.11",
+            date: "May 20, 2026",
+            headline: "新增了Ops工具面板，包含监听端口管理、进程监控、Homebrew管理、开发环境检查、系统清理和诊断功能，具体实现包括：",
+            changes: [
+                "新增AppEnvironment中的OpsStore依赖注入",
+                "在侧边栏添加Ops导航入口",
+                "实现完整的Ops侧边栏和详情视图",
+                "新增命令行执行封装、数据模型和测试用例",
+                "扩展主窗口布局支持Ops模式切换",
+            ]
+        ),
+        ReleaseHistoryEntry(
             version: "1.5.10",
             date: "May 20, 2026",
             headline: "This commit adds full realtime leaderboard functionality:",

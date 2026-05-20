@@ -1,0 +1,10 @@
+{
+  "headline": "为各类使用统计数据模型添加数据修订ID，用于生成唯一缓存键，确保数据变更时正确刷新视图缓存。",
+  "changes": [
+    "为TokenUsage、ModelUsage数组、TrendSeries添加dataRevisionID计算属性",
+    "更新UsageModelBreakdownSnapshot和UsageTrendSnapshotKey，加入修订ID参数",
+    "补充对应测试用例验证缓存键随数据变更而变化",
+    "新增完整的AI配置浏览详情页，支持按分类查看配置文件",
+    "新增侧边栏导航和搜索功能，支持筛选配置文件"
+  ]
+}
