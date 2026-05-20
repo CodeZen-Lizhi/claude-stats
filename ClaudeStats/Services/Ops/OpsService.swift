@@ -9,8 +9,8 @@ protocol OpsServicing: Sendable {
     func loadCleanupItems() async -> [OpsCleanupItem]
     func loadDiagnostics() async -> OpsDiagnosticsSnapshot
     func runURLDiagnostics(_ rawURL: String) async -> OpsURLDiagnosticResult
-    func terminate(pid: Int32, signal: Int32) async throws -> OpsTerminationOutcome
-    func runBrew(arguments: [String]) async throws -> OpsCommandResult
+    func terminate(target: OpsProcessIdentity, signal: Int32) async throws -> OpsTerminationOutcome
+    func runBrew(action: OpsBrewAction) async throws -> OpsCommandResult
     func cleanup(kinds: Set<OpsCleanupKind>) async throws -> OpsCleanupResult
 }
 
@@ -45,7 +45,7 @@ struct OpsService: OpsServicing {
     func loadProcesses() async throws -> [OpsProcessItem] {
         let result = try await runRequired(
             executable: "/bin/ps",
-            arguments: ["-axo", "pid=,ppid=,user=,pcpu=,pmem=,etime=,comm=,args="],
+            arguments: ["axww", "-o", "pid=,ppid=,user=,pcpu=,pmem=,etime=,lstart=,command="],
             timeout: 6
         )
         return OpsParsers.parseProcessList(
@@ -57,56 +57,91 @@ struct OpsService: OpsServicing {
 
     func loadBrew() async -> OpsBrewSnapshot {
         guard let brewPath = await brewExecutablePath() else { return .missing }
+        let brewEnvironment = readOnlyBrewEnvironment()
 
         async let formulae = runner.run(OpsCommandInvocation(
             executablePath: brewPath,
             arguments: ["list", "--versions"],
-            environment: environment,
+            environment: brewEnvironment,
             timeout: 14
         ))
         async let casks = runner.run(OpsCommandInvocation(
             executablePath: brewPath,
             arguments: ["list", "--cask", "--versions"],
-            environment: environment,
+            environment: brewEnvironment,
             timeout: 14
         ))
         async let outdated = runner.run(OpsCommandInvocation(
             executablePath: brewPath,
             arguments: ["outdated", "--verbose"],
-            environment: environment,
+            environment: brewEnvironment,
             timeout: 18
         ))
         async let services = runner.run(OpsCommandInvocation(
             executablePath: brewPath,
             arguments: ["services", "list", "--json"],
-            environment: environment,
+            environment: brewEnvironment,
             timeout: 12
         ))
         async let doctor = runner.run(OpsCommandInvocation(
             executablePath: brewPath,
             arguments: ["doctor"],
-            environment: environment,
+            environment: brewEnvironment,
             timeout: 20
         ))
 
-        var packages = OpsParsers.parseBrewListVersions((await formulae).stdout, kind: .formula)
-        packages += OpsParsers.parseBrewListVersions((await casks).stdout, kind: .cask)
-        let outdatedVersions = OpsParsers.parseBrewOutdated((await outdated).stdout)
+        let formulaeResult = await formulae
+        let casksResult = await casks
+        let outdatedResult = await outdated
+        let servicesResult = await services
+        let doctorResult = await doctor
+        var errors: [String] = []
+
+        var packages: [OpsBrewPackage] = []
+        if formulaeResult.isSuccess {
+            packages += OpsParsers.parseBrewListVersions(formulaeResult.stdout, kind: .formula)
+        } else {
+            errors.append("brew list --versions: \(formulaeResult.errorText)")
+        }
+        if casksResult.isSuccess {
+            packages += OpsParsers.parseBrewListVersions(casksResult.stdout, kind: .cask)
+        } else {
+            errors.append("brew list --cask --versions: \(casksResult.errorText)")
+        }
+        let outdatedVersions: [String: String]
+        if outdatedResult.isSuccess {
+            outdatedVersions = OpsParsers.parseBrewOutdated(outdatedResult.stdout)
+        } else {
+            errors.append("brew outdated --verbose: \(outdatedResult.errorText)")
+            outdatedVersions = [:]
+        }
         packages = packages.map { package in
             var next = package
             next.latestVersion = outdatedVersions[package.name]
             return next
         }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
 
-        let servicesResult = await services
-        let doctorResult = await doctor
+        let serviceItems = servicesResult.isSuccess
+            ? OpsParsers.parseBrewServices(servicesResult.stdout.isEmpty ? servicesResult.stderr : servicesResult.stdout)
+            : []
+        if !servicesResult.isSuccess {
+            errors.append("brew services list --json: \(servicesResult.errorText)")
+        }
+        let doctorOutput: String
+        if doctorResult.isSuccess {
+            doctorOutput = doctorResult.outputText.isEmpty ? "brew doctor produced no output." : doctorResult.outputText
+        } else {
+            errors.append("brew doctor: \(doctorResult.errorText)")
+            doctorOutput = "Unable to run brew doctor: \(doctorResult.errorText)"
+        }
 
         return OpsBrewSnapshot(
             brewPath: brewPath,
             packages: packages,
-            services: OpsParsers.parseBrewServices(servicesResult.stdout.isEmpty ? servicesResult.stderr : servicesResult.stdout),
-            doctorOutput: doctorResult.outputText.isEmpty ? "brew doctor produced no output." : doctorResult.outputText,
-            lastCommandOutput: nil
+            services: serviceItems,
+            doctorOutput: doctorOutput,
+            lastCommandOutput: nil,
+            errors: errors
         )
     }
 
@@ -128,7 +163,7 @@ struct OpsService: OpsServicing {
 
     func loadCleanupItems() async -> [OpsCleanupItem] {
         let brewPath = await brewExecutablePath()
-        let dockerPath = await executablePath(named: "docker")
+        let dockerPath = trustedExecutablePath(named: "docker")
         let targets = cleanupTargets(brewPath: brewPath, dockerPath: dockerPath)
         return await Task.detached(priority: .utility) {
             targets.map { target in
@@ -167,10 +202,21 @@ struct OpsService: OpsServicing {
         ))
         async let hosts = readHostsEntries()
 
+        let proxyResult = await proxy
+        let dnsResult = await dns
+        var errors: [String] = []
+        if !proxyResult.isSuccess {
+            errors.append("scutil --proxy: \(proxyResult.errorText)")
+        }
+        if !dnsResult.isSuccess {
+            errors.append("scutil --dns: \(dnsResult.errorText)")
+        }
+
         return OpsDiagnosticsSnapshot(
-            proxySummary: OpsParsers.proxySummary(from: await proxy.stdout),
-            dnsSummary: OpsParsers.dnsSummary(from: await dns.stdout),
-            hostsEntries: await hosts
+            proxySummary: proxyResult.isSuccess ? OpsParsers.proxySummary(from: proxyResult.stdout) : "Unable to read system proxy settings.",
+            dnsSummary: dnsResult.isSuccess ? OpsParsers.dnsSummary(from: dnsResult.stdout) : "Unable to read system DNS settings.",
+            hostsEntries: await hosts,
+            errors: errors
         )
     }
 
@@ -179,15 +225,19 @@ struct OpsService: OpsServicing {
               let host = url.host(percentEncoded: false) else {
             return OpsURLDiagnosticResult(url: rawURL, headerText: "", tlsExpiration: nil, errorMessage: "Enter a valid URL.")
         }
+        guard let scheme = url.scheme?.lowercased(),
+              ["http", "https"].contains(scheme) else {
+            return OpsURLDiagnosticResult(url: rawURL, headerText: "", tlsExpiration: nil, errorMessage: "Only HTTP and HTTPS URLs are supported.")
+        }
 
         let urlText = url.absoluteString
         async let headers = runner.run(OpsCommandInvocation(
             executablePath: "/usr/bin/curl",
-            arguments: ["-I", "-L", "--max-time", "8", "--silent", "--show-error", urlText],
+            arguments: ["-I", "-L", "--proto", "=http,https", "--proto-redir", "=http,https", "--max-time", "8", "--silent", "--show-error", urlText],
             environment: environment,
             timeout: 10
         ))
-        async let tls = tlsExpiration(host: host, port: url.port ?? 443, enabled: url.scheme?.lowercased() == "https")
+        async let tls = tlsExpiration(host: host, port: url.port ?? 443, enabled: scheme == "https")
 
         let headerResult = await headers
         let expiration = await tls
@@ -200,24 +250,38 @@ struct OpsService: OpsServicing {
         )
     }
 
-    func terminate(pid: Int32, signal: Int32) async throws -> OpsTerminationOutcome {
-        let code = Darwin.kill(pid, signal)
+    func terminate(target: OpsProcessIdentity, signal: Int32) async throws -> OpsTerminationOutcome {
+        guard signal == SIGTERM || signal == SIGKILL else {
+            throw OpsServiceError.invalidSignal
+        }
+        guard let current = try await processItem(pid: target.pid) else {
+            throw OpsServiceError.processNotFound(target.pid)
+        }
+        if let reason = current.protection.reason {
+            throw OpsServiceError.protectedProcess(reason)
+        }
+        guard current.identity.matches(target) else {
+            throw OpsServiceError.processIdentityChanged
+        }
+
+        let code = Darwin.kill(target.pid, signal)
         guard code == 0 else {
             throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EPERM)
         }
 
         try? await Task.sleep(nanoseconds: signal == SIGTERM ? 700_000_000 : 250_000_000)
-        let stillRunning = Darwin.kill(pid, 0) == 0
-        return OpsTerminationOutcome(pid: pid, signal: signal, isStillRunning: stillRunning)
+        let stillRunning = Darwin.kill(target.pid, 0) == 0
+        return OpsTerminationOutcome(pid: target.pid, signal: signal, isStillRunning: stillRunning)
     }
 
-    func runBrew(arguments: [String]) async throws -> OpsCommandResult {
+    func runBrew(action: OpsBrewAction) async throws -> OpsCommandResult {
         guard let brewPath = await brewExecutablePath() else {
             throw OpsServiceError.brewMissing
         }
-        guard Self.brewArgumentsAreAllowed(arguments) else {
+        guard Self.brewActionIsAllowed(action) else {
             throw OpsServiceError.invalidBrewArguments
         }
+        let arguments = action.arguments
         let result = await runner.run(OpsCommandInvocation(
             executablePath: brewPath,
             arguments: arguments,
@@ -232,7 +296,7 @@ struct OpsService: OpsServicing {
 
     func cleanup(kinds: Set<OpsCleanupKind>) async throws -> OpsCleanupResult {
         let brewPath = await brewExecutablePath()
-        let dockerPath = await executablePath(named: "docker")
+        let dockerPath = trustedExecutablePath(named: "docker")
         let targets = Dictionary(uniqueKeysWithValues: cleanupTargets(brewPath: brewPath, dockerPath: dockerPath).map { ($0.kind, $0) })
         var removed = Set<OpsCleanupKind>()
         var skipped: [OpsCleanupKind: String] = [:]
@@ -271,6 +335,10 @@ struct OpsService: OpsServicing {
 
             do {
                 let url = URL(fileURLWithPath: path)
+                guard isSafeCleanupTarget(url, expectedPath: path) else {
+                    skipped[kind] = "Cleanup target is not the expected allowlisted directory."
+                    continue
+                }
                 if FileManager.default.fileExists(atPath: path) {
                     try FileManager.default.removeItem(at: url)
                     removed.insert(kind)
@@ -298,47 +366,94 @@ struct OpsService: OpsServicing {
         return result
     }
 
+    private func processItem(pid: Int32) async throws -> OpsProcessItem? {
+        let result = await runner.run(OpsCommandInvocation(
+            executablePath: "/bin/ps",
+            arguments: ["-p", "\(pid)", "-ww", "-o", "pid=,ppid=,user=,pcpu=,pmem=,etime=,lstart=,command="],
+            environment: environment,
+            timeout: 3
+        ))
+        guard result.isSuccess else { return nil }
+        return OpsParsers.parseProcessList(
+            result.stdout,
+            currentPID: Int32(ProcessInfo.processInfo.processIdentifier),
+            currentUser: NSUserName()
+        ).first { $0.pid == pid }
+    }
+
+    private func readOnlyBrewEnvironment() -> [String: String] {
+        var next = environment
+        next["HOMEBREW_NO_AUTO_UPDATE"] = "1"
+        next["HOMEBREW_NO_ANALYTICS"] = "1"
+        return next
+    }
+
     private func brewExecutablePath() async -> String? {
         for path in ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"] where isExecutable(path) {
             return path
         }
-        return await executablePath(named: "brew")
+        return nil
     }
 
-    private func executablePath(named command: String) async -> String? {
+    private func executablePath(named command: String) async -> ResolvedExecutable? {
         for directory in searchPaths() {
+            let candidate = directory.appendingPathComponent(command).path
+            if isExecutable(candidate) {
+                return ResolvedExecutable(path: candidate, isTrusted: isTrustedExecutablePath(candidate))
+            }
+        }
+        return nil
+    }
+
+    private func trustedExecutablePath(named command: String) -> String? {
+        for directory in Self.trustedExecutableDirectories {
             let candidate = directory.appendingPathComponent(command).path
             if isExecutable(candidate) { return candidate }
         }
-
-        let result = await runner.run(OpsCommandInvocation(
-            executablePath: "/usr/bin/which",
-            arguments: [command],
-            environment: environment,
-            timeout: 4
-        ))
-        guard result.isSuccess else { return nil }
-        let path = result.outputText.components(separatedBy: .newlines).first ?? ""
-        return isExecutable(path) ? path : nil
+        return nil
     }
 
     private func searchPaths() -> [URL] {
         let pathValue = environment["PATH"] ?? ""
         let pathURLs = pathValue
             .split(separator: ":")
-            .map { URL(fileURLWithPath: String($0), isDirectory: true) }
-        return [
-            URL(fileURLWithPath: "/opt/homebrew/bin", isDirectory: true),
-            URL(fileURLWithPath: "/usr/local/bin", isDirectory: true),
-            URL(fileURLWithPath: "/usr/bin", isDirectory: true),
-            URL(fileURLWithPath: "/bin", isDirectory: true),
-            URL(fileURLWithPath: "/usr/sbin", isDirectory: true),
-            URL(fileURLWithPath: "/sbin", isDirectory: true),
-        ] + pathURLs
+            .map(String.init)
+            .filter { $0.hasPrefix("/") }
+            .map { URL(fileURLWithPath: $0, isDirectory: true) }
+        return Self.trustedExecutableDirectories + pathURLs
     }
+
+    private static let trustedExecutableDirectories: [URL] = [
+        URL(fileURLWithPath: "/opt/homebrew/bin", isDirectory: true),
+        URL(fileURLWithPath: "/usr/local/bin", isDirectory: true),
+        URL(fileURLWithPath: "/usr/bin", isDirectory: true),
+        URL(fileURLWithPath: "/bin", isDirectory: true),
+        URL(fileURLWithPath: "/usr/sbin", isDirectory: true),
+        URL(fileURLWithPath: "/sbin", isDirectory: true),
+    ]
 
     private func isExecutable(_ path: String) -> Bool {
         FileManager.default.isExecutableFile(atPath: path)
+    }
+
+    private func isTrustedExecutablePath(_ path: String) -> Bool {
+        let standardized = URL(fileURLWithPath: path).standardizedFileURL.path
+        return Self.trustedExecutableDirectories.contains { directory in
+            standardized.hasPrefix(directory.standardizedFileURL.path + "/")
+        }
+    }
+
+    private struct ResolvedExecutable: Sendable {
+        var path: String
+        var isTrusted: Bool
+    }
+
+    private func isSafeCleanupTarget(_ url: URL, expectedPath: String) -> Bool {
+        let expected = URL(fileURLWithPath: expectedPath).standardizedFileURL.path
+        guard url.standardizedFileURL.path == expected else { return false }
+        guard expected.hasPrefix(homeDirectory.standardizedFileURL.path + "/") else { return false }
+        let values = try? url.resourceValues(forKeys: [.isSymbolicLinkKey])
+        return values?.isSymbolicLink != true
     }
 
     private struct EnvironmentToolDefinition: Sendable {
@@ -363,19 +478,20 @@ struct OpsService: OpsServicing {
     ]
 
     private func environmentTool(_ definition: EnvironmentToolDefinition) async -> OpsEnvironmentTool {
-        guard let path = await executablePath(named: definition.command) else {
+        guard let resolved = await executablePath(named: definition.command) else {
             return OpsEnvironmentTool(
                 name: definition.name,
                 command: definition.command,
                 resolvedPath: nil,
                 version: nil,
                 status: .missing,
-                detail: "Not found in PATH."
+                detail: "Not found in PATH.",
+                isTrustedPath: false
             )
         }
 
         let result = await runner.run(OpsCommandInvocation(
-            executablePath: path,
+            executablePath: resolved.path,
             arguments: definition.versionArguments,
             environment: environment,
             timeout: 6
@@ -384,19 +500,21 @@ struct OpsService: OpsServicing {
             return OpsEnvironmentTool(
                 name: definition.name,
                 command: definition.command,
-                resolvedPath: path,
+                resolvedPath: resolved.path,
                 version: OpsParsers.firstMeaningfulLine(result.outputText),
                 status: .available,
-                detail: nil
+                detail: resolved.isTrusted ? nil : "Resolved from a non-standard PATH directory.",
+                isTrustedPath: resolved.isTrusted
             )
         }
         return OpsEnvironmentTool(
             name: definition.name,
             command: definition.command,
-            resolvedPath: path,
+            resolvedPath: resolved.path,
             version: nil,
             status: .error(result.errorText),
-            detail: result.errorText
+            detail: result.errorText,
+            isTrustedPath: resolved.isTrusted
         )
     }
 
@@ -499,7 +617,7 @@ struct OpsService: OpsServicing {
 
     private func tlsExpiration(host: String, port: Int, enabled: Bool) async -> Date? {
         guard enabled else { return nil }
-        let openssl = await executablePath(named: "openssl") ?? "/usr/bin/openssl"
+        let openssl = trustedExecutablePath(named: "openssl") ?? "/usr/bin/openssl"
         guard isExecutable(openssl) else { return nil }
 
         let sClient = await runner.run(OpsCommandInvocation(
@@ -521,25 +639,47 @@ struct OpsService: OpsServicing {
         return OpsParsers.parseOpenSSLNotAfter(x509.outputText)
     }
 
-    private static func brewArgumentsAreAllowed(_ arguments: [String]) -> Bool {
-        guard let command = arguments.first else { return false }
-        let allowedCommands: Set<String> = ["install", "uninstall", "upgrade", "cleanup", "services"]
-        guard allowedCommands.contains(command) else { return false }
-        let pattern = #"^[A-Za-z0-9+_.@/-]+$"#
-        return arguments.dropFirst().allSatisfy { value in
-            value.range(of: pattern, options: .regularExpression) != nil
+    static func brewActionIsAllowed(_ action: OpsBrewAction) -> Bool {
+        switch action {
+        case .install(let token), .uninstall(let token), .upgrade(let token):
+            return brewTokenIsSafe(token)
+        case .cleanup:
+            return true
+        case .service(_, let name):
+            return brewTokenIsSafe(name)
         }
+    }
+
+    private static func brewTokenIsSafe(_ token: String) -> Bool {
+        guard !token.isEmpty,
+              !token.hasPrefix("-"),
+              !token.contains("/"),
+              !token.contains(".."),
+              !token.contains("://"),
+              !token.lowercased().hasSuffix(".rb") else {
+            return false
+        }
+        let pattern = #"^[A-Za-z0-9+_.@-]+$"#
+        return token.range(of: pattern, options: .regularExpression) != nil
     }
 }
 
 enum OpsServiceError: LocalizedError, Sendable {
     case brewMissing
     case invalidBrewArguments
+    case invalidSignal
+    case protectedProcess(String)
+    case processIdentityChanged
+    case processNotFound(Int32)
 
     var errorDescription: String? {
         switch self {
         case .brewMissing: "Homebrew was not found."
         case .invalidBrewArguments: "The Homebrew action contains unsupported arguments."
+        case .invalidSignal: "Only SIGTERM and SIGKILL are supported."
+        case .protectedProcess(let reason): "Process is protected: \(reason)"
+        case .processIdentityChanged: "The process changed before the action could run. Refresh and try again."
+        case .processNotFound(let pid): "Process \(pid) is no longer running."
         }
     }
 }
@@ -548,10 +688,11 @@ enum OpsParsers {
     static func parseProcessList(
         _ output: String,
         currentPID: Int32 = Int32(ProcessInfo.processInfo.processIdentifier),
-        currentUser: String = NSUserName()
+        currentUser: String = NSUserName(),
+        executablePathResolver: @Sendable (Int32, String) -> String? = { pid, _ in processExecutablePath(pid: pid) }
     ) -> [OpsProcessItem] {
         output.components(separatedBy: .newlines).compactMap { line in
-            let parts = line.split(maxSplits: 7, omittingEmptySubsequences: true, whereSeparator: \.isWhitespace).map(String.init)
+            let parts = line.split(maxSplits: 11, omittingEmptySubsequences: true, whereSeparator: \.isWhitespace).map(String.init)
             guard parts.count >= 7,
                   let pid = Int32(parts[0]),
                   let ppid = Int32(parts[1]),
@@ -559,8 +700,16 @@ enum OpsParsers {
                   let memory = Double(parts[4]) else {
                 return nil
             }
-            let executable = parts[6]
-            let commandLine = parts.count > 7 ? parts[7] : executable
+            let startTime: String?
+            let commandLine: String
+            if parts.count >= 12 {
+                startTime = parts[6...10].joined(separator: " ")
+                commandLine = parts[11]
+            } else {
+                startTime = nil
+                commandLine = parts.count > 7 ? parts[7] : parts[6]
+            }
+            let executable = executablePathResolver(pid, commandLine) ?? firstExecutableToken(from: commandLine)
             return OpsProcessItem(
                 pid: pid,
                 ppid: ppid,
@@ -568,6 +717,7 @@ enum OpsParsers {
                 cpuPercent: cpu,
                 memoryPercent: memory,
                 elapsed: parts[5],
+                startTime: startTime,
                 executablePath: executable,
                 commandLine: commandLine,
                 protection: protection(pid: pid, user: parts[2], displayName: URL(fileURLWithPath: executable).lastPathComponent, currentPID: currentPID, currentUser: currentUser)
@@ -613,6 +763,14 @@ enum OpsParsers {
                     OpsPortItem(
                         id: id,
                         pid: current.pid,
+                        processIdentity: process?.identity ?? OpsProcessIdentity(
+                            pid: current.pid,
+                            ppid: 0,
+                            user: user,
+                            executablePath: process?.executablePath ?? name,
+                            commandFingerprint: OpsProcessIdentity.fingerprint(process?.commandLine ?? name),
+                            startTime: process?.startTime
+                        ),
                         processName: name,
                         user: user,
                         protocolName: current.proto,
@@ -742,6 +900,19 @@ enum OpsParsers {
         return (address, port)
     }
 
+    private static func processExecutablePath(pid: Int32) -> String? {
+        let capacity = 4096
+        let buffer = UnsafeMutablePointer<CChar>.allocate(capacity: capacity)
+        defer { buffer.deallocate() }
+        let length = proc_pidpath(pid, buffer, UInt32(capacity))
+        guard length > 0 else { return nil }
+        return String(cString: buffer)
+    }
+
+    private static func firstExecutableToken(from commandLine: String) -> String {
+        commandLine.split(separator: " ").first.map(String.init) ?? commandLine
+    }
+
     private static func protection(
         pid: Int32,
         user: String,
@@ -759,6 +930,17 @@ enum OpsParsers {
         ])
         if critical.contains(displayName) { return .protected(reason: "macOS system process.") }
         return .allowed
+    }
+}
+
+private extension OpsProcessIdentity {
+    func matches(_ other: OpsProcessIdentity) -> Bool {
+        pid == other.pid
+            && ppid == other.ppid
+            && user == other.user
+            && executablePath == other.executablePath
+            && commandFingerprint == other.commandFingerprint
+            && (startTime == nil || other.startTime == nil || startTime == other.startTime)
     }
 }
 

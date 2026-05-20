@@ -84,6 +84,111 @@ struct OpsParserTests {
     }
 }
 
+struct OpsCommandRunnerTests {
+    @Test("runner drains large stdout without timing out")
+    func runnerDrainsLargeStdoutWithoutTimingOut() async {
+        let runner = DefaultOpsCommandRunner()
+        let input = Data(repeating: UInt8(ascii: "x"), count: 200_000)
+
+        let result = await runner.run(OpsCommandInvocation(
+            executablePath: "/bin/cat",
+            timeout: 3,
+            standardInput: input,
+            maxOutputBytes: 300_000
+        ))
+
+        #expect(result.isSuccess)
+        #expect(result.stdout.count == 200_000)
+        #expect(!result.stdoutTruncated)
+    }
+
+    @Test("runner drains large stderr without blocking")
+    func runnerDrainsLargeStderrWithoutBlocking() async {
+        let runner = DefaultOpsCommandRunner()
+
+        let result = await runner.run(OpsCommandInvocation(
+            executablePath: "/usr/bin/perl",
+            arguments: ["-e", "print STDERR 'x' x 200000"],
+            timeout: 3,
+            maxOutputBytes: 300_000
+        ))
+
+        #expect(result.isSuccess)
+        #expect(result.stderr.count == 200_000)
+    }
+
+    @Test("runner truncates output at configured cap")
+    func runnerTruncatesOutputAtConfiguredCap() async {
+        let runner = DefaultOpsCommandRunner()
+        let input = Data(repeating: UInt8(ascii: "x"), count: 200_000)
+
+        let result = await runner.run(OpsCommandInvocation(
+            executablePath: "/bin/cat",
+            timeout: 3,
+            standardInput: input,
+            maxOutputBytes: 1_024
+        ))
+
+        #expect(result.isSuccess)
+        #expect(result.stdoutTruncated)
+        #expect(result.stdout.contains("[output truncated]"))
+    }
+
+    @Test("runner timeout returns bounded result")
+    func runnerTimeoutReturnsBoundedResult() async {
+        let runner = DefaultOpsCommandRunner()
+
+        let result = await runner.run(OpsCommandInvocation(
+            executablePath: "/bin/sleep",
+            arguments: ["5"],
+            timeout: 0.2
+        ))
+
+        #expect(result.timedOut)
+        #expect(!result.isSuccess)
+    }
+
+    @Test("runner cancellation stops external process")
+    func runnerCancellationStopsExternalProcess() async throws {
+        let runner = DefaultOpsCommandRunner()
+        let task = Task {
+            await runner.run(OpsCommandInvocation(
+                executablePath: "/bin/sleep",
+                arguments: ["10"],
+                timeout: 30
+            ))
+        }
+
+        try await Task.sleep(for: .milliseconds(100))
+        task.cancel()
+        let result = await task.value
+
+        #expect(!result.isSuccess)
+    }
+
+    @Test("runner strips secret environment variables")
+    func runnerStripsSecretEnvironmentVariables() async {
+        let runner = DefaultOpsCommandRunner()
+        let result = await runner.run(OpsCommandInvocation(
+            executablePath: "/usr/bin/env",
+            environment: [
+                "PATH": "/usr/bin:/bin",
+                "OPENAI_API_KEY": "sk-test",
+                "ANTHROPIC_API_KEY": "anthropic-test",
+                "GH_TOKEN": "gh-test",
+                "DYLD_INSERT_LIBRARIES": "/tmp/hook.dylib",
+            ],
+            timeout: 3
+        ))
+
+        #expect(result.isSuccess)
+        #expect(!result.stdout.contains("OPENAI_API_KEY"))
+        #expect(!result.stdout.contains("ANTHROPIC_API_KEY"))
+        #expect(!result.stdout.contains("GH_TOKEN"))
+        #expect(!result.stdout.contains("DYLD_INSERT_LIBRARIES"))
+    }
+}
+
 @MainActor
 struct OpsStoreTests {
     @Test("terminate requires confirmation before service call")
@@ -109,6 +214,31 @@ struct OpsStoreTests {
 
         store.confirmPendingAction()
         try await waitFor { await service.terminatedSignals == [SIGTERM] }
+    }
+
+    @Test("SIGTERM still running creates SIGKILL confirmation")
+    func sigtermStillRunningCreatesSIGKILLConfirmation() async throws {
+        let service = FakeOpsService()
+        await service.setStillRunningSignals([SIGTERM])
+        let store = OpsStore(service: service)
+        let process = OpsProcessItem(
+            pid: 222,
+            ppid: 1,
+            user: "alice",
+            cpuPercent: 0,
+            memoryPercent: 0,
+            elapsed: "00:01",
+            executablePath: "/bin/node",
+            commandLine: "node server.js",
+            protection: .allowed
+        )
+
+        store.requestTerminate(process)
+        store.confirmPendingAction()
+        try await waitFor { store.pendingConfirmation?.commandSummary == "kill -KILL 222" }
+        store.confirmPendingAction()
+
+        try await waitFor { await service.terminatedSignals == [SIGTERM, SIGKILL] }
     }
 
     @Test("protected processes cannot create terminate confirmation")
@@ -147,6 +277,20 @@ struct OpsStoreTests {
         store.confirmPendingAction()
         try await waitFor { await service.cleanedKinds == [.npmCache] }
     }
+
+    @Test("filtered selection follows visible ports and processes")
+    func filteredSelectionFollowsVisibleItems() {
+        let store = OpsStore(service: FakeOpsService())
+        store.processes = [
+            OpsProcessItem(pid: 1, ppid: 0, user: "alice", cpuPercent: 0, memoryPercent: 0, elapsed: "00:01", executablePath: "/bin/node", commandLine: "node api.js", protection: .allowed),
+            OpsProcessItem(pid: 2, ppid: 0, user: "alice", cpuPercent: 0, memoryPercent: 0, elapsed: "00:01", executablePath: "/bin/python3", commandLine: "python worker.py", protection: .allowed),
+        ]
+        store.selectProcess(store.processes[1])
+
+        store.processQuery = "node"
+
+        #expect(store.selectedProcess?.pid == 1)
+    }
 }
 
 struct OpsServiceCleanupTests {
@@ -165,11 +309,56 @@ struct OpsServiceCleanupTests {
         #expect(result.removedKinds == [.npmCache])
         #expect(!FileManager.default.fileExists(atPath: npm.path))
     }
+
+    @Test("cleanup skips symlink targets")
+    func cleanupSkipsSymlinkTargets() async throws {
+        let dir = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let outside = dir.appendingPathComponent("outside", isDirectory: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        let npm = dir.appendingPathComponent(".npm")
+        try FileManager.default.createSymbolicLink(at: npm, withDestinationURL: outside)
+
+        let service = OpsService(runner: FailingOpsRunner(), environment: ["PATH": ""], homeDirectory: dir)
+        let result = try await service.cleanup(kinds: [.npmCache])
+
+        #expect(result.removedKinds.isEmpty)
+        #expect(FileManager.default.fileExists(atPath: npm.path))
+    }
+}
+
+struct OpsServiceSafetyTests {
+    @Test("brew typed actions reject unsafe tokens")
+    func brewTypedActionsRejectUnsafeTokens() {
+        #expect(!OpsService.brewActionIsAllowed(.install("--HEAD")))
+        #expect(!OpsService.brewActionIsAllowed(.install("/tmp/foo.rb")))
+        #expect(!OpsService.brewActionIsAllowed(.install("https://example.com/formula.rb")))
+        #expect(!OpsService.brewActionIsAllowed(.service(.start, "../plist")))
+        #expect(OpsService.brewActionIsAllowed(.install("openssl@3")))
+        #expect(OpsService.brewActionIsAllowed(.service(.restart, "postgresql@16")))
+    }
+
+    @Test("URL diagnostics only accept HTTP schemes")
+    func urlDiagnosticsOnlyAcceptHTTPSchemes() async {
+        let service = OpsService(runner: FailingOpsRunner(), environment: ["PATH": ""])
+
+        let file = await service.runURLDiagnostics("file://localhost/etc/hosts")
+        let ftp = await service.runURLDiagnostics("ftp://example.com")
+
+        #expect(file.errorMessage?.contains("Only HTTP and HTTPS") == true)
+        #expect(ftp.errorMessage?.contains("Only HTTP and HTTPS") == true)
+    }
 }
 
 private actor FakeOpsService: OpsServicing {
     var terminatedSignals: [Int32] = []
     var cleanedKinds: Set<OpsCleanupKind> = []
+    var stillRunningSignals = Set<Int32>()
+
+    func setStillRunningSignals(_ signals: Set<Int32>) {
+        stillRunningSignals = signals
+    }
 
     func loadPorts() async throws -> [OpsPortItem] { [] }
     func loadProcesses() async throws -> [OpsProcessItem] { [] }
@@ -182,11 +371,11 @@ private actor FakeOpsService: OpsServicing {
     func runURLDiagnostics(_ rawURL: String) async -> OpsURLDiagnosticResult {
         OpsURLDiagnosticResult(url: rawURL, headerText: "", tlsExpiration: nil, errorMessage: nil)
     }
-    func terminate(pid: Int32, signal: Int32) async throws -> OpsTerminationOutcome {
+    func terminate(target: OpsProcessIdentity, signal: Int32) async throws -> OpsTerminationOutcome {
         terminatedSignals.append(signal)
-        return OpsTerminationOutcome(pid: pid, signal: signal, isStillRunning: false)
+        return OpsTerminationOutcome(pid: target.pid, signal: signal, isStillRunning: stillRunningSignals.contains(signal))
     }
-    func runBrew(arguments: [String]) async throws -> OpsCommandResult {
+    func runBrew(action: OpsBrewAction) async throws -> OpsCommandResult {
         OpsCommandResult(exitCode: 0, stdout: "ok", stderr: "", launchError: nil, timedOut: false)
     }
     func cleanup(kinds: Set<OpsCleanupKind>) async throws -> OpsCleanupResult {

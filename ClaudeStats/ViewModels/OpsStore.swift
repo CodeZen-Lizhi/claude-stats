@@ -32,7 +32,10 @@ final class OpsStore {
 
     private var loadedSections: Set<OpsSection> = []
     private var loadingSections: Set<OpsSection> = []
+    private var queuedRefreshSections: Set<OpsSection> = []
     private var workingActions: Set<String> = []
+    private var urlDiagnosticsTask: Task<Void, Never>?
+    private var latestURLDiagnosticsID: UUID?
 
     init(service: any OpsServicing = OpsService()) {
         self.service = service
@@ -40,6 +43,10 @@ final class OpsStore {
 
     var isWorking: Bool {
         !workingActions.isEmpty
+    }
+
+    var canRunAction: Bool {
+        !isWorking && pendingConfirmation == nil
     }
 
     func isLoading(_ section: OpsSection) -> Bool {
@@ -51,11 +58,13 @@ final class OpsStore {
         refresh(section)
     }
 
-    func refresh(_ section: OpsSection) {
-        guard !loadingSections.contains(section) else { return }
+    func refresh(_ section: OpsSection, force: Bool = false) {
+        if loadingSections.contains(section) {
+            if force { queuedRefreshSections.insert(section) }
+            return
+        }
         loadingSections.insert(section)
         Task {
-            defer { loadingSections.remove(section) }
             do {
                 switch section {
                 case .ports:
@@ -76,9 +85,12 @@ final class OpsStore {
                     diagnostics = await service.loadDiagnostics()
                 }
                 loadedSections.insert(section)
-                lastError = nil
             } catch {
                 setError(error)
+            }
+            loadingSections.remove(section)
+            if queuedRefreshSections.remove(section) != nil {
+                refresh(section, force: true)
             }
         }
     }
@@ -97,7 +109,7 @@ final class OpsStore {
 
     var selectedPort: OpsPortItem? {
         if let selectedPortID,
-           let match = ports.first(where: { $0.id == selectedPortID }) {
+           let match = filteredPorts.first(where: { $0.id == selectedPortID }) {
             return match
         }
         return filteredPorts.first
@@ -132,7 +144,7 @@ final class OpsStore {
 
     var selectedProcess: OpsProcessItem? {
         if let selectedProcessID,
-           let match = processes.first(where: { $0.pid == selectedProcessID }) {
+           let match = filteredProcesses.first(where: { $0.pid == selectedProcessID }) {
             return match
         }
         return filteredProcesses.first
@@ -185,20 +197,25 @@ final class OpsStore {
         lastError = nil
     }
 
+    func clearActionOutput() {
+        lastActionOutput = nil
+    }
+
     func copyToClipboard(_ text: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
     }
 
     func requestTerminate(_ process: OpsProcessItem) {
-        requestTerminate(pid: process.pid, displayName: process.displayName, protection: process.protection)
+        requestTerminate(pid: process.pid, displayName: process.displayName, identity: process.identity, protection: process.protection)
     }
 
     func requestTerminate(_ port: OpsPortItem) {
-        requestTerminate(pid: port.pid, displayName: "\(port.processName) on :\(port.port)", protection: port.protection)
+        requestTerminate(pid: port.pid, displayName: "\(port.processName) on :\(port.port)", identity: port.processIdentity, protection: port.protection)
     }
 
     func requestBrewInstall(_ rawName: String) {
+        guard canRunAction else { return }
         let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
             lastError = "Enter a package name first."
@@ -208,47 +225,53 @@ final class OpsStore {
             title: "Install \(name)?",
             message: "Homebrew will download and install this package.",
             commandSummary: "brew install \(name)",
-            action: .brew(arguments: ["install", name])
+            action: .brew(.install(name))
         )
     }
 
     func requestBrewUninstall(_ package: OpsBrewPackage) {
+        guard canRunAction else { return }
         pendingConfirmation = OpsConfirmation(
             title: "Uninstall \(package.name)?",
             message: "Homebrew will remove this package. Other packages that depend on it may be affected.",
             commandSummary: "brew uninstall \(package.name)",
-            action: .brew(arguments: ["uninstall", package.name])
+            action: .brew(.uninstall(package.name))
         )
     }
 
     func requestBrewUpgrade(_ package: OpsBrewPackage) {
+        guard canRunAction else { return }
         pendingConfirmation = OpsConfirmation(
             title: "Upgrade \(package.name)?",
             message: "Homebrew will upgrade the selected package.",
             commandSummary: "brew upgrade \(package.name)",
-            action: .brew(arguments: ["upgrade", package.name])
+            action: .brew(.upgrade(package.name))
         )
     }
 
     func requestBrewCleanup() {
+        guard canRunAction else { return }
         pendingConfirmation = OpsConfirmation(
             title: "Run brew cleanup?",
             message: "Homebrew will remove old downloads and stale package versions.",
             commandSummary: "brew cleanup",
-            action: .brew(arguments: ["cleanup"])
+            action: .brew(.cleanup)
         )
     }
 
     func requestBrewService(_ serviceName: String, action: String) {
+        guard canRunAction,
+              let serviceAction = OpsBrewServiceAction(rawValue: action) else { return }
         pendingConfirmation = OpsConfirmation(
             title: "\(action.capitalized) \(serviceName)?",
             message: "Homebrew services will \(action) this service for the current user.",
             commandSummary: "brew services \(action) \(serviceName)",
-            action: .brew(arguments: ["services", action, serviceName])
+            action: .brew(.service(serviceAction, serviceName))
         )
     }
 
     func requestCleanupSelected() {
+        guard canRunAction else { return }
         let kinds = selectedCleanupKinds
         guard !kinds.isEmpty else {
             lastError = "Select at least one cleanup target."
@@ -267,29 +290,29 @@ final class OpsStore {
     }
 
     func confirmPendingAction() {
-        guard let confirmation = pendingConfirmation else { return }
+        guard !isWorking, let confirmation = pendingConfirmation else { return }
         pendingConfirmation = nil
         workingActions.insert(confirmation.id.uuidString)
         Task {
             defer { workingActions.remove(confirmation.id.uuidString) }
             do {
                 switch confirmation.action {
-                case .terminate(let pid, let signal):
-                    let outcome = try await service.terminate(pid: pid, signal: signal)
+                case .terminate(let target, let displayName, let signal):
+                    let outcome = try await service.terminate(target: target, signal: signal)
                     if outcome.isStillRunning && signal == SIGTERM {
                         pendingConfirmation = OpsConfirmation(
-                            title: "Force quit process \(pid)?",
+                            title: "Force quit \(displayName)?",
                             message: "The process is still running after SIGTERM. SIGKILL cannot be handled by the process.",
-                            commandSummary: "kill -KILL \(pid)",
-                            action: .terminate(pid: pid, signal: SIGKILL)
+                            commandSummary: "kill -KILL \(target.pid)",
+                            action: .terminate(target: target, displayName: displayName, signal: SIGKILL)
                         )
                     }
-                    refresh(.ports)
-                    refresh(.processes)
-                case .brew(let arguments):
-                    let result = try await service.runBrew(arguments: arguments)
+                    refresh(.ports, force: true)
+                    refresh(.processes, force: true)
+                case .brew(let action):
+                    let result = try await service.runBrew(action: action)
                     lastActionOutput = result.outputText
-                    refresh(.brew)
+                    refresh(.brew, force: true)
                 case .cleanup(let kinds):
                     let result = try await service.cleanup(kinds: kinds)
                     if !result.skippedKinds.isEmpty {
@@ -297,7 +320,7 @@ final class OpsStore {
                     }
                     lastActionOutput = result.commandOutput
                     selectedCleanupKinds.subtract(result.removedKinds)
-                    refresh(.cleanup)
+                    refresh(.cleanup, force: true)
                 }
             } catch {
                 setError(error)
@@ -310,15 +333,22 @@ final class OpsStore {
     }
 
     func runURLDiagnostics() {
+        guard !isWorking else { return }
         let raw = urlInput
-        Task {
-            workingActions.insert("url-diagnostics")
-            defer { workingActions.remove("url-diagnostics") }
-            urlDiagnosticResult = await service.runURLDiagnostics(raw)
+        let requestID = UUID()
+        latestURLDiagnosticsID = requestID
+        urlDiagnosticsTask?.cancel()
+        urlDiagnosticsTask = Task { @MainActor in
+            workingActions.insert("url-diagnostics-\(requestID.uuidString)")
+            defer { workingActions.remove("url-diagnostics-\(requestID.uuidString)") }
+            let result = await service.runURLDiagnostics(raw)
+            guard latestURLDiagnosticsID == requestID, !Task.isCancelled else { return }
+            urlDiagnosticResult = result
         }
     }
 
-    private func requestTerminate(pid: Int32, displayName: String, protection: OpsProtection) {
+    private func requestTerminate(pid: Int32, displayName: String, identity: OpsProcessIdentity, protection: OpsProtection) {
+        guard canRunAction else { return }
         if let reason = protection.reason {
             lastError = "\(displayName) cannot be ended here: \(reason)"
             return
@@ -327,7 +357,7 @@ final class OpsStore {
             title: "End \(displayName)?",
             message: "Ops will send SIGTERM first. If the process keeps running, you can confirm a force quit next.",
             commandSummary: "kill -TERM \(pid)",
-            action: .terminate(pid: pid, signal: SIGTERM)
+            action: .terminate(target: identity, displayName: displayName, signal: SIGTERM)
         )
     }
 

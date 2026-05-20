@@ -78,6 +78,7 @@ enum OpsProtection: Sendable, Hashable {
 struct OpsPortItem: Identifiable, Sendable, Hashable {
     var id: String
     var pid: Int32
+    var processIdentity = OpsProcessIdentity(pid: 0, ppid: 0, user: "", executablePath: "", commandFingerprint: "", startTime: nil)
     var processName: String
     var user: String
     var protocolName: String
@@ -105,9 +106,21 @@ struct OpsProcessItem: Identifiable, Sendable, Hashable {
     var cpuPercent: Double
     var memoryPercent: Double
     var elapsed: String
+    var startTime: String? = nil
     var executablePath: String
     var commandLine: String
     var protection: OpsProtection
+
+    var identity: OpsProcessIdentity {
+        OpsProcessIdentity(
+            pid: pid,
+            ppid: ppid,
+            user: user,
+            executablePath: executablePath,
+            commandFingerprint: OpsProcessIdentity.fingerprint(commandLine),
+            startTime: startTime
+        )
+    }
 
     var displayName: String {
         let name = URL(fileURLWithPath: executablePath).lastPathComponent
@@ -123,6 +136,19 @@ struct OpsProcessItem: Identifiable, Sendable, Hashable {
             "cargo", "go", "gradle", "java", "uvicorn", "rails",
         ]
         return markers.contains { text.contains($0) }
+    }
+}
+
+struct OpsProcessIdentity: Sendable, Hashable {
+    var pid: Int32
+    var ppid: Int32
+    var user: String
+    var executablePath: String
+    var commandFingerprint: String
+    var startTime: String?
+
+    static func fingerprint(_ commandLine: String) -> String {
+        String(commandLine.prefix(500))
     }
 }
 
@@ -176,13 +202,15 @@ struct OpsBrewSnapshot: Sendable, Hashable {
     var services: [OpsBrewServiceItem]
     var doctorOutput: String
     var lastCommandOutput: String?
+    var errors: [String] = []
 
     static let missing = OpsBrewSnapshot(
         brewPath: nil,
         packages: [],
         services: [],
         doctorOutput: "Homebrew was not found in /opt/homebrew/bin, /usr/local/bin, or PATH.",
-        lastCommandOutput: nil
+        lastCommandOutput: nil,
+        errors: ["Homebrew was not found in a trusted location."]
     )
 }
 
@@ -208,6 +236,7 @@ struct OpsEnvironmentTool: Identifiable, Sendable, Hashable {
     var version: String?
     var status: OpsEnvironmentStatus
     var detail: String?
+    var isTrustedPath: Bool
 }
 
 enum OpsCleanupKind: String, CaseIterable, Identifiable, Sendable, Hashable {
@@ -275,6 +304,7 @@ struct OpsDiagnosticsSnapshot: Sendable, Hashable {
     var proxySummary: String
     var dnsSummary: String
     var hostsEntries: [OpsHostEntry]
+    var errors: [String] = []
 }
 
 struct OpsURLDiagnosticResult: Sendable, Hashable {
@@ -285,9 +315,44 @@ struct OpsURLDiagnosticResult: Sendable, Hashable {
 }
 
 enum OpsPendingAction: Sendable, Hashable {
-    case terminate(pid: Int32, signal: Int32)
-    case brew(arguments: [String])
+    case terminate(target: OpsProcessIdentity, displayName: String, signal: Int32)
+    case brew(OpsBrewAction)
     case cleanup(kinds: Set<OpsCleanupKind>)
+}
+
+enum OpsBrewServiceAction: String, CaseIterable, Identifiable, Sendable, Hashable {
+    case start
+    case stop
+    case restart
+
+    var id: String { rawValue }
+}
+
+enum OpsBrewAction: Sendable, Hashable {
+    case install(String)
+    case uninstall(String)
+    case upgrade(String)
+    case cleanup
+    case service(OpsBrewServiceAction, String)
+
+    var arguments: [String] {
+        switch self {
+        case .install(let token):
+            ["install", token]
+        case .uninstall(let token):
+            ["uninstall", token]
+        case .upgrade(let token):
+            ["upgrade", token]
+        case .cleanup:
+            ["cleanup"]
+        case .service(let action, let name):
+            ["services", action.rawValue, name]
+        }
+    }
+
+    var commandSummary: String {
+        "brew \(arguments.joined(separator: " "))"
+    }
 }
 
 struct OpsConfirmation: Identifiable, Sendable, Hashable {

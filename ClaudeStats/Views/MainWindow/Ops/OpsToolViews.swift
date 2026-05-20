@@ -97,7 +97,7 @@ struct OpsPortsView: View {
                         Label("End", systemImage: "xmark.octagon")
                     }
                     .controlSize(.small)
-                    .disabled(port.protection.reason != nil)
+                    .disabled(port.protection.reason != nil || !store.canRunAction)
                     .help(port.protection.reason ?? "End process")
                 }
             } else {
@@ -223,7 +223,7 @@ struct OpsProcessesView: View {
                         Label("End", systemImage: "xmark.octagon")
                     }
                     .controlSize(.small)
-                    .disabled(process.protection.reason != nil)
+                    .disabled(process.protection.reason != nil || !store.canRunAction)
                     .help(process.protection.reason ?? "End process")
                 }
             } else {
@@ -265,7 +265,23 @@ struct OpsBrewView: View {
                         Label("Cleanup", systemImage: "sparkles")
                     }
                     .controlSize(.small)
-                    .disabled(store.brewSnapshot.brewPath == nil)
+                    .disabled(store.brewSnapshot.brewPath == nil || !store.canRunAction)
+                }
+            }
+
+            if !store.brewSnapshot.errors.isEmpty {
+                OpsCard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Command errors")
+                            .font(.sora(13, weight: .semibold))
+                        OpsCodeBlock(store.brewSnapshot.errors.joined(separator: "\n"))
+                    }
+                }
+            }
+
+            if let output = store.lastActionOutput, !output.isEmpty {
+                OpsActionOutputCard(output: output) {
+                    store.clearActionOutput()
                 }
             }
 
@@ -283,7 +299,7 @@ struct OpsBrewView: View {
                             Label("Install", systemImage: "plus")
                         }
                         .controlSize(.small)
-                        .disabled(store.brewSnapshot.brewPath == nil)
+                        .disabled(store.brewSnapshot.brewPath == nil || !store.canRunAction || installText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
                 }
             }
@@ -303,8 +319,8 @@ struct OpsBrewView: View {
                         OpsInlineEmptyState("No packages.")
                     } else {
                         LazyVStack(spacing: 0) {
-                            ForEach(store.filteredBrewPackages) { package in
-                                OpsBrewPackageRow(package: package, isSelected: store.selectedBrewPackage?.id == package.id) {
+	                            ForEach(store.filteredBrewPackages) { package in
+                                OpsBrewPackageRow(package: package, isSelected: store.selectedBrewPackage?.id == package.id, actionsDisabled: !store.canRunAction) {
                                     store.selectBrewPackage(package)
                                 } upgrade: {
                                     store.requestBrewUpgrade(package)
@@ -325,8 +341,8 @@ struct OpsBrewView: View {
                         OpsInlineEmptyState("No Homebrew services.")
                     } else {
                         LazyVStack(spacing: 0) {
-                            ForEach(store.brewSnapshot.services) { service in
-                                OpsBrewServiceRow(service: service) { action in
+	                            ForEach(store.brewSnapshot.services) { service in
+                                OpsBrewServiceRow(service: service, actionsDisabled: !store.canRunAction) { action in
                                     store.requestBrewService(service.name, action: action)
                                 }
                             }
@@ -393,7 +409,13 @@ struct OpsCleanupView: View {
                     Label("Clean Selected", systemImage: "trash")
                 }
                 .controlSize(.small)
-                .disabled(store.selectedCleanupKinds.isEmpty)
+                .disabled(store.selectedCleanupKinds.isEmpty || !store.canRunAction)
+            }
+
+            if let output = store.lastActionOutput, !output.isEmpty {
+                OpsActionOutputCard(output: output) {
+                    store.clearActionOutput()
+                }
             }
 
             LazyVStack(spacing: 10) {
@@ -442,6 +464,7 @@ struct OpsDiagnosticsView: View {
                             Label("Run", systemImage: "play")
                         }
                         .controlSize(.small)
+                        .disabled(!store.canRunAction || store.urlInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
                     if let result = store.urlDiagnosticResult {
                         if let error = result.errorMessage {
@@ -464,6 +487,16 @@ struct OpsDiagnosticsView: View {
                     Text("Proxy")
                         .font(.sora(13, weight: .semibold))
                     OpsCodeBlock(store.diagnostics.proxySummary)
+                }
+            }
+
+            if !store.diagnostics.errors.isEmpty {
+                OpsCard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Command errors")
+                            .font(.sora(13, weight: .semibold))
+                        OpsCodeBlock(store.diagnostics.errors.joined(separator: "\n"))
+                    }
                 }
             }
 
@@ -688,6 +721,7 @@ private struct OpsProcessRow: View {
 private struct OpsBrewPackageRow: View {
     let package: OpsBrewPackage
     let isSelected: Bool
+    let actionsDisabled: Bool
     let select: () -> Void
     let upgrade: () -> Void
     let uninstall: () -> Void
@@ -719,13 +753,14 @@ private struct OpsBrewPackageRow: View {
                 Image(systemName: "arrow.up.circle")
             }
             .buttonStyle(.plain)
-            .disabled(!package.isOutdated)
+            .disabled(!package.isOutdated || actionsDisabled)
             .help("Upgrade")
 
             Button(role: .destructive, action: uninstall) {
                 Image(systemName: "trash")
             }
             .buttonStyle(.plain)
+            .disabled(actionsDisabled)
             .help("Uninstall")
         }
         .padding(.horizontal, 10)
@@ -740,6 +775,7 @@ private struct OpsBrewPackageRow: View {
 
 private struct OpsBrewServiceRow: View {
     let service: OpsBrewServiceItem
+    let actionsDisabled: Bool
     let action: (String) -> Void
 
     var body: some View {
@@ -755,9 +791,9 @@ private struct OpsBrewServiceRow: View {
                     .foregroundStyle(Color.stxMuted)
             }
             Spacer()
-            Button("Start") { action("start") }.controlSize(.small)
-            Button("Stop") { action("stop") }.controlSize(.small)
-            Button("Restart") { action("restart") }.controlSize(.small)
+            Button("Start") { action("start") }.controlSize(.small).disabled(actionsDisabled)
+            Button("Stop") { action("stop") }.controlSize(.small).disabled(actionsDisabled)
+            Button("Restart") { action("restart") }.controlSize(.small).disabled(actionsDisabled)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
@@ -790,6 +826,11 @@ private struct OpsEnvironmentToolCard: View {
                     .foregroundStyle(Color.stxMuted.opacity(0.82))
                     .lineLimit(1)
                     .truncationMode(.middle)
+            }
+            if tool.resolvedPath != nil, !tool.isTrustedPath {
+                Text("Non-standard PATH")
+                    .font(.sora(10, weight: .medium))
+                    .foregroundStyle(Color.orange)
             }
         }
         .mainWindowPanel(padding: 12)
@@ -853,6 +894,31 @@ private struct OpsCard<Content: View>: View {
 
     var body: some View {
         content.mainWindowPanel(padding: 14)
+    }
+}
+
+private struct OpsActionOutputCard: View {
+    let output: String
+    let clear: () -> Void
+
+    var body: some View {
+        OpsCard {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Last action")
+                        .font(.sora(13, weight: .semibold))
+                    Spacer()
+                    Button {
+                        clear()
+                    } label: {
+                        Image(systemName: "xmark.circle")
+                    }
+                    .buttonStyle(.plain)
+                    .help("Clear")
+                }
+                OpsCodeBlock(output)
+            }
+        }
     }
 }
 
