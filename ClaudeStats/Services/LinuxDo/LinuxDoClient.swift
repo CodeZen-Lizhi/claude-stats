@@ -6,6 +6,7 @@ protocol LinuxDoClienting: Sendable {
     func fetchTopic(id: Int, slug: String?, now: Date) async throws -> LinuxDoTopicDetail
     func fetchPosts(topicID: Int, postIDs: [Int]) async throws -> [LinuxDoPost]
     func fetchCurrentUser() async throws -> LinuxDoCurrentUser
+    func fetchCSRFToken() async throws -> String
     func fetchNotifications(limit: Int) async throws -> [LinuxDoNotification]
     func revokeUserAPIKey() async
 }
@@ -122,6 +123,11 @@ struct LinuxDoClient: LinuxDoClienting {
         return response.currentUser.currentUser
     }
 
+    func fetchCSRFToken() async throws -> String {
+        let response: CSRFResponse = try await get(path: "/session/csrf")
+        return response.csrf
+    }
+
     func fetchNotifications(limit: Int = 30) async throws -> [LinuxDoNotification] {
         let response: NotificationsResponse = try await get(
             path: "/notifications.json",
@@ -178,11 +184,43 @@ struct LinuxDoClient: LinuxDoClienting {
         if method != "GET" {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
-        if requiresAuthentication || credentials.readAPIKey() != nil {
-            guard let key = credentials.readAPIKey() else { throw ClientError.unauthorized }
-            request.setValue(key, forHTTPHeaderField: "User-Api-Key")
-            request.setValue(credentials.readClientID(), forHTTPHeaderField: "User-Api-Client-Id")
+        let credential = credentials.readAuthCredential()
+        if requiresAuthentication, credential == nil {
+            throw ClientError.unauthorized
         }
+
+        do {
+            return try await perform(
+                request: request,
+                path: path,
+                method: method,
+                credential: credential,
+                allowsEmptyResponse: allowsEmptyResponse
+            )
+        } catch ClientError.unauthorized where !requiresAuthentication {
+            if case .webSession? = credential {
+                credentials.deleteWebSession()
+                return try await perform(
+                    request: request,
+                    path: path,
+                    method: method,
+                    credential: nil,
+                    allowsEmptyResponse: allowsEmptyResponse
+                )
+            }
+            throw ClientError.unauthorized
+        }
+    }
+
+    private func perform<T: Decodable>(
+        request originalRequest: URLRequest,
+        path: String,
+        method: String,
+        credential: LinuxDoAuthCredential?,
+        allowsEmptyResponse: Bool
+    ) async throws -> T {
+        var request = originalRequest
+        apply(credential: credential, to: &request)
 
         let started = Date()
         let data: Data
@@ -208,7 +246,31 @@ struct LinuxDoClient: LinuxDoClienting {
         do {
             return try decoder.decode(T.self, from: data)
         } catch {
-            throw ClientError.decoding(String(describing: error))
+            let message = Self.decodingMessage(error)
+            Log.network.error("LinuxDo decode failed for \(path, privacy: .public): \(message, privacy: .public)")
+            throw ClientError.decoding(message)
+        }
+    }
+
+    private func apply(credential: LinuxDoAuthCredential?, to request: inout URLRequest) {
+        switch credential {
+        case .userAPIKey(let key, let clientID):
+            request.setValue(key, forHTTPHeaderField: "User-Api-Key")
+            request.setValue(clientID, forHTTPHeaderField: "User-Api-Client-Id")
+        case .webSession(let session):
+            if let cookieHeader = session.cookieHeader() {
+                request.setValue(cookieHeader, forHTTPHeaderField: "Cookie")
+                request.setValue("XMLHttpRequest", forHTTPHeaderField: "X-Requested-With")
+                if let csrfToken = session.csrfToken, !csrfToken.isEmpty {
+                    request.setValue(csrfToken, forHTTPHeaderField: "X-CSRF-Token")
+                }
+                if session.containsCookie(named: "_t") {
+                    request.setValue("true", forHTTPHeaderField: "Discourse-Logged-In")
+                    request.setValue("true", forHTTPHeaderField: "Discourse-Present")
+                }
+            }
+        case nil:
+            break
         }
     }
 
@@ -261,6 +323,26 @@ struct LinuxDoClient: LinuxDoClienting {
             return first
         }
         return object["message"] as? String
+    }
+
+    private static func decodingMessage(_ error: Error) -> String {
+        func path(_ codingPath: [CodingKey]) -> String {
+            let raw = codingPath.map(\.stringValue).joined(separator: ".")
+            return raw.isEmpty ? "<root>" : raw
+        }
+
+        switch error {
+        case DecodingError.typeMismatch(let type, let context):
+            return "Type mismatch for \(type) at \(path(context.codingPath)): \(context.debugDescription)"
+        case DecodingError.valueNotFound(let type, let context):
+            return "Missing value for \(type) at \(path(context.codingPath)): \(context.debugDescription)"
+        case DecodingError.keyNotFound(let key, let context):
+            return "Missing key \(key.stringValue) at \(path(context.codingPath)): \(context.debugDescription)"
+        case DecodingError.dataCorrupted(let context):
+            return "Corrupt data at \(path(context.codingPath)): \(context.debugDescription)"
+        default:
+            return String(describing: error)
+        }
     }
 
     private static func decodeDate(from decoder: Decoder) throws -> Date {

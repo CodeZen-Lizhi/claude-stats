@@ -98,7 +98,7 @@ struct LinuxDoSourceColumn: View {
                 Label(store.isAuthenticated ? "Signed in" : "Guest browsing", systemImage: store.isAuthenticated ? "checkmark.seal" : "person")
                     .font(.sora(12, weight: .medium))
             }
-            Text(store.isAuthenticated ? "Notifications are available in Settings." : "Public feeds are available without signing in.")
+            Text(store.isAuthenticated ? "\(store.authenticationDescription) active. Notifications are available in Settings." : "Public feeds are available without signing in.")
                 .font(.sora(10))
                 .foregroundStyle(Color.stxMuted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -155,4 +155,3 @@ private extension Color {
         self.init(red: red, green: green, blue: blue)
     }
 }
-

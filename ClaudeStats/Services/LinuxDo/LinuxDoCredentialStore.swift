@@ -5,8 +5,23 @@ protocol LinuxDoCredentialStoring: Sendable {
     func readAPIKey() -> String?
     func saveAPIKey(_ apiKey: String) throws
     func deleteAPIKey()
+    func readWebSession() -> LinuxDoWebSession?
+    func saveWebSession(_ session: LinuxDoWebSession) throws
+    func deleteWebSession()
     func readClientID() -> String
     func saveClientID(_ clientID: String)
+}
+
+extension LinuxDoCredentialStoring {
+    func readAuthCredential() -> LinuxDoAuthCredential? {
+        if let apiKey = readAPIKey() {
+            return .userAPIKey(key: apiKey, clientID: readClientID())
+        }
+        if let session = readWebSession(), session.isAuthenticated {
+            return .webSession(session)
+        }
+        return nil
+    }
 }
 
 struct LinuxDoKeychainStore: LinuxDoCredentialStoring {
@@ -14,6 +29,7 @@ struct LinuxDoKeychainStore: LinuxDoCredentialStoring {
 
     private let service = "com.claudestats.linuxdo"
     private let apiKeyAccount = "linux.do:default"
+    private let webSessionAccount = "linux.do:web-session"
     private let clientIDKey = "LinuxDo.clientID"
 
     func readAPIKey() -> String? {
@@ -26,6 +42,29 @@ struct LinuxDoKeychainStore: LinuxDoCredentialStoring {
 
     func deleteAPIKey() {
         delete(account: apiKeyAccount)
+    }
+
+    func readWebSession() -> LinuxDoWebSession? {
+        guard let data = readData(account: webSessionAccount) else { return nil }
+        do {
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .secondsSince1970
+            return try decoder.decode(LinuxDoWebSession.self, from: data)
+        } catch {
+            Log.app.error("LinuxDo web session decode failed: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
+    func saveWebSession(_ session: LinuxDoWebSession) throws {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .secondsSince1970
+        let data = try encoder.encode(session)
+        try saveData(data, account: webSessionAccount)
+    }
+
+    func deleteWebSession() {
+        delete(account: webSessionAccount)
     }
 
     func readClientID() -> String {
@@ -42,6 +81,11 @@ struct LinuxDoKeychainStore: LinuxDoCredentialStoring {
     }
 
     private func read(account: String) -> String? {
+        guard let data = readData(account: account) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private func readData(account: String) -> Data? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -53,8 +97,7 @@ struct LinuxDoKeychainStore: LinuxDoCredentialStoring {
         let status = SecItemCopyMatching(query as CFDictionary, &item)
         switch status {
         case errSecSuccess:
-            guard let data = item as? Data else { return nil }
-            return String(data: data, encoding: .utf8)
+            return item as? Data
         case errSecItemNotFound:
             return nil
         default:
@@ -67,6 +110,10 @@ struct LinuxDoKeychainStore: LinuxDoCredentialStoring {
         guard let data = value.data(using: .utf8) else {
             throw KeychainError.invalidValue
         }
+        try saveData(data, account: account)
+    }
+
+    private func saveData(_ data: Data, account: String) throws {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -112,10 +159,12 @@ final class InMemoryLinuxDoCredentialStore: LinuxDoCredentialStoring, @unchecked
     private let lock = NSLock()
     private var apiKey: String?
     private var clientID: String
+    private var webSession: LinuxDoWebSession?
 
-    init(apiKey: String? = nil, clientID: String = "test-client-id") {
+    init(apiKey: String? = nil, clientID: String = "test-client-id", webSession: LinuxDoWebSession? = nil) {
         self.apiKey = apiKey
         self.clientID = clientID
+        self.webSession = webSession
     }
 
     func readAPIKey() -> String? {
@@ -130,6 +179,18 @@ final class InMemoryLinuxDoCredentialStore: LinuxDoCredentialStoring, @unchecked
         lock.withLock { apiKey = nil }
     }
 
+    func readWebSession() -> LinuxDoWebSession? {
+        lock.withLock { webSession }
+    }
+
+    func saveWebSession(_ session: LinuxDoWebSession) {
+        lock.withLock { webSession = session }
+    }
+
+    func deleteWebSession() {
+        lock.withLock { webSession = nil }
+    }
+
     func readClientID() -> String {
         lock.withLock { clientID }
     }
@@ -138,4 +199,3 @@ final class InMemoryLinuxDoCredentialStore: LinuxDoCredentialStoring, @unchecked
         lock.withLock { self.clientID = clientID }
     }
 }
-

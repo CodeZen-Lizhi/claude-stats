@@ -50,7 +50,17 @@ final class LinuxDoStore {
     var selectedTopicID: Int?
 
     var isAuthenticated: Bool {
-        credentials.readAPIKey() != nil
+        credentials.readAuthCredential() != nil
+    }
+
+    var authenticationDescription: String {
+        if credentials.readAPIKey() != nil {
+            return "User API Key"
+        }
+        if let session = credentials.readWebSession(), session.isAuthenticated {
+            return "Browser session"
+        }
+        return "Guest"
     }
 
     var selectedTopicState: LinuxDoTopicDetailState? {
@@ -236,7 +246,7 @@ final class LinuxDoStore {
         topicStates[topicID] = state
     }
 
-    func signIn(presentationAnchor: NSWindow?) async {
+    func signInWithUserAPIKey(presentationAnchor: NSWindow?) async {
         guard let presentationAnchor else {
             lastError = "Open the main window before signing in to LinuxDo."
             return
@@ -255,9 +265,40 @@ final class LinuxDoStore {
         isSigningIn = false
     }
 
+    func signInWithWebSession(_ session: LinuxDoWebSession) async -> Bool {
+        guard session.isAuthenticated else {
+            lastError = "Linux.do login did not return a usable browser session yet."
+            return false
+        }
+
+        isSigningIn = true
+        lastError = nil
+        credentials.deleteAPIKey()
+
+        do {
+            try credentials.saveWebSession(session)
+            let user = try await client.fetchCurrentUser()
+            let csrfToken = try? await client.fetchCSRFToken()
+            let enrichedSession = session.with(csrfToken: csrfToken, username: user.username)
+            try credentials.saveWebSession(enrichedSession)
+            currentUser = user
+            preferences.linuxDoLastLoginUsername = user.username
+            await refreshNotifications(announce: false)
+            isSigningIn = false
+            return true
+        } catch {
+            credentials.deleteWebSession()
+            currentUser = nil
+            lastError = userFacingMessage(error)
+            isSigningIn = false
+            return false
+        }
+    }
+
     func signOut() async {
         await client.revokeUserAPIKey()
         credentials.deleteAPIKey()
+        credentials.deleteWebSession()
         preferences.linuxDoLastLoginUsername = ""
         preferences.linuxDoNotificationsEnabled = false
         preferences.linuxDoLastSeenNotificationID = 0
@@ -417,6 +458,7 @@ final class LinuxDoStore {
             switch clientError {
             case .unauthorized:
                 credentials.deleteAPIKey()
+                credentials.deleteWebSession()
                 currentUser = nil
                 preferences.linuxDoNotificationsEnabled = false
                 stopNotificationPolling()

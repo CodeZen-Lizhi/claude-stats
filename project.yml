@@ -358,6 +358,7 @@ targets:
       - sdk: IOKit.framework
       - sdk: SystemConfiguration.framework
       - sdk: CoreWLAN.framework
+      - sdk: WebKit.framework
     postBuildScripts:
       - name: Copy Atoll MediaRemote Runtime Resources
         inputFiles:

@@ -26,7 +26,7 @@ enum LinuxDoResponseMapper {
             fancyTitle: response.fancyTitle,
             slug: response.slug,
             categoryID: response.categoryID,
-            tags: response.tags ?? [],
+            tags: response.tags?.values ?? [],
             postsCount: response.postsCount ?? response.postStream.posts.count,
             stream: response.postStream.stream ?? response.postStream.posts.map(\.id),
             posts: response.postStream.posts.map(\.model),
@@ -97,7 +97,7 @@ struct TopicDetailResponse: Decodable, Sendable {
     let fancyTitle: String?
     let slug: String?
     let categoryID: Int?
-    let tags: [String]?
+    let tags: LinuxDoTagList?
     let postsCount: Int?
     let postStream: PostStream
 
@@ -154,13 +154,17 @@ struct CurrentUserResponse: Decodable, Sendable {
     }
 }
 
+struct CSRFResponse: Decodable, Sendable {
+    let csrf: String
+}
+
 struct TopicResponse: Decodable, Sendable {
     let id: Int
     let title: String
     let fancyTitle: String?
     let slug: String?
     let categoryID: Int?
-    let tags: [String]?
+    let tags: LinuxDoTagList?
     let excerpt: String?
     let postsCount: Int?
     let replyCount: Int?
@@ -196,7 +200,7 @@ struct TopicResponse: Decodable, Sendable {
             fancyTitle: fancyTitle,
             slug: slug,
             categoryID: categoryID,
-            tags: tags ?? [],
+            tags: tags?.values ?? [],
             excerpt: excerpt,
             postsCount: postsCount ?? 0,
             replyCount: replyCount ?? 0,
@@ -207,6 +211,75 @@ struct TopicResponse: Decodable, Sendable {
             lastPostedAt: lastPostedAt,
             imageURL: LinuxDoURLResolver.url(from: imageURL)
         )
+    }
+}
+
+struct LinuxDoTagList: Decodable, Hashable, Sendable {
+    let values: [String]
+
+    init(from decoder: Decoder) throws {
+        var container = try decoder.unkeyedContainer()
+        var values: [String] = []
+        while !container.isAtEnd {
+            if let value = try? container.decode(String.self) {
+                if !value.isEmpty {
+                    values.append(value)
+                }
+                continue
+            }
+            if let object = try? container.decode(TagObject.self) {
+                if let name = object.name, !name.isEmpty {
+                    values.append(name)
+                } else if let slug = object.slug, !slug.isEmpty {
+                    values.append(slug)
+                }
+                continue
+            }
+            _ = try? container.decode(DiscardedTagValue.self)
+        }
+        self.values = values
+    }
+
+    private struct TagObject: Decodable, Hashable, Sendable {
+        let name: String?
+        let slug: String?
+    }
+
+    private struct DiscardedTagValue: Decodable, Hashable, Sendable {
+        init(from decoder: Decoder) throws {
+            if var array = try? decoder.unkeyedContainer() {
+                while !array.isAtEnd {
+                    _ = try? array.decode(DiscardedTagValue.self)
+                }
+                return
+            }
+            if let object = try? decoder.container(keyedBy: DynamicCodingKey.self) {
+                for key in object.allKeys {
+                    _ = try? object.decode(DiscardedTagValue.self, forKey: key)
+                }
+                return
+            }
+            let container = try decoder.singleValueContainer()
+            if container.decodeNil() { return }
+            if (try? container.decode(Bool.self)) != nil { return }
+            if (try? container.decode(Double.self)) != nil { return }
+            _ = try? container.decode(String.self)
+        }
+    }
+
+    private struct DynamicCodingKey: CodingKey, Hashable, Sendable {
+        let stringValue: String
+        let intValue: Int?
+
+        init?(stringValue: String) {
+            self.stringValue = stringValue
+            self.intValue = nil
+        }
+
+        init?(intValue: Int) {
+            self.stringValue = "\(intValue)"
+            self.intValue = intValue
+        }
     }
 }
 
@@ -384,4 +457,3 @@ enum LinuxDoURLResolver {
         return url(from: template.replacingOccurrences(of: "{size}", with: "96"))
     }
 }
-

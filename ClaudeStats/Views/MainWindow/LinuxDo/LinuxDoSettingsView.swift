@@ -4,6 +4,7 @@ import SwiftUI
 struct LinuxDoSettingsView: View {
     @Environment(AppEnvironment.self) private var env
     @Bindable var store: LinuxDoStore
+    @State private var webLoginPresented = false
 
     var body: some View {
         @Bindable var prefs = env.preferences
@@ -11,7 +12,7 @@ struct LinuxDoSettingsView: View {
         VStack(alignment: .leading, spacing: 28) {
             SettingGroup(
                 title: "Connection",
-                caption: "LinuxDo uses Discourse User API Keys. Claude Stats stores only the user API key in Keychain."
+                caption: "LinuxDo uses a browser session by default. User API Key sign-in remains available if Linux.do enables it again."
             ) {
                 VStack(spacing: 0) {
                     SettingRow(title: "Account", description: accountDescription) {
@@ -25,10 +26,17 @@ struct LinuxDoSettingsView: View {
                             .controlSize(.small)
                         } else {
                             Button("Sign In") {
-                                Task { await store.signIn(presentationAnchor: NSApp.keyWindow) }
+                                webLoginPresented = true
                             }
                             .controlSize(.small)
                         }
+                    }
+                    SettingRow(title: "User API Key", description: "Advanced Discourse flow. Linux.do may report that site admins disabled it.") {
+                        Button("Try User API Key Flow") {
+                            Task { await store.signInWithUserAPIKey(presentationAnchor: NSApp.keyWindow) }
+                        }
+                        .controlSize(.small)
+                        .disabled(store.isSigningIn)
                     }
                     SettingRow(title: "Open Linux.do", description: "Open the community in your default browser.") {
                         Button("Open") {
@@ -83,6 +91,9 @@ struct LinuxDoSettingsView: View {
                 LinuxDoInlineError(message: error)
             }
         }
+        .sheet(isPresented: $webLoginPresented) {
+            LinuxDoWebLoginSheet(store: store, isPresented: $webLoginPresented)
+        }
     }
 
     private var accountDescription: String {
@@ -90,9 +101,9 @@ struct LinuxDoSettingsView: View {
             return "Signed in as @\(user.username)."
         }
         if !env.preferences.linuxDoLastLoginUsername.isEmpty {
-            return "Last signed in as @\(env.preferences.linuxDoLastLoginUsername)."
+            return "Last signed in as @\(env.preferences.linuxDoLastLoginUsername) using \(store.authenticationDescription.lowercased())."
         }
-        return store.isAuthenticated ? "Signed in. User details will load when Linux.do is reachable." : "Sign in to enable notifications."
+        return store.isAuthenticated ? "Signed in using \(store.authenticationDescription.lowercased()). User details will load when Linux.do is reachable." : "Guest browsing. Sign in to enable notifications."
     }
 
     private var notificationDescription: String {
@@ -126,4 +137,3 @@ struct LinuxDoSettingsView: View {
         .frame(width: 760)
 }
 #endif
-

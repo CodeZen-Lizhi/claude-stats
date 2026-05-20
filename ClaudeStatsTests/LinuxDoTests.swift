@@ -50,7 +50,7 @@ struct LinuxDoTests {
                 "fancy_title": null,
                 "slug": "hello-linux",
                 "category_id": 1,
-                "tags": ["mac"],
+                "tags": [{"id": 1, "name": "mac", "slug": "mac-tag"}],
                 "excerpt": "<p>Native &amp; fast</p>",
                 "posts_count": 3,
                 "reply_count": 2,
@@ -69,8 +69,69 @@ struct LinuxDoTests {
 
         #expect(list.nextPage == 1)
         #expect(topic.displayTitle == "Hello & Linux")
+        #expect(topic.tags == ["mac"])
         #expect(topic.displayExcerpt == "Native & fast")
         #expect(topic.imageURL?.absoluteString == "https://linux.do/uploads/default/original/1X/image.png")
+    }
+
+    @Test("Topic tags decode from string object and empty shapes")
+    func tagShapesDecode() throws {
+        let json = """
+        {
+          "topic_list": {
+            "topics": [
+              { "id": 1, "title": "String tags", "slug": "one", "tags": ["swift"] },
+              { "id": 2, "title": "Object tags", "slug": "two", "tags": [{"id": 2, "name": "macOS", "slug": "macos"}] },
+              { "id": 3, "title": "Empty tags", "slug": "three", "tags": [] }
+            ]
+          }
+        }
+        """
+
+        let response = try JSONDecoder().decode(TopicListResponse.self, from: Data(json.utf8))
+        let topics = LinuxDoResponseMapper.topicList(from: response, page: 0, now: Date()).topics
+
+        #expect(topics.map(\.tags) == [["swift"], ["macOS"], []])
+    }
+
+    @Test("Linux.do guest topic list shape decodes")
+    func linuxDoGuestShapeDecode() throws {
+        let json = """
+        {
+          "users": [],
+          "topic_list": {
+            "more_topics_url": "/hot.json?page=1",
+            "topics": [
+              {
+                "fancy_title": "Hot &amp; Native",
+                "id": 2213371,
+                "title": "Hot Native",
+                "slug": "topic",
+                "posts_count": 47,
+                "reply_count": 24,
+                "image_url": "https://cdn3.ldstatic.com/original/example.png",
+                "created_at": "2026-05-20T09:09:14.607Z",
+                "last_posted_at": "2026-05-20T14:33:33.809Z",
+                "bumped_at": "2026-05-20T14:33:33.809Z",
+                "tags": [{"id": 1461, "name": "纯水", "slug": "1461-tag"}],
+                "views": 1297,
+                "like_count": 70,
+                "category_id": 42
+              }
+            ]
+          }
+        }
+        """
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom(Self.decodeLinuxDoDate)
+        let response = try decoder.decode(TopicListResponse.self, from: Data(json.utf8))
+        let list = LinuxDoResponseMapper.topicList(from: response, page: 0, now: Date())
+        let topic = try #require(list.topics.first)
+
+        #expect(list.nextPage == 1)
+        #expect(topic.displayTitle == "Hot & Native")
+        #expect(topic.tags == ["纯水"])
     }
 
     @Test("User API key auth URL and callback payload are strict")
@@ -131,12 +192,19 @@ struct LinuxDoTests {
 
         store.saveAPIKey("api-key")
         store.saveClientID("client-b")
+        store.saveWebSession(Self.webSession(username: "tester"))
 
         #expect(store.readAPIKey() == "api-key")
         #expect(store.readClientID() == "client-b")
+        #expect(store.readWebSession()?.username == "tester")
+        #expect(store.readAuthCredential() == .userAPIKey(key: "api-key", clientID: "client-b"))
 
         store.deleteAPIKey()
         #expect(store.readAPIKey() == nil)
+        #expect(store.readAuthCredential() == .webSession(Self.webSession(username: "tester")))
+
+        store.deleteWebSession()
+        #expect(store.readAuthCredential() == nil)
     }
 
     @Test("Store uses fresh cache without touching network")
@@ -196,6 +264,72 @@ struct LinuxDoTests {
         #expect(notificationService.sentIDs == [11])
         #expect(preferences.linuxDoLastSeenNotificationID == 11)
         #expect(preferences.linuxDoNotificationDeliveredIDs == [11])
+    }
+
+    @Test("Store treats web session as authenticated and clears it on sign out")
+    func storeWebSessionAuthAndLogout() async throws {
+        let credentials = InMemoryLinuxDoCredentialStore(webSession: Self.webSession(username: "tester"))
+        let store = LinuxDoStore(
+            preferences: Self.makePreferences(),
+            credentials: credentials,
+            notificationService: FakeLinuxDoNotificationService(),
+            client: FakeLinuxDoClient()
+        )
+
+        #expect(store.isAuthenticated)
+        #expect(store.authenticationDescription == "Browser session")
+
+        await store.signOut()
+
+        #expect(credentials.readWebSession() == nil)
+        #expect(!store.isAuthenticated)
+    }
+
+    @Test("Client sends API key credentials")
+    func clientSendsAPIKeyCredentials() async throws {
+        let credentials = InMemoryLinuxDoCredentialStore(apiKey: "api-key", clientID: "client-id")
+        let client = Self.makeClient(credentials: credentials) { request in
+            #expect(request.value(forHTTPHeaderField: "User-Api-Key") == "api-key")
+            #expect(request.value(forHTTPHeaderField: "User-Api-Client-Id") == "client-id")
+            return Self.response(body: Self.currentUserJSON)
+        }
+
+        _ = try await client.fetchCurrentUser()
+    }
+
+    @Test("Client sends web session cookies")
+    func clientSendsWebSessionCookies() async throws {
+        let credentials = InMemoryLinuxDoCredentialStore(webSession: Self.webSession(csrfToken: "csrf-token"))
+        let client = Self.makeClient(credentials: credentials) { request in
+            #expect(request.value(forHTTPHeaderField: "Cookie")?.contains("_t=session-token") == true)
+            #expect(request.value(forHTTPHeaderField: "X-CSRF-Token") == "csrf-token")
+            #expect(request.value(forHTTPHeaderField: "X-Requested-With") == "XMLHttpRequest")
+            #expect(request.value(forHTTPHeaderField: "Discourse-Logged-In") == "true")
+            return Self.response(body: Self.currentUserJSON)
+        }
+
+        _ = try await client.fetchCurrentUser()
+    }
+
+    @Test("Client retries public feed as guest after stale web session unauthorized")
+    func clientRetriesPublicFeedAsGuest() async throws {
+        let credentials = InMemoryLinuxDoCredentialStore(webSession: Self.webSession())
+        let calls = LinuxDoCallCounter()
+        let client = Self.makeClient(credentials: credentials) { request in
+            let call = calls.increment()
+            if call == 1 {
+                #expect(request.value(forHTTPHeaderField: "Cookie") != nil)
+                return Self.response(status: 401, body: "{}")
+            }
+            #expect(request.value(forHTTPHeaderField: "Cookie") == nil)
+            return Self.response(body: Self.topicListJSON)
+        }
+
+        let list = try await client.fetchTopicList(feed: LinuxDoFeed.latest, page: 0, now: Date())
+
+        #expect(calls.value == 2)
+        #expect(credentials.readWebSession() == nil)
+        #expect(list.topics.first?.title == "Guest Topic")
     }
 
     private static func makePreferences() -> Preferences {
@@ -267,6 +401,70 @@ struct LinuxDoTests {
             excerpt: "Body"
         )
     }
+
+    nonisolated private static func webSession(csrfToken: String? = nil, username: String? = nil) -> LinuxDoWebSession {
+        LinuxDoWebSession(
+            cookies: [
+                LinuxDoStoredCookie(name: "_t", value: "session-token", domain: ".linux.do"),
+                LinuxDoStoredCookie(name: "_forum_session", value: "forum-session", domain: "linux.do"),
+                LinuxDoStoredCookie(name: "cf_clearance", value: "clearance", domain: ".linux.do"),
+            ],
+            csrfToken: csrfToken,
+            username: username,
+            savedAt: Date(timeIntervalSince1970: 100)
+        )
+    }
+
+    nonisolated private static let currentUserJSON = """
+    {
+      "current_user": {
+        "id": 1,
+        "username": "tester",
+        "name": "Tester",
+        "avatar_template": "/user_avatar/linux.do/tester/{size}/1.png"
+      }
+    }
+    """
+
+    nonisolated private static let topicListJSON = """
+    {
+      "topic_list": {
+        "topics": [
+          { "id": 1, "title": "Guest Topic", "slug": "guest-topic", "tags": [] }
+        ]
+      }
+    }
+    """
+
+    nonisolated private static func response(status: Int = 200, body: String, headers: [String: String] = [:]) -> MockLinuxDoResponse {
+        MockLinuxDoResponse(status: status, headers: headers, data: Data(body.utf8))
+    }
+
+    nonisolated private static func makeClient(
+        credentials: InMemoryLinuxDoCredentialStore,
+        handler: @escaping @Sendable (URLRequest) throws -> MockLinuxDoResponse
+    ) -> LinuxDoClient {
+        MockLinuxDoURLProtocol.handler = handler
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockLinuxDoURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        return LinuxDoClient(baseURL: URL(string: "https://linux.do")!, session: session, credentials: credentials)
+    }
+
+    nonisolated private static func decodeLinuxDoDate(from decoder: Decoder) throws -> Date {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: raw) {
+            return date
+        }
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        if let date = plain.date(from: raw) {
+            return date
+        }
+        throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Invalid date"))
+    }
 }
 
 private final class FakeLinuxDoClient: LinuxDoClienting, @unchecked Sendable {
@@ -303,11 +501,72 @@ private final class FakeLinuxDoClient: LinuxDoClienting, @unchecked Sendable {
         LinuxDoCurrentUser(id: 1, username: "tester", name: nil, avatarURL: nil)
     }
 
+    func fetchCSRFToken() async throws -> String {
+        "csrf-token"
+    }
+
     func fetchNotifications(limit: Int) async throws -> [LinuxDoNotification] {
         notifications
     }
 
     func revokeUserAPIKey() async {}
+}
+
+private struct MockLinuxDoResponse: Sendable {
+    let status: Int
+    let headers: [String: String]
+    let data: Data
+}
+
+private final class LinuxDoCallCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    var value: Int {
+        lock.withLock { count }
+    }
+
+    func increment() -> Int {
+        lock.withLock {
+            count += 1
+            return count
+        }
+    }
+}
+
+private final class MockLinuxDoURLProtocol: URLProtocol, @unchecked Sendable {
+    nonisolated(unsafe) static var handler: (@Sendable (URLRequest) throws -> MockLinuxDoResponse)?
+
+    override class func canInit(with request: URLRequest) -> Bool {
+        true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        guard let handler = Self.handler else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+        do {
+            let mock = try handler(request)
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: mock.status,
+                httpVersion: nil,
+                headerFields: mock.headers
+            )!
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: mock.data)
+            client?.urlProtocolDidFinishLoading(self)
+        } catch {
+            client?.urlProtocol(self, didFailWithError: error)
+        }
+    }
+
+    override func stopLoading() {}
 }
 
 private final class FakeLinuxDoNotificationService: LinuxDoNotificationServicing, @unchecked Sendable {

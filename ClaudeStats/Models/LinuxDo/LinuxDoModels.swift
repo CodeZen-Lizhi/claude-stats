@@ -227,6 +227,113 @@ struct LinuxDoCurrentUser: Codable, Hashable, Identifiable, Sendable {
     let avatarURL: URL?
 }
 
+struct LinuxDoStoredCookie: Codable, Hashable, Sendable {
+    let name: String
+    let value: String
+    let domain: String
+    let path: String
+    let expiresAt: Date?
+    let isSecure: Bool
+    let isHTTPOnly: Bool
+
+    init(
+        name: String,
+        value: String,
+        domain: String,
+        path: String = "/",
+        expiresAt: Date? = nil,
+        isSecure: Bool = true,
+        isHTTPOnly: Bool = false
+    ) {
+        self.name = name
+        self.value = value
+        self.domain = domain
+        self.path = path
+        self.expiresAt = expiresAt
+        self.isSecure = isSecure
+        self.isHTTPOnly = isHTTPOnly
+    }
+
+    init(cookie: HTTPCookie) {
+        self.init(
+            name: cookie.name,
+            value: cookie.value,
+            domain: cookie.domain,
+            path: cookie.path,
+            expiresAt: cookie.expiresDate,
+            isSecure: cookie.isSecure,
+            isHTTPOnly: cookie.isHTTPOnly
+        )
+    }
+
+    var isExpired: Bool {
+        guard let expiresAt else { return false }
+        return expiresAt <= Date()
+    }
+
+    var isLinuxDoCookie: Bool {
+        let normalized = domain.trimmingCharacters(in: CharacterSet(charactersIn: ".")).lowercased()
+        return normalized == "linux.do" || normalized.hasSuffix(".linux.do")
+    }
+}
+
+struct LinuxDoWebSession: Codable, Hashable, Sendable {
+    var cookies: [LinuxDoStoredCookie]
+    var csrfToken: String?
+    var username: String?
+    var savedAt: Date
+
+    init(cookies: [LinuxDoStoredCookie], csrfToken: String? = nil, username: String? = nil, savedAt: Date = .now) {
+        self.cookies = cookies
+        self.csrfToken = csrfToken
+        self.username = username
+        self.savedAt = savedAt
+    }
+
+    var isAuthenticated: Bool {
+        containsCookie(named: "_t")
+    }
+
+    func containsCookie(named name: String) -> Bool {
+        cookies.contains { $0.name == name && !$0.isExpired && $0.isLinuxDoCookie && !$0.value.isEmpty }
+    }
+
+    func cookieHeader(now: Date = .now) -> String? {
+        let liveCookies = cookies
+            .filter { cookie in
+                cookie.isLinuxDoCookie && !cookie.value.isEmpty && (cookie.expiresAt.map { $0 > now } ?? true)
+            }
+            .sorted { lhs, rhs in
+                Self.cookieSortRank(lhs.name) < Self.cookieSortRank(rhs.name)
+            }
+        guard !liveCookies.isEmpty else { return nil }
+        return liveCookies.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
+    }
+
+    func with(csrfToken: String?, username: String?) -> LinuxDoWebSession {
+        LinuxDoWebSession(
+            cookies: cookies,
+            csrfToken: csrfToken ?? self.csrfToken,
+            username: username ?? self.username,
+            savedAt: .now
+        )
+    }
+
+    private static func cookieSortRank(_ name: String) -> Int {
+        switch name {
+        case "_t": 0
+        case "_forum_session": 1
+        case "cf_clearance": 2
+        default: 10
+        }
+    }
+}
+
+enum LinuxDoAuthCredential: Equatable, Sendable {
+    case userAPIKey(key: String, clientID: String)
+    case webSession(LinuxDoWebSession)
+}
+
 enum LinuxDoContentBlock: Hashable, Sendable, Identifiable {
     case paragraph(String)
     case quote(String)
@@ -261,4 +368,3 @@ extension String {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
-
