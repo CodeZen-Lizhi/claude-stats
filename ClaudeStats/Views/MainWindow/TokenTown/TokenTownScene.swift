@@ -6,6 +6,7 @@ final class TokenTownScene: SKScene {
     private let tileSize: CGFloat = 12
     private let cameraNode = SKCameraNode()
     private var renderedRevision = ""
+    private var worldSize: CGSize = .zero
     var onSelect: ((TownEntitySelection?) -> Void)?
     var pausedAnimation = false {
         didSet { updateResidentAnimation() }
@@ -13,7 +14,7 @@ final class TokenTownScene: SKScene {
 
     override init(size: CGSize) {
         super.init(size: size)
-        scaleMode = .aspectFit
+        scaleMode = .resizeFill
         anchorPoint = .zero
         backgroundColor = TokenTownPalette.background
         camera = cameraNode
@@ -24,32 +25,33 @@ final class TokenTownScene: SKScene {
         super.init(coder: aDecoder)
     }
 
-    func configure(map: TownMap, state: TownState) {
+    var worldBounds: CGSize { worldSize }
+
+    func configure(map: TownMap, state: TownState, viewportSize: CGSize) {
+        size = viewportSize
+        worldSize = CGSize(width: CGFloat(map.grid.width) * tileSize, height: CGFloat(map.grid.height) * tileSize)
         let revision = [
             map.revisionID,
             state.placedItems.map { "\($0.id):\($0.kind.rawValue):\($0.footprint.origin.x):\($0.footprint.origin.y)" }.joined(separator: ","),
-            "\(state.camera.scale)",
             state.residentMemory.lastActivity.rawValue,
         ].joined(separator: "#")
         guard revision != renderedRevision else {
-            applyCamera(map: map, state: state)
+            applyCamera(state.camera)
             return
         }
         renderedRevision = revision
         removeAllChildren()
         addChild(cameraNode)
-        size = CGSize(width: CGFloat(map.grid.width) * tileSize, height: CGFloat(map.grid.height) * tileSize)
         backgroundColor = TokenTownPalette.sky(for: map.weather)
         renderTiles(map.grid)
         renderBuildings(map.buildings)
         renderPlacedItems(state.placedItems)
         renderResident(map: map, state: state)
         renderVisitors(map: map, state: state)
-        applyCamera(map: map, state: state)
+        applyCamera(state.camera)
     }
 
-    override func mouseDown(with event: NSEvent) {
-        let location = event.location(in: self)
+    func select(at location: CGPoint) {
         let hit = nodes(at: location).first { $0.name != nil }
         if let name = hit?.name {
             if name == "resident:user" {
@@ -67,6 +69,21 @@ final class TokenTownScene: SKScene {
         }
         let point = TownPoint(x: Int(location.x / tileSize), y: Int(location.y / tileSize))
         onSelect?(.tile(point))
+    }
+
+    func applyCamera(_ cameraState: TownCameraState) {
+        let viewport = TownCameraViewport(
+            viewWidth: Double(max(1, size.width)),
+            viewHeight: Double(max(1, size.height)),
+            worldWidth: Double(max(1, worldSize.width)),
+            worldHeight: Double(max(1, worldSize.height))
+        )
+        let camera = TownCameraMath.normalized(cameraState, viewport: viewport)
+        cameraNode.position = CGPoint(
+            x: CGFloat(camera.centerX ?? Double(worldSize.width) / 2),
+            y: CGFloat(camera.centerY ?? Double(worldSize.height) / 2)
+        )
+        cameraNode.setScale(CGFloat(TownCameraMath.spriteKitCameraScale(for: camera.scale, viewport: viewport)))
     }
 
     private func renderTiles(_ grid: TownTileGrid) {
@@ -190,11 +207,6 @@ final class TokenTownScene: SKScene {
             .wait(forDuration: 0.8),
         ])
         resident.run(.repeatForever(idle), withKey: "idle")
-    }
-
-    private func applyCamera(map: TownMap, state: TownState) {
-        cameraNode.position = CGPoint(x: size.width / 2, y: size.height / 2)
-        cameraNode.setScale(CGFloat(1 / max(0.65, min(2.4, state.camera.scale))))
     }
 
     private func position(for point: TownPoint) -> CGPoint {

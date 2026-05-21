@@ -1,3 +1,4 @@
+import AppKit
 import SpriteKit
 import SwiftUI
 
@@ -15,7 +16,8 @@ struct TokenTownView: View {
                     map: map,
                     state: town.state,
                     isPaused: town.isPaused,
-                    onSelect: { town.select($0) }
+                    onSelect: { town.select($0) },
+                    onCameraChanged: { town.setCamera($0) }
                 )
                 .ignoresSafeArea()
                 .overlay(alignment: .topLeading) {
@@ -358,34 +360,181 @@ struct TokenTownView: View {
     }
 }
 
-private struct TokenTownSpriteView: View {
+private struct TokenTownSpriteView: NSViewRepresentable {
     let map: TownMap
     let state: TownState
     let isPaused: Bool
     let onSelect: (TownEntitySelection?) -> Void
+    let onCameraChanged: (TownCameraState) -> Void
 
-    @State private var scene = TokenTownScene(size: CGSize(width: 760, height: 520))
-
-    var body: some View {
-        SpriteView(scene: scene, options: [.allowsTransparency])
-            .background(Color.clear)
-            .onAppear { updateScene() }
-            .onChange(of: map.revisionID) { _, _ in updateScene() }
-            .onChange(of: state) { _, _ in updateScene() }
-            .onChange(of: isPaused) { _, paused in
-                scene.pausedAnimation = paused
-            }
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
     }
 
-    private func updateScene() {
+    func makeNSView(context: Context) -> TokenTownMapSKView {
+        let view = TokenTownMapSKView()
+        view.allowsTransparency = true
+        view.ignoresSiblingOrder = true
+        view.presentScene(context.coordinator.scene)
+        return view
+    }
+
+    func updateNSView(_ nsView: TokenTownMapSKView, context: Context) {
+        nsView.configure(
+            scene: context.coordinator.scene,
+            map: map,
+            state: state,
+            isPaused: isPaused,
+            onSelect: onSelect,
+            onCameraChanged: onCameraChanged
+        )
+    }
+
+    @MainActor
+    final class Coordinator {
+        let scene = TokenTownScene(size: CGSize(width: 760, height: 520))
+    }
+}
+
+@MainActor
+private final class TokenTownMapSKView: SKView {
+    private weak var townScene: TokenTownScene?
+    private var map: TownMap?
+    private var state: TownState?
+    private var cameraState = TownCameraState()
+    private var onSelect: ((TownEntitySelection?) -> Void)?
+    private var onCameraChanged: ((TownCameraState) -> Void)?
+    private var lastDragLocation: CGPoint?
+    private var dragDistance: CGFloat = 0
+
+    override var acceptsFirstResponder: Bool { true }
+
+    func configure(
+        scene: TokenTownScene,
+        map: TownMap,
+        state: TownState,
+        isPaused: Bool,
+        onSelect: @escaping (TownEntitySelection?) -> Void,
+        onCameraChanged: @escaping (TownCameraState) -> Void
+    ) {
+        self.townScene = scene
+        self.map = map
+        self.state = state
+        self.cameraState = normalized(state.camera)
+        self.onSelect = onSelect
+        self.onCameraChanged = onCameraChanged
+
+        if scene.view !== self {
+            presentScene(scene)
+        }
         scene.onSelect = onSelect
         scene.pausedAnimation = isPaused
-        scene.configure(map: map, state: state)
+        scene.configure(map: map, state: state, viewportSize: bounds.size)
+    }
+
+    override func layout() {
+        super.layout()
+        guard let scene = townScene, let map, let state else { return }
+        cameraState = normalized(cameraState)
+        scene.configure(map: map, state: state.withCamera(cameraState), viewportSize: bounds.size)
+        onCameraChanged?(cameraState)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+        lastDragLocation = convert(event.locationInWindow, from: nil)
+        dragDistance = 0
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        let location = convert(event.locationInWindow, from: nil)
+        guard let previous = lastDragLocation else {
+            lastDragLocation = location
+            return
+        }
+        let delta = CGPoint(x: location.x - previous.x, y: location.y - previous.y)
+        dragDistance += hypot(delta.x, delta.y)
+        lastDragLocation = location
+        updateCamera(
+            TownCameraMath.panned(
+                cameraState,
+                deltaViewX: Double(delta.x),
+                deltaViewY: Double(delta.y),
+                viewport: viewport
+            )
+        )
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        defer { lastDragLocation = nil }
+        guard dragDistance < 4, let scene = townScene else { return }
+        let location = convert(event.locationInWindow, from: nil)
+        scene.select(at: scene.convertPoint(fromView: location))
+    }
+
+    override func magnify(with event: NSEvent) {
+        let location = convert(event.locationInWindow, from: nil)
+        zoom(factor: 1 + Double(event.magnification), at: location)
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        let location = convert(event.locationInWindow, from: nil)
+        let delta = event.hasPreciseScrollingDeltas ? event.scrollingDeltaY : event.deltaY * 8
+        guard delta != 0 else { return }
+        zoom(factor: pow(1.0018, Double(delta)), at: location)
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    private func zoom(factor: Double, at viewLocation: CGPoint) {
+        guard let scene = townScene else { return }
+        let worldLocation = scene.convertPoint(fromView: viewLocation)
+        updateCamera(
+            TownCameraMath.zoomed(
+                cameraState,
+                factor: factor,
+                anchorX: Double(worldLocation.x),
+                anchorY: Double(worldLocation.y),
+                viewport: viewport
+            )
+        )
+    }
+
+    private func updateCamera(_ camera: TownCameraState) {
+        let normalizedCamera = normalized(camera)
+        guard normalizedCamera != cameraState else { return }
+        cameraState = normalizedCamera
+        townScene?.applyCamera(normalizedCamera)
+        onCameraChanged?(normalizedCamera)
+    }
+
+    private func normalized(_ camera: TownCameraState) -> TownCameraState {
+        TownCameraMath.normalized(camera, viewport: viewport)
+    }
+
+    private var viewport: TownCameraViewport {
+        let world = townScene?.worldBounds ?? .zero
+        return TownCameraViewport(
+            viewWidth: Double(max(1, bounds.width)),
+            viewHeight: Double(max(1, bounds.height)),
+            worldWidth: Double(max(1, world.width)),
+            worldHeight: Double(max(1, world.height))
+        )
     }
 }
 
 private extension TownSize {
     var widthText: String { "\(width)x\(height)" }
+}
+
+private extension TownState {
+    func withCamera(_ camera: TownCameraState) -> TownState {
+        var copy = self
+        copy.camera = camera
+        return copy
+    }
 }
 
 #if DEBUG

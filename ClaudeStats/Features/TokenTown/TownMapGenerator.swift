@@ -13,8 +13,7 @@ enum TownMapGenerator {
                 wallChance: params.wallChance,
                 maxAttempts: params.maxAttempts
             )
-            var rng = TownRandom(seed: attemptParams.seed)
-            let map = build(params: attemptParams, snapshot: snapshot, state: state, rng: &rng)
+            let map = WatabouTownMapBuilder.build(params: attemptParams, snapshot: snapshot, state: state)
             if map.validation.ok { return map }
         }
         return fallback(params: params, snapshot: snapshot, state: state)

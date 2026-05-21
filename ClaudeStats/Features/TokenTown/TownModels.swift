@@ -510,7 +510,15 @@ struct TownEconomyLedger: Codable, Hashable, Sendable {
 }
 
 struct TownCameraState: Codable, Hashable, Sendable {
-    var scale: Double = 1
+    var centerX: Double?
+    var centerY: Double?
+    var scale: Double
+
+    init(centerX: Double? = nil, centerY: Double? = nil, scale: Double = 1) {
+        self.centerX = centerX
+        self.centerY = centerY
+        self.scale = scale
+    }
 }
 
 struct TownState: Codable, Hashable, Sendable {

@@ -139,7 +139,13 @@ final class TownStore {
     }
 
     func setCameraScale(_ scale: Double) {
-        state.camera.scale = min(2.4, max(0.65, scale))
+        state.camera.scale = min(TownCameraMath.maxScale, max(TownCameraMath.minScale, scale))
+        persistState()
+    }
+
+    func setCamera(_ camera: TownCameraState) {
+        guard state.camera != camera else { return }
+        state.camera = camera
         persistState()
     }
 

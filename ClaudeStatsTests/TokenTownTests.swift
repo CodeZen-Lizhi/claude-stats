@@ -108,6 +108,44 @@ struct TokenTownTests {
         #expect(snapshot.cacheReadTokens == 9_000)
     }
 
+    @Test("Watabou fork submodule is configured on the integration branch")
+    func watabouSubmoduleConfiguration() throws {
+        let root = repoRoot()
+        let gitmodules = try String(contentsOf: root.appendingPathComponent(".gitmodules"), encoding: .utf8)
+        #expect(gitmodules.contains(#"[submodule "ThirdParty/TownGeneratorOS"]"#))
+        #expect(gitmodules.contains("url = https://github.com/1pitaph/TownGeneratorOS.git"))
+        #expect(gitmodules.contains("branch = integration/claude-stats"))
+        #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("ThirdParty/TownGeneratorOS/LICENSE").path))
+        #expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("ThirdParty/TownGeneratorOS/Source/com/watabou/towngenerator/building/Model.hx").path))
+    }
+
+    @Test("Camera state migrates old JSON and clamps pan and zoom")
+    func cameraStateMigrationAndMath() throws {
+        let legacy = try JSONDecoder().decode(TownCameraState.self, from: Data(#"{"scale":1.4}"#.utf8))
+        #expect(legacy.centerX == nil)
+        #expect(legacy.centerY == nil)
+        #expect(legacy.scale == 1.4)
+
+        let viewport = TownCameraViewport(viewWidth: 100, viewHeight: 50, worldWidth: 400, worldHeight: 220)
+        let centered = TownCameraMath.normalized(TownCameraState(scale: 0.2), viewport: viewport)
+        #expect(centered.scale == TownCameraMath.minScale)
+        #expect(abs((centered.centerX ?? 0) - 200) < 0.01)
+        #expect(abs((centered.centerY ?? 0) - 110) < 0.01)
+
+        let zoomed = TownCameraMath.zoomed(centered, factor: 2, anchorX: 260, anchorY: 110, viewport: viewport)
+        #expect(zoomed.scale == 2)
+        #expect((zoomed.centerX ?? 0) > (centered.centerX ?? 0))
+
+        let panned = TownCameraMath.panned(zoomed, deltaViewX: 20, deltaViewY: -10, viewport: viewport)
+        #expect((panned.centerX ?? 0) < (zoomed.centerX ?? 0))
+        #expect((panned.centerY ?? 0) > (zoomed.centerY ?? 0))
+
+        let clamped = TownCameraMath.panned(panned, deltaViewX: 10_000, deltaViewY: 10_000, viewport: viewport)
+        let visible = TownCameraMath.visibleWorldSize(for: clamped.scale, viewport: viewport)
+        #expect((clamped.centerX ?? 0) >= visible.width / 2)
+        #expect((clamped.centerY ?? 0) >= visible.height / 2)
+    }
+
     private func makeSnapshot(
         provider: ProviderKind = .claude,
         period: StatsPeriod = .last7Days,
@@ -161,5 +199,11 @@ struct TokenTownTests {
             fileSize: 1,
             stats: stats
         )
+    }
+
+    private func repoRoot() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
     }
 }
