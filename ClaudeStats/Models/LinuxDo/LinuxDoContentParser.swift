@@ -60,6 +60,12 @@ private struct LinuxDoContentDOMParser {
     private mutating func blockElements(from element: Element, path: String) throws -> [LinuxDoContentBlock] {
         let tag = element.tagNameNormal()
 
+        if let event = postEvent(from: element) {
+            return [block(.event(event), path: path)]
+        }
+        if let callout = try calloutBlock(from: element, path: path) {
+            return [callout]
+        }
         if let onebox = try onebox(from: element) {
             return [block(.onebox(onebox), path: path)]
         }
@@ -75,7 +81,12 @@ private struct LinuxDoContentDOMParser {
             let level = Int(tag.dropFirst()) ?? 3
             let inline = Self.trimmed(try inlineNodes(from: element, path: path))
             return Self.isEmpty(inline) ? [] : [block(.heading(level: level, content: inline), path: path)]
-        case "blockquote", "aside":
+        case "aside":
+            if element.hasClass("quote") {
+                return try discourseQuoteBlocks(from: element, path: path)
+            }
+            return try blocks(from: element.getChildNodes(), path: path)
+        case "blockquote":
             let attribution = try quoteAttribution(from: element)
             let childBlocks = try blocks(from: element.getChildNodes(), path: "\(path).quote")
             return childBlocks.isEmpty ? [] : [block(.quote(attribution: attribution, blocks: childBlocks), path: path)]
@@ -103,8 +114,18 @@ private struct LinuxDoContentDOMParser {
         switch tag {
         case "br":
             return [.lineBreak]
+        case "input":
+            return []
         case "code":
             return [.code(try element.text(trimAndNormaliseWhitespace: false))]
+        case "kbd":
+            return [.keyboard(try inlineChildren(from: element, path: path))]
+        case "mark":
+            return [.highlight(try inlineChildren(from: element, path: path))]
+        case "sub":
+            return [.subscript(try inlineChildren(from: element, path: path))]
+        case "sup":
+            return [.superscript(try inlineChildren(from: element, path: path))]
         case "strong", "b":
             return [.strong(try inlineChildren(from: element, path: path))]
         case "em", "i":
@@ -112,6 +133,9 @@ private struct LinuxDoContentDOMParser {
         case "s", "strike", "del":
             return [.strikethrough(try inlineChildren(from: element, path: path))]
         case "a":
+            if isEmptyAnchor(element) {
+                return []
+            }
             if element.hasClass("mention"),
                let username = try element.text().split(separator: "@").last.map(String.init) {
                 return [.mention(username: username, url: resolvedURL(try? element.attr("href")))]
@@ -126,6 +150,7 @@ private struct LinuxDoContentDOMParser {
             }
             return try inlineChildren(from: element, path: path)
         case "img":
+            guard !element.hasClass("avatar") else { return [] }
             guard let url = resolvedURL(try? element.attr("src")) else { return [] }
             return [.image(
                 url: url,
@@ -135,6 +160,9 @@ private struct LinuxDoContentDOMParser {
                 isEmoji: element.hasClass("emoji") || optionalAttribute("src", from: element)?.contains("/emoji/") == true
             )]
         default:
+            if shouldSkipChrome(element) {
+                return []
+            }
             if isSpoiler(element) {
                 return [.spoiler(try inlineChildren(from: element, path: path))]
             }
@@ -213,18 +241,24 @@ private struct LinuxDoContentDOMParser {
     private mutating func listItems(from element: Element, path: String) throws -> [LinuxDoListItem] {
         try element.children().array().enumerated().compactMap { index, child in
             guard child.tagNameNormal() == "li" else { return nil }
+            let itemID = "\(path).li\(index)"
+            let taskState = try taskState(from: child)
             let childBlocks = try blocks(from: child.getChildNodes(), path: "\(path).li\(index)")
             if childBlocks.isEmpty {
                 let inline = try inlineNodes(from: child, path: "\(path).li\(index).inline")
-                return Self.isEmpty(inline) ? nil : LinuxDoListItem(blocks: [block(.paragraph(inline), path: "\(path).li\(index).p")])
+                return Self.isEmpty(inline) ? nil : LinuxDoListItem(
+                    id: itemID,
+                    taskState: taskState,
+                    blocks: [block(.paragraph(inline), path: "\(path).li\(index).p")]
+                )
             }
-            return LinuxDoListItem(blocks: childBlocks)
+            return LinuxDoListItem(id: itemID, taskState: taskState, blocks: childBlocks)
         }
     }
 
     private mutating func table(from element: Element, path: String) throws -> LinuxDoContentBlockKind {
-        var headers: [[LinuxDoContentBlock]] = []
-        var rows: [[[LinuxDoContentBlock]]] = []
+        var headers: [LinuxDoTableCell] = []
+        var rows: [LinuxDoTableRow] = []
         let tableRows = try element.select("tr").array()
 
         for (rowIndex, row) in tableRows.enumerated() {
@@ -232,17 +266,24 @@ private struct LinuxDoContentDOMParser {
             if !headerCells.isEmpty {
                 headers.append(contentsOf: try headerCells.enumerated().map { cellIndex, cell in
                     let cellBlocks = try blocks(from: cell.getChildNodes(), path: "\(path).h\(rowIndex).\(cellIndex)")
-                    return cellBlocks.isEmpty ? [block(.paragraph([.text(try cell.text())]), path: "\(path).h\(rowIndex).\(cellIndex).p")] : cellBlocks
+                    return LinuxDoTableCell(
+                        id: "\(path).h\(rowIndex).\(cellIndex)",
+                        blocks: cellBlocks.isEmpty ? [block(.paragraph([.text(try cell.text())]), path: "\(path).h\(rowIndex).\(cellIndex).p")] : cellBlocks
+                    )
                 })
                 continue
             }
 
             let cells = try row.select("td").array()
             guard !cells.isEmpty else { continue }
-            rows.append(try cells.enumerated().map { cellIndex, cell in
+            let rowCells = try cells.enumerated().map { cellIndex, cell in
                 let cellBlocks = try blocks(from: cell.getChildNodes(), path: "\(path).r\(rowIndex).\(cellIndex)")
-                return cellBlocks.isEmpty ? [block(.paragraph([.text(try cell.text())]), path: "\(path).r\(rowIndex).\(cellIndex).p")] : cellBlocks
-            })
+                return LinuxDoTableCell(
+                    id: "\(path).r\(rowIndex).\(cellIndex)",
+                    blocks: cellBlocks.isEmpty ? [block(.paragraph([.text(try cell.text())]), path: "\(path).r\(rowIndex).\(cellIndex).p")] : cellBlocks
+                )
+            }
+            rows.append(LinuxDoTableRow(id: "\(path).r\(rowIndex)", cells: rowCells))
         }
         return .table(headers: headers, rows: rows)
     }
@@ -300,7 +341,10 @@ private struct LinuxDoContentDOMParser {
         } else {
             return nil
         }
-        guard let image, let url = resolvedURL(try? image.attr("src")) else { return nil }
+        guard let image,
+              !image.hasClass("avatar"),
+              !image.hasClass("emoji"),
+              let url = resolvedURL(try? image.attr("src")) else { return nil }
         return block(.image(
             url: url,
             alt: optionalAttribute("alt", from: image),
@@ -329,7 +373,7 @@ private struct LinuxDoContentDOMParser {
     }
 
     private func quoteAttribution(from element: Element) throws -> LinuxDoQuoteAttribution? {
-        let selectedTitle = try element.select(".title, cite, .quote-info").first()?.text().nilIfBlank
+        let selectedTitle = try quoteTitleText(from: element.select(".title, cite, .quote-info").first())
         let username = optionalAttribute("data-username", from: element)
             ?? optionalAttribute("data-user-card", from: element)
             ?? selectedTitle
@@ -340,7 +384,137 @@ private struct LinuxDoContentDOMParser {
         if username == nil, avatarURL == nil, topicTitle == nil, topicURL == nil {
             return nil
         }
-        return LinuxDoQuoteAttribution(username: username, avatarURL: avatarURL, topicTitle: topicTitle, topicURL: topicURL)
+        return LinuxDoQuoteAttribution(
+            username: username,
+            displayName: selectedTitle,
+            avatarURL: avatarURL,
+            topicTitle: topicTitle,
+            topicURL: topicURL,
+            source: .blockquote
+        )
+    }
+
+    private mutating func discourseQuoteBlocks(from element: Element, path: String) throws -> [LinuxDoContentBlock] {
+        let attribution = try discourseQuoteAttribution(from: element)
+        let bodyNodes = try discourseQuoteBodyNodes(from: element)
+        let childBlocks = try blocks(from: bodyNodes, path: "\(path).quote")
+        return childBlocks.isEmpty ? [] : [block(.quote(attribution: attribution, blocks: childBlocks), path: path)]
+    }
+
+    private func discourseQuoteAttribution(from element: Element) throws -> LinuxDoQuoteAttribution? {
+        let titleElement = try element.select(".title, .quote-info, cite").first()
+        let title = try quoteTitleText(from: titleElement)
+        let username = optionalAttribute("data-username", from: element)
+            ?? optionalAttribute("data-user-card", from: element)
+            ?? title
+        var avatarURL = try titleElement?.select("img.avatar").first().flatMap { resolvedURL(try? $0.attr("src")) }
+        if avatarURL == nil {
+            for child in element.children().array() where child.hasClass("title") {
+                avatarURL = try child.select("img.avatar").first().flatMap { resolvedURL(try? $0.attr("src")) }
+                if avatarURL != nil { break }
+            }
+        }
+        let topicID = optionalAttribute("data-topic", from: element).flatMap(Int.init)
+        let postNumber = optionalAttribute("data-post", from: element).flatMap(Int.init)
+        let titleLinkURL = try titleElement?.select("a[href]").first().flatMap { resolvedURL(try? $0.attr("href")) }
+        let topicURL = topicID.flatMap { resolvedURL("/t/topic/\($0)") } ?? titleLinkURL
+        let postURL = topicID.flatMap { topicID in
+            postNumber.flatMap { resolvedURL("/t/topic/\(topicID)/\($0)") }
+        } ?? titleLinkURL
+        if username == nil, title == nil, avatarURL == nil, topicURL == nil, postURL == nil {
+            return nil
+        }
+        return LinuxDoQuoteAttribution(
+            username: username,
+            displayName: title,
+            avatarURL: avatarURL,
+            topicTitle: nil,
+            topicURL: topicURL,
+            postNumber: postNumber,
+            postURL: postURL,
+            source: .discourseAside
+        )
+    }
+
+    private func quoteTitleText(from element: Element?) throws -> String? {
+        guard let element else { return nil }
+        return cleanedQuoteTitle(try quoteTitleText(from: element as Node))
+    }
+
+    private func quoteTitleText(from node: Node) throws -> String {
+        if let text = node as? TextNode {
+            return text.getWholeText()
+        }
+        if let data = node as? DataNode {
+            return data.getWholeData()
+        }
+        guard let element = node as? Element else { return "" }
+        if shouldSkipChrome(element) {
+            return ""
+        }
+        if element.tagNameNormal() == "img", element.hasClass("avatar") {
+            return ""
+        }
+        return try element.getChildNodes()
+            .map { try quoteTitleText(from: $0) }
+            .joined()
+    }
+
+    private func discourseQuoteBodyNodes(from element: Element) throws -> [Node] {
+        if let blockquote = element.children().array().first(where: { $0.tagNameNormal() == "blockquote" }) {
+            return blockquote.getChildNodes()
+        }
+        return element.getChildNodes().filter { node in
+            guard let child = node as? Element else { return true }
+            return !child.hasClass("title") && !shouldSkipChrome(child)
+        }
+    }
+
+    private mutating func calloutBlock(from element: Element, path: String) throws -> LinuxDoContentBlock? {
+        if element.tagNameNormal() == "blockquote",
+           let callout = try markdownCallout(from: element, path: path) {
+            return callout
+        }
+        guard let style = classCalloutStyle(from: element) else { return nil }
+        var childBlocks = try blocks(from: element.getChildNodes(), path: "\(path).callout")
+        let title = consumeLeadingCalloutTitle(from: &childBlocks, style: style)
+        return block(.callout(LinuxDoCallout(
+            style: style,
+            title: title ?? defaultCalloutTitle(for: style),
+            blocks: childBlocks
+        )), path: path)
+    }
+
+    private mutating func markdownCallout(from element: Element, path: String) throws -> LinuxDoContentBlock? {
+        var childBlocks = try blocks(from: element.getChildNodes(), path: "\(path).callout")
+        guard let first = childBlocks.first,
+              case .paragraph(let nodes) = first.kind,
+              let style = markerCalloutStyle(from: nodes) else {
+            return nil
+        }
+        childBlocks[0] = LinuxDoContentBlock(id: first.id, kind: .paragraph(nodesRemovingCalloutMarker(from: nodes)))
+        childBlocks = childBlocks.filter { block in
+            if case .paragraph(let nodes) = block.kind {
+                return !Self.isEmpty(nodes)
+            }
+            return true
+        }
+        return block(.callout(LinuxDoCallout(
+            style: style,
+            title: defaultCalloutTitle(for: style),
+            blocks: childBlocks
+        )), path: path)
+    }
+
+    private func postEvent(from element: Element) -> LinuxDoPostEvent? {
+        guard element.hasClass("discourse-post-event") else { return nil }
+        return LinuxDoPostEvent(
+            name: optionalAttribute("data-name", from: element),
+            startsAt: optionalAttribute("data-start", from: element),
+            endsAt: optionalAttribute("data-end", from: element),
+            timezone: optionalAttribute("data-timezone", from: element),
+            status: optionalAttribute("data-status", from: element)
+        )
     }
 
     private func isBlockElement(_ element: Element) -> Bool {
@@ -359,6 +533,121 @@ private struct LinuxDoContentDOMParser {
             || element.hasClass("spoiler-alert")
             || element.hasClass("blurred")
             || element.hasClass("inline-spoiler")
+    }
+
+    private func isEmptyAnchor(_ element: Element) -> Bool {
+        guard element.tagNameNormal() == "a" else { return false }
+        let href = optionalAttribute("href", from: element) ?? ""
+        let name = optionalAttribute("name", from: element)
+        return element.hasClass("anchor")
+            || (href.hasPrefix("#") && ((try? element.text().nilIfBlank) == nil))
+            || (name != nil && ((try? element.text().nilIfBlank) == nil))
+    }
+
+    private func shouldSkipChrome(_ element: Element) -> Bool {
+        element.hasClass("quote-controls")
+            || element.hasClass("quote-button")
+            || element.hasClass("quote-toggle")
+            || element.hasClass("expand-quote")
+    }
+
+    private func taskState(from element: Element) throws -> LinuxDoTaskState? {
+        guard let input = try element.select("input[type=checkbox]").first() else { return nil }
+        return input.hasAttr("checked") ? .checked : .unchecked
+    }
+
+    private func classCalloutStyle(from element: Element) -> LinuxDoCalloutStyle? {
+        let classes = classTokens(from: element)
+        guard classes.contains("alert")
+            || classes.contains("markdown-alert")
+            || classes.contains("md-alert")
+            || classes.contains(where: { $0.hasPrefix("alert-") || $0.hasPrefix("markdown-alert-") || $0.hasPrefix("md-alert-") })
+        else {
+            return nil
+        }
+        return calloutStyle(from: classes) ?? .generic
+    }
+
+    private func calloutStyle(from classes: [String]) -> LinuxDoCalloutStyle? {
+        if classes.contains(where: { $0.contains("danger") || $0.contains("error") }) { return .danger }
+        if classes.contains(where: { $0.contains("warning") || $0.contains("caution") }) { return .warning }
+        if classes.contains(where: { $0.contains("important") }) { return .important }
+        if classes.contains(where: { $0.contains("tip") || $0.contains("success") }) { return .tip }
+        if classes.contains(where: { $0.contains("note") || $0.contains("info") }) { return .note }
+        return nil
+    }
+
+    private func classTokens(from element: Element) -> [String] {
+        ((try? element.className()) ?? "")
+            .split(separator: " ")
+            .map { $0.lowercased() }
+    }
+
+    private func markerCalloutStyle(from nodes: [LinuxDoInlineNode]) -> LinuxDoCalloutStyle? {
+        guard let marker = calloutMarker(from: nodes) else { return nil }
+        switch marker {
+        case "note": return .note
+        case "tip": return .tip
+        case "important": return .important
+        case "warning", "caution": return .warning
+        case "danger", "error": return .danger
+        default: return .generic
+        }
+    }
+
+    private func calloutMarker(from nodes: [LinuxDoInlineNode]) -> String? {
+        let text = nodes.map(\.plainHTMLText).joined().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.hasPrefix("[!"), let end = text.firstIndex(of: "]") else { return nil }
+        return String(text[text.index(text.startIndex, offsetBy: 2)..<end]).lowercased()
+    }
+
+    private func nodesRemovingCalloutMarker(from nodes: [LinuxDoInlineNode]) -> [LinuxDoInlineNode] {
+        var mutable = nodes
+        for index in mutable.indices {
+            guard case .text(let text) = mutable[index],
+                  let markerStart = text.range(of: "[!"),
+                  markerStart.lowerBound == text.startIndex,
+                  let markerEnd = text[markerStart.upperBound...].firstIndex(of: "]") else {
+                continue
+            }
+            let remainderStart = text.index(after: markerEnd)
+            let remainder = String(text[remainderStart...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            mutable[index] = .text(remainder)
+            return Self.trimmed(mutable)
+        }
+        return nodes
+    }
+
+    private func consumeLeadingCalloutTitle(from blocks: inout [LinuxDoContentBlock], style: LinuxDoCalloutStyle) -> String? {
+        guard let first = blocks.first, case .paragraph(let nodes) = first.kind else { return nil }
+        let text = nodes.map(\.plainHTMLText).joined().trimmingCharacters(in: .whitespacesAndNewlines)
+        let defaultTitle = defaultCalloutTitle(for: style)
+        guard text.caseInsensitiveCompare(defaultTitle) == .orderedSame else { return nil }
+        blocks.removeFirst()
+        return text
+    }
+
+    private func defaultCalloutTitle(for style: LinuxDoCalloutStyle) -> String {
+        switch style {
+        case .note: return "Note"
+        case .tip: return "Tip"
+        case .important: return "Important"
+        case .warning: return "Warning"
+        case .danger: return "Danger"
+        case .generic: return "Notice"
+        }
+    }
+
+    private func cleanedQuoteTitle(_ title: String?) -> String? {
+        guard var title = title?.nilIfBlank else { return nil }
+        title = title
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        while title.last == ":" || title.last == "：" {
+            title.removeLast()
+            title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return title.nilIfBlank
     }
 
     private mutating func block(_ kind: LinuxDoContentBlockKind, path: String) -> LinuxDoContentBlock {
@@ -398,7 +687,7 @@ private struct LinuxDoContentDOMParser {
         if let last = copy.last, case .text(let text) = last {
             copy[copy.count - 1] = .text(text.trimmingTrailingWhitespace)
         }
-        return copy.filter { !$0.isWhitespaceOnly }
+        return copy
     }
 
     private static func isEmpty(_ nodes: [LinuxDoInlineNode]) -> Bool {
@@ -419,6 +708,34 @@ private extension Element {
     }
 }
 
+private extension LinuxDoInlineNode {
+    var plainHTMLText: String {
+        switch self {
+        case .text(let text), .code(let text):
+            return text
+        case .strong(let children),
+             .emphasis(let children),
+             .strikethrough(let children),
+             .highlight(let children),
+             .keyboard(let children),
+             .subscript(let children),
+             .superscript(let children),
+             .spoiler(let children):
+            return children.map(\.plainHTMLText).joined()
+        case .link(_, let children):
+            return children.map(\.plainHTMLText).joined()
+        case .image(_, let alt, _, _, _):
+            return alt ?? ""
+        case .mention(let username, _):
+            return "@\(username)"
+        case .hashtag(let text, _):
+            return text
+        case .lineBreak:
+            return "\n"
+        }
+    }
+}
+
 private extension Elements {
     func array() -> [Element] {
         (0..<size()).map { get($0) }
@@ -430,7 +747,14 @@ private extension LinuxDoInlineNode {
         switch self {
         case .text(let text), .code(let text):
             text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        case .strong(let children), .emphasis(let children), .strikethrough(let children), .spoiler(let children):
+        case .strong(let children),
+             .emphasis(let children),
+             .strikethrough(let children),
+             .highlight(let children),
+             .keyboard(let children),
+             .subscript(let children),
+             .superscript(let children),
+             .spoiler(let children):
             children.allSatisfy(\.isWhitespaceOnly)
         case .lineBreak:
             true

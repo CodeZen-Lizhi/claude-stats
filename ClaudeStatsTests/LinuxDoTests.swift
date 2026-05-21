@@ -189,10 +189,10 @@ struct LinuxDoTests {
 
         if case .table(let headers, let rows) = blocks[2].kind {
             #expect(headers.count == 2)
-            #expect(Self.plainText(headers[0].first) == "Name")
-            #expect(Self.plainText(headers[1].first) == "Link")
-            #expect(rows.first?.count == 2)
-            #expect(Self.plainText(rows.first?[1].first) == "Topic")
+            #expect(Self.plainText(headers[0].blocks.first) == "Name")
+            #expect(Self.plainText(headers[1].blocks.first) == "Link")
+            #expect(rows.first?.cells.count == 2)
+            #expect(Self.plainText(rows.first?.cells[1].blocks.first) == "Topic")
         } else {
             Issue.record("Expected table block")
         }
@@ -204,6 +204,95 @@ struct LinuxDoTests {
         } else {
             Issue.record("Expected onebox block")
         }
+    }
+
+    @Test("Discourse quote aside keeps title chrome out of quote body")
+    func discourseQuoteAsideParsesAttribution() throws {
+        let blocks = LinuxDoContentParser.blocks(from: """
+        <aside class="quote no-group" data-username="neo" data-post="1" data-topic="662077">
+          <div class="title">
+            <div class="quote-controls">ignored</div>
+            <img alt="" width="24" height="24" src="https://linux.do/user_avatar/linux.do/neo/48/12_2.png" class="avatar"> Neo:
+          </div>
+          <blockquote><p><strong>Quoted</strong> body</p></blockquote>
+        </aside>
+        """)
+
+        #expect(blocks.count == 1)
+        guard case .quote(let attribution, let quoteBlocks) = blocks[0].kind else {
+            Issue.record("Expected quote")
+            return
+        }
+        #expect(attribution?.username == "neo")
+        #expect(attribution?.displayName == "Neo")
+        #expect(attribution?.avatarURL == URL(string: "https://linux.do/user_avatar/linux.do/neo/48/12_2.png")!)
+        #expect(attribution?.postNumber == 1)
+        #expect(attribution?.postURL == URL(string: "https://linux.do/t/topic/662077/1")!)
+        #expect(Self.plainText(quoteBlocks.first) == "Quoted body")
+        #expect(!Self.containsImage(quoteBlocks))
+        #expect(!quoteBlocks.contains { Self.plainText($0).contains("ignored") })
+    }
+
+    @Test("Cooked HTML callouts support alert divs and markdown markers")
+    func cookedHTMLCallouts() throws {
+        let blocks = LinuxDoContentParser.blocks(from: """
+        <div class="alert alert-danger"><p><strong>Danger</strong></p><p>请自己写回帖内容</p></div>
+        <blockquote><p>[!DANGER]</p><p>Marker body</p></blockquote>
+        """)
+
+        #expect(blocks.count == 2)
+        guard case .callout(let alert) = blocks[0].kind else {
+            Issue.record("Expected alert callout")
+            return
+        }
+        #expect(alert.style == .danger)
+        #expect(alert.title == "Danger")
+        #expect(Self.plainText(alert.blocks.first) == "请自己写回帖内容")
+
+        guard case .callout(let marker) = blocks[1].kind else {
+            Issue.record("Expected marker callout")
+            return
+        }
+        #expect(marker.style == .danger)
+        #expect(marker.title == "Danger")
+        #expect(Self.plainText(marker.blocks.first) == "Marker body")
+    }
+
+    @Test("Cooked HTML preserves event, task list, inline markdown, and empty anchors")
+    func cookedHTMLMarkdownExtensions() throws {
+        let blocks = LinuxDoContentParser.blocks(from: """
+        <div class="discourse-post-event" data-start="2025-05-20 12:10" data-end="2025-05-27 12:10" data-timezone="Asia/Shanghai" data-status="public" data-name="社区文化宣导周"></div>
+        <ul class="task-list"><li><input type="checkbox" checked> Done <kbd>Cmd K</kbd> <mark>marked</mark> H<sub>2</sub>O<sup>2</sup></li></ul>
+        <h2><a name="p-1-title" class="anchor" href="#p-1-title" aria-label="标题链接"></a>Title</h2>
+        """)
+
+        #expect(blocks.count == 3)
+        guard case .event(let event) = blocks[0].kind else {
+            Issue.record("Expected event")
+            return
+        }
+        #expect(event.name == "社区文化宣导周")
+        #expect(event.startsAt == "2025-05-20 12:10")
+        #expect(event.endsAt == "2025-05-27 12:10")
+        #expect(event.timezone == "Asia/Shanghai")
+        #expect(event.status == "public")
+
+        guard case .list(false, let items) = blocks[1].kind, let item = items.first else {
+            Issue.record("Expected task list")
+            return
+        }
+        #expect(item.taskState == .checked)
+        #expect(Self.plainText(item.blocks.first) == "Done Cmd K marked H2O2")
+        guard case .paragraph(let nodes) = item.blocks.first?.kind else {
+            Issue.record("Expected task paragraph")
+            return
+        }
+        #expect(nodes.contains { if case .keyboard = $0 { return true }; return false })
+        #expect(nodes.contains { if case .highlight = $0 { return true }; return false })
+        #expect(nodes.contains { if case .subscript = $0 { return true }; return false })
+        #expect(nodes.contains { if case .superscript = $0 { return true }; return false })
+
+        #expect(Self.plainText(blocks[2]) == "Title")
     }
 
     @Test("Post response optional Discourse metadata decodes without breaking older shapes")
@@ -1166,6 +1255,10 @@ struct LinuxDoTests {
             return plainText(nodes)
         case .quote(attribution: _, blocks: let blocks):
             return blocks.map { plainText($0) }.joined(separator: " ")
+        case .callout(let callout):
+            return ([callout.title].compactMap(\.self) + callout.blocks.map { plainText($0) }).joined(separator: " ")
+        case .event(let event):
+            return [event.name, event.startsAt, event.endsAt].compactMap(\.self).joined(separator: " ")
         case .spoiler(let blocks):
             return blocks.map { plainText($0) }.joined(separator: " ")
         case .details(summary: _, blocks: let blocks):
@@ -1174,7 +1267,11 @@ struct LinuxDoTests {
             return code
         case .list(_, let items):
             return items.map { $0.blocks.map { plainText($0) }.joined(separator: " ") }.joined(separator: " ")
-        case .image, .onebox, .table, .divider:
+        case .table(let headers, let rows):
+            return (headers.flatMap(\.blocks) + rows.flatMap(\.cells).flatMap(\.blocks))
+                .map { plainText($0) }
+                .joined(separator: " ")
+        case .image, .onebox, .divider:
             return ""
         }
     }
@@ -1184,7 +1281,14 @@ struct LinuxDoTests {
             switch node {
             case .text(let text), .code(let text):
                 return text
-            case .strong(let children), .emphasis(let children), .strikethrough(let children), .spoiler(let children):
+            case .strong(let children),
+                 .emphasis(let children),
+                 .strikethrough(let children),
+                 .highlight(let children),
+                 .keyboard(let children),
+                 .subscript(let children),
+                 .superscript(let children),
+                 .spoiler(let children):
                 return plainText(children)
             case .link(_, let children):
                 return plainText(children)
@@ -1198,6 +1302,26 @@ struct LinuxDoTests {
                 return "\n"
             }
         }.joined()
+    }
+
+    private static func containsImage(_ blocks: [LinuxDoContentBlock]) -> Bool {
+        blocks.contains { block in
+            switch block.kind {
+            case .image:
+                return true
+            case .quote(_, let blocks), .details(_, let blocks), .spoiler(let blocks):
+                return containsImage(blocks)
+            case .callout(let callout):
+                return containsImage(callout.blocks)
+            case .list(_, let items):
+                return items.contains { containsImage($0.blocks) }
+            case .table(let headers, let rows):
+                return headers.contains { containsImage($0.blocks) }
+                    || rows.flatMap(\.cells).contains { containsImage($0.blocks) }
+            case .paragraph, .heading, .event, .codeBlock, .onebox, .divider, .rawHTML:
+                return false
+            }
+        }
     }
 
     private static func notification(

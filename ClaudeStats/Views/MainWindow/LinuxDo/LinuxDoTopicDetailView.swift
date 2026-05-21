@@ -89,6 +89,7 @@ struct LinuxDoTopicDetailView: View {
                         LinuxDoPostView(
                             post: post,
                             contentBlocks: store.contentBlocks(for: post),
+                            contentBlocksForReply: { store.contentBlocks(for: $0) },
                             isTopicOwner: post.postNumber == 1,
                             repliesState: state.replyStates[post.id] ?? LinuxDoPostRepliesState(),
                             replyComposer: state.replyComposers[post.id] ?? LinuxDoComposerState(),
@@ -218,6 +219,7 @@ struct LinuxDoTopicDetailView: View {
 private struct LinuxDoPostView: View {
     let post: LinuxDoPost
     let contentBlocks: [LinuxDoContentBlock]
+    let contentBlocksForReply: (LinuxDoPost) -> [LinuxDoContentBlock]
     let isTopicOwner: Bool
     let repliesState: LinuxDoPostRepliesState
     let replyComposer: LinuxDoComposerState
@@ -267,7 +269,7 @@ private struct LinuxDoPostView: View {
 
                 LinuxDoPostReplyPreviewList(
                     repliesState: repliesState,
-                    contentBlocks: { LinuxDoContentParser.blocks(from: $0.cookedHTML) }
+                    contentBlocks: contentBlocksForReply
                 )
 
                 if replyComposer.isPresented {
@@ -284,6 +286,7 @@ private struct LinuxDoPostView: View {
                     )
                 }
             }
+            .frame(maxWidth: LinuxDoDetailLayout.contentMaxWidth, alignment: .leading)
             .padding(.bottom, 16)
             .overlay(alignment: .bottom) {
                 Rectangle()
@@ -352,10 +355,36 @@ private struct LinuxDoPostBody: View {
     let contentBlocks: [LinuxDoContentBlock]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ForEach(contentBlocks) { block in
-                LinuxDoContentBlockView(block: block)
-            }
+        LinuxDoRichContentList(blocks: contentBlocks, context: .post)
+    }
+}
+
+private enum LinuxDoRichContentContext: Equatable {
+    case post
+    case quote(depth: Int)
+
+    var quoteDepth: Int {
+        switch self {
+        case .post: 0
+        case .quote(let depth): depth
+        }
+    }
+
+    var nestedQuoteContext: LinuxDoRichContentContext {
+        .quote(depth: quoteDepth + 1)
+    }
+
+    var imageMaxHeight: CGFloat {
+        switch self {
+        case .post: 460
+        case .quote: 160
+        }
+    }
+
+    var bodyFontSize: CGFloat {
+        switch self {
+        case .post: 12
+        case .quote: 11
         }
     }
 }
@@ -606,11 +635,19 @@ private struct LinuxDoReplyPreviewRow: View {
             nodes.map(\.plainPreview).joined()
         case .quote(_, let blocks), .details(_, let blocks), .spoiler(let blocks):
             blocks.map(plainText).joined(separator: " ")
+        case .callout(let callout):
+            ([callout.title].compactMap(\.self) + callout.blocks.map(plainText)).joined(separator: " ")
+        case .event(let event):
+            [event.name, event.startsAt, event.endsAt].compactMap(\.self).joined(separator: " ")
         case .codeBlock(_, let code), .rawHTML(let code):
             code
         case .list(_, let items):
             items.flatMap(\.blocks).map(plainText).joined(separator: " ")
-        case .image, .onebox, .table, .divider:
+        case .table(let headers, let rows):
+            (headers.flatMap(\.blocks) + rows.flatMap(\.cells).flatMap(\.blocks))
+                .map(plainText)
+                .joined(separator: " ")
+        case .image, .onebox, .divider:
             ""
         }
     }
@@ -687,52 +724,42 @@ private struct LinuxDoComposer: View {
     }
 }
 
+private struct LinuxDoRichContentList: View {
+    let blocks: [LinuxDoContentBlock]
+    let context: LinuxDoRichContentContext
+    var spacing: CGFloat = 10
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: spacing) {
+            ForEach(blocks) { block in
+                LinuxDoContentBlockView(block: block, context: context)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 private struct LinuxDoContentBlockView: View {
     let block: LinuxDoContentBlock
+    let context: LinuxDoRichContentContext
 
     var body: some View {
         switch block.kind {
         case .paragraph(let nodes):
-            LinuxDoInlineText(nodes: nodes)
-                .font(.sora(12))
+            LinuxDoRichInlineText(nodes: nodes, fontSize: context.bodyFontSize)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
         case .heading(let level, let nodes):
-            LinuxDoInlineText(nodes: nodes)
-                .font(.sora(headingSize(for: level), weight: .semibold))
+            LinuxDoRichInlineText(nodes: nodes, fontSize: headingSize(for: level), weight: .semibold)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, level <= 2 ? 4 : 2)
         case .quote(let attribution, let blocks):
-            VStack(alignment: .leading, spacing: 8) {
-                if let attribution {
-                    HStack(spacing: 6) {
-                        if let avatarURL = attribution.avatarURL {
-                            AsyncImage(url: avatarURL) { image in
-                                image.resizable().scaledToFill()
-                            } placeholder: {
-                                Image(systemName: "quote.bubble")
-                                    .foregroundStyle(Color.stxMuted)
-                            }
-                            .frame(width: 18, height: 18)
-                            .clipShape(Circle())
-                        }
-                        Text(attribution.username ?? attribution.topicTitle ?? "Quote")
-                            .font(.sora(10, weight: .semibold))
-                            .foregroundStyle(Color.stxMuted)
-                    }
-                }
-                ForEach(blocks) { child in
-                    LinuxDoContentBlockView(block: child)
-                }
-            }
-            .padding(.vertical, 8)
-            .padding(.leading, 12)
-            .padding(.trailing, 10)
-            .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 6))
-            .overlay(alignment: .leading) {
-                Rectangle().fill(Color.stxAccent.opacity(0.45)).frame(width: 3)
-            }
+            LinuxDoQuoteCard(attribution: attribution, blocks: blocks, context: context)
+        case .callout(let callout):
+            LinuxDoCalloutBlock(callout: callout, context: context)
+        case .event(let event):
+            LinuxDoEventBlock(event: event)
         case .codeBlock(let language, let code):
             VStack(alignment: .leading, spacing: 0) {
                 if let language, !language.isEmpty {
@@ -742,7 +769,7 @@ private struct LinuxDoContentBlockView: View {
                         .padding(.horizontal, 10)
                         .padding(.top, 8)
                 }
-                ScrollView(.horizontal, showsIndicators: true) {
+                AppScrollView(.horizontal) {
                     Text(code)
                         .font(.system(.caption, design: .monospaced))
                         .textSelection(.enabled)
@@ -752,55 +779,28 @@ private struct LinuxDoContentBlockView: View {
             .background(Color.black.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
         case .list(let ordered, let items):
             VStack(alignment: .leading, spacing: 6) {
-                ForEach(items.indices, id: \.self) { index in
-                    HStack(alignment: .top, spacing: 8) {
-                        Text(ordered ? "\(index + 1)." : "-")
-                            .font(.sora(12).monospacedDigit())
-                            .foregroundStyle(Color.stxMuted)
-                            .frame(width: ordered ? 26 : 14, alignment: .trailing)
-                        VStack(alignment: .leading, spacing: 6) {
-                            ForEach(items[index].blocks) { itemBlock in
-                                LinuxDoContentBlockView(block: itemBlock)
-                            }
-                        }
-                    }
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                    LinuxDoListItemView(item: item, marker: marker(for: item, ordered: ordered, index: index), context: context)
                 }
             }
-        case .image(let url, let alt, _, _, let linkURL):
-            Button {
-                NSWorkspace.shared.open(linkURL ?? url)
-            } label: {
-                AsyncImage(url: url) { image in
-                    image
-                        .resizable()
-                        .scaledToFit()
-                } placeholder: {
-                    ProgressView()
-                        .controlSize(.small)
-                        .frame(height: 90)
-                        .frame(maxWidth: .infinity)
-                }
-                .frame(maxHeight: 460)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-                .accessibilityLabel(alt ?? "LinuxDo image")
-            }
-            .buttonStyle(.plain)
+        case .image(let url, let alt, let width, let height, let linkURL):
+            LinuxDoImageBlock(url: url, alt: alt, width: width, height: height, linkURL: linkURL, context: context)
         case .onebox(let onebox):
             LinuxDoOneboxView(onebox: onebox)
         case .table(let headers, let rows):
-            ScrollView(.horizontal, showsIndicators: true) {
+            AppScrollView(.horizontal) {
                 Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
                     if !headers.isEmpty {
                         GridRow {
-                            ForEach(headers.indices, id: \.self) { index in
-                                tableCell(headers[index], isHeader: true)
+                            ForEach(headers) { cell in
+                                tableCell(cell.blocks, isHeader: true)
                             }
                         }
                     }
-                    ForEach(rows.indices, id: \.self) { rowIndex in
+                    ForEach(rows) { row in
                         GridRow {
-                            ForEach(rows[rowIndex].indices, id: \.self) { columnIndex in
-                                tableCell(rows[rowIndex][columnIndex], isHeader: false)
+                            ForEach(row.cells) { cell in
+                                tableCell(cell.blocks, isHeader: false)
                             }
                         }
                     }
@@ -808,9 +808,9 @@ private struct LinuxDoContentBlockView: View {
                 .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 6))
             }
         case .details(let summary, let blocks):
-            LinuxDoDisclosureBlockView(summary: summary, blocks: blocks, icon: "chevron.right")
+            LinuxDoDisclosureBlockView(summary: summary, blocks: blocks, icon: "chevron.right", context: context)
         case .spoiler(let blocks):
-            LinuxDoDisclosureBlockView(summary: [.text("Spoiler")], blocks: blocks, icon: "eye.slash")
+            LinuxDoDisclosureBlockView(summary: [.text("Spoiler")], blocks: blocks, icon: "eye.slash", context: context)
         case .divider:
             StxRule()
                 .padding(.vertical, 5)
@@ -821,6 +821,13 @@ private struct LinuxDoContentBlockView: View {
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    private func marker(for item: LinuxDoListItem, ordered: Bool, index: Int) -> LinuxDoListMarker {
+        if let taskState = item.taskState {
+            return .task(taskState)
+        }
+        return ordered ? .text("\(index + 1).") : .text("-")
     }
 
     private func headingSize(for level: Int) -> CGFloat {
@@ -835,7 +842,7 @@ private struct LinuxDoContentBlockView: View {
     private func tableCell(_ blocks: [LinuxDoContentBlock], isHeader: Bool) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             ForEach(blocks) { block in
-                LinuxDoContentBlockView(block: block)
+                LinuxDoContentBlockView(block: block, context: context)
             }
         }
         .font(isHeader ? .sora(11, weight: .semibold) : .sora(11))
@@ -845,56 +852,422 @@ private struct LinuxDoContentBlockView: View {
     }
 }
 
-private struct LinuxDoInlineText: View {
-    let nodes: [LinuxDoInlineNode]
+private enum LinuxDoListMarker: Equatable {
+    case text(String)
+    case task(LinuxDoTaskState)
+}
+
+private struct LinuxDoListItemView: View {
+    let item: LinuxDoListItem
+    let marker: LinuxDoListMarker
+    let context: LinuxDoRichContentContext
 
     var body: some View {
-        Text(Self.attributedString(from: nodes))
+        HStack(alignment: .top, spacing: 8) {
+            markerView
+                .frame(width: markerWidth, alignment: .trailing)
+            LinuxDoRichContentList(blocks: item.blocks, context: context, spacing: 6)
+        }
+    }
+
+    @ViewBuilder
+    private var markerView: some View {
+        switch marker {
+        case .text(let text):
+            Text(text)
+                .font(.sora(context.bodyFontSize).monospacedDigit())
+                .foregroundStyle(Color.stxMuted)
+        case .task(let state):
+            Image(systemName: state == .checked ? "checkmark.square.fill" : "square")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(state == .checked ? Color.stxAccent : Color.stxMuted)
+                .accessibilityLabel(state == .checked ? "Completed task" : "Incomplete task")
+        }
+    }
+
+    private var markerWidth: CGFloat {
+        switch marker {
+        case .text(let text):
+            text == "-" ? 14 : 26
+        case .task:
+            18
+        }
+    }
+}
+
+private struct LinuxDoQuoteCard: View {
+    let attribution: LinuxDoQuoteAttribution?
+    let blocks: [LinuxDoContentBlock]
+    let context: LinuxDoRichContentContext
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if attribution != nil {
+                header
+            }
+            LinuxDoRichContentList(blocks: blocks, context: context.nestedQuoteContext, spacing: 8)
+        }
+        .padding(.vertical, 8)
+        .padding(.leading, 12)
+        .padding(.trailing, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(context.quoteDepth == 0 ? 0.055 : 0.035), in: RoundedRectangle(cornerRadius: 6))
+        .overlay(alignment: .leading) {
+            Rectangle().fill(Color.stxAccent.opacity(context.quoteDepth == 0 ? 0.45 : 0.28)).frame(width: 3)
+        }
+        .padding(.leading, context.quoteDepth > 0 ? 10 : 0)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Quote")
+    }
+
+    @ViewBuilder
+    private var header: some View {
+        if let attribution {
+            HStack(spacing: 6) {
+                if let avatarURL = attribution.avatarURL {
+                    AsyncImage(url: avatarURL) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Image(systemName: "quote.bubble")
+                            .foregroundStyle(Color.stxMuted)
+                    }
+                    .frame(width: 18, height: 18)
+                    .clipShape(Circle())
+                    .accessibilityHidden(true)
+                }
+                Text(attribution.displayName ?? attribution.username ?? attribution.topicTitle ?? "Quote")
+                    .font(.sora(10, weight: .semibold))
+                    .foregroundStyle(Color.stxMuted)
+                if let postNumber = attribution.postNumber {
+                    Text("#\(postNumber)")
+                        .font(.sora(9).monospacedDigit())
+                        .foregroundStyle(Color.stxMuted.opacity(0.75))
+                }
+                Spacer(minLength: 0)
+                if let url = attribution.postURL ?? attribution.topicURL {
+                    Button {
+                        NSWorkspace.shared.open(url)
+                    } label: {
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.stxMuted)
+                    .help("Open quoted post")
+                }
+            }
+        }
+    }
+}
+
+private struct LinuxDoCalloutBlock: View {
+    let callout: LinuxDoCallout
+    let context: LinuxDoRichContentContext
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let title = callout.title, !title.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: iconName)
+                        .font(.system(size: 13, weight: .bold))
+                    Text(title)
+                        .font(.sora(13, weight: .bold))
+                }
+                .foregroundStyle(accentColor)
+            }
+            LinuxDoRichContentList(blocks: callout.blocks, context: context, spacing: 8)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(backgroundColor, in: RoundedRectangle(cornerRadius: 7))
+    }
+
+    private var iconName: String {
+        switch callout.style {
+        case .note: "info.circle.fill"
+        case .tip: "lightbulb.fill"
+        case .important: "star.circle.fill"
+        case .warning: "exclamationmark.triangle.fill"
+        case .danger: "bolt.fill"
+        case .generic: "text.bubble.fill"
+        }
+    }
+
+    private var accentColor: Color {
+        switch callout.style {
+        case .note: Color.stxAccent
+        case .tip: .green
+        case .important: .purple
+        case .warning: .orange
+        case .danger: .red
+        case .generic: Color.stxMuted
+        }
+    }
+
+    private var backgroundColor: Color {
+        switch callout.style {
+        case .danger: Color.red.opacity(0.18)
+        case .warning: Color.orange.opacity(0.16)
+        case .tip: Color.green.opacity(0.13)
+        case .important: Color.purple.opacity(0.14)
+        case .note: Color.stxAccent.opacity(0.12)
+        case .generic: Color.primary.opacity(0.05)
+        }
+    }
+}
+
+private struct LinuxDoEventBlock: View {
+    let event: LinuxDoPostEvent
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(spacing: 2) {
+                Text(monthText)
+                    .font(.sora(10, weight: .semibold))
+                    .foregroundStyle(.red)
+                Text(dayText)
+                    .font(.sora(18, weight: .semibold).monospacedDigit())
+            }
+            .frame(width: 48, height: 48)
+            .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 6))
+            .overlay {
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+            }
+
+            VStack(alignment: .leading, spacing: 7) {
+                Text(event.name ?? "Event")
+                    .font(.sora(14, weight: .semibold))
+                HStack(spacing: 6) {
+                    Image(systemName: "clock.fill")
+                    Text(eventRangeText)
+                }
+                .font(.sora(11))
+                .foregroundStyle(Color.stxMuted)
+                if let status = event.status {
+                    Text(status.capitalized)
+                        .font(.sora(9, weight: .medium))
+                        .foregroundStyle(Color.stxAccent)
+                        .padding(.horizontal, 6)
+                        .frame(height: 18)
+                        .background(Color.stxAccent.opacity(0.1), in: Capsule())
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 7))
+        .overlay {
+            RoundedRectangle(cornerRadius: 7)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        }
+    }
+
+    private var eventRangeText: String {
+        [event.startsAt, event.endsAt].compactMap(\.self).joined(separator: " -> ")
+            + (event.timezone.map { " \($0)" } ?? "")
+    }
+
+    private var monthText: String {
+        guard let startsAt = event.startsAt else { return "--" }
+        let datePart = startsAt.split(separator: " ").first ?? Substring(startsAt)
+        let parts = datePart.split(separator: "-")
+        guard parts.count >= 2 else { return "--" }
+        return "\(Int(parts[1]) ?? 0)月"
+    }
+
+    private var dayText: String {
+        guard let startsAt = event.startsAt else { return "--" }
+        let datePart = startsAt.split(separator: " ").first ?? Substring(startsAt)
+        let parts = datePart.split(separator: "-")
+        guard parts.count >= 3 else { return "--" }
+        return "\(Int(parts[2]) ?? 0)"
+    }
+}
+
+private struct LinuxDoImageBlock: View {
+    let url: URL
+    let alt: String?
+    let width: Int?
+    let height: Int?
+    let linkURL: URL?
+    let context: LinuxDoRichContentContext
+
+    var body: some View {
+        Button {
+            NSWorkspace.shared.open(linkURL ?? url)
+        } label: {
+            AsyncImage(url: url) { image in
+                image
+                    .resizable()
+                    .scaledToFit()
+            } placeholder: {
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(height: min(90, context.imageMaxHeight))
+                    .frame(maxWidth: .infinity)
+            }
+            .frame(width: fixedSmallWidth, height: fixedSmallHeight)
+            .frame(maxHeight: context.imageMaxHeight)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .accessibilityLabel(alt ?? "LinuxDo image")
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var fixedSmallWidth: CGFloat? {
+        guard isSmallImage, let width else { return nil }
+        return CGFloat(width)
+    }
+
+    private var fixedSmallHeight: CGFloat? {
+        guard isSmallImage, let height else { return nil }
+        return CGFloat(height)
+    }
+
+    private var isSmallImage: Bool {
+        max(width ?? 0, height ?? 0) > 0 && max(width ?? 0, height ?? 0) <= 80
+    }
+}
+
+private struct LinuxDoRichInlineText: View {
+    let nodes: [LinuxDoInlineNode]
+    var fontSize: CGFloat
+    var weight: Font.Weight = .regular
+
+    var body: some View {
+        Text(Self.attributedString(from: nodes, fontSize: fontSize, weight: weight))
             .environment(\.openURL, OpenURLAction { url in
                 NSWorkspace.shared.open(url)
                 return .handled
             })
     }
 
-    private static func attributedString(from nodes: [LinuxDoInlineNode]) -> AttributedString {
+    private static func attributedString(from nodes: [LinuxDoInlineNode], fontSize: CGFloat, weight: Font.Weight) -> AttributedString {
         var result = AttributedString()
-        append(nodes, to: &result)
+        append(nodes, style: LinuxDoInlineStyle(fontSize: fontSize, weight: weight), to: &result)
         return result
     }
 
-    private static func append(_ nodes: [LinuxDoInlineNode], to result: inout AttributedString) {
+    private static func append(_ nodes: [LinuxDoInlineNode], style: LinuxDoInlineStyle, to result: inout AttributedString) {
         for node in nodes {
             switch node {
             case .text(let text):
-                result.append(AttributedString(text))
-            case .strong(let children), .emphasis(let children), .strikethrough(let children), .spoiler(let children):
-                append(children, to: &result)
+                result.append(run(text.addingSoftBreaksToLongRuns(), style: style))
+            case .strong(let children):
+                append(children, style: style.with(strong: true), to: &result)
+            case .emphasis(let children):
+                append(children, style: style.with(emphasis: true), to: &result)
+            case .strikethrough(let children):
+                append(children, style: style.with(strikethrough: true), to: &result)
+            case .highlight(let children):
+                append(children, style: style.with(highlight: true), to: &result)
+            case .keyboard(let children):
+                append(children, style: style.with(keyboard: true), to: &result)
+            case .subscript(let children):
+                append(children, style: style.with(isSubscript: true), to: &result)
+            case .superscript(let children):
+                append(children, style: style.with(superscript: true), to: &result)
+            case .spoiler(let children):
+                append(children, style: style.with(spoiler: true), to: &result)
             case .code(let text):
-                var run = AttributedString(text)
-                run.font = .system(.caption, design: .monospaced)
-                run.backgroundColor = Color.primary.opacity(0.08)
-                result.append(run)
+                result.append(run(text.addingSoftBreaksToLongRuns(), style: style.with(code: true)))
             case .link(let url, let children):
-                var run = attributedString(from: children)
-                run.link = url
-                run.foregroundColor = Color.stxAccent
-                result.append(run)
+                var childRun = AttributedString()
+                append(children, style: style, to: &childRun)
+                childRun.link = url
+                childRun.foregroundColor = Color.stxAccent
+                result.append(childRun)
             case .image(_, let alt, _, _, let isEmoji):
-                result.append(AttributedString(isEmoji ? (alt ?? "") : (alt ?? "[image]")))
+                result.append(run(isEmoji ? (alt ?? "") : (alt ?? "[image]"), style: style))
             case .mention(let username, let url):
-                var run = AttributedString("@\(username)")
-                run.foregroundColor = Color.stxAccent
-                if let url { run.link = url }
-                result.append(run)
+                var mention = run("@\(username)", style: style)
+                mention.foregroundColor = Color.stxAccent
+                if let url { mention.link = url }
+                result.append(mention)
             case .hashtag(let text, let url):
-                var run = AttributedString(text.hasPrefix("#") ? text : "#\(text)")
-                run.foregroundColor = Color.stxAccent
-                if let url { run.link = url }
-                result.append(run)
+                var hashtag = run(text.hasPrefix("#") ? text : "#\(text)", style: style)
+                hashtag.foregroundColor = Color.stxAccent
+                if let url { hashtag.link = url }
+                result.append(hashtag)
             case .lineBreak:
                 result.append(AttributedString("\n"))
             }
         }
+    }
+
+    private static func run(_ text: String, style: LinuxDoInlineStyle) -> AttributedString {
+        var run = AttributedString(text)
+        var fontSize = style.fontSize
+        if style.isSubscript || style.isSuperscript {
+            fontSize -= 2
+        }
+        var font: Font = style.isCode || style.isKeyboard
+            ? .system(size: fontSize - 1, design: .monospaced)
+            : .sora(fontSize, weight: style.isStrong ? .semibold : style.weight)
+        if style.isEmphasis {
+            font = font.italic()
+        }
+        run.font = font
+        if style.isStrikethrough {
+            run.strikethroughStyle = .single
+        }
+        if style.isCode || style.isKeyboard {
+            run.backgroundColor = Color.primary.opacity(0.08)
+        }
+        if style.isHighlight {
+            run.backgroundColor = Color.yellow.opacity(0.28)
+        }
+        if style.isSpoiler {
+            run.backgroundColor = Color.primary.opacity(0.12)
+            run.foregroundColor = Color.primary.opacity(0.72)
+        }
+        if style.isSubscript {
+            run.baselineOffset = -style.fontSize * 0.22
+        }
+        if style.isSuperscript {
+            run.baselineOffset = style.fontSize * 0.35
+        }
+        return run
+    }
+}
+
+private struct LinuxDoInlineStyle {
+    let fontSize: CGFloat
+    let weight: Font.Weight
+    var isStrong = false
+    var isEmphasis = false
+    var isStrikethrough = false
+    var isCode = false
+    var isHighlight = false
+    var isKeyboard = false
+    var isSubscript = false
+    var isSuperscript = false
+    var isSpoiler = false
+
+    func with(
+        strong: Bool = false,
+        emphasis: Bool = false,
+        strikethrough: Bool = false,
+        code: Bool = false,
+        highlight: Bool = false,
+        keyboard: Bool = false,
+        isSubscript: Bool = false,
+        superscript: Bool = false,
+        spoiler: Bool = false
+    ) -> LinuxDoInlineStyle {
+        var copy = self
+        copy.isStrong = copy.isStrong || strong
+        copy.isEmphasis = copy.isEmphasis || emphasis
+        copy.isStrikethrough = copy.isStrikethrough || strikethrough
+        copy.isCode = copy.isCode || code
+        copy.isHighlight = copy.isHighlight || highlight
+        copy.isKeyboard = copy.isKeyboard || keyboard
+        copy.isSubscript = copy.isSubscript || isSubscript
+        copy.isSuperscript = copy.isSuperscript || superscript
+        copy.isSpoiler = copy.isSpoiler || spoiler
+        return copy
     }
 }
 
@@ -949,13 +1322,14 @@ private struct LinuxDoDisclosureBlockView: View {
     let summary: [LinuxDoInlineNode]
     let blocks: [LinuxDoContentBlock]
     let icon: String
+    let context: LinuxDoRichContentContext
     @State private var isExpanded = false
 
     var body: some View {
         DisclosureGroup(isExpanded: $isExpanded) {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(blocks) { block in
-                    LinuxDoContentBlockView(block: block)
+                    LinuxDoContentBlockView(block: block, context: context)
                 }
             }
             .padding(.top, 8)
@@ -964,8 +1338,7 @@ private struct LinuxDoDisclosureBlockView: View {
                 Image(systemName: icon)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(Color.stxMuted)
-                LinuxDoInlineText(nodes: summary)
-                    .font(.sora(11, weight: .medium))
+                LinuxDoRichInlineText(nodes: summary, fontSize: 11, weight: .medium)
             }
         }
         .padding(10)
@@ -1048,7 +1421,14 @@ private extension LinuxDoInlineNode {
         switch self {
         case .text(let text), .code(let text):
             text
-        case .strong(let children), .emphasis(let children), .strikethrough(let children), .spoiler(let children):
+        case .strong(let children),
+             .emphasis(let children),
+             .strikethrough(let children),
+             .highlight(let children),
+             .keyboard(let children),
+             .subscript(let children),
+             .superscript(let children),
+             .spoiler(let children):
             children.map(\.plainPreview).joined()
         case .link(_, let children):
             children.map(\.plainPreview).joined()
@@ -1061,6 +1441,26 @@ private extension LinuxDoInlineNode {
         case .lineBreak:
             "\n"
         }
+    }
+}
+
+private extension String {
+    func addingSoftBreaksToLongRuns(maxRunLength: Int = 32, chunkLength: Int = 16) -> String {
+        split(separator: " ", omittingEmptySubsequences: false)
+            .map { part -> String in
+                guard part.count > maxRunLength else { return String(part) }
+                var result = ""
+                var count = 0
+                for character in part {
+                    if count > 0 && count.isMultiple(of: chunkLength) {
+                        result += "\u{200B}"
+                    }
+                    result.append(character)
+                    count += 1
+                }
+                return result
+            }
+            .joined(separator: " ")
     }
 }
 

@@ -622,11 +622,13 @@ enum LinuxDoContentBlockKind: Hashable, Sendable {
     case paragraph([LinuxDoInlineNode])
     case heading(level: Int, content: [LinuxDoInlineNode])
     case quote(attribution: LinuxDoQuoteAttribution?, blocks: [LinuxDoContentBlock])
+    case callout(LinuxDoCallout)
+    case event(LinuxDoPostEvent)
     case codeBlock(language: String?, code: String)
     case list(ordered: Bool, items: [LinuxDoListItem])
     case image(url: URL, alt: String?, width: Int?, height: Int?, linkURL: URL?)
     case onebox(LinuxDoOnebox)
-    case table(headers: [[LinuxDoContentBlock]], rows: [[[LinuxDoContentBlock]]])
+    case table(headers: [LinuxDoTableCell], rows: [LinuxDoTableRow])
     case details(summary: [LinuxDoInlineNode], blocks: [LinuxDoContentBlock])
     case spoiler([LinuxDoContentBlock])
     case divider
@@ -639,6 +641,10 @@ enum LinuxDoInlineNode: Hashable, Sendable {
     case emphasis([LinuxDoInlineNode])
     case strikethrough([LinuxDoInlineNode])
     case code(String)
+    case highlight([LinuxDoInlineNode])
+    case keyboard([LinuxDoInlineNode])
+    case `subscript`([LinuxDoInlineNode])
+    case superscript([LinuxDoInlineNode])
     case link(url: URL, children: [LinuxDoInlineNode])
     case image(url: URL, alt: String?, width: Int?, height: Int?, isEmoji: Bool)
     case mention(username: String, url: URL?)
@@ -647,15 +653,90 @@ enum LinuxDoInlineNode: Hashable, Sendable {
     case lineBreak
 }
 
-struct LinuxDoListItem: Hashable, Sendable {
+enum LinuxDoTaskState: Hashable, Sendable {
+    case checked
+    case unchecked
+}
+
+struct LinuxDoListItem: Hashable, Sendable, Identifiable {
+    let id: String
+    let taskState: LinuxDoTaskState?
     let blocks: [LinuxDoContentBlock]
+
+    init(id: String = UUID().uuidString, taskState: LinuxDoTaskState? = nil, blocks: [LinuxDoContentBlock]) {
+        self.id = id
+        self.taskState = taskState
+        self.blocks = blocks
+    }
+}
+
+struct LinuxDoTableCell: Hashable, Sendable, Identifiable {
+    let id: String
+    let blocks: [LinuxDoContentBlock]
+}
+
+struct LinuxDoTableRow: Hashable, Sendable, Identifiable {
+    let id: String
+    let cells: [LinuxDoTableCell]
+}
+
+struct LinuxDoCallout: Hashable, Sendable {
+    let style: LinuxDoCalloutStyle
+    let title: String?
+    let blocks: [LinuxDoContentBlock]
+}
+
+enum LinuxDoCalloutStyle: String, Hashable, Sendable {
+    case note
+    case tip
+    case important
+    case warning
+    case danger
+    case generic
+}
+
+struct LinuxDoPostEvent: Hashable, Sendable {
+    let name: String?
+    let startsAt: String?
+    let endsAt: String?
+    let timezone: String?
+    let status: String?
 }
 
 struct LinuxDoQuoteAttribution: Hashable, Sendable {
     let username: String?
+    let displayName: String?
     let avatarURL: URL?
     let topicTitle: String?
     let topicURL: URL?
+    let postNumber: Int?
+    let postURL: URL?
+    let source: LinuxDoQuoteSource
+
+    init(
+        username: String?,
+        displayName: String? = nil,
+        avatarURL: URL?,
+        topicTitle: String?,
+        topicURL: URL?,
+        postNumber: Int? = nil,
+        postURL: URL? = nil,
+        source: LinuxDoQuoteSource = .blockquote
+    ) {
+        self.username = username
+        self.displayName = displayName
+        self.avatarURL = avatarURL
+        self.topicTitle = topicTitle
+        self.topicURL = topicURL
+        self.postNumber = postNumber
+        self.postURL = postURL
+        self.source = source
+    }
+}
+
+enum LinuxDoQuoteSource: Hashable, Sendable {
+    case blockquote
+    case discourseAside
 }
 
 struct LinuxDoOnebox: Hashable, Sendable {
