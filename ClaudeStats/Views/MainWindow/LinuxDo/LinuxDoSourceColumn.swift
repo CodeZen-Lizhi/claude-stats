@@ -60,16 +60,6 @@ struct LinuxDoSourceColumn: View {
     private var topSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             sourceHeader("Top")
-            Picker("", selection: $store.topPeriod) {
-                ForEach(LinuxDoTopPeriod.allCases) { period in
-                    Text(period.displayName).tag(period)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .onChange(of: store.topPeriod) { _, new in
-                store.selectTopPeriod(new)
-            }
             sourceButton(title: "Top \(store.topPeriod.displayName)", symbol: "trophy.fill", feed: .top(store.topPeriod))
         }
     }
