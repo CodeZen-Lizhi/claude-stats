@@ -72,7 +72,11 @@ struct LinuxDoTopicDetailView: View {
                             .padding(.top, 14)
                     }
                     ForEach(detail.posts) { post in
-                        LinuxDoPostView(post: post, isTopicOwner: post.postNumber == 1)
+                        LinuxDoPostView(
+                            post: post,
+                            contentBlocks: store.contentBlocks(for: post),
+                            isTopicOwner: post.postNumber == 1
+                        )
                             .id(post.id)
                             .background {
                                 GeometryReader { geometry in
@@ -128,7 +132,9 @@ struct LinuxDoTopicDetailView: View {
 
     private func updateVisiblePost(_ values: [LinuxDoPostVisibility]) {
         guard let visible = values.min(by: { abs($0.minY - 12) < abs($1.minY - 12) }) else { return }
-        visiblePostNumber = max(1, visible.postNumber)
+        let nextPostNumber = max(1, visible.postNumber)
+        guard nextPostNumber != visiblePostNumber else { return }
+        visiblePostNumber = nextPostNumber
     }
 
     private func header(detail: LinuxDoTopicDetail, state: LinuxDoTopicDetailState) -> some View {
@@ -181,11 +187,8 @@ struct LinuxDoTopicDetailView: View {
 
 private struct LinuxDoPostView: View {
     let post: LinuxDoPost
+    let contentBlocks: [LinuxDoContentBlock]
     let isTopicOwner: Bool
-
-    private var blocks: [LinuxDoContentBlock] {
-        LinuxDoContentParser.blocks(from: post.cookedHTML)
-    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
@@ -230,7 +233,7 @@ private struct LinuxDoPostView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    ForEach(blocks) { block in
+                    ForEach(contentBlocks) { block in
                         LinuxDoContentBlockView(block: block)
                     }
                 }

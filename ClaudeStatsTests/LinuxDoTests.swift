@@ -83,6 +83,48 @@ struct LinuxDoTests {
         }
     }
 
+    @Test("Store caches parsed post blocks and invalidates when post content changes")
+    func storeCachesParsedPostBlocks() {
+        let store = LinuxDoStore(
+            preferences: Self.makePreferences(),
+            credentials: InMemoryLinuxDoCredentialStore()
+        )
+        let updatedAt = Date(timeIntervalSince1970: 1_000)
+        let post = Self.post(
+            id: 100,
+            topicID: 1,
+            postNumber: 1,
+            cookedHTML: "<p>First</p>",
+            updatedAt: updatedAt
+        )
+
+        let first = store.contentBlocks(for: post)
+        let second = store.contentBlocks(for: post)
+
+        #expect(first == second)
+        #expect(Self.plainText(first.first) == "First")
+
+        let changedHTML = Self.post(
+            id: 100,
+            topicID: 1,
+            postNumber: 1,
+            cookedHTML: "<p>Second</p>",
+            updatedAt: updatedAt
+        )
+        let changedHTMLBlocks = store.contentBlocks(for: changedHTML)
+        #expect(Self.plainText(changedHTMLBlocks.first) == "Second")
+
+        let changedUpdatedAt = Self.post(
+            id: 100,
+            topicID: 1,
+            postNumber: 1,
+            cookedHTML: "<p>Third</p>",
+            updatedAt: updatedAt.addingTimeInterval(1)
+        )
+        let changedUpdatedAtBlocks = store.contentBlocks(for: changedUpdatedAt)
+        #expect(Self.plainText(changedUpdatedAtBlocks.first) == "Third")
+    }
+
     @Test("Cooked HTML preserves rich Discourse shapes")
     func cookedHTMLRichDiscourseShapes() throws {
         let blocks = LinuxDoContentParser.blocks(from: """
@@ -688,7 +730,13 @@ struct LinuxDoTests {
         )
 	}
 
-    nonisolated private static func post(id: Int, topicID: Int, postNumber: Int) -> LinuxDoPost {
+    nonisolated private static func post(
+        id: Int,
+        topicID: Int,
+        postNumber: Int,
+        cookedHTML: String? = nil,
+        updatedAt: Date? = nil
+    ) -> LinuxDoPost {
         LinuxDoPost(
             id: id,
             topicID: topicID,
@@ -697,9 +745,9 @@ struct LinuxDoTests {
             username: "user\(postNumber)",
             name: nil,
             avatarURL: nil,
-            cookedHTML: "<p>Post \(postNumber)</p>",
+            cookedHTML: cookedHTML ?? "<p>Post \(postNumber)</p>",
             createdAt: nil,
-            updatedAt: nil,
+            updatedAt: updatedAt,
             likeCount: 0,
             replyCount: 0,
             reads: 0,

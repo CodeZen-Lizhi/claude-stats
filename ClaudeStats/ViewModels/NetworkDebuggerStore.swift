@@ -16,6 +16,83 @@ protocol NetworkHelperManaging: AnyObject {
 
 extension RockxyHelperController: NetworkHelperManaging {}
 
+struct NetworkTrafficSnapshot: Sendable {
+    struct Key: Sendable, Equatable {
+        let flowsVersion: Int
+        let filter: NetworkTrafficFilter
+    }
+
+    let key: Key
+    let filteredFlows: [NetworkFlow]
+    let httpTrafficFlows: [NetworkFlow]
+    let apps: [NetworkTrafficFilterGroup]
+    let domains: [NetworkTrafficFilterGroup]
+    let methods: [NetworkTrafficFilterGroup]
+    let pinnedCount: Int
+    let savedCount: Int
+    let statusCounts: [NetworkTrafficStatusFilter: Int]
+    let protocolCounts: [NetworkFlowProtocol: Int]
+
+    var visibleCount: Int { filteredFlows.count }
+
+    init(key: Key, flows: [NetworkFlow]) {
+        let normalizedQuery = key.filter.query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let filteredFlows = flows.filter { Self.matches($0, filter: key.filter, normalizedQuery: normalizedQuery) }
+        self.key = key
+        self.filteredFlows = filteredFlows
+        self.httpTrafficFlows = filteredFlows.filter { $0.flowProtocol != .webSocket }
+        self.apps = Self.groupedFilters(
+            flows.map { $0.clientName.isEmpty ? "Proxy Client" : $0.clientName },
+            symbol: "app"
+        )
+        self.domains = Self.groupedFilters(flows.map(\.domainDisplay), symbol: "globe")
+        self.methods = Self.groupedFilters(flows.map(\.methodDisplay), symbol: "arrow.right.circle")
+        self.pinnedCount = flows.lazy.filter { $0.isPinned }.count
+        self.savedCount = flows.lazy.filter { $0.isSaved }.count
+        self.statusCounts = Dictionary(
+            uniqueKeysWithValues: NetworkTrafficStatusFilter.allCases.map { status in
+                (status, flows.lazy.filter(status.matches).count)
+            }
+        )
+        self.protocolCounts = Dictionary(
+            uniqueKeysWithValues: NetworkFlowProtocol.allCases.map { proto in
+                (proto, flows.lazy.filter { $0.flowProtocol == proto }.count)
+            }
+        )
+    }
+
+    private static func matches(_ flow: NetworkFlow, filter: NetworkTrafficFilter, normalizedQuery: String) -> Bool {
+        if filter.pinnedOnly, !flow.isPinned { return false }
+        if filter.savedOnly, !flow.isSaved { return false }
+        if !filter.protocols.isEmpty, !filter.protocols.contains(flow.flowProtocol) { return false }
+        if !filter.apps.isEmpty, !filter.apps.contains(flow.clientName.isEmpty ? "Proxy Client" : flow.clientName) { return false }
+        if !filter.domains.isEmpty, !filter.domains.contains(flow.domainDisplay) { return false }
+        if !filter.methods.isEmpty, !filter.methods.contains(flow.methodDisplay) { return false }
+        if !filter.statuses.isEmpty, !filter.statuses.contains(where: { $0.matches(flow) }) { return false }
+
+        guard !normalizedQuery.isEmpty else { return true }
+        return flow.request.url.localizedCaseInsensitiveContains(normalizedQuery)
+            || flow.request.method.localizedCaseInsensitiveContains(normalizedQuery)
+            || flow.clientName.localizedCaseInsensitiveContains(normalizedQuery)
+            || flow.statusDisplay.localizedCaseInsensitiveContains(normalizedQuery)
+            || flow.domainDisplay.localizedCaseInsensitiveContains(normalizedQuery)
+            || (flow.matchedRuleName?.localizedCaseInsensitiveContains(normalizedQuery) ?? false)
+    }
+
+    private static func groupedFilters(_ values: [String], symbol: String) -> [NetworkTrafficFilterGroup] {
+        let counts = Dictionary(grouping: values.filter { !$0.isEmpty }, by: { $0 })
+            .mapValues(\.count)
+        return counts
+            .map { NetworkTrafficFilterGroup(id: $0.key, title: $0.key, symbol: symbol, count: $0.value) }
+            .sorted {
+                if $0.count == $1.count {
+                    return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+                }
+                return $0.count > $1.count
+            }
+    }
+}
+
 @MainActor
 @Observable
 final class NetworkDebuggerStore: @unchecked Sendable {
@@ -24,7 +101,9 @@ final class NetworkDebuggerStore: @unchecked Sendable {
     var systemProxyStatus: NetworkSystemProxyStatus = .idle
     var helperState: NetworkHelperState = .empty
     var certificateState: NetworkCertificateState = .empty
-    var flows: [NetworkFlow] = []
+    var flows: [NetworkFlow] = [] {
+        didSet { markFlowsChanged() }
+    }
     var selectedFlowID: UUID?
     var selectedRequestTab: NetworkInspectorTab = .header
     var selectedResponseTab: NetworkInspectorTab = .body
@@ -76,6 +155,9 @@ final class NetworkDebuggerStore: @unchecked Sendable {
     private let upstreamEnvironmentStore = NetworkUpstreamEnvironmentStore()
     private weak var preferences: Preferences?
     private var autoEnabledSystemProxyForCurrentCapture = false
+    @ObservationIgnored private var flowsVersion = 0
+    @ObservationIgnored private var cachedTrafficSnapshotKey: NetworkTrafficSnapshot.Key?
+    @ObservationIgnored private var cachedTrafficSnapshot: NetworkTrafficSnapshot?
 
     init(
         preferences: Preferences? = nil,
@@ -94,14 +176,23 @@ final class NetworkDebuggerStore: @unchecked Sendable {
         return flows.first { $0.id == selectedFlowID } ?? flows.first
     }
 
-    var filteredFlows: [NetworkFlow] {
-        flows.filter { flow in
-            matchesTrafficFilter(flow)
+    var trafficSnapshot: NetworkTrafficSnapshot {
+        let key = NetworkTrafficSnapshot.Key(flowsVersion: flowsVersion, filter: trafficFilter)
+        if cachedTrafficSnapshotKey == key, let cachedTrafficSnapshot {
+            return cachedTrafficSnapshot
         }
+        let snapshot = NetworkTrafficSnapshot(key: key, flows: flows)
+        cachedTrafficSnapshotKey = key
+        cachedTrafficSnapshot = snapshot
+        return snapshot
+    }
+
+    var filteredFlows: [NetworkFlow] {
+        trafficSnapshot.filteredFlows
     }
 
     var httpTrafficFlows: [NetworkFlow] {
-        filteredFlows.filter { $0.flowProtocol != .webSocket }
+        trafficSnapshot.httpTrafficFlows
     }
 
     var webSocketSessions: [NetworkWebSocketSession] {
@@ -170,34 +261,35 @@ final class NetworkDebuggerStore: @unchecked Sendable {
     }
 
     var trafficApps: [NetworkTrafficFilterGroup] {
-        groupedFilters(
-            flows.map { $0.clientName.isEmpty ? "Proxy Client" : $0.clientName },
-            symbol: "app"
-        )
+        trafficSnapshot.apps
     }
 
     var trafficDomains: [NetworkTrafficFilterGroup] {
-        groupedFilters(flows.map(\.domainDisplay), symbol: "globe")
+        trafficSnapshot.domains
     }
 
     var trafficMethods: [NetworkTrafficFilterGroup] {
-        groupedFilters(flows.map(\.methodDisplay), symbol: "arrow.right.circle")
+        trafficSnapshot.methods
     }
 
     var pinnedTrafficCount: Int {
-        flows.filter(\.isPinned).count
+        trafficSnapshot.pinnedCount
     }
 
     var savedTrafficCount: Int {
-        flows.filter(\.isSaved).count
+        trafficSnapshot.savedCount
     }
 
     func statusCount(for status: NetworkTrafficStatusFilter) -> Int {
-        flows.filter(status.matches).count
+        trafficSnapshot.statusCounts[status, default: 0]
     }
 
     func protocolCount(for proto: NetworkFlowProtocol) -> Int {
-        flows.filter { $0.flowProtocol == proto }.count
+        trafficSnapshot.protocolCounts[proto, default: 0]
+    }
+
+    var visibleTrafficCount: Int {
+        trafficSnapshot.visibleCount
     }
 
     var listeningEndpoint: NetworkProxyEndpoint? {
@@ -1231,44 +1323,18 @@ final class NetworkDebuggerStore: @unchecked Sendable {
         }
     }
 
-    private func matchesTrafficFilter(_ flow: NetworkFlow) -> Bool {
-        if trafficFilter.pinnedOnly, !flow.isPinned { return false }
-        if trafficFilter.savedOnly, !flow.isSaved { return false }
-        if !trafficFilter.protocols.isEmpty, !trafficFilter.protocols.contains(flow.flowProtocol) { return false }
-        if !trafficFilter.apps.isEmpty, !trafficFilter.apps.contains(flow.clientName.isEmpty ? "Proxy Client" : flow.clientName) { return false }
-        if !trafficFilter.domains.isEmpty, !trafficFilter.domains.contains(flow.domainDisplay) { return false }
-        if !trafficFilter.methods.isEmpty, !trafficFilter.methods.contains(flow.methodDisplay) { return false }
-        if !trafficFilter.statuses.isEmpty, !trafficFilter.statuses.contains(where: { $0.matches(flow) }) { return false }
-
-        let query = trafficFilter.query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return true }
-        return flow.request.url.localizedCaseInsensitiveContains(query)
-            || flow.request.method.localizedCaseInsensitiveContains(query)
-            || flow.clientName.localizedCaseInsensitiveContains(query)
-            || flow.statusDisplay.localizedCaseInsensitiveContains(query)
-            || flow.domainDisplay.localizedCaseInsensitiveContains(query)
-            || (flow.matchedRuleName?.localizedCaseInsensitiveContains(query) ?? false)
-    }
-
-    private func groupedFilters(_ values: [String], symbol: String) -> [NetworkTrafficFilterGroup] {
-        let counts = Dictionary(grouping: values.filter { !$0.isEmpty }, by: { $0 })
-            .mapValues(\.count)
-        return counts
-            .map { NetworkTrafficFilterGroup(id: $0.key, title: $0.key, symbol: symbol, count: $0.value) }
-            .sorted {
-                if $0.count == $1.count {
-                    return $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
-                }
-                return $0.count > $1.count
-            }
-    }
-
     private func toggle<T: Hashable>(_ value: T, in set: inout Set<T>) {
         if set.contains(value) {
             set.remove(value)
         } else {
             set.insert(value)
         }
+    }
+
+    private func markFlowsChanged() {
+        flowsVersion &+= 1
+        cachedTrafficSnapshotKey = nil
+        cachedTrafficSnapshot = nil
     }
 
     private func updateFlow(id: UUID, _ transform: (inout NetworkFlow) -> Void) {

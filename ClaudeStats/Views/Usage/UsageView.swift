@@ -28,8 +28,18 @@ struct UsageView: View {
     var body: some View {
         @Bindable var vm = vm
         let provider = env.preferences.selectedProvider
-        let summary = exportConfig.map { env.store.summary(for: $0.period, provider: provider) } ?? vm.summary(from: env.store, provider: provider)
-        let series = summary.trendSeries()
+        let derivedData = exportConfig == nil
+            ? vm.displayedDerivedData(provider: provider, lastRefreshedAt: env.store.lastRefreshedAt)
+            : nil
+        let summary = exportConfig.map { env.store.summary(for: $0.period, provider: provider) }
+            ?? derivedData?.summary
+            ?? UsageSummary.empty(period: vm.period)
+        let series = exportConfig == nil
+            ? (derivedData?.series ?? summary.trendSeries())
+            : summary.trendSeries()
+        let cacheHitRate = exportConfig == nil
+            ? derivedData?.cacheHitRate
+            : env.store.cacheHitRate(for: summary.totalUsage, provider: provider)
         let isHourly = series.granularity == .hour
         let style: TrendChartStyle = isHourly ? .line : (exportConfig?.chartStyle ?? vm.chartStyle)
         let stackByType = exportConfig?.stackByType ?? vm.stackByType
@@ -51,13 +61,15 @@ struct UsageView: View {
             breakdownPanel(summary, series: series, rangeID: rangeID, isHourly: isHourly, style: style, useLog: useLog,
                            stackByType: stackByType,
                            interactive: interactive, exportPeriod: exportConfig?.period)
-            cacheStats(summary)
+            cacheStats(summary, cacheHitRate: cacheHitRate)
             modelBreakdown(summary, series: series)
         }
         .padding(14)
 
         if interactive {
             AppScrollView { content }
+                .onAppear { refreshDerivedData() }
+                .onChange(of: usageDataKey) { _, _ in refreshDerivedData() }
         } else {
             content
         }
@@ -107,16 +119,31 @@ struct UsageView: View {
 
     /// Cache-efficiency row shown directly above the BY MODEL list — hit rate
     /// plus the raw cache-read token volume the rate is based on.
-    private func cacheStats(_ s: UsageSummary) -> some View {
+    private func cacheStats(_ s: UsageSummary, cacheHitRate: Double?) -> some View {
         let usage = s.totalUsage
-        let hitText = env.store.cacheHitRate(for: usage, provider: env.preferences.selectedProvider)
-            .map(Format.percent) ?? "—"
+        let hitText = cacheHitRate.map(Format.percent) ?? "—"
         return Grid(horizontalSpacing: 10, verticalSpacing: 8) {
             GridRow {
                 statCell(L10n.string("usage.stat.cache_hit", defaultValue: "CACHE HIT"), hitText)
                 statCell(L10n.string("usage.stat.cached", defaultValue: "CACHED"), Format.tokens(usage.cacheReadTokens))
             }
         }
+    }
+
+    private var usageDataKey: UsageDerivedData.Key {
+        UsageDerivedData.Key(
+            period: vm.period,
+            provider: env.preferences.selectedProvider,
+            lastRefreshedAt: env.store.lastRefreshedAt
+        )
+    }
+
+    private func refreshDerivedData() {
+        vm.refreshDerivedData(
+            from: env.store,
+            provider: env.preferences.selectedProvider,
+            lastRefreshedAt: env.store.lastRefreshedAt
+        )
     }
 
     private func statCell(_ title: String, _ value: String) -> some View {

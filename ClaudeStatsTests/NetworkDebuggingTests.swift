@@ -405,6 +405,8 @@ struct NetworkDebuggingTests {
         #expect(store.protocolCount(for: .webSocket) == 1)
         #expect(store.pinnedTrafficCount == 1)
         #expect(store.savedTrafficCount == 1)
+        #expect(store.visibleTrafficCount == 3)
+        #expect(store.httpTrafficFlows.map(\.id) == [firstID, secondID])
 
         store.toggleAppFilter("curl")
         store.toggleDomainFilter("api.example.test")
@@ -413,10 +415,20 @@ struct NetworkDebuggingTests {
         store.toggleProtocolFilter(.https)
 
         #expect(store.filteredFlows.map(\.id) == [firstID])
+        #expect(store.visibleTrafficCount == 1)
+        #expect(store.httpTrafficFlows.map(\.id) == [firstID])
 
         store.resetTrafficFilters()
         store.toggleSavedFilter()
         #expect(store.filteredFlows.map(\.id) == [secondID])
+        #expect(store.httpTrafficFlows.map(\.id) == [secondID])
+
+        store.resetTrafficFilters()
+        store.togglePinned(for: secondID)
+        #expect(store.pinnedTrafficCount == 2)
+        store.deleteFlow(firstID)
+        #expect(store.filteredFlows.map(\.id).contains(firstID) == false)
+        #expect(store.httpTrafficFlows.map(\.id) == [secondID])
     }
 
     @Test("Request operation service exports cURL HAR and imports cURL")

@@ -62,6 +62,20 @@ enum LinuxDoAuthenticationStatus: Equatable, Sendable {
     }
 }
 
+private struct LinuxDoPostContentCacheKey: Hashable, Sendable {
+    let postID: Int
+    let updatedAt: Date?
+    let htmlLength: Int
+    let htmlHash: Int
+
+    init(post: LinuxDoPost) {
+        self.postID = post.id
+        self.updatedAt = post.updatedAt
+        self.htmlLength = post.cookedHTML.count
+        self.htmlHash = post.cookedHTML.hashValue
+    }
+}
+
 @MainActor
 @Observable
 final class LinuxDoStore {
@@ -113,6 +127,9 @@ final class LinuxDoStore {
     @ObservationIgnored private let notificationService: any LinuxDoNotificationServicing
     @ObservationIgnored private var searchTask: Task<Void, Never>?
     @ObservationIgnored private var notificationTask: Task<Void, Never>?
+    @ObservationIgnored private var contentBlockCache: [LinuxDoPostContentCacheKey: [LinuxDoContentBlock]] = [:]
+    @ObservationIgnored private var contentBlockCacheOrder: [LinuxDoPostContentCacheKey] = []
+    @ObservationIgnored private let contentBlockCacheLimit = 1_000
 
     init(
         preferences: Preferences,
@@ -254,6 +271,10 @@ final class LinuxDoStore {
         }
     }
 
+    func contentBlocks(for post: LinuxDoPost) -> [LinuxDoContentBlock] {
+        cachedContentBlocks(for: post)
+    }
+
     @discardableResult
     func openNotificationAndWait(_ notification: LinuxDoNotification) async -> Int? {
         guard let topicID = notification.topicID else { return nil }
@@ -265,6 +286,9 @@ final class LinuxDoStore {
         if !force,
            let cached = cache.readTopic(id: id, ttl: 15 * 60, now: .now) {
             state.detail = sortedDetail(cached.detail)
+            if let detail = state.detail {
+                prewarmContentBlocks(for: detail.posts)
+            }
             state.loadedPostIDs = Set(cached.detail.posts.map(\.id))
             state.remainingPostIDs = cached.detail.stream.filter { !state.loadedPostIDs.contains($0) }
             state.isStale = cached.isStale
@@ -277,12 +301,14 @@ final class LinuxDoStore {
         topicStates[id] = state
         do {
             let detail = try await client.fetchTopic(id: id, slug: slug, now: .now)
-            state.detail = sortedDetail(detail)
-            state.loadedPostIDs = Set(detail.posts.map(\.id))
-            state.remainingPostIDs = detail.stream.filter { !state.loadedPostIDs.contains($0) }
+            let sorted = sortedDetail(detail)
+            state.detail = sorted
+            prewarmContentBlocks(for: sorted.posts)
+            state.loadedPostIDs = Set(sorted.posts.map(\.id))
+            state.remainingPostIDs = sorted.stream.filter { !state.loadedPostIDs.contains($0) }
             state.isLoading = false
             state.isStale = false
-            try? cache.writeTopic(detail)
+            try? cache.writeTopic(sorted)
         } catch {
             state.isLoading = false
             state.error = userFacingMessage(error)
@@ -307,6 +333,7 @@ final class LinuxDoStore {
         topicStates[topicID] = state
         do {
             let posts = try await client.fetchPosts(topicID: topicID, postIDs: batch)
+            prewarmContentBlocks(for: posts)
             state.detail = mergedDetail(state.detail, adding: posts)
             state.loadedPostIDs.formUnion(posts.map(\.id))
             state.remainingPostIDs.removeAll { state.loadedPostIDs.contains($0) }
@@ -320,6 +347,31 @@ final class LinuxDoStore {
             handle(error)
         }
         topicStates[topicID] = state
+    }
+
+    private func prewarmContentBlocks(for posts: [LinuxDoPost]) {
+        for post in posts {
+            _ = cachedContentBlocks(for: post)
+        }
+    }
+
+    private func cachedContentBlocks(for post: LinuxDoPost) -> [LinuxDoContentBlock] {
+        let key = LinuxDoPostContentCacheKey(post: post)
+        if let blocks = contentBlockCache[key] {
+            return blocks
+        }
+        let blocks = LinuxDoContentParser.blocks(from: post.cookedHTML)
+        contentBlockCache[key] = blocks
+        contentBlockCacheOrder.append(key)
+        evictContentBlockCacheIfNeeded()
+        return blocks
+    }
+
+    private func evictContentBlockCacheIfNeeded() {
+        while contentBlockCacheOrder.count > contentBlockCacheLimit {
+            let key = contentBlockCacheOrder.removeFirst()
+            contentBlockCache.removeValue(forKey: key)
+        }
     }
 
     @discardableResult

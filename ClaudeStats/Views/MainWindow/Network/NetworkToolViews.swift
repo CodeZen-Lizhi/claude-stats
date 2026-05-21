@@ -46,7 +46,7 @@ struct NetworkProxyView: View {
             NetworkInfoGrid(items: [
                 NetworkInfoItem(title: "Listen", value: endpoint, symbol: "point.3.connected.trianglepath.dotted"),
                 NetworkInfoItem(title: "Captured", value: "\(store.flows.count)", symbol: "list.bullet.rectangle"),
-                NetworkInfoItem(title: "Visible", value: "\(store.filteredFlows.count)", symbol: "line.3.horizontal.decrease.circle"),
+                NetworkInfoItem(title: "Visible", value: "\(store.visibleTrafficCount)", symbol: "line.3.horizontal.decrease.circle"),
                 NetworkInfoItem(title: "Selected", value: store.selectedFlow?.domainDisplay ?? "None", symbol: "scope"),
             ])
 

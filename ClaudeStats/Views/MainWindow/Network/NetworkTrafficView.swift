@@ -299,14 +299,16 @@ private struct NetworkTrafficTable: View {
     @Bindable var store: NetworkDebuggerStore
 
     var body: some View {
+        let snapshot = store.trafficSnapshot
         ZStack {
             NetworkNativeTrafficTable(
-                flows: store.httpTrafficFlows,
+                flows: snapshot.httpTrafficFlows,
+                filter: snapshot.key.filter,
                 selectedFlowID: selectedFlowID
             )
             .background(Color.primary.opacity(0.025))
 
-            if store.httpTrafficFlows.isEmpty {
+            if snapshot.httpTrafficFlows.isEmpty {
                 NetworkInlineEmptyState(store.flows.isEmpty ? "Start capture to see traffic." : "No matching traffic.")
                     .padding(.top, 24)
                     .allowsHitTesting(false)
@@ -325,6 +327,7 @@ private struct NetworkTrafficTable: View {
 
 private struct NetworkNativeTrafficTable: NSViewRepresentable {
     var flows: [NetworkFlow]
+    var filter: NetworkTrafficFilter
     @Binding var selectedFlowID: UUID?
 
     func makeCoordinator() -> Coordinator {
@@ -368,12 +371,13 @@ private struct NetworkNativeTrafficTable: NSViewRepresentable {
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        let previousParent = context.coordinator.parent
         context.coordinator.parent = self
         guard let tableView = scrollView.documentView as? NSTableView else { return }
         AppScrollbars.configure(scrollView, axes: [.vertical, .horizontal])
         context.coordinator.tableView = tableView
         context.coordinator.applyHeaderLayout()
-        tableView.reloadData()
+        context.coordinator.applyFlowChanges(from: previousParent, to: self)
         context.coordinator.applySelection()
     }
 
@@ -430,12 +434,76 @@ private struct NetworkNativeTrafficTable: NSViewRepresentable {
             tableView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
         }
 
+        func applyFlowChanges(from previous: NetworkNativeTrafficTable, to next: NetworkNativeTrafficTable) {
+            guard let tableView else { return }
+            guard tableView.numberOfRows == previous.flows.count, previous.filter == next.filter else {
+                tableView.reloadData()
+                return
+            }
+
+            let oldIDs = previous.flows.map(\.id)
+            let newIDs = next.flows.map(\.id)
+            guard oldIDs != newIDs else {
+                reloadChangedRows(previous: previous.flows, next: next.flows)
+                return
+            }
+
+            let oldIDSet = Set(oldIDs)
+            let newIDSet = Set(newIDs)
+            let oldSharedOrder = oldIDs.filter(newIDSet.contains)
+            let newSharedOrder = newIDs.filter(oldIDSet.contains)
+            guard oldSharedOrder == newSharedOrder else {
+                tableView.reloadData()
+                return
+            }
+
+            let removedRows = oldIDs.enumerated().compactMap { index, id in
+                newIDSet.contains(id) ? nil : index
+            }
+            let insertedRows = newIDs.enumerated().compactMap { index, id in
+                oldIDSet.contains(id) ? nil : index
+            }
+
+            if removedRows.isEmpty, insertedRows.isEmpty {
+                tableView.reloadData()
+                return
+            }
+
+            tableView.beginUpdates()
+            if !removedRows.isEmpty {
+                tableView.removeRows(at: IndexSet(removedRows.sorted(by: >)), withAnimation: [])
+            }
+            if !insertedRows.isEmpty {
+                tableView.insertRows(at: IndexSet(insertedRows.sorted()), withAnimation: [])
+            }
+            tableView.endUpdates()
+
+            guard tableView.numberOfRows == next.flows.count else {
+                tableView.reloadData()
+                return
+            }
+            reloadChangedRows(previous: previous.flows, next: next.flows)
+        }
+
         func applyHeaderLayout() {
             guard let headerView = tableView?.headerView else { return }
             let targetHeight = NetworkTrafficTableMetrics.headerHeight
             guard abs(headerView.frame.height - targetHeight) > 0.5 else { return }
             headerView.frame.size.height = targetHeight
             headerView.needsDisplay = true
+        }
+
+        private func reloadChangedRows(previous: [NetworkFlow], next: [NetworkFlow]) {
+            guard let tableView, !next.isEmpty else { return }
+            let previousByID = Dictionary(uniqueKeysWithValues: previous.map { ($0.id, $0) })
+            let rows = next.enumerated().compactMap { index, flow in
+                previousByID[flow.id] == flow ? nil : index
+            }
+            guard !rows.isEmpty else { return }
+            tableView.reloadData(
+                forRowIndexes: IndexSet(rows.filter { $0 < tableView.numberOfRows }),
+                columnIndexes: IndexSet(integersIn: 0..<tableView.numberOfColumns)
+            )
         }
 
         private func reusableCell(in tableView: NSTableView, for column: NetworkTrafficColumn) -> NSTableCellView {
