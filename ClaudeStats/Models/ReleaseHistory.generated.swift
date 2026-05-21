@@ -3,6 +3,26 @@
 extension ReleaseHistoryCatalog {
     static let generatedEntries: [ReleaseHistoryEntry] = [
         ReleaseHistoryEntry(
+            version: "1.6.2",
+            date: "May 21, 2026",
+            headline: "新增LinuxDo话题路由解析与导航逻辑",
+            changes: [
+                "完善Post响应模型与LinuxDoPost数据结构",
+                "实现完整的HTML内容解析与富文本展示",
+                "添加话题列表页UI优化与分类颜色支持",
+                "集成本地通知跳转处理",
+                "新增帖子跳转加载逻辑与测试用例",
+            ]
+        ),
+        ReleaseHistoryEntry(
+            version: "1.6.1",
+            date: "May 21, 2026",
+            headline: "skip",
+            changes: [
+                "skip",
+            ]
+        ),
+        ReleaseHistoryEntry(
             version: "1.6.0",
             date: "May 21, 2026",
             headline: "新增LocalSkillDetailModel和RemoteSkillDetailModel用于展示技能详情数据",
