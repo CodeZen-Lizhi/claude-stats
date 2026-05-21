@@ -3,6 +3,18 @@
 extension ReleaseHistoryCatalog {
     static let generatedEntries: [ReleaseHistoryEntry] = [
         ReleaseHistoryEntry(
+            version: "1.6.3",
+            date: "May 21, 2026",
+            headline: "重构屏幕样式解析逻辑，新增NotchIslandScreenStyleResolver统一处理有效样式计算",
+            changes: [
+                "传递屏幕ID而非仅本地化名称到AtollRuntimeBridge，优化屏幕匹配准确性",
+                "修复两处传入screen.localizedName的调用，改为直接传入NSScreen对象",
+                "新增测试用例验证样式解析逻辑正确性",
+                "新增屏幕样式枚举，替换原有的单一外接显示器选择器",
+                "支持为每个屏幕单独设置显示样式（贴合挖孔/浮动岛）",
+            ]
+        ),
+        ReleaseHistoryEntry(
             version: "1.6.2",
             date: "May 21, 2026",
             headline: "新增LinuxDo话题路由解析与导航逻辑",
