@@ -38,17 +38,40 @@ struct PreferencesTests {
         #expect(prefs.floatingTabEdge == .right)
     }
 
-    @Test("Notch Island defaults are off with safe modules")
+    @Test("Notch Island defaults are off with Atoll-aligned modules")
     func notchIslandDefaults() {
         let defaults = makeDefaults()
         let prefs = Preferences(defaults: defaults)
+        let expectedDefaultModules: Set<NotchIslandModule> = [
+            .media,
+            .stats,
+            .clipboard,
+            .colorPicker,
+            .calendar,
+            .shelf,
+            .privacy,
+            .focus,
+            .battery,
+            .bluetooth,
+            .downloads,
+            .osd
+        ]
 
         #expect(prefs.notchIslandEnabled == false)
         #expect(prefs.notchIslandDisplayMode == .primaryDisplay)
+        #expect(prefs.notchIslandSelectedScreenIDs == NotchIslandScreenCatalog.defaultSelectedScreenIDs())
+        #expect(prefs.notchIslandScreenStyles.isEmpty)
         #expect(prefs.notchIslandSizePreset == .regular)
         #expect(prefs.notchIslandHoverExpansionEnabled == true)
         #expect(prefs.notchIslandShortcutEnabled == true)
+        #expect(NotchIslandModule.defaultEnabled == expectedDefaultModules)
         #expect(prefs.notchIslandEnabledModules == NotchIslandModule.defaultEnabled)
+        #expect(!prefs.notchIslandEnabledModules.contains(.timer))
+        #expect(!prefs.notchIslandEnabledModules.contains(.recording))
+        #expect(!prefs.notchIslandEnabledModules.contains(.lockScreenWidgets))
+        #expect(!prefs.notchIslandEnabledModules.contains(.extensionBridge))
+        #expect(!prefs.notchIslandEnabledModules.contains(.screenAssistant))
+        #expect(!prefs.notchIslandEnabledModules.contains(.terminal))
     }
 
     @Test("Notch Island preferences persist and invalid values fall back")
@@ -58,6 +81,11 @@ struct PreferencesTests {
         prefs.notchIslandEnabled = true
         prefs.notchIslandDisplayMode = .allDisplays
         prefs.notchIslandSizePreset = .large
+        prefs.notchIslandSelectedScreenIDs = ["screen-a", "screen-b"]
+        prefs.notchIslandScreenStyles = [
+            "screen-a": .floatingIsland,
+            "screen-b": .sameAsNotch
+        ]
         prefs.notchIslandHoverExpansionEnabled = false
         prefs.notchIslandShortcutEnabled = false
         prefs.notchIslandEnabledModules = [.media, .timer, .clipboard]
@@ -66,6 +94,11 @@ struct PreferencesTests {
         #expect(reloaded.notchIslandEnabled == true)
         #expect(reloaded.notchIslandDisplayMode == .allDisplays)
         #expect(reloaded.notchIslandSizePreset == .large)
+        #expect(reloaded.notchIslandSelectedScreenIDs == ["screen-a", "screen-b"])
+        #expect(reloaded.notchIslandScreenStyles == [
+            "screen-a": .floatingIsland,
+            "screen-b": .sameAsNotch
+        ])
         #expect(reloaded.notchIslandHoverExpansionEnabled == false)
         #expect(reloaded.notchIslandShortcutEnabled == false)
         #expect(reloaded.notchIslandEnabledModules == [.media, .timer, .clipboard])
@@ -75,6 +108,34 @@ struct PreferencesTests {
         let invalid = Preferences(defaults: defaults)
         #expect(invalid.notchIslandDisplayMode == .primaryDisplay)
         #expect(invalid.notchIslandSizePreset == .regular)
+    }
+
+    @Test("Notch Island legacy display mode migrates into selected screen IDs")
+    func notchIslandLegacyDisplayModeMigratesToSelectedScreens() {
+        let allDefaults = makeDefaults()
+        allDefaults.set(NotchIslandDisplayMode.allDisplays.rawValue, forKey: "notchIslandDisplayMode")
+        let allPrefs = Preferences(defaults: allDefaults)
+        #expect(allPrefs.notchIslandSelectedScreenIDs == NotchIslandScreenCatalog.defaultSelectedScreenIDs(for: .allDisplays))
+
+        let primaryDefaults = makeDefaults()
+        primaryDefaults.set(NotchIslandDisplayMode.primaryDisplay.rawValue, forKey: "notchIslandDisplayMode")
+        let primaryPrefs = Preferences(defaults: primaryDefaults)
+        #expect(primaryPrefs.notchIslandSelectedScreenIDs == NotchIslandScreenCatalog.defaultSelectedScreenIDs(for: .primaryDisplay))
+
+        let pointerDefaults = makeDefaults()
+        pointerDefaults.set(NotchIslandDisplayMode.pointerDisplay.rawValue, forKey: "notchIslandDisplayMode")
+        let pointerPrefs = Preferences(defaults: pointerDefaults)
+        #expect(!pointerPrefs.notchIslandSelectedScreenIDs.isEmpty)
+    }
+
+    @Test("Notch Island screen style dictionary ignores invalid raw values")
+    func notchIslandScreenStylesIgnoreInvalidRawValues() {
+        let defaults = makeDefaults()
+        defaults.set(#"{"unknown-screen":"floatingIsland","broken-screen":"floaty"}"#, forKey: "notchIslandScreenStyles")
+
+        let prefs = Preferences(defaults: defaults)
+        #expect(prefs.notchIslandScreenStyles["unknown-screen"] == .floatingIsland)
+        #expect(prefs.notchIslandScreenStyles["broken-screen"] == nil)
     }
 
     @Test("Notch Island empty module selection falls back to safe defaults")

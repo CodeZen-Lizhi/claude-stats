@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 enum NotchIslandDisplayMode: String, CaseIterable, Sendable, Identifiable {
@@ -48,6 +49,122 @@ enum NotchIslandSizePreset: String, CaseIterable, Sendable, Identifiable {
     }
 }
 
+enum NotchIslandScreenStyle: String, CaseIterable, Sendable, Identifiable {
+    case sameAsNotch
+    case floatingIsland
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .sameAsNotch: "Same as notch"
+        case .floatingIsland: "Floating island"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .sameAsNotch: "Blend into the top screen edge."
+        case .floatingIsland: "Float below the top edge as a detached pill."
+        }
+    }
+}
+
+struct NotchIslandScreenDescriptor: Identifiable, Equatable, Sendable {
+    let id: String
+    let displayName: String
+    let localizedName: String
+    let hasPhysicalNotch: Bool
+}
+
+@MainActor
+enum NotchIslandScreenCatalog {
+    static let fallbackScreenID = "main"
+
+    static func id(for screen: NSScreen) -> String {
+        if let screenNumber = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber {
+            return String(screenNumber.uint32Value)
+        }
+        return screen.localizedName.isEmpty ? fallbackScreenID : screen.localizedName
+    }
+
+    static func shortID(for id: String) -> String {
+        String(id.suffix(4))
+    }
+
+    static func descriptors() -> [NotchIslandScreenDescriptor] {
+        let screens = NSScreen.screens
+        let nameCounts = Dictionary(grouping: screens, by: \.localizedName)
+            .mapValues(\.count)
+
+        return screens.map { screen in
+            let id = id(for: screen)
+            let name = screen.localizedName.isEmpty ? "Display" : screen.localizedName
+            let displayName = (nameCounts[screen.localizedName] ?? 0) > 1
+                ? "\(name) (\(shortID(for: id)))"
+                : name
+            return NotchIslandScreenDescriptor(
+                id: id,
+                displayName: displayName,
+                localizedName: name,
+                hasPhysicalNotch: screen.safeAreaInsets.top > 0
+            )
+        }
+    }
+
+    static func screen(for id: String) -> NSScreen? {
+        NSScreen.screens.first { Self.id(for: $0) == id }
+    }
+
+    static func mainScreenID() -> String {
+        if let main = NSScreen.main ?? NSScreen.screens.first {
+            return id(for: main)
+        }
+        return fallbackScreenID
+    }
+
+    static func pointerScreenID() -> String {
+        let mouse = NSEvent.mouseLocation
+        if let screen = NSScreen.screens.first(where: { $0.frame.contains(mouse) }) {
+            return id(for: screen)
+        }
+        return mainScreenID()
+    }
+
+    static func defaultSelectedScreenIDs(for legacyMode: NotchIslandDisplayMode = .primaryDisplay) -> Set<String> {
+        let screens = NSScreen.screens
+        guard !screens.isEmpty else { return [fallbackScreenID] }
+
+        switch legacyMode {
+        case .primaryDisplay:
+            return [mainScreenID()]
+        case .pointerDisplay:
+            return [pointerScreenID()]
+        case .allDisplays:
+            return Set(screens.map(id(for:)))
+        }
+    }
+
+    static func selectedScreens(for ids: Set<String>) -> [NSScreen] {
+        let screens = NSScreen.screens
+        guard !screens.isEmpty else { return [] }
+        let selected = screens.filter { ids.contains(id(for: $0)) }
+        if !selected.isEmpty {
+            return selected
+        }
+        return [NSScreen.main ?? screens[0]]
+    }
+
+    static func primaryRuntimeScreen(from screens: [NSScreen]) -> NSScreen? {
+        guard !screens.isEmpty else { return nil }
+        if let main = NSScreen.main, screens.contains(main) {
+            return main
+        }
+        let selectedIDs = Set(screens.map(id(for:)))
+        return NSScreen.screens.first { selectedIDs.contains(id(for: $0)) } ?? screens[0]
+    }
+}
+
 enum NotchIslandModule: String, CaseIterable, Sendable, Identifiable {
     case media
     case stats
@@ -68,7 +185,20 @@ enum NotchIslandModule: String, CaseIterable, Sendable, Identifiable {
     case screenAssistant
     case terminal
 
-    static let defaultEnabled: Set<NotchIslandModule> = [.stats, .battery, .privacy]
+    static let defaultEnabled: Set<NotchIslandModule> = [
+        .media,
+        .stats,
+        .clipboard,
+        .colorPicker,
+        .calendar,
+        .shelf,
+        .privacy,
+        .focus,
+        .battery,
+        .bluetooth,
+        .downloads,
+        .osd
+    ]
 
     var id: String { rawValue }
 

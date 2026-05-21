@@ -29,12 +29,24 @@ public final class AtollIslandRuntimeBridge {
         coordinator.firstLaunch = false
         coordinator.alwaysShowTabs = true
         coordinator.openLastTabByDefault = false
-        if let screenName {
-            coordinator.selectedScreen = screenName
-            coordinator.preferredScreen = screenName
-        }
 
         viewModel = DynamicIslandViewModel(screen: screenName)
+    }
+
+    func configurePrimaryRuntimeContext() {
+        guard let screenName else { return }
+        let coordinator = DynamicIslandViewCoordinator.shared
+        coordinator.selectedScreen = screenName
+        coordinator.preferredScreen = screenName
+    }
+
+    func configureLockScreenManagers() {
+        LockScreenLiveActivityWindowManager.shared.configure(viewModel: viewModel)
+        LockScreenManager.shared.configure(viewModel: viewModel)
+    }
+
+    func closeForLockScreen() {
+        viewModel.closeForLockScreen()
     }
 
     func makeContentView() -> ContentView {
@@ -61,7 +73,6 @@ public final class AtollIslandRuntimeBridge {
         AtollDefaultsBridge.sync(configuration)
         AtollSettingsRouter.openSettings = settingsOpener
         ensureValidCurrentTab()
-        syncManagers()
         ensureWindowSize(animated: false, force: true)
     }
 
@@ -72,19 +83,12 @@ public final class AtollIslandRuntimeBridge {
         AtollSettingsRouter.openSettings = settingsOpener
         ensureValidCurrentTab()
         startWindowSizingObservers()
-        syncManagers()
         ensureWindowSize(animated: false, force: true)
     }
 
     public func stop() {
         didStart = false
         sizingCancellables.removeAll()
-        WebcamManager.shared.stopSession()
-        StatsManager.shared.stopMonitoring()
-        ClipboardManager.shared.stopMonitoring()
-        PrivacyIndicatorManager.shared.stopMonitoring()
-        ScreenRecordingManager.shared.stopMonitoring()
-        viewModel.closeForLockScreen()
 
         if let attachedScreen {
             AppDelegate.shared?.unregister(screen: attachedScreen)
@@ -186,7 +190,51 @@ public final class AtollIslandRuntimeBridge {
         }
     }
 
+}
+
+@MainActor
+public final class AtollIslandRuntimeServiceOwner {
+    private var configuration: AtollIslandConfiguration?
+    private weak var primaryBridge: AtollIslandRuntimeBridge?
+    private var didStart = false
+
+    public init() {}
+
+    public func update(
+        configuration: AtollIslandConfiguration,
+        primaryBridge: AtollIslandRuntimeBridge?
+    ) {
+        self.configuration = configuration
+        self.primaryBridge = primaryBridge
+        AtollDefaultsBridge.sync(configuration)
+        primaryBridge?.configurePrimaryRuntimeContext()
+        didStart = true
+        syncManagers()
+    }
+
+    public func stop() {
+        didStart = false
+        WebcamManager.shared.stopSession()
+        StatsManager.shared.stopMonitoring()
+        ClipboardManager.shared.stopMonitoring()
+        PrivacyIndicatorManager.shared.stopMonitoring()
+        ScreenRecordingManager.shared.stopMonitoring()
+        DoNotDisturbManager.shared.stopMonitoring()
+        BluetoothAudioManager.shared.stopMonitoring()
+        ExtensionXPCServiceHost.shared.stop()
+        ExtensionRPCServer.shared.stop()
+        Task { @MainActor in
+            await SystemHUDManager.shared.stop()
+        }
+        ScreenAssistantManager.shared.closePanels()
+        hideLockScreenPresentation()
+        primaryBridge?.closeForLockScreen()
+        primaryBridge = nil
+        configuration = nil
+    }
+
     private func syncManagers() {
+        guard didStart, let configuration else { return }
         let features = configuration.enabledFeatures
 
         if features.contains(.stats) {
@@ -211,6 +259,66 @@ public final class AtollIslandRuntimeBridge {
             ScreenRecordingManager.shared.startMonitoring()
         } else {
             ScreenRecordingManager.shared.stopMonitoring()
+        }
+
+        if features.contains(.focus) {
+            DoNotDisturbManager.shared.startMonitoring()
+        } else {
+            DoNotDisturbManager.shared.stopMonitoring()
+        }
+
+        if features.contains(.bluetooth) {
+            BluetoothAudioManager.shared.startMonitoring()
+        } else {
+            BluetoothAudioManager.shared.stopMonitoring()
+        }
+
+        if features.contains(.downloads) {
+            _ = DownloadManager.shared
+        }
+
+        if features.contains(.calendar) {
+            _ = ReminderLiveActivityManager.shared
+        }
+
+        if features.contains(.osd) {
+            SystemHUDManager.shared.setup(coordinator: DynamicIslandViewCoordinator.shared)
+        } else {
+            Task { @MainActor in
+                await SystemHUDManager.shared.stop()
+            }
+        }
+
+        if features.contains(.lockScreenWidgets) {
+            primaryBridge?.configureLockScreenManagers()
+        } else {
+            hideLockScreenPresentation()
+        }
+
+        if features.contains(.extensionBridge) {
+            ExtensionXPCServiceHost.shared.start()
+            ExtensionRPCServer.shared.start()
+        } else {
+            ExtensionXPCServiceHost.shared.stop()
+            ExtensionRPCServer.shared.stop()
+        }
+
+        if !features.contains(.screenAssistant) {
+            ScreenAssistantManager.shared.closePanels()
+        }
+    }
+
+    private func hideLockScreenPresentation() {
+        LockScreenPanelManager.shared.hidePanel()
+        FullScreenArtworkWindowManager.shared.hide()
+        LockScreenLiveActivityWindowManager.shared.hideImmediately()
+        LockScreenWeatherManager.shared.hideWeatherWidget()
+        LockScreenTimerWidgetPanelManager.shared.hide(animated: false)
+        LockScreenReminderWidgetPanelManager.shared.hide()
+        TimerControlWindowManager.shared.hide(animated: false)
+        let coordinator = DynamicIslandViewCoordinator.shared
+        if coordinator.expandingView.type == .lockScreen {
+            coordinator.toggleExpandingView(status: false, type: .lockScreen)
         }
     }
 }

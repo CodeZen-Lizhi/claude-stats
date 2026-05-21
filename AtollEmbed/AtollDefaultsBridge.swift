@@ -9,36 +9,43 @@ public enum AtollDefaultsBridge {
 
         Defaults[.openNotchOnHover] = configuration.openOnHover
         Defaults[.showOnAllDisplays] = configuration.showOnAllDisplays
+        Defaults[.statsUpdateInterval] = configuration.statsUpdateInterval
+        Defaults[.externalDisplayStylesByScreenID] = configuration.screenStylesByScreenID.mapValues {
+            $0.externalDisplayStyle.rawValue
+        }
 
-        Defaults[.showStandardMediaControls] = features.contains(.media)
-        Defaults[.showCalendar] = features.contains(.calendar)
-        Defaults[.dynamicShelf] = features.contains(.shelf)
+        let mediaEnabled = features.contains(.media)
+        let calendarEnabled = features.contains(.calendar)
+        let shelfEnabled = features.contains(.shelf)
+        let batteryEnabled = features.contains(.battery)
+        let privacyEnabled = features.contains(.privacy)
+        let recordingEnabled = features.contains(.recording)
+        let focusEnabled = features.contains(.focus)
+        let bluetoothEnabled = features.contains(.bluetooth)
+        let downloadsEnabled = features.contains(.downloads)
+        let osdEnabled = features.contains(.osd)
+        let lockScreenEnabled = features.contains(.lockScreenWidgets)
+        let extensionsEnabled = features.contains(.extensionBridge)
+
+        Defaults[.showStandardMediaControls] = mediaEnabled
+        syncCalendarAvailability(calendarEnabled)
+        Defaults[.dynamicShelf] = shelfEnabled
 
         Defaults[.enableTimerFeature] = features.contains(.timer)
-
         Defaults[.enableStatsFeature] = features.contains(.stats)
-
         Defaults[.enableClipboardManager] = features.contains(.clipboard)
-
         Defaults[.enableColorPickerFeature] = features.contains(.colorPicker)
 
-        Defaults[.showBatteryIndicator] = features.contains(.battery)
-        Defaults[.showPowerStatusNotifications] = features.contains(.battery)
+        syncBatteryAvailability(batteryEnabled)
+        syncPrivacyAvailability(privacyEnabled)
+        syncRecordingAvailability(recordingEnabled)
+        syncFocusAvailability(focusEnabled)
 
-        Defaults[.enableCameraDetection] = features.contains(.privacy)
-        Defaults[.enableMicrophoneDetection] = features.contains(.privacy)
-        Defaults[.enableScreenRecordingDetection] = features.contains(.recording)
-        Defaults[.showRecordingIndicator] = features.contains(.recording)
-        Defaults[.enableDoNotDisturbDetection] = features.contains(.focus)
-        Defaults[.showDoNotDisturbIndicator] = features.contains(.focus)
-
-        Defaults[.showBluetoothDeviceConnections] = features.contains(.bluetooth)
-        Defaults[.enableDownloadListener] = features.contains(.downloads)
-        syncOSDAvailability(features.contains(.osd))
-
-        Defaults[.enableLockScreenLiveActivity] = features.contains(.lockScreenWidgets)
-
-        Defaults[.enableThirdPartyExtensions] = features.contains(.extensionBridge)
+        Defaults[.showBluetoothDeviceConnections] = bluetoothEnabled
+        Defaults[.enableDownloadListener] = downloadsEnabled
+        syncOSDAvailability(osdEnabled)
+        syncLockScreenAvailability(lockScreenEnabled)
+        syncExtensionAvailability(extensionsEnabled, lockScreenEnabled: lockScreenEnabled)
 
         Defaults[.enableScreenAssistant] = features.contains(.screenAssistant)
         Defaults[.enableTerminalFeature] = features.contains(.terminal)
@@ -50,20 +57,81 @@ public enum AtollDefaultsBridge {
         )
     }
 
+    private static func syncCalendarAvailability(_ isEnabled: Bool) {
+        Defaults[.showCalendar] = isEnabled
+        Defaults[.enableReminderLiveActivity] = isEnabled
+    }
+
+    private static func syncBatteryAvailability(_ isEnabled: Bool) {
+        Defaults[.showBatteryIndicator] = isEnabled
+        Defaults[.showPowerStatusNotifications] = isEnabled
+        Defaults[.showChargingBatteryHUD] = isEnabled
+        Defaults[.showLowBatteryHUD] = isEnabled
+        Defaults[.showFullBatteryHUD] = isEnabled
+    }
+
+    private static func syncPrivacyAvailability(_ isEnabled: Bool) {
+        Defaults[.enableCameraDetection] = isEnabled
+        Defaults[.enableMicrophoneDetection] = isEnabled
+    }
+
+    private static func syncRecordingAvailability(_ isEnabled: Bool) {
+        Defaults[.enableScreenRecordingDetection] = isEnabled
+        Defaults[.showRecordingIndicator] = isEnabled
+    }
+
+    private static func syncFocusAvailability(_ isEnabled: Bool) {
+        Defaults[.enableDoNotDisturbDetection] = isEnabled
+        Defaults[.showDoNotDisturbIndicator] = isEnabled
+    }
+
     private static func syncOSDAvailability(_ isEnabled: Bool) {
         guard isEnabled else {
             Defaults[.enableSystemHUD] = false
+            Defaults[.enableVolumeHUD] = false
+            Defaults[.enableBrightnessHUD] = false
+            Defaults[.enableKeyboardBacklightHUD] = false
             Defaults[.enableCustomOSD] = false
+            Defaults[.enableOSDVolume] = false
+            Defaults[.enableOSDBrightness] = false
+            Defaults[.enableOSDKeyboardBacklight] = false
             Defaults[.enableVerticalHUD] = false
             Defaults[.enableCircularHUD] = false
+            Defaults[.enableCapsLockIndicator] = false
             return
         }
 
-        if !Defaults[.enableCustomOSD],
-           !Defaults[.enableVerticalHUD],
-           !Defaults[.enableCircularHUD] {
-            Defaults[.enableSystemHUD] = true
-        }
+        Defaults[.enableVolumeHUD] = true
+        Defaults[.enableBrightnessHUD] = true
+        Defaults[.enableKeyboardBacklightHUD] = true
+        Defaults[.enableOSDVolume] = true
+        Defaults[.enableOSDBrightness] = true
+        Defaults[.enableOSDKeyboardBacklight] = true
+        Defaults[.enableCapsLockIndicator] = true
+        Defaults[.enableSystemHUD] = true
+        Defaults[.enableCustomOSD] = false
+        Defaults[.enableVerticalHUD] = false
+        Defaults[.enableCircularHUD] = false
+    }
+
+    private static func syncLockScreenAvailability(_ isEnabled: Bool) {
+        Defaults[.enableLockScreenLiveActivity] = isEnabled
+        Defaults[.enableLockScreenMediaWidget] = isEnabled
+        Defaults[.enableLockScreenWeatherWidget] = isEnabled
+        Defaults[.enableLockScreenFocusWidget] = isEnabled
+        Defaults[.enableLockScreenReminderWidget] = isEnabled
+        Defaults[.enableLockScreenTimerWidget] = isEnabled
+    }
+
+    private static func syncExtensionAvailability(_ isEnabled: Bool, lockScreenEnabled: Bool) {
+        Defaults[.enableThirdPartyExtensions] = isEnabled
+        Defaults[.enableExtensionLiveActivities] = isEnabled
+        Defaults[.enableExtensionLockScreenWidgets] = isEnabled && lockScreenEnabled
+        Defaults[.enableExtensionNotchExperiences] = isEnabled
+        Defaults[.enableExtensionNotchTabs] = isEnabled
+        Defaults[.enableExtensionNotchMinimalisticOverrides] = isEnabled
+        Defaults[.enableExtensionNotchInteractiveWebViews] = isEnabled
+        Defaults[.enableExtensionFileSharing] = isEnabled
     }
 
     public static func standardTabCount(for features: Set<AtollIslandFeature>) -> Int {

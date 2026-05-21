@@ -13,6 +13,7 @@ final class NotchIslandController {
     private var lockObserver: NSObjectProtocol?
     private var unlockObserver: NSObjectProtocol?
     private let shortcutMonitor = NotchIslandShortcutMonitor()
+    private let runtimeServices = AtollIslandRuntimeServiceOwner()
     private var isStarted = false
     private var windowsHiddenForLock = false
 
@@ -33,6 +34,7 @@ final class NotchIslandController {
 
     func stop() {
         closePanels()
+        runtimeServices.stop()
         if let screenObserver {
             NotificationCenter.default.removeObserver(screenObserver)
         }
@@ -54,6 +56,8 @@ final class NotchIslandController {
         withObservationTracking {
             _ = preferences.notchIslandEnabled
             _ = preferences.notchIslandDisplayMode
+            _ = preferences.notchIslandSelectedScreenIDs
+            _ = preferences.notchIslandScreenStyles
             _ = preferences.notchIslandSizePreset
             _ = preferences.notchIslandHoverExpansionEnabled
             _ = preferences.notchIslandShortcutEnabled
@@ -103,13 +107,21 @@ final class NotchIslandController {
 
     private func syncWithPreferences() {
         guard let environment, let preferences else { return }
-        syncShortcutMonitor()
         guard preferences.notchIslandEnabled else {
+            shortcutMonitor.stop()
             closePanels()
+            runtimeServices.stop()
             return
         }
+        syncShortcutMonitor()
 
-        let targetScreens = screens(for: preferences.notchIslandDisplayMode)
+        let targetScreens = NotchIslandScreenCatalog.selectedScreens(for: preferences.notchIslandSelectedScreenIDs)
+        guard !targetScreens.isEmpty else {
+            closePanels()
+            runtimeServices.stop()
+            return
+        }
+        let configuration = atollConfiguration(for: preferences, targetScreens: targetScreens)
         let targetSet = Set(targetScreens)
         let staleScreens = panels.keys.filter { !targetSet.contains($0) }
         for screen in staleScreens {
@@ -120,18 +132,22 @@ final class NotchIslandController {
         }
 
         for screen in targetScreens {
-            ensurePanel(on: screen, environment: environment)
+            ensurePanel(on: screen, environment: environment, configuration: configuration)
         }
-        let configuration = atollConfiguration(for: preferences)
         for bridge in bridges.values {
             bridge.update(configuration: configuration)
             bridge.refreshWindowFrame(animated: false, force: true)
         }
+        let primaryScreen = NotchIslandScreenCatalog.primaryRuntimeScreen(from: targetScreens)
+        runtimeServices.update(configuration: configuration, primaryBridge: primaryScreen.flatMap { bridges[$0] })
     }
 
-    private func ensurePanel(on screen: NSScreen, environment: AppEnvironment) {
-        guard panels[screen] == nil, let preferences else { return }
-        let configuration = atollConfiguration(for: preferences)
+    private func ensurePanel(
+        on screen: NSScreen,
+        environment: AppEnvironment,
+        configuration: AtollIslandConfiguration
+    ) {
+        guard panels[screen] == nil else { return }
         let frame = AtollIslandSizing.frame(for: screen, configuration: configuration)
         let panel = AtollIslandWindowFactory.makeWindow(frame: frame)
 
@@ -158,7 +174,7 @@ final class NotchIslandController {
     }
 
     private func syncShortcutMonitor() {
-        guard let preferences, preferences.notchIslandShortcutEnabled else {
+        guard let preferences, preferences.notchIslandEnabled, preferences.notchIslandShortcutEnabled else {
             shortcutMonitor.stop()
             return
         }
@@ -205,27 +221,17 @@ final class NotchIslandController {
         }
     }
 
-    private func screens(for mode: NotchIslandDisplayMode) -> [NSScreen] {
-        let screens = NSScreen.screens
-        guard !screens.isEmpty else { return [] }
-        switch mode {
-        case .primaryDisplay:
-            return [NSScreen.main ?? screens[0]]
-        case .pointerDisplay:
-            let mouse = NSEvent.mouseLocation
-            return [screens.first { $0.frame.contains(mouse) } ?? NSScreen.main ?? screens[0]]
-        case .allDisplays:
-            return screens
-        }
-    }
-
-    private func atollConfiguration(for preferences: Preferences) -> AtollIslandConfiguration {
+    private func atollConfiguration(
+        for preferences: Preferences,
+        targetScreens: [NSScreen]
+    ) -> AtollIslandConfiguration {
         AtollIslandConfiguration(
             enabledFeatures: Set(preferences.notchIslandEnabledModules.map(\.atollFeature)),
             openNotchWidth: AtollNotchGeometry.openWidth(for: preferences.notchIslandSizePreset),
             openOnHover: preferences.notchIslandHoverExpansionEnabled,
-            showOnAllDisplays: preferences.notchIslandDisplayMode == .allDisplays,
-            statsUpdateInterval: atollStatsUpdateInterval(for: preferences.systemMonitorRefreshRate)
+            showOnAllDisplays: targetScreens.count > 1,
+            statsUpdateInterval: atollStatsUpdateInterval(for: preferences.systemMonitorRefreshRate),
+            screenStylesByScreenID: preferences.notchIslandScreenStyles.mapValues(\.atollStyle)
         )
     }
 
@@ -236,6 +242,15 @@ final class NotchIslandController {
         case .threeSeconds: 3
         case .tenSeconds: 10
         case .thirtySeconds: 30
+        }
+    }
+}
+
+private extension NotchIslandScreenStyle {
+    var atollStyle: AtollIslandScreenStyle {
+        switch self {
+        case .sameAsNotch: .sameAsNotch
+        case .floatingIsland: .floatingIsland
         }
     }
 }

@@ -543,7 +543,6 @@ private extension AtollSettingsBridge {
                 toggle("island.hideFromScreenCapture", "Hide during screenshots", "Avoid capturing the island in screenshots and recordings.")
             ]),
             group("External Displays", [
-                picker("island.externalDisplayStyle", "External display style", "Choose the non-notch display shape.", enumOptions(ExternalDisplayStyle.self) { $0.localizedName }),
                 toggle("island.hideNonNotchUntilHover", "Hide until hovered", "Keep the floating pill hidden on non-notch displays until the pointer approaches.")
             ])
         ],

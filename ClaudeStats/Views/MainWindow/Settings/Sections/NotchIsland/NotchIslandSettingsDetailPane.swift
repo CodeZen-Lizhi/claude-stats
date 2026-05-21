@@ -94,14 +94,35 @@ struct NotchIslandSettingsDetailPane: View {
     private func islandDisplaySettings(prefs: Preferences) -> some View {
         SettingGroup(title: "Display", caption: "Claude Stats owns placement, sizing, and the global shortcut.") {
             VStack(spacing: 0) {
-                SettingRow(title: "Display mode", description: "Where the island window is created.") {
-                    Picker("", selection: displayModeBinding(prefs)) {
-                        ForEach(NotchIslandDisplayMode.allCases) { mode in
-                            Text(mode.displayName).tag(mode)
+                let descriptors = NotchIslandScreenCatalog.descriptors()
+                ForEach(Array(descriptors.enumerated()), id: \.element.id) { index, descriptor in
+                    SettingRow(title: descriptor.displayName, description: screenDescription(for: descriptor, prefs: prefs)) {
+                        HStack(spacing: 12) {
+                            if descriptor.hasPhysicalNotch {
+                                Text(NotchIslandScreenStyle.sameAsNotch.displayName)
+                                    .font(.sora(10, weight: .medium))
+                                    .foregroundStyle(Color.stxMuted)
+                                    .lineLimit(1)
+                            } else {
+                                Picker("", selection: screenStyleBinding(descriptor.id, prefs: prefs)) {
+                                    ForEach(NotchIslandScreenStyle.allCases) { style in
+                                        Text(style.displayName).tag(style)
+                                    }
+                                }
+                                .labelsHidden()
+                                .frame(width: 150)
+                                .disabled(!prefs.notchIslandSelectedScreenIDs.contains(descriptor.id))
+                            }
+
+                            Toggle("", isOn: screenSelectionBinding(descriptor.id, prefs: prefs))
+                                .labelsHidden()
                         }
+                        .frame(width: 260, alignment: .trailing)
                     }
-                    .labelsHidden()
-                    .frame(width: 190)
+
+                    if index != descriptors.count - 1 {
+                        SettingRowDivider()
+                    }
                 }
 
                 SettingRowDivider()
@@ -132,6 +153,14 @@ struct NotchIslandSettingsDetailPane: View {
             }
             .settingCard()
         }
+    }
+
+    private func screenDescription(for descriptor: NotchIslandScreenDescriptor, prefs: Preferences) -> String {
+        if descriptor.hasPhysicalNotch {
+            return "Physical notch display; style is fixed to the standard notch shape."
+        }
+        let style = prefs.notchIslandScreenStyles[descriptor.id] ?? .sameAsNotch
+        return style.description
     }
 
     private func moduleAvailabilitySettings(_ module: NotchIslandModule, prefs: Preferences) -> some View {
@@ -172,11 +201,37 @@ struct NotchIslandSettingsDetailPane: View {
         )
     }
 
-    private func displayModeBinding(_ prefs: Preferences) -> Binding<NotchIslandDisplayMode> {
+    private func screenSelectionBinding(_ screenID: String, prefs: Preferences) -> Binding<Bool> {
         Binding(
-            get: { prefs.notchIslandDisplayMode },
-            set: {
-                prefs.notchIslandDisplayMode = $0
+            get: { prefs.notchIslandSelectedScreenIDs.contains(screenID) },
+            set: { isSelected in
+                var selected = prefs.notchIslandSelectedScreenIDs
+                if isSelected {
+                    selected.insert(screenID)
+                } else {
+                    selected.remove(screenID)
+                    let attachedIDs = Set(NotchIslandScreenCatalog.descriptors().map(\.id))
+                    if selected.intersection(attachedIDs).isEmpty {
+                        selected.insert(screenID)
+                    }
+                }
+                prefs.notchIslandSelectedScreenIDs = selected
+                onSettingChanged()
+            }
+        )
+    }
+
+    private func screenStyleBinding(_ screenID: String, prefs: Preferences) -> Binding<NotchIslandScreenStyle> {
+        Binding(
+            get: { prefs.notchIslandScreenStyles[screenID] ?? .sameAsNotch },
+            set: { style in
+                var styles = prefs.notchIslandScreenStyles
+                if style == .sameAsNotch {
+                    styles.removeValue(forKey: screenID)
+                } else {
+                    styles[screenID] = style
+                }
+                prefs.notchIslandScreenStyles = styles
                 onSettingChanged()
             }
         )

@@ -92,6 +92,23 @@ final class Preferences {
     var notchIslandDisplayMode: NotchIslandDisplayMode {
         didSet { defaults.set(notchIslandDisplayMode.rawValue, forKey: Keys.notchIslandDisplayMode) }
     }
+    var notchIslandSelectedScreenIDs: Set<String> {
+        didSet {
+            if notchIslandSelectedScreenIDs.isEmpty {
+                notchIslandSelectedScreenIDs = NotchIslandScreenCatalog.defaultSelectedScreenIDs()
+                return
+            }
+            defaults.set(
+                notchIslandSelectedScreenIDs.sorted().joined(separator: ","),
+                forKey: Keys.notchIslandSelectedScreenIDs
+            )
+        }
+    }
+    var notchIslandScreenStyles: [String: NotchIslandScreenStyle] {
+        didSet {
+            persistNotchIslandScreenStyles()
+        }
+    }
     var notchIslandSizePreset: NotchIslandSizePreset {
         didSet { defaults.set(notchIslandSizePreset.rawValue, forKey: Keys.notchIslandSizePreset) }
     }
@@ -419,7 +436,20 @@ final class Preferences {
         floatingTabEdge = FloatingPanelEdge(rawValue: defaults.string(forKey: Keys.floatingTabEdge) ?? "") ?? .right
         floatingTabAnchor = (defaults.object(forKey: Keys.floatingTabAnchor) as? Double) ?? 0.5
         notchIslandEnabled = defaults.bool(forKey: Keys.notchIslandEnabled)
-        notchIslandDisplayMode = NotchIslandDisplayMode(rawValue: defaults.string(forKey: Keys.notchIslandDisplayMode) ?? "") ?? .primaryDisplay
+        let legacyNotchDisplayMode = NotchIslandDisplayMode(rawValue: defaults.string(forKey: Keys.notchIslandDisplayMode) ?? "") ?? .primaryDisplay
+        notchIslandDisplayMode = legacyNotchDisplayMode
+        let storedNotchScreenIDsRaw = defaults.string(forKey: Keys.notchIslandSelectedScreenIDs) ?? ""
+        let storedNotchScreenIDs = storedNotchScreenIDsRaw
+            .split(separator: ",")
+            .map { String($0) }
+        if storedNotchScreenIDs.isEmpty {
+            let migratedScreenIDs = NotchIslandScreenCatalog.defaultSelectedScreenIDs(for: legacyNotchDisplayMode)
+            notchIslandSelectedScreenIDs = migratedScreenIDs
+            defaults.set(migratedScreenIDs.sorted().joined(separator: ","), forKey: Keys.notchIslandSelectedScreenIDs)
+        } else {
+            notchIslandSelectedScreenIDs = Set(storedNotchScreenIDs)
+        }
+        notchIslandScreenStyles = Self.decodeNotchIslandScreenStyles(defaults.string(forKey: Keys.notchIslandScreenStyles))
         notchIslandSizePreset = NotchIslandSizePreset(rawValue: defaults.string(forKey: Keys.notchIslandSizePreset) ?? "") ?? .regular
         notchIslandHoverExpansionEnabled = (defaults.object(forKey: Keys.notchIslandHoverExpansionEnabled) as? Bool) ?? true
         notchIslandShortcutEnabled = (defaults.object(forKey: Keys.notchIslandShortcutEnabled) as? Bool) ?? true
@@ -541,6 +571,29 @@ final class Preferences {
         networkTrafficAutoBreakpoint = NetworkTrafficLayoutConstants.defaultAutoBreakpoint
     }
 
+    private func persistNotchIslandScreenStyles() {
+        let raw = notchIslandScreenStyles.mapValues(\.rawValue)
+        guard let data = try? JSONEncoder().encode(raw),
+              let json = String(data: data, encoding: .utf8) else {
+            defaults.removeObject(forKey: Keys.notchIslandScreenStyles)
+            return
+        }
+        defaults.set(json, forKey: Keys.notchIslandScreenStyles)
+    }
+
+    private static func decodeNotchIslandScreenStyles(_ raw: String?) -> [String: NotchIslandScreenStyle] {
+        guard let raw,
+              let data = raw.data(using: .utf8),
+              let decoded = try? JSONDecoder().decode([String: String].self, from: data) else {
+            return [:]
+        }
+        return decoded.reduce(into: [:]) { result, pair in
+            if let style = NotchIslandScreenStyle(rawValue: pair.value) {
+                result[pair.key] = style
+            }
+        }
+    }
+
     private enum Keys {
         static let appLanguagePreference = "appLanguagePreference"
         static let autoRefreshMinutes = "autoRefreshMinutes"
@@ -554,6 +607,8 @@ final class Preferences {
         static let floatingTabAnchor = "floatingTabAnchor"
         static let notchIslandEnabled = "notchIslandEnabled"
         static let notchIslandDisplayMode = "notchIslandDisplayMode"
+        static let notchIslandSelectedScreenIDs = "notchIslandSelectedScreenIDs"
+        static let notchIslandScreenStyles = "notchIslandScreenStyles"
         static let notchIslandSizePreset = "notchIslandSizePreset"
         static let notchIslandHoverExpansionEnabled = "notchIslandHoverExpansionEnabled"
         static let notchIslandShortcutEnabled = "notchIslandShortcutEnabled"
