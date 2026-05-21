@@ -41,7 +41,6 @@ struct SidebarColumn: View {
 
             sectionHeader("STATS")
             navRow(.usage)
-            navRow(.town)
             navRow(.leaderboards)
             if env.preferences.aiActivityAnalysisEnabled { navRow(.activity) }
             if env.preferences.systemMonitorEnabled { navRow(.system) }
