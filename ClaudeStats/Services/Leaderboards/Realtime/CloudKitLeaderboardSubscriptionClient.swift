@@ -2,38 +2,35 @@ import CloudKit
 import Foundation
 
 protocol LeaderboardRealtimeCloudServicing: Sendable {
-    func ensureSubscription(for scope: LeaderboardRealtimeScope) async throws
-    func deleteManagedSubscriptions(except scopes: Set<LeaderboardRealtimeScope>) async
+    func ensureSubscription() async throws
+    func deleteManagedSubscriptions(except subscriptionIDs: Set<String>) async
 }
 
 struct CloudKitLeaderboardSubscriptionClient: LeaderboardRealtimeCloudServicing {
     private let containerIdentifier: String
     private let entitlementChecker: @Sendable (String) -> Bool
-    private let now: @Sendable () -> Date
 
     init(
         containerIdentifier: String = CloudKitLeaderboardConfig.containerIdentifier,
-        entitlementChecker: @escaping @Sendable (String) -> Bool = CloudKitRuntimeEntitlements.hasCloudKitAccess,
-        now: @escaping @Sendable () -> Date = Date.init
+        entitlementChecker: @escaping @Sendable (String) -> Bool = CloudKitRuntimeEntitlements.hasCloudKitAccess
     ) {
         self.containerIdentifier = containerIdentifier
         self.entitlementChecker = entitlementChecker
-        self.now = now
     }
 
-    func ensureSubscription(for scope: LeaderboardRealtimeScope) async throws {
+    func ensureSubscription() async throws {
         try ensureCloudKitEntitlement()
         let subscription = CKQuerySubscription(
             recordType: CloudKitLeaderboardConfig.recordType,
-            predicate: Self.subscriptionPredicate(for: scope),
-            subscriptionID: scope.subscriptionID,
+            predicate: Self.subscriptionPredicate(),
+            subscriptionID: LeaderboardRealtimeNotification.globalSubscriptionID,
             options: [.firesOnRecordCreation, .firesOnRecordUpdate, .firesOnRecordDeletion]
         )
         subscription.notificationInfo = CKSubscription.NotificationInfo(shouldSendContentAvailable: true)
 
         do {
             let result = try await publicDatabase.modifySubscriptions(saving: [subscription], deleting: [])
-            if case .failure(let error) = result.saveResults[scope.subscriptionID] {
+            if case .failure(let error) = result.saveResults[LeaderboardRealtimeNotification.globalSubscriptionID] {
                 throw LeaderboardCloudError.cloudKit(Self.shortCloudKitMessage(error))
             }
         } catch let error as LeaderboardCloudError {
@@ -43,37 +40,27 @@ struct CloudKitLeaderboardSubscriptionClient: LeaderboardRealtimeCloudServicing 
         }
     }
 
-    func deleteManagedSubscriptions(except scopes: Set<LeaderboardRealtimeScope>) async {
+    func deleteManagedSubscriptions(except subscriptionIDs: Set<String>) async {
         guard entitlementChecker(containerIdentifier) else { return }
-        let idsToKeep = Set(scopes.map(\.subscriptionID))
-        let idsToDelete = Self.managedLiveScopes(now: now())
-            .map(\.subscriptionID)
-            .filter { !idsToKeep.contains($0) }
-
-        guard !idsToDelete.isEmpty else { return }
         do {
+            let subscriptions = try await publicDatabase.allSubscriptions()
+            let idsToDelete = subscriptions
+                .map(\.subscriptionID)
+                .filter { LeaderboardRealtimeNotification.isManagedSubscriptionID($0) }
+                .filter { !subscriptionIDs.contains($0) }
+
+            guard !idsToDelete.isEmpty else { return }
             _ = try await publicDatabase.modifySubscriptions(saving: [], deleting: idsToDelete)
         } catch {
             Log.network.debug("Leaderboard subscription cleanup failed: \(Self.shortCloudKitMessage(error), privacy: .public)")
         }
     }
 
-    static func subscriptionPredicate(for scope: LeaderboardRealtimeScope) -> NSPredicate {
+    static func subscriptionPredicate() -> NSPredicate {
         NSPredicate(
-            format: "%K == %@ AND %K == %@ AND %K == %@ AND %K == %@",
-            CloudKitLeaderboardRecordMapper.Field.providerScope, CloudKitLeaderboardConfig.providerScope,
-            CloudKitLeaderboardRecordMapper.Field.metric, scope.metric.rawValue,
-            CloudKitLeaderboardRecordMapper.Field.period, scope.period.rawValue,
-            CloudKitLeaderboardRecordMapper.Field.periodKey, scope.periodKey
+            format: "%K == %@",
+            CloudKitLeaderboardRecordMapper.Field.providerScope, CloudKitLeaderboardConfig.providerScope
         )
-    }
-
-    private static func managedLiveScopes(now: Date) -> [LeaderboardRealtimeScope] {
-        LeaderboardMetric.allCases.flatMap { metric in
-            LeaderboardPeriod.allCases.map { period in
-                LeaderboardRealtimeScope.liveScope(metric: metric, period: period, now: now)
-            }
-        }
     }
 
     private var container: CKContainer {

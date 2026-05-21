@@ -68,22 +68,61 @@ struct LeaderboardRealtimeScope: Codable, Equatable, Hashable, Identifiable, Sen
 }
 
 struct LeaderboardRealtimeNotification: Equatable, Sendable {
+    static let globalSubscriptionID = "leaderboard.score.v2.all"
+
     let subscriptionID: String
     let scope: LeaderboardRealtimeScope?
     let receivedAt: Date
+
+    var isGlobalScoreChange: Bool {
+        subscriptionID == Self.globalSubscriptionID
+    }
 
     init(subscriptionID: String, receivedAt: Date = .now) {
         self.subscriptionID = subscriptionID
         self.scope = LeaderboardRealtimeScope(subscriptionID: subscriptionID)
         self.receivedAt = receivedAt
     }
+
+    static func isManagedSubscriptionID(_ subscriptionID: String) -> Bool {
+        subscriptionID == globalSubscriptionID
+            || LeaderboardRealtimeScope(subscriptionID: subscriptionID) != nil
+    }
 }
 
 struct LeaderboardRealtimeState: Codable, Equatable, Sendable {
     var pendingScopes: Set<LeaderboardRealtimeScope>
     var lastNotificationAt: Date?
+    var hasPendingGlobalChange: Bool
 
-    static let empty = LeaderboardRealtimeState(pendingScopes: [], lastNotificationAt: nil)
+    static let empty = LeaderboardRealtimeState(
+        pendingScopes: [],
+        lastNotificationAt: nil,
+        hasPendingGlobalChange: false
+    )
+
+    init(
+        pendingScopes: Set<LeaderboardRealtimeScope>,
+        lastNotificationAt: Date?,
+        hasPendingGlobalChange: Bool = false
+    ) {
+        self.pendingScopes = pendingScopes
+        self.lastNotificationAt = lastNotificationAt
+        self.hasPendingGlobalChange = hasPendingGlobalChange
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case pendingScopes
+        case lastNotificationAt
+        case hasPendingGlobalChange
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        pendingScopes = try container.decode(Set<LeaderboardRealtimeScope>.self, forKey: .pendingScopes)
+        lastNotificationAt = try container.decodeIfPresent(Date.self, forKey: .lastNotificationAt)
+        hasPendingGlobalChange = try container.decodeIfPresent(Bool.self, forKey: .hasPendingGlobalChange) ?? false
+    }
 }
 
 enum LeaderboardRealtimeStatus: Equatable, Sendable {
@@ -111,6 +150,7 @@ enum LeaderboardRealtimeStatus: Equatable, Sendable {
 
 enum LeaderboardRealtimeDecision: Equatable, Sendable {
     case ignored
+    case markedGlobalPending
     case markedPending(LeaderboardRealtimeScope)
     case refresh(LeaderboardRealtimeScope)
 }

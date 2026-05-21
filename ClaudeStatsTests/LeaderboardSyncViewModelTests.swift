@@ -259,8 +259,8 @@ struct LeaderboardSyncViewModelTests {
         #expect(await fixture.client.fetchedPeriodKeys() == ["all"])
     }
 
-    @Test("Current realtime notification debounces then force-refreshes visible scores")
-    func currentRealtimeNotificationRefreshesVisibleScores() async {
+    @Test("Global realtime notification debounces then force-refreshes visible scores")
+    func globalRealtimeNotificationRefreshesVisibleScores() async {
         let fixture = makeFixture(enabled: true)
         let now = dateUTC(2026, 5, 16, 8)
         let scope = LeaderboardRealtimeScope.liveScope(metric: .tokensWithCache, period: .allTime, now: now)
@@ -278,16 +278,21 @@ struct LeaderboardSyncViewModelTests {
             ],
         ])
 
-        fixture.viewModel.handleRealtimeNotification(LeaderboardRealtimeNotification(subscriptionID: scope.subscriptionID, receivedAt: now))
+        fixture.viewModel.handleRealtimeNotification(LeaderboardRealtimeNotification(
+            subscriptionID: LeaderboardRealtimeNotification.globalSubscriptionID,
+            receivedAt: now
+        ))
         try? await Task.sleep(for: .milliseconds(50))
 
         #expect(fixture.viewModel.realtimeStatus == .live)
         #expect(fixture.viewModel.scores.first?.id == "fresh")
         #expect(await fixture.client.fetchedPeriodKeys() == ["all", "all"])
+        #expect(await fixture.realtimeCloud.ensureCount() == 1)
+        #expect(await fixture.realtimeCloud.cleanupKeepIDs() == [[LeaderboardRealtimeNotification.globalSubscriptionID]])
     }
 
-    @Test("Non-current realtime notification only marks pending")
-    func nonCurrentRealtimeNotificationMarksPending() async {
+    @Test("Legacy non-current realtime notification only marks scoped pending")
+    func legacyNonCurrentRealtimeNotificationMarksPending() async {
         let fixture = makeFixture(enabled: true)
         let now = dateUTC(2026, 5, 16, 8)
         let currentScope = LeaderboardRealtimeScope.liveScope(metric: .tokensWithCache, period: .allTime, now: now)
@@ -303,6 +308,42 @@ struct LeaderboardSyncViewModelTests {
         #expect(fixture.viewModel.realtimeStatus == .live)
         #expect(await fixture.client.fetchedPeriodKeys().isEmpty)
         #expect(await fixture.localStore.readRealtimeState().pendingScopes == [pendingScope])
+    }
+
+    @Test("Global realtime notification while inactive refreshes on next activation")
+    func inactiveGlobalRealtimeNotificationRefreshesOnNextActivation() async {
+        let fixture = makeFixture(enabled: true)
+        let now = dateUTC(2026, 5, 16, 8)
+        let scope = LeaderboardRealtimeScope.liveScope(metric: .tokensWithCache, period: .allTime, now: now)
+        await fixture.client.setScores([
+            "all": [
+                score(id: "initial", userHash: "initialhash", rank: 1, nickname: "Initial", value: 100, now: now),
+            ],
+        ])
+
+        await fixture.viewModel.loadScores(metric: .tokensWithCache, period: .allTime, now: now)
+        await fixture.client.clearFetches()
+        fixture.viewModel.handleRealtimeNotification(LeaderboardRealtimeNotification(
+            subscriptionID: LeaderboardRealtimeNotification.globalSubscriptionID,
+            receivedAt: now
+        ))
+        try? await Task.sleep(for: .milliseconds(50))
+
+        let pendingState = await fixture.localStore.readRealtimeState()
+        #expect(pendingState.hasPendingGlobalChange)
+        #expect(await fixture.client.fetchedPeriodKeys().isEmpty)
+
+        await fixture.client.setScores([
+            "all": [
+                score(id: "fresh", userHash: "freshhash", rank: 1, nickname: "Fresh", value: 300, now: now),
+            ],
+        ])
+        await fixture.viewModel.activateRealtime(scope: scope)
+
+        #expect(fixture.viewModel.realtimeStatus == .live)
+        #expect(fixture.viewModel.scores.first?.id == "fresh")
+        #expect(await fixture.client.fetchedPeriodKeys() == ["all"])
+        #expect(!(await fixture.localStore.readRealtimeState()).hasPendingGlobalChange)
     }
 
     @Test("Historical day does not register a realtime subscription")
@@ -324,7 +365,7 @@ struct LeaderboardSyncViewModelTests {
 
         #expect(scope == nil)
         #expect(fixture.viewModel.realtimeStatus == .historicalCache)
-        #expect(await fixture.realtimeCloud.ensuredScopes().isEmpty)
+        #expect(await fixture.realtimeCloud.ensureCount() == 0)
     }
 
     @Test("Realtime registration failure does not block manual refresh")
@@ -349,6 +390,19 @@ struct LeaderboardSyncViewModelTests {
         }
         #expect(await fixture.client.submittedCount() > 0)
         #expect(fixture.viewModel.scores.first?.id == "fresh")
+    }
+
+    @Test("Sync and realtime status text stay separate")
+    func syncAndRealtimeStatusTextStaySeparate() async {
+        let fixture = makeFixture(enabled: true)
+        let now = dateUTC(2026, 5, 16, 8)
+        let scope = LeaderboardRealtimeScope.liveScope(metric: .tokensWithCache, period: .allTime, now: now)
+        await fixture.realtimeCloud.setEnsureError(LeaderboardCloudError.missingEntitlement("Missing push entitlement."))
+
+        await fixture.viewModel.activateRealtime(scope: scope)
+
+        #expect(fixture.viewModel.leaderboardStatusText == "Ready")
+        #expect(fixture.viewModel.leaderboardRealtimeStatusText == "Live unavailable")
     }
 
     @Test("CloudKit score failure keeps cached scores visible")
@@ -895,31 +949,31 @@ private actor FakeLeaderboardLocalStore: LeaderboardLocalStoring {
 }
 
 private actor FakeLeaderboardRealtimeCloudService: LeaderboardRealtimeCloudServicing {
-    private var ensured: [LeaderboardRealtimeScope] = []
-    private var cleanupScopes: [Set<LeaderboardRealtimeScope>] = []
+    private var ensuredCount = 0
+    private var cleanupIDs: [Set<String>] = []
     private var ensureError: Error?
 
     func setEnsureError(_ error: Error?) {
         ensureError = error
     }
 
-    func ensuredScopes() -> [LeaderboardRealtimeScope] {
-        ensured
+    func ensureCount() -> Int {
+        ensuredCount
     }
 
-    func cleanupKeepScopes() -> [Set<LeaderboardRealtimeScope>] {
-        cleanupScopes
+    func cleanupKeepIDs() -> [Set<String>] {
+        cleanupIDs
     }
 
-    func ensureSubscription(for scope: LeaderboardRealtimeScope) async throws {
+    func ensureSubscription() async throws {
         if let ensureError {
             throw ensureError
         }
-        ensured.append(scope)
+        ensuredCount += 1
     }
 
-    func deleteManagedSubscriptions(except scopes: Set<LeaderboardRealtimeScope>) async {
-        cleanupScopes.append(scopes)
+    func deleteManagedSubscriptions(except subscriptionIDs: Set<String>) async {
+        cleanupIDs.append(subscriptionIDs)
     }
 }
 

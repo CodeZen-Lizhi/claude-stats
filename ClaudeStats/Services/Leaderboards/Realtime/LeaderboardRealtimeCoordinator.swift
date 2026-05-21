@@ -6,6 +6,7 @@ actor LeaderboardRealtimeCoordinator {
     private var didLoadState = false
     private var activeScope: LeaderboardRealtimeScope?
     private var pendingScopes: Set<LeaderboardRealtimeScope> = []
+    private var hasPendingGlobalChange = false
     private var lastNotificationAt: Date?
 
     init(
@@ -22,9 +23,9 @@ actor LeaderboardRealtimeCoordinator {
         guard let scope else { return .historicalCache }
 
         do {
-            try await cloud.ensureSubscription(for: scope)
-            await cloud.deleteManagedSubscriptions(except: [scope])
-            return pendingScopes.contains(scope) ? .pending : .live
+            try await cloud.ensureSubscription()
+            await cloud.deleteManagedSubscriptions(except: [LeaderboardRealtimeNotification.globalSubscriptionID])
+            return status(for: scope)
         } catch let error as LeaderboardCloudError {
             Log.network.error("Leaderboard realtime subscription failed: \(error.description, privacy: .public)")
             return .unavailable(error.description)
@@ -40,9 +41,21 @@ actor LeaderboardRealtimeCoordinator {
 
     func handle(_ notification: LeaderboardRealtimeNotification) async -> LeaderboardRealtimeDecision {
         await loadStateIfNeeded()
+        lastNotificationAt = notification.receivedAt
+
+        if notification.isGlobalScoreChange {
+            if let activeScope {
+                await saveState()
+                return .refresh(activeScope)
+            }
+
+            hasPendingGlobalChange = true
+            await saveState()
+            return .markedGlobalPending
+        }
+
         guard let scope = notification.scope else { return .ignored }
 
-        lastNotificationAt = notification.receivedAt
         if scope == activeScope {
             await saveState()
             return .refresh(scope)
@@ -55,7 +68,13 @@ actor LeaderboardRealtimeCoordinator {
 
     func consumePending(for scope: LeaderboardRealtimeScope?) async -> Bool {
         await loadStateIfNeeded()
-        guard let scope, pendingScopes.remove(scope) != nil else { return false }
+        guard let scope else { return false }
+
+        let hadScopedPending = pendingScopes.remove(scope) != nil
+        let hadGlobalPending = hasPendingGlobalChange
+        guard hadScopedPending || hadGlobalPending else { return false }
+
+        hasPendingGlobalChange = false
         await saveState()
         return true
     }
@@ -63,7 +82,7 @@ actor LeaderboardRealtimeCoordinator {
     func currentStatus(for scope: LeaderboardRealtimeScope?) async -> LeaderboardRealtimeStatus {
         await loadStateIfNeeded()
         guard let scope else { return .historicalCache }
-        return pendingScopes.contains(scope) ? .pending : .live
+        return status(for: scope)
     }
 
     private func loadStateIfNeeded() async {
@@ -71,13 +90,19 @@ actor LeaderboardRealtimeCoordinator {
         let state = await localStore.readRealtimeState()
         pendingScopes = state.pendingScopes
         lastNotificationAt = state.lastNotificationAt
+        hasPendingGlobalChange = state.hasPendingGlobalChange
         didLoadState = true
     }
 
     private func saveState() async {
         await localStore.writeRealtimeState(LeaderboardRealtimeState(
             pendingScopes: pendingScopes,
-            lastNotificationAt: lastNotificationAt
+            lastNotificationAt: lastNotificationAt,
+            hasPendingGlobalChange: hasPendingGlobalChange
         ))
+    }
+
+    private func status(for scope: LeaderboardRealtimeScope) -> LeaderboardRealtimeStatus {
+        pendingScopes.contains(scope) || hasPendingGlobalChange ? .pending : .live
     }
 }

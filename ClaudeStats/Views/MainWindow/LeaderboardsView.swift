@@ -187,7 +187,7 @@ struct LeaderboardsView: View {
             scores: scores,
             topScore: topScore,
             currentUserHash: env.leaderboards.currentUserHash,
-            syncStatusText: env.leaderboards.leaderboardStatusText
+            liveStatusText: env.leaderboards.leaderboardRealtimeStatusText
         )
     }
 

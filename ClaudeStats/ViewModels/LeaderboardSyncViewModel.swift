@@ -57,10 +57,13 @@ final class LeaderboardSyncViewModel {
 
     var leaderboardStatusText: String {
         guard preferences.leaderboardsEnabled else { return SyncStatus.disabled.displayText }
+        return syncStatus.displayText
+    }
+
+    var leaderboardRealtimeStatusText: String {
+        guard preferences.leaderboardsEnabled else { return SyncStatus.disabled.displayText }
         switch realtimeStatus {
-        case .inactive:
-            return syncStatus.displayText
-        case .live, .pending, .historicalCache, .unavailable:
+        case .inactive, .live, .pending, .historicalCache, .unavailable:
             return realtimeStatus.displayText
         }
     }
@@ -413,6 +416,10 @@ final class LeaderboardSyncViewModel {
         switch decision {
         case .ignored:
             return
+        case .markedGlobalPending:
+            if let activeRealtimeScope {
+                realtimeStatus = await realtime.currentStatus(for: activeRealtimeScope)
+            }
         case .markedPending:
             if let activeRealtimeScope {
                 realtimeStatus = await realtime.currentStatus(for: activeRealtimeScope)

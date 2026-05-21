@@ -59,7 +59,7 @@ struct LeaderboardOverviewPanel: View {
     let scores: [LeaderboardScore]
     let topScore: Int64
     let currentUserHash: String?
-    let syncStatusText: String
+    let liveStatusText: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -128,7 +128,7 @@ struct LeaderboardOverviewPanel: View {
             LeaderboardSummaryCard(label: "Entries", value: scores.isEmpty ? "--" : "\(scores.count)")
             LeaderboardSummaryCard(label: "Top score", value: topScore > 0 ? LeaderboardFormat.score(topScore, metric: metric) : "--")
             LeaderboardSummaryCard(label: "Your rank", value: yourRankLabel)
-            LeaderboardSummaryCard(label: "Sync", value: syncStatusText, animatesNumericValue: false)
+            LeaderboardSummaryCard(label: "Live", value: liveStatusText, animatesNumericValue: false)
         }
     }
 
