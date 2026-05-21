@@ -150,9 +150,36 @@ struct LinuxDoTopicDetail: Codable, Hashable, Identifiable, Sendable {
     let categoryID: Int?
     let tags: [String]
     let postsCount: Int
+    let canReply: Bool?
     var stream: [Int]
     var posts: [LinuxDoPost]
     let fetchedAt: Date
+
+    init(
+        id: Int,
+        title: String,
+        fancyTitle: String?,
+        slug: String?,
+        categoryID: Int?,
+        tags: [String],
+        postsCount: Int,
+        canReply: Bool? = nil,
+        stream: [Int],
+        posts: [LinuxDoPost],
+        fetchedAt: Date
+    ) {
+        self.id = id
+        self.title = title
+        self.fancyTitle = fancyTitle
+        self.slug = slug
+        self.categoryID = categoryID
+        self.tags = tags
+        self.postsCount = postsCount
+        self.canReply = canReply
+        self.stream = stream
+        self.posts = posts
+        self.fetchedAt = fetchedAt
+    }
 
     var displayTitle: String {
         let candidate = (fancyTitle?.isEmpty == false ? fancyTitle : title) ?? title
@@ -170,12 +197,15 @@ struct LinuxDoTopicDetail: Codable, Hashable, Identifiable, Sendable {
 struct LinuxDoPost: Codable, Hashable, Identifiable, Sendable {
     let id: Int
     let topicID: Int?
+    let topicSlug: String?
     let postNumber: Int
     let replyToPostNumber: Int?
     let username: String
     let name: String?
+    let displayUsername: String?
     let avatarURL: URL?
     let cookedHTML: String
+    let raw: String?
     let createdAt: Date?
     let updatedAt: Date?
     let likeCount: Int
@@ -183,9 +213,133 @@ struct LinuxDoPost: Codable, Hashable, Identifiable, Sendable {
     let reads: Int
     let score: Double?
     let actionsSummary: [LinuxDoPostActionSummary]
+    let reactions: [LinuxDoReaction]?
+    let currentUserReaction: String?
+    let canAct: Bool?
+    let canReply: Bool?
+    let yours: Bool?
+    let postURL: URL?
+
+    init(
+        id: Int,
+        topicID: Int?,
+        topicSlug: String? = nil,
+        postNumber: Int,
+        replyToPostNumber: Int?,
+        username: String,
+        name: String?,
+        displayUsername: String? = nil,
+        avatarURL: URL?,
+        cookedHTML: String,
+        raw: String? = nil,
+        createdAt: Date?,
+        updatedAt: Date?,
+        likeCount: Int,
+        replyCount: Int,
+        reads: Int,
+        score: Double?,
+        actionsSummary: [LinuxDoPostActionSummary],
+        reactions: [LinuxDoReaction] = [],
+        currentUserReaction: String? = nil,
+        canAct: Bool? = nil,
+        canReply: Bool? = nil,
+        yours: Bool? = nil,
+        postURL: URL? = nil
+    ) {
+        self.id = id
+        self.topicID = topicID
+        self.topicSlug = topicSlug
+        self.postNumber = postNumber
+        self.replyToPostNumber = replyToPostNumber
+        self.username = username
+        self.name = name
+        self.displayUsername = displayUsername
+        self.avatarURL = avatarURL
+        self.cookedHTML = cookedHTML
+        self.raw = raw
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.likeCount = likeCount
+        self.replyCount = replyCount
+        self.reads = reads
+        self.score = score
+        self.actionsSummary = actionsSummary
+        self.reactions = reactions
+        self.currentUserReaction = currentUserReaction
+        self.canAct = canAct
+        self.canReply = canReply
+        self.yours = yours
+        self.postURL = postURL
+    }
 
     var textPreview: String {
         cookedHTML.htmlStrippedAndDecoded
+    }
+
+    var displayAuthorName: String {
+        if let displayUsername, !displayUsername.isEmpty {
+            return displayUsername
+        }
+        if let name, !name.isEmpty {
+            return name
+        }
+        return "@\(username)"
+    }
+
+    var likeActionSummary: LinuxDoPostActionSummary? {
+        actionsSummary.first { $0.id == 2 }
+    }
+
+    var effectiveLikeCount: Int {
+        max(likeCount, likeActionSummary?.count ?? 0)
+    }
+
+    var isLikedByCurrentUser: Bool {
+        likeActionSummary?.acted == true || currentUserReaction == LinuxDoReactionCatalog.likeReactionID
+    }
+
+    var canToggleLike: Bool {
+        likeActionSummary?.canAct ?? canAct ?? true
+    }
+
+    var visibleReactions: [LinuxDoReaction] {
+        reactions ?? []
+    }
+
+    func replacingForumState(
+        likeCount: Int? = nil,
+        replyCount: Int? = nil,
+        actionsSummary: [LinuxDoPostActionSummary]? = nil,
+        reactions: [LinuxDoReaction]? = nil,
+        currentUserReaction: String? = nil,
+        clearsCurrentUserReaction: Bool = false
+    ) -> LinuxDoPost {
+        LinuxDoPost(
+            id: id,
+            topicID: topicID,
+            topicSlug: topicSlug,
+            postNumber: postNumber,
+            replyToPostNumber: replyToPostNumber,
+            username: username,
+            name: name,
+            displayUsername: displayUsername,
+            avatarURL: avatarURL,
+            cookedHTML: cookedHTML,
+            raw: raw,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            likeCount: likeCount ?? self.likeCount,
+            replyCount: replyCount ?? self.replyCount,
+            reads: reads,
+            score: score,
+            actionsSummary: actionsSummary ?? self.actionsSummary,
+            reactions: reactions ?? visibleReactions,
+            currentUserReaction: clearsCurrentUserReaction ? nil : (currentUserReaction ?? self.currentUserReaction),
+            canAct: canAct,
+            canReply: canReply,
+            yours: yours,
+            postURL: postURL
+        )
     }
 }
 
@@ -193,6 +347,76 @@ struct LinuxDoPostActionSummary: Codable, Hashable, Sendable {
     let id: Int
     let count: Int
     let acted: Bool
+    let canAct: Bool?
+
+    init(id: Int, count: Int, acted: Bool, canAct: Bool? = nil) {
+        self.id = id
+        self.count = count
+        self.acted = acted
+        self.canAct = canAct
+    }
+}
+
+struct LinuxDoReaction: Codable, Hashable, Identifiable, Sendable {
+    let id: String
+    let count: Int
+    let users: [LinuxDoReactionUserSummary]
+
+    var displayText: String {
+        LinuxDoReactionCatalog.displayText(for: id)
+    }
+}
+
+struct LinuxDoReactionUserSummary: Codable, Hashable, Identifiable, Sendable {
+    var id: String { username }
+
+    let username: String
+    let name: String?
+    let avatarURL: URL?
+    let canUndo: Bool
+    let createdAt: Date?
+}
+
+struct LinuxDoEmoji: Codable, Hashable, Identifiable, Sendable {
+    var id: String { name }
+
+    let name: String
+    let imageURL: URL
+}
+
+enum LinuxDoReactionCatalog {
+    static let likeReactionID = "heart"
+
+    static let defaultReactionIDs = [
+        "heart",
+        "+1",
+        "clap",
+        "hugs",
+        "laughing",
+        "open_mouth",
+        "eyes",
+    ]
+
+    static func displayText(for id: String) -> String {
+        switch id {
+        case "heart": "❤️"
+        case "+1": "👍"
+        case "-1": "👎"
+        case "clap": "👏"
+        case "hugs": "🤗"
+        case "laughing", "laugh": "😆"
+        case "open_mouth": "😮"
+        case "eyes": "👀"
+        case "tada": "🎉"
+        case "rocket": "🚀"
+        default:
+            if id.count <= 3 {
+                id
+            } else {
+                ":\(id):"
+            }
+        }
+    }
 }
 
 struct LinuxDoTopicList: Codable, Sendable {

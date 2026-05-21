@@ -18,6 +18,10 @@ struct LinuxDoTopicDetailState: Sendable {
     var detail: LinuxDoTopicDetail?
     var loadedPostIDs: Set<Int> = []
     var remainingPostIDs: [Int] = []
+    var replyStates: [Int: LinuxDoPostRepliesState] = [:]
+    var replyComposers: [Int: LinuxDoComposerState] = [:]
+    var pendingLikePostIDs: Set<Int> = []
+    var pendingReactionPostIDs: Set<Int> = []
     var nextPage: Int?
     var scrollTargetPostID: Int?
     var timelineWarning: String?
@@ -29,6 +33,33 @@ struct LinuxDoTopicDetailState: Sendable {
 
     var hasMorePosts: Bool {
         !remainingPostIDs.isEmpty || nextPage != nil
+    }
+}
+
+struct LinuxDoPostRepliesState: Sendable {
+    var replies: [LinuxDoPost] = []
+    var reactionsByPostID: [Int: [LinuxDoReaction]] = [:]
+    var isExpanded = false
+    var isLoading = false
+    var hasLoaded = false
+    var error: String?
+}
+
+struct LinuxDoComposerState: Sendable, Equatable {
+    var title = ""
+    var raw = ""
+    var isPresented = false
+    var isSubmitting = false
+    var error: String?
+
+    var canSubmitReply: Bool {
+        raw.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 && !isSubmitting
+    }
+
+    var canSubmitTopic: Bool {
+        title.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2
+            && raw.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2
+            && !isSubmitting
     }
 }
 
@@ -100,6 +131,7 @@ final class LinuxDoStore {
     private(set) var authenticationStatus: LinuxDoAuthenticationStatus
     private(set) var notifications: [LinuxDoNotification] = []
     private(set) var notificationAuthorization: LinuxDoNotificationAuthorizationStatus = .notDetermined
+    private(set) var emojiURLsByID: [String: URL] = [:]
     private(set) var isLoadingCategories = false
     private(set) var isSigningIn = false
     private(set) var isAwaitingExternalBrowserSignIn = false
@@ -116,9 +148,14 @@ final class LinuxDoStore {
     var searchText = ""
     var submittedSearch = ""
     var selectedTopicID: Int?
+    var newTopicComposer = LinuxDoComposerState()
 
     var isAuthenticated: Bool {
         authenticationStatus.isAuthenticated
+    }
+
+    var canWriteForum: Bool {
+        hasWritableWebSession
     }
 
     var authenticationDescription: String {
@@ -144,6 +181,8 @@ final class LinuxDoStore {
     @ObservationIgnored private var contentBlockCache: [LinuxDoPostContentCacheKey: [LinuxDoContentBlock]] = [:]
     @ObservationIgnored private var contentBlockCacheOrder: [LinuxDoPostContentCacheKey] = []
     @ObservationIgnored private let contentBlockCacheLimit = 1_000
+    @ObservationIgnored private var hasAttemptedEmojiCatalogLoad = false
+    @ObservationIgnored private var isLoadingEmojiCatalog = false
 
     init(
         preferences: Preferences,
@@ -161,6 +200,9 @@ final class LinuxDoStore {
         self.authService = authService ?? LinuxDoAuthService(credentials: credentials)
         self.authenticationStatus = Self.authenticationStatus(from: credentials)
         self.selectedFeed = LinuxDoFeed.stored(preferences.linuxDoSelectedFeed) ?? .latest
+        if case .top(let period) = selectedFeed {
+            self.topPeriod = period
+        }
     }
 
     deinit {
@@ -180,6 +222,7 @@ final class LinuxDoStore {
 
     func loadInitialIfNeeded() async {
         Log.app.info("LinuxDo initial load started")
+        await loadEmojiCatalogIfNeeded()
         await loadCategoriesIfNeeded()
         await loadCurrentFeedIfNeeded()
         refreshAuthenticationState()
@@ -190,6 +233,9 @@ final class LinuxDoStore {
     }
 
     func selectFeed(_ feed: LinuxDoFeed) {
+        if case .top(let period) = feed {
+            topPeriod = period
+        }
         selectedFeed = feed
         if case .search(let query) = feed {
             submittedSearch = query
@@ -289,6 +335,211 @@ final class LinuxDoStore {
         cachedContentBlocks(for: post)
     }
 
+    func emojiURL(for reactionID: String) -> URL? {
+        emojiURLsByID[reactionID] ?? fallbackEmojiURL(for: reactionID)
+    }
+
+    func toggleReplies(topicID: Int, postID: Int) {
+        var state = topicStates[topicID] ?? LinuxDoTopicDetailState()
+        var replies = state.replyStates[postID] ?? LinuxDoPostRepliesState()
+        replies.isExpanded.toggle()
+        let shouldLoad = replies.isExpanded && !replies.hasLoaded && !replies.isLoading
+        state.replyStates[postID] = replies
+        topicStates[topicID] = state
+        if shouldLoad {
+            Task { await loadReplies(topicID: topicID, postID: postID) }
+        }
+    }
+
+    func beginReply(topicID: Int, postID: Int) {
+        var state = topicStates[topicID] ?? LinuxDoTopicDetailState()
+        var composer = state.replyComposers[postID] ?? LinuxDoComposerState()
+        composer.isPresented = true
+        composer.error = nil
+        state.replyComposers[postID] = composer
+        topicStates[topicID] = state
+    }
+
+    func cancelReply(topicID: Int, postID: Int) {
+        var state = topicStates[topicID] ?? LinuxDoTopicDetailState()
+        var composer = state.replyComposers[postID] ?? LinuxDoComposerState()
+        composer.isPresented = false
+        composer.raw = ""
+        composer.error = nil
+        state.replyComposers[postID] = composer
+        topicStates[topicID] = state
+    }
+
+    func setReplyDraft(topicID: Int, postID: Int, raw: String) {
+        var state = topicStates[topicID] ?? LinuxDoTopicDetailState()
+        var composer = state.replyComposers[postID] ?? LinuxDoComposerState()
+        composer.raw = raw
+        composer.error = nil
+        state.replyComposers[postID] = composer
+        topicStates[topicID] = state
+    }
+
+    func submitReply(topicID: Int, postID: Int) async {
+        guard hasWritableWebSession else {
+            setReplyError(topicID: topicID, postID: postID, message: "Sign in with a browser session to reply.")
+            return
+        }
+        var state = topicStates[topicID] ?? LinuxDoTopicDetailState()
+        guard let parent = post(withID: postID, in: state) else { return }
+        var composer = state.replyComposers[postID] ?? LinuxDoComposerState()
+        let raw = composer.raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard raw.count >= 2, !composer.isSubmitting else { return }
+        composer.isSubmitting = true
+        composer.error = nil
+        state.replyComposers[postID] = composer
+        topicStates[topicID] = state
+
+        do {
+            let created = try await client.createReply(topicID: topicID, raw: raw, replyToPostNumber: parent.postNumber)
+            state = topicStates[topicID] ?? state
+            if let detail = mergedDetail(state.detail, adding: [created]) {
+                state.detail = detail
+                refreshPaginationState(&state)
+            }
+            let incrementedParent = parent.replacingForumState(replyCount: parent.replyCount + 1)
+            replacePost(in: &state, with: incrementedParent)
+            var replies = state.replyStates[postID] ?? LinuxDoPostRepliesState()
+            replies.replies = sortedPosts(uniquePosts(replies.replies + [created]), stream: [])
+            replies.isExpanded = true
+            replies.hasLoaded = true
+            replies.isLoading = false
+            replies.error = nil
+            state.replyStates[postID] = replies
+            composer.raw = ""
+            composer.isPresented = false
+            composer.isSubmitting = false
+            state.replyComposers[postID] = composer
+            prewarmContentBlocks(for: [created])
+            if let detail = state.detail {
+                try? cache.writeTopic(detail)
+            }
+        } catch {
+            composer.isSubmitting = false
+            composer.error = userFacingMessage(error)
+            state.replyComposers[postID] = composer
+            handle(error)
+        }
+        topicStates[topicID] = state
+    }
+
+    func toggleLike(topicID: Int, postID: Int) async {
+        guard hasWritableWebSession else {
+            setPostActionError(topicID: topicID, postID: postID, message: "Sign in with a browser session to like posts.")
+            return
+        }
+        var state = topicStates[topicID] ?? LinuxDoTopicDetailState()
+        guard let original = post(withID: postID, in: state), !state.pendingLikePostIDs.contains(postID) else { return }
+        let nextLiked = !original.isLikedByCurrentUser
+        replacePost(in: &state, with: optimisticallyLikedPost(original, liked: nextLiked))
+        state.pendingLikePostIDs.insert(postID)
+        topicStates[topicID] = state
+
+        do {
+            let updated = try await client.toggleLike(postID: postID, liked: nextLiked)
+            state = topicStates[topicID] ?? state
+            replacePost(in: &state, with: updated)
+            state.pendingLikePostIDs.remove(postID)
+            clearPostActionError(topicID: topicID, postID: postID, state: &state)
+            if let detail = state.detail {
+                try? cache.writeTopic(detail)
+            }
+        } catch {
+            state = topicStates[topicID] ?? state
+            replacePost(in: &state, with: original)
+            state.pendingLikePostIDs.remove(postID)
+            setPostActionError(topicID: topicID, postID: postID, message: userFacingMessage(error), state: &state)
+            handle(error)
+        }
+        topicStates[topicID] = state
+    }
+
+    func toggleReaction(topicID: Int, postID: Int, reactionID: String) async {
+        guard hasWritableWebSession else {
+            setPostActionError(topicID: topicID, postID: postID, message: "Sign in with a browser session to react.")
+            return
+        }
+        var state = topicStates[topicID] ?? LinuxDoTopicDetailState()
+        guard let original = post(withID: postID, in: state), !state.pendingReactionPostIDs.contains(postID) else { return }
+        let nextReaction = original.currentUserReaction == reactionID ? nil : reactionID
+        replacePost(in: &state, with: optimisticallyReactedPost(original, nextReaction: nextReaction))
+        state.pendingReactionPostIDs.insert(postID)
+        topicStates[topicID] = state
+
+        do {
+            let updated = try await client.toggleReaction(postID: postID, reactionID: reactionID)
+            state = topicStates[topicID] ?? state
+            replacePost(in: &state, with: updated)
+            state.pendingReactionPostIDs.remove(postID)
+            clearPostActionError(topicID: topicID, postID: postID, state: &state)
+            if let detail = state.detail {
+                try? cache.writeTopic(detail)
+            }
+        } catch {
+            state = topicStates[topicID] ?? state
+            replacePost(in: &state, with: original)
+            state.pendingReactionPostIDs.remove(postID)
+            setPostActionError(topicID: topicID, postID: postID, message: userFacingMessage(error), state: &state)
+            handle(error)
+        }
+        topicStates[topicID] = state
+    }
+
+    func loadReactionUsers(topicID: Int, postID: Int, reactionID: String? = nil) async {
+        do {
+            let reactions = try await client.fetchReactionUsers(postID: postID, reactionID: reactionID)
+            var state = topicStates[topicID] ?? LinuxDoTopicDetailState()
+            guard let post = post(withID: postID, in: state) else { return }
+            let merged = mergeReactions(existing: post.visibleReactions, fresh: reactions)
+            replacePost(in: &state, with: post.replacingForumState(reactions: merged))
+            topicStates[topicID] = state
+        } catch {
+            setPostActionError(topicID: topicID, postID: postID, message: userFacingMessage(error))
+            handle(error)
+        }
+    }
+
+    func presentNewTopicComposer() {
+        guard hasWritableWebSession else {
+            lastError = "Sign in with a browser session to create a topic."
+            return
+        }
+        newTopicComposer.isPresented = true
+        newTopicComposer.error = nil
+    }
+
+    func cancelNewTopicComposer() {
+        newTopicComposer = LinuxDoComposerState()
+    }
+
+    func submitNewTopic() async {
+        guard hasWritableWebSession else {
+            newTopicComposer.error = "Sign in with a browser session to create a topic."
+            return
+        }
+        let title = newTopicComposer.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let raw = newTopicComposer.raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard title.count >= 2, raw.count >= 2, !newTopicComposer.isSubmitting else { return }
+        newTopicComposer.isSubmitting = true
+        newTopicComposer.error = nil
+        do {
+            let post = try await client.createTopic(title: title, raw: raw, categoryID: selectedCategoryID)
+            newTopicComposer = LinuxDoComposerState()
+            await refreshCurrentFeed()
+            if let topicID = post.topicID {
+                openTopic(id: topicID, slug: post.topicSlug)
+            }
+        } catch {
+            newTopicComposer.isSubmitting = false
+            newTopicComposer.error = userFacingMessage(error)
+            handle(error)
+        }
+    }
+
     @discardableResult
     func openNotificationAndWait(_ notification: LinuxDoNotification) async -> Int? {
         guard let topicID = notification.topicID else { return nil }
@@ -296,6 +547,7 @@ final class LinuxDoStore {
     }
 
     func loadTopic(id: Int, slug: String?, force: Bool) async {
+        await loadEmojiCatalogIfNeeded()
         var state = topicStates[id] ?? LinuxDoTopicDetailState()
         if !force,
            let cached = cache.readTopic(id: id, ttl: 15 * 60, now: .now) {
@@ -367,6 +619,42 @@ final class LinuxDoStore {
         } catch {
             state.isLoadingMore = false
             state.error = userFacingMessage(error)
+            handle(error)
+        }
+        topicStates[topicID] = state
+    }
+
+    func loadReplies(topicID: Int, postID: Int) async {
+        var state = topicStates[topicID] ?? LinuxDoTopicDetailState()
+        var replies = state.replyStates[postID] ?? LinuxDoPostRepliesState()
+        guard !replies.isLoading else { return }
+        replies.isLoading = true
+        replies.error = nil
+        state.replyStates[postID] = replies
+        topicStates[topicID] = state
+
+        do {
+            let fetched = try await client.fetchPostReplies(postID: postID)
+            state = topicStates[topicID] ?? state
+            prewarmContentBlocks(for: fetched)
+            if let detail = mergedDetail(state.detail, adding: fetched) {
+                state.detail = detail
+                refreshPaginationState(&state)
+            }
+            replies = state.replyStates[postID] ?? replies
+            replies.replies = sortedPosts(uniquePosts(fetched), stream: [])
+            replies.isLoading = false
+            replies.hasLoaded = true
+            replies.error = nil
+            state.replyStates[postID] = replies
+            if let detail = state.detail {
+                try? cache.writeTopic(detail)
+            }
+        } catch {
+            replies = state.replyStates[postID] ?? replies
+            replies.isLoading = false
+            replies.error = userFacingMessage(error)
+            state.replyStates[postID] = replies
             handle(error)
         }
         topicStates[topicID] = state
@@ -742,6 +1030,173 @@ final class LinuxDoStore {
 
         let streamOnlyCoversLoadedPosts = detail.stream.isEmpty || detail.stream.allSatisfy { state.loadedPostIDs.contains($0) }
         state.nextPage = streamOnlyCoversLoadedPosts ? (currentPage.map { $0 + 1 } ?? 2) : nil
+    }
+
+    private var hasWritableWebSession: Bool {
+        if case .webSession = authenticationStatus {
+            true
+        } else {
+            false
+        }
+    }
+
+    private var selectedCategoryID: Int? {
+        if case .category(let id, _, _) = selectedFeed {
+            id
+        } else {
+            nil
+        }
+    }
+
+    private func post(withID postID: Int, in state: LinuxDoTopicDetailState) -> LinuxDoPost? {
+        if let post = state.detail?.posts.first(where: { $0.id == postID }) {
+            return post
+        }
+        for replies in state.replyStates.values {
+            if let post = replies.replies.first(where: { $0.id == postID }) {
+                return post
+            }
+        }
+        return nil
+    }
+
+    private func replacePost(in state: inout LinuxDoTopicDetailState, with post: LinuxDoPost) {
+        if var detail = state.detail {
+            if let index = detail.posts.firstIndex(where: { $0.id == post.id }) {
+                detail.posts[index] = post
+            } else {
+                detail.posts.append(post)
+            }
+            detail.posts = sortedPosts(uniquePosts(detail.posts), stream: detail.stream)
+            state.detail = detail
+            refreshPaginationState(&state)
+        }
+
+        for key in Array(state.replyStates.keys) {
+            guard var replies = state.replyStates[key],
+                  let index = replies.replies.firstIndex(where: { $0.id == post.id }) else {
+                continue
+            }
+            replies.replies[index] = post
+            replies.replies = sortedPosts(uniquePosts(replies.replies), stream: [])
+            state.replyStates[key] = replies
+        }
+    }
+
+    private func uniquePosts(_ posts: [LinuxDoPost]) -> [LinuxDoPost] {
+        var byID: [Int: LinuxDoPost] = [:]
+        for post in posts {
+            byID[post.id] = post
+        }
+        return Array(byID.values)
+    }
+
+    private func optimisticallyLikedPost(_ post: LinuxDoPost, liked: Bool) -> LinuxDoPost {
+        let current = post.likeActionSummary ?? LinuxDoPostActionSummary(
+            id: 2,
+            count: post.effectiveLikeCount,
+            acted: false,
+            canAct: post.canAct
+        )
+        let nextCount = max(0, current.count + (liked ? 1 : -1))
+        let nextSummary = LinuxDoPostActionSummary(id: 2, count: nextCount, acted: liked, canAct: current.canAct)
+        var summaries = post.actionsSummary.filter { $0.id != 2 }
+        summaries.append(nextSummary)
+        summaries.sort { $0.id < $1.id }
+        return post.replacingForumState(likeCount: nextCount, actionsSummary: summaries)
+    }
+
+    private func optimisticallyReactedPost(_ post: LinuxDoPost, nextReaction: String?) -> LinuxDoPost {
+        var reactions = post.visibleReactions
+        if let current = post.currentUserReaction {
+            reactions = adjusted(reactions: reactions, reactionID: current, delta: -1)
+        }
+        if let nextReaction {
+            reactions = adjusted(reactions: reactions, reactionID: nextReaction, delta: 1)
+        }
+        return post.replacingForumState(
+            reactions: reactions,
+            currentUserReaction: nextReaction,
+            clearsCurrentUserReaction: nextReaction == nil
+        )
+    }
+
+    private func adjusted(reactions: [LinuxDoReaction], reactionID: String, delta: Int) -> [LinuxDoReaction] {
+        var copy = reactions
+        if let index = copy.firstIndex(where: { $0.id == reactionID }) {
+            let nextCount = max(0, copy[index].count + delta)
+            if nextCount == 0 {
+                copy.remove(at: index)
+            } else {
+                copy[index] = LinuxDoReaction(id: reactionID, count: nextCount, users: copy[index].users)
+            }
+        } else if delta > 0 {
+            copy.append(LinuxDoReaction(id: reactionID, count: delta, users: []))
+        }
+        return copy.sorted { lhs, rhs in
+            if lhs.count != rhs.count { return lhs.count > rhs.count }
+            return lhs.id < rhs.id
+        }
+    }
+
+    private func mergeReactions(existing: [LinuxDoReaction], fresh: [LinuxDoReaction]) -> [LinuxDoReaction] {
+        var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+        for reaction in fresh {
+            byID[reaction.id] = reaction
+        }
+        return byID.values.sorted { lhs, rhs in
+            if lhs.count != rhs.count { return lhs.count > rhs.count }
+            return lhs.id < rhs.id
+        }
+    }
+
+    private func setReplyError(topicID: Int, postID: Int, message: String) {
+        var state = topicStates[topicID] ?? LinuxDoTopicDetailState()
+        var composer = state.replyComposers[postID] ?? LinuxDoComposerState()
+        composer.error = message
+        state.replyComposers[postID] = composer
+        topicStates[topicID] = state
+        lastError = message
+    }
+
+    private func setPostActionError(topicID: Int, postID: Int, message: String) {
+        var state = topicStates[topicID] ?? LinuxDoTopicDetailState()
+        setPostActionError(topicID: topicID, postID: postID, message: message, state: &state)
+        topicStates[topicID] = state
+        lastError = message
+    }
+
+    private func setPostActionError(topicID: Int, postID: Int, message: String, state: inout LinuxDoTopicDetailState) {
+        var replies = state.replyStates[postID] ?? LinuxDoPostRepliesState()
+        replies.error = message
+        state.replyStates[postID] = replies
+    }
+
+    private func clearPostActionError(topicID _: Int, postID: Int, state: inout LinuxDoTopicDetailState) {
+        guard var replies = state.replyStates[postID] else { return }
+        replies.error = nil
+        state.replyStates[postID] = replies
+    }
+
+    private func loadEmojiCatalogIfNeeded() async {
+        guard !hasAttemptedEmojiCatalogLoad, !isLoadingEmojiCatalog else { return }
+        hasAttemptedEmojiCatalogLoad = true
+        isLoadingEmojiCatalog = true
+        defer { isLoadingEmojiCatalog = false }
+        do {
+            emojiURLsByID = try await client.fetchEmojiCatalog()
+        } catch {
+            Log.network.notice("LinuxDo emoji catalog load failed: \(self.userFacingMessage(error), privacy: .public)")
+        }
+    }
+
+    private func fallbackEmojiURL(for reactionID: String) -> URL? {
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_+-")
+        guard reactionID.rangeOfCharacter(from: allowed.inverted) == nil,
+              let encoded = reactionID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {
+            return nil
+        }
+        return LinuxDoURLResolver.url(from: "/images/emoji/twemoji/\(encoded).png?v=15")
     }
 
     private func loadCategoriesIfNeeded() async {

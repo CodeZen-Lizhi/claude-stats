@@ -28,6 +28,7 @@ enum LinuxDoResponseMapper {
             categoryID: response.categoryID,
             tags: response.tags?.values ?? [],
             postsCount: response.postsCount ?? response.postStream.posts.count,
+            canReply: response.details?.canCreatePost,
             stream: response.postStream.stream ?? response.postStream.posts.map(\.id),
             posts: response.postStream.posts.map(\.model),
             fetchedAt: now
@@ -36,6 +37,14 @@ enum LinuxDoResponseMapper {
 
     static func posts(from response: TopicPostsResponse) -> [LinuxDoPost] {
         response.postStream.posts.map(\.model)
+    }
+
+    static func reactionUsers(from response: ReactionUsersResponse) -> [LinuxDoReaction] {
+        response.reactionUsers.map(\.model)
+    }
+
+    static func emojiURLs(from response: EmojiCatalogResponse) -> [String: URL] {
+        Dictionary(uniqueKeysWithValues: response.emojis.map { ($0.name, $0.imageURL) })
     }
 }
 
@@ -100,6 +109,7 @@ struct TopicDetailResponse: Decodable, Sendable {
     let tags: LinuxDoTagList?
     let postsCount: Int?
     let postStream: PostStream
+    let details: Details?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -110,6 +120,15 @@ struct TopicDetailResponse: Decodable, Sendable {
         case tags
         case postsCount = "posts_count"
         case postStream = "post_stream"
+        case details
+    }
+
+    struct Details: Decodable, Sendable {
+        let canCreatePost: Bool?
+
+        enum CodingKeys: String, CodingKey {
+            case canCreatePost = "can_create_post"
+        }
     }
 }
 
@@ -118,6 +137,57 @@ struct TopicPostsResponse: Decodable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case postStream = "post_stream"
+    }
+}
+
+struct ReactionUsersResponse: Decodable, Sendable {
+    let reactionUsers: [ReactionResponse]
+
+    enum CodingKeys: String, CodingKey {
+        case reactionUsers = "reaction_users"
+    }
+}
+
+struct EmojiCatalogResponse: Decodable, Sendable {
+    let emojis: [LinuxDoEmoji]
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: DynamicCodingKey.self)
+        var emojis: [LinuxDoEmoji] = []
+        var seen = Set<String>()
+        for key in container.allKeys {
+            let group = try container.decode([EmojiResponse].self, forKey: key)
+            for response in group {
+                guard let emoji = response.model, seen.insert(emoji.name).inserted else { continue }
+                emojis.append(emoji)
+            }
+        }
+        self.emojis = emojis
+    }
+
+    private struct EmojiResponse: Decodable, Sendable {
+        let name: String
+        let url: String?
+
+        var model: LinuxDoEmoji? {
+            guard let imageURL = LinuxDoURLResolver.url(from: url) else { return nil }
+            return LinuxDoEmoji(name: name, imageURL: imageURL)
+        }
+    }
+
+    private struct DynamicCodingKey: CodingKey, Hashable, Sendable {
+        let stringValue: String
+        let intValue: Int?
+
+        init?(stringValue: String) {
+            self.stringValue = stringValue
+            self.intValue = nil
+        }
+
+        init?(intValue: Int) {
+            self.stringValue = "\(intValue)"
+            self.intValue = intValue
+        }
     }
 }
 
@@ -354,12 +424,15 @@ struct UserResponse: Decodable, Sendable {
 struct PostResponse: Decodable, Sendable {
     let id: Int
     let topicID: Int?
+    let topicSlug: String?
     let postNumber: Int
     let replyToPostNumber: Int?
     let username: String
     let name: String?
+    let displayUsername: String?
     let avatarTemplate: String?
     let cooked: String
+    let raw: String?
     let createdAt: Date?
     let updatedAt: Date?
     let likeCount: Int?
@@ -367,16 +440,25 @@ struct PostResponse: Decodable, Sendable {
     let reads: Int?
     let score: Double?
     let actionsSummary: [ActionSummary]?
+    let reactions: [ReactionResponse]?
+    let currentUserReaction: FlexibleReactionValue?
+    let canAct: Bool?
+    let canReply: Bool?
+    let yours: Bool?
+    let postURL: String?
 
     enum CodingKeys: String, CodingKey {
         case id
         case topicID = "topic_id"
+        case topicSlug = "topic_slug"
         case postNumber = "post_number"
         case replyToPostNumber = "reply_to_post_number"
         case username
         case name
+        case displayUsername = "display_username"
         case avatarTemplate = "avatar_template"
         case cooked
+        case raw
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case likeCount = "like_count"
@@ -384,25 +466,42 @@ struct PostResponse: Decodable, Sendable {
         case reads
         case score
         case actionsSummary = "actions_summary"
+        case reactions
+        case currentUserReaction = "current_user_reaction"
+        case canAct = "can_act"
+        case canReply = "can_reply"
+        case yours
+        case postURL = "post_url"
     }
 
     var model: LinuxDoPost {
-        LinuxDoPost(
+        let mappedActions = actionsSummary?.map(\.model) ?? []
+        let actionLikeCount = mappedActions.first { $0.id == 2 }?.count ?? 0
+        return LinuxDoPost(
             id: id,
             topicID: topicID,
+            topicSlug: topicSlug,
             postNumber: postNumber,
             replyToPostNumber: replyToPostNumber,
             username: username,
             name: name,
+            displayUsername: displayUsername,
             avatarURL: LinuxDoURLResolver.avatarURL(from: avatarTemplate),
             cookedHTML: cooked,
+            raw: raw,
             createdAt: createdAt,
             updatedAt: updatedAt,
-            likeCount: likeCount ?? 0,
+            likeCount: max(likeCount ?? 0, actionLikeCount),
             replyCount: replyCount ?? 0,
             reads: reads ?? 0,
             score: score,
-            actionsSummary: actionsSummary?.map(\.model) ?? []
+            actionsSummary: mappedActions,
+            reactions: reactions?.map(\.model) ?? [],
+            currentUserReaction: currentUserReaction?.id.isEmpty == false ? currentUserReaction?.id : nil,
+            canAct: canAct,
+            canReply: canReply,
+            yours: yours,
+            postURL: LinuxDoURLResolver.url(from: postURL)
         )
     }
 
@@ -410,10 +509,101 @@ struct PostResponse: Decodable, Sendable {
         let id: Int
         let count: Int?
         let acted: Bool?
+        let canAct: Bool?
+
+        enum CodingKeys: String, CodingKey {
+            case id
+            case count
+            case acted
+            case canAct = "can_act"
+        }
 
         var model: LinuxDoPostActionSummary {
-            LinuxDoPostActionSummary(id: id, count: count ?? 0, acted: acted ?? false)
+            LinuxDoPostActionSummary(id: id, count: count ?? 0, acted: acted ?? false, canAct: canAct)
         }
+    }
+}
+
+struct ReactionResponse: Decodable, Sendable {
+    let id: String?
+    let reactionValue: String?
+    let reaction: String?
+    let emoji: String?
+    let count: Int?
+    let reactionUsersCount: Int?
+    let users: [ReactionUserResponse]?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case reactionValue = "reaction_value"
+        case reaction
+        case emoji
+        case count
+        case reactionUsersCount = "reaction_users_count"
+        case users
+    }
+
+    var model: LinuxDoReaction {
+        let reactionID = id ?? reactionValue ?? reaction ?? emoji ?? LinuxDoReactionCatalog.likeReactionID
+        return LinuxDoReaction(
+            id: reactionID,
+            count: count ?? reactionUsersCount ?? users?.count ?? 0,
+            users: users?.map(\.model) ?? []
+        )
+    }
+}
+
+struct ReactionUserResponse: Decodable, Sendable {
+    let username: String
+    let name: String?
+    let avatarTemplate: String?
+    let canUndo: Bool?
+    let createdAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case username
+        case name
+        case avatarTemplate = "avatar_template"
+        case canUndo = "can_undo"
+        case createdAt = "created_at"
+    }
+
+    var model: LinuxDoReactionUserSummary {
+        LinuxDoReactionUserSummary(
+            username: username,
+            name: name,
+            avatarURL: LinuxDoURLResolver.avatarURL(from: avatarTemplate),
+            canUndo: canUndo ?? false,
+            createdAt: createdAt
+        )
+    }
+}
+
+struct FlexibleReactionValue: Decodable, Sendable {
+    let id: String
+
+    init(from decoder: Decoder) throws {
+        if let container = try? decoder.singleValueContainer() {
+            if container.decodeNil() {
+                id = ""
+                return
+            }
+            if let value = try? container.decode(String.self) {
+                id = value
+                return
+            }
+        }
+        let object = try decoder.container(keyedBy: CodingKeys.self)
+        id = try object.decodeIfPresent(String.self, forKey: .id)
+            ?? object.decodeIfPresent(String.self, forKey: .reactionValue)
+            ?? object.decodeIfPresent(String.self, forKey: .reaction)
+            ?? ""
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case reactionValue = "reaction_value"
+        case reaction
     }
 }
 

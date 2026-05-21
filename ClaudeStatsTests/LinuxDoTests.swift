@@ -239,6 +239,64 @@ struct LinuxDoTests {
         #expect(old.actionsSummary.isEmpty)
     }
 
+    @Test("Post response decodes reactions and falls back to action summary likes")
+    func postResponseReactionsDecode() throws {
+        let post = try JSONDecoder().decode(PostResponse.self, from: Data("""
+        {
+          "id": 12,
+          "topic_id": 3,
+          "topic_slug": "hello",
+          "post_number": 1,
+          "username": "alice",
+          "display_username": "Alice",
+          "cooked": "<p>Hello</p>",
+          "actions_summary": [
+            { "id": 2, "count": 7, "acted": true, "can_act": true }
+          ],
+          "reactions": [
+            {
+              "id": "heart",
+              "count": 7,
+              "users": [
+                { "username": "bob", "avatar_template": "/user_avatar/linux.do/bob/{size}/1.png", "can_undo": false }
+              ]
+            },
+            { "reaction_value": "clap", "reaction_users_count": 3 }
+          ],
+          "current_user_reaction": { "id": "heart" },
+          "can_reply": true,
+          "post_url": "/t/hello/3/1"
+        }
+        """.utf8)).model
+
+        #expect(post.topicSlug == "hello")
+        #expect(post.displayAuthorName == "Alice")
+        #expect(post.effectiveLikeCount == 7)
+        #expect(post.isLikedByCurrentUser)
+        #expect(post.canToggleLike)
+        #expect(post.visibleReactions.map(\.id) == ["heart", "clap"])
+        #expect(post.visibleReactions.first?.users.first?.avatarURL?.absoluteString == "https://linux.do/user_avatar/linux.do/bob/96/1.png")
+        #expect(post.postURL?.absoluteString == "https://linux.do/t/hello/3/1")
+    }
+
+    @Test("Emoji catalog response decodes dynamic Discourse groups")
+    func emojiCatalogResponseDecode() throws {
+        let response = try JSONDecoder().decode(EmojiCatalogResponse.self, from: Data("""
+        {
+          "smileys_&_emotion": [
+            { "name": "distorted_face", "url": "/images/emoji/twemoji/distorted_face.png?v=15" }
+          ],
+          "custom": [
+            { "name": "bili_057", "url": "//linuxdo-uploads.s3.linux.do/original/4X/b/i/l/bili_057.png" }
+          ]
+        }
+        """.utf8))
+        let urls = LinuxDoResponseMapper.emojiURLs(from: response)
+
+        #expect(urls["distorted_face"]?.absoluteString == "https://linux.do/images/emoji/twemoji/distorted_face.png?v=15")
+        #expect(urls["bili_057"]?.absoluteString == "https://linuxdo-uploads.s3.linux.do/original/4X/b/i/l/bili_057.png")
+    }
+
     @Test("LinuxDo topic URLs map to native topic routes")
     func topicRouteParsesLinuxDoURLs() throws {
         let routed = try #require(LinuxDoTopicRoute(url: URL(string: "https://linux.do/t/dexo/42/7")!))
@@ -602,6 +660,108 @@ struct LinuxDoTests {
         #expect(!loadedState.hasMorePosts)
     }
 
+    @Test("Store loads expanded post replies once")
+    func storeLoadsExpandedPostRepliesOnce() async throws {
+        let root = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let parent = Self.post(id: 500, topicID: 18, postNumber: 1)
+        let reply = Self.post(id: 501, topicID: 18, postNumber: 2)
+        let client = FakeLinuxDoClient(
+            topicDetail: Self.detail(id: 18, postsCount: 2, stream: [500, 501], posts: [parent]),
+            repliesByPostID: [500: [reply]]
+        )
+        let store = LinuxDoStore(
+            preferences: Self.makePreferences(),
+            credentials: InMemoryLinuxDoCredentialStore(),
+            cache: LinuxDoCache(rootURL: root),
+            notificationService: FakeLinuxDoNotificationService(),
+            client: client
+        )
+
+        await store.loadTopic(id: 18, slug: "replies", force: true)
+        await store.loadReplies(topicID: 18, postID: 500)
+        store.toggleReplies(topicID: 18, postID: 500)
+        store.toggleReplies(topicID: 18, postID: 500)
+        store.toggleReplies(topicID: 18, postID: 500)
+
+        let state = try #require(store.topicStates[18])
+        #expect(client.fetchPostRepliesCalls == [500])
+        #expect(state.replyStates[500]?.replies.map(\.id) == [501])
+        #expect(state.replyStates[500]?.isExpanded == true)
+    }
+
+    @Test("Store submits replies through web session and merges them into detail")
+    func storeSubmitsReplyAndMerges() async throws {
+        let root = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let parent = Self.post(id: 600, topicID: 19, postNumber: 1)
+        let created = Self.post(id: 601, topicID: 19, postNumber: 2, cookedHTML: "<p>Thanks</p>")
+        let client = FakeLinuxDoClient(
+            topicDetail: Self.detail(id: 19, postsCount: 2, stream: [600, 601], posts: [parent]),
+            nextCreatedPost: created
+        )
+        let store = LinuxDoStore(
+            preferences: Self.makePreferences(),
+            credentials: InMemoryLinuxDoCredentialStore(webSession: Self.webSession(csrfToken: "csrf-token")),
+            cache: LinuxDoCache(rootURL: root),
+            notificationService: FakeLinuxDoNotificationService(),
+            client: client
+        )
+
+        await store.loadTopic(id: 19, slug: "reply", force: true)
+        store.beginReply(topicID: 19, postID: 600)
+        store.setReplyDraft(topicID: 19, postID: 600, raw: "Thanks")
+        await store.submitReply(topicID: 19, postID: 600)
+
+        let state = try #require(store.topicStates[19])
+        #expect(client.createReplyCalls.first?.topicID == 19)
+        #expect(client.createReplyCalls.first?.replyToPostNumber == 1)
+        #expect(state.detail?.posts.map(\.id) == [600, 601])
+        #expect(state.replyStates[600]?.replies.map(\.id) == [601])
+        #expect(state.replyComposers[600]?.isPresented == false)
+    }
+
+    @Test("Store writes require browser session and likes optimistically settle")
+    func storeForumWritesRequireWebSessionAndLike() async throws {
+        let root = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let post = Self.post(id: 700, topicID: 20, postNumber: 1)
+        let guestClient = FakeLinuxDoClient(topicDetail: Self.detail(id: 20, stream: [700], posts: [post]))
+        let guestStore = LinuxDoStore(
+            preferences: Self.makePreferences(),
+            credentials: InMemoryLinuxDoCredentialStore(),
+            cache: LinuxDoCache(rootURL: root),
+            notificationService: FakeLinuxDoNotificationService(),
+            client: guestClient
+        )
+        await guestStore.loadTopic(id: 20, slug: "guest", force: true)
+        await guestStore.toggleLike(topicID: 20, postID: 700)
+        #expect(guestStore.lastError == "Sign in with a browser session to like posts.")
+        #expect(guestClient.toggleLikeCalls.isEmpty)
+
+        let authedClient = FakeLinuxDoClient(
+            topicDetail: Self.detail(id: 20, stream: [700], posts: [post]),
+            postsByID: [700: post]
+        )
+        let authedStore = LinuxDoStore(
+            preferences: Self.makePreferences(),
+            credentials: InMemoryLinuxDoCredentialStore(webSession: Self.webSession(csrfToken: "csrf-token")),
+            cache: LinuxDoCache(rootURL: try TempDir.make()),
+            notificationService: FakeLinuxDoNotificationService(),
+            client: authedClient
+        )
+        await authedStore.loadTopic(id: 20, slug: "authed", force: true)
+        await authedStore.toggleLike(topicID: 20, postID: 700)
+
+        let liked = try #require(authedStore.topicStates[20]?.detail?.posts.first)
+        #expect(authedClient.toggleLikeCalls.first?.liked == true)
+        #expect(liked.isLikedByCurrentUser)
+        #expect(liked.effectiveLikeCount == 1)
+    }
+
     @Test("Topic detail response keeps full post stream for lazy replies")
     func topicDetailResponseKeepsFullPostStream() throws {
         let decoder = JSONDecoder()
@@ -786,6 +946,100 @@ struct LinuxDoTests {
         }
 
         _ = try await client.fetchCurrentUser()
+    }
+
+    @Test("Client fetches Discourse emoji catalog")
+    func clientFetchesEmojiCatalog() async throws {
+        let credentials = InMemoryLinuxDoCredentialStore()
+        let client = Self.makeClient(credentials: credentials) { request in
+            #expect(request.httpMethod == "GET")
+            #expect(request.url?.path == "/emojis.json")
+            return Self.response(body: """
+            {
+              "smileys": [
+                { "name": "distorted_face", "url": "/images/emoji/twemoji/distorted_face.png?v=15" }
+              ]
+            }
+            """)
+        }
+
+        let catalog = try await client.fetchEmojiCatalog()
+
+        #expect(catalog["distorted_face"]?.absoluteString == "https://linux.do/images/emoji/twemoji/distorted_face.png?v=15")
+    }
+
+    @Test("Client sends forum write endpoints with web session CSRF")
+    func clientForumWriteEndpoints() async throws {
+        let credentials = InMemoryLinuxDoCredentialStore(webSession: Self.webSession(csrfToken: "csrf-token"))
+        let calls = LinuxDoCallCounter()
+        let client = Self.makeClient(credentials: credentials) { request in
+            let body = Self.jsonBody(request)
+            switch calls.increment() {
+            case 1:
+                #expect(request.httpMethod == "POST")
+                #expect(request.url?.path == "/post_actions.json")
+                #expect(request.value(forHTTPHeaderField: "X-CSRF-Token") == "csrf-token")
+                #expect(body["id"] as? Int == 42)
+                #expect(body["post_action_type_id"] as? Int == 2)
+                return Self.response(body: Self.postResponseJSON(id: 42, topicID: 9, postNumber: 1))
+            case 2:
+                #expect(request.httpMethod == "PUT")
+                #expect(request.url?.path == "/discourse-reactions/posts/42/custom-reactions/clap/toggle.json")
+                return Self.response(body: Self.postResponseJSON(id: 42, topicID: 9, postNumber: 1))
+            case 3:
+                #expect(request.httpMethod == "POST")
+                #expect(request.url?.path == "/posts.json")
+                #expect(body["topic_id"] as? Int == 9)
+                #expect(body["reply_to_post_number"] as? Int == 1)
+                #expect(body["raw"] as? String == "Thanks")
+                return Self.response(body: Self.postResponseJSON(id: 43, topicID: 9, postNumber: 2))
+            case 4:
+                #expect(request.httpMethod == "POST")
+                #expect(request.url?.path == "/posts.json")
+                #expect(body["title"] as? String == "New Topic")
+                #expect(body["category"] as? Int == 4)
+                #expect(body["raw"] as? String == "Body")
+                return Self.response(body: Self.postResponseJSON(id: 44, topicID: 44, postNumber: 1, slug: "new-topic"))
+            default:
+                Issue.record("Unexpected write request: \(request.httpMethod ?? "?") \(request.url?.path ?? "nil")")
+                return Self.response(status: 404, body: "{}")
+            }
+        }
+
+        _ = try await client.toggleLike(postID: 42, liked: true)
+        _ = try await client.toggleReaction(postID: 42, reactionID: "clap")
+        _ = try await client.createReply(topicID: 9, raw: "Thanks", replyToPostNumber: 1)
+        _ = try await client.createTopic(title: "New Topic", raw: "Body", categoryID: 4)
+
+        #expect(calls.value == 4)
+    }
+
+    @Test("Client fetches CSRF before forum writes when browser session lacks token")
+    func clientFetchesCSRFFromWebSessionBeforeWrite() async throws {
+        let credentials = InMemoryLinuxDoCredentialStore(webSession: Self.webSession())
+        let calls = LinuxDoCallCounter()
+        let client = Self.makeClient(credentials: credentials) { request in
+            switch calls.increment() {
+            case 1:
+                #expect(request.httpMethod == "GET")
+                #expect(request.url?.path == "/session/csrf")
+                #expect(request.value(forHTTPHeaderField: "Cookie")?.contains("_t=session-token") == true)
+                return Self.response(body: #"{"csrf":"fresh-token"}"#)
+            case 2:
+                #expect(request.httpMethod == "POST")
+                #expect(request.url?.path == "/post_actions.json")
+                #expect(request.value(forHTTPHeaderField: "X-CSRF-Token") == "fresh-token")
+                return Self.response(body: Self.postResponseJSON(id: 42, topicID: 9, postNumber: 1))
+            default:
+                Issue.record("Unexpected request: \(request.url?.path ?? "nil")")
+                return Self.response(status: 404, body: "{}")
+            }
+        }
+
+        _ = try await client.toggleLike(postID: 42, liked: true)
+
+        #expect(credentials.readWebSession()?.csrfToken == "fresh-token")
+        #expect(calls.value == 2)
     }
 
     @Test("Client fills missing current user avatar from profile response")
@@ -1066,6 +1320,43 @@ struct LinuxDoTests {
         MockLinuxDoResponse(status: status, headers: headers, data: Data(body.utf8))
     }
 
+    nonisolated private static func jsonBody(_ request: URLRequest) -> [String: Any] {
+        var bodyData = request.httpBody
+        if bodyData == nil, let stream = request.httpBodyStream {
+            stream.open()
+            defer { stream.close() }
+
+            var data = Data()
+            var buffer = [UInt8](repeating: 0, count: 4096)
+            while stream.hasBytesAvailable {
+                let count = stream.read(&buffer, maxLength: buffer.count)
+                guard count > 0 else { break }
+                data.append(buffer, count: count)
+            }
+            bodyData = data
+        }
+
+        guard let data = bodyData,
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return [:]
+        }
+        return object
+    }
+
+    nonisolated private static func postResponseJSON(id: Int, topicID: Int, postNumber: Int, slug: String = "topic") -> String {
+        """
+        {
+          "id": \(id),
+          "topic_id": \(topicID),
+          "topic_slug": "\(slug)",
+          "post_number": \(postNumber),
+          "username": "tester",
+          "cooked": "<p>OK</p>",
+          "actions_summary": [{ "id": 2, "count": 1, "acted": true }]
+        }
+        """
+    }
+
     nonisolated private static func makeClient(
         credentials: InMemoryLinuxDoCredentialStore,
         handler: @escaping @Sendable (URLRequest) throws -> MockLinuxDoResponse
@@ -1098,26 +1389,40 @@ private final class FakeLinuxDoClient: LinuxDoClienting, @unchecked Sendable {
     var topicDetail: LinuxDoTopicDetail?
     var topicPages: [Int: LinuxDoTopicDetail]
     var postsByID: [Int: LinuxDoPost]
+    var repliesByPostID: [Int: [LinuxDoPost]]
+    var reactionUsersByPostID: [Int: [LinuxDoReaction]]
     var notifications: [LinuxDoNotification]
     var currentUser: LinuxDoCurrentUser
+    var nextCreatedPost: LinuxDoPost?
     var fetchTopicListCalls = 0
     var fetchPostsBatches: [[Int]] = []
     var fetchTopicPages: [Int] = []
+    var fetchPostRepliesCalls: [Int] = []
+    var toggleLikeCalls: [(postID: Int, liked: Bool)] = []
+    var toggleReactionCalls: [(postID: Int, reactionID: String)] = []
+    var createReplyCalls: [(topicID: Int, raw: String, replyToPostNumber: Int?)] = []
+    var createTopicCalls: [(title: String, raw: String, categoryID: Int?)] = []
 
     init(
         topicList: LinuxDoTopicList = LinuxDoTopicList(topics: [], page: 0, nextPage: nil, fetchedAt: Date()),
         topicDetail: LinuxDoTopicDetail? = nil,
         topicPages: [Int: LinuxDoTopicDetail] = [:],
         postsByID: [Int: LinuxDoPost] = [:],
+        repliesByPostID: [Int: [LinuxDoPost]] = [:],
+        reactionUsersByPostID: [Int: [LinuxDoReaction]] = [:],
         notifications: [LinuxDoNotification] = [],
-        currentUser: LinuxDoCurrentUser = LinuxDoCurrentUser(id: 1, username: "tester", name: nil, avatarURL: nil)
+        currentUser: LinuxDoCurrentUser = LinuxDoCurrentUser(id: 1, username: "tester", name: nil, avatarURL: nil),
+        nextCreatedPost: LinuxDoPost? = nil
     ) {
         self.topicList = topicList
         self.topicDetail = topicDetail
         self.topicPages = topicPages
         self.postsByID = postsByID
+        self.repliesByPostID = repliesByPostID
+        self.reactionUsersByPostID = reactionUsersByPostID
         self.notifications = notifications
         self.currentUser = currentUser
+        self.nextCreatedPost = nextCreatedPost
     }
 
     func fetchTopicList(feed: LinuxDoFeed, page: Int, now: Date) async throws -> LinuxDoTopicList {
@@ -1143,6 +1448,84 @@ private final class FakeLinuxDoClient: LinuxDoClienting, @unchecked Sendable {
         return postIDs.compactMap { postsByID[$0] }
     }
 
+    func fetchPostReplies(postID: Int) async throws -> [LinuxDoPost] {
+        fetchPostRepliesCalls.append(postID)
+        return repliesByPostID[postID] ?? []
+    }
+
+    func fetchReactionUsers(postID: Int, reactionID: String?) async throws -> [LinuxDoReaction] {
+        reactionUsersByPostID[postID] ?? []
+    }
+
+    func fetchEmojiCatalog() async throws -> [String: URL] {
+        [
+            "distorted_face": URL(string: "https://linux.do/images/emoji/twemoji/distorted_face.png?v=15")!,
+            "+1": URL(string: "https://linux.do/images/emoji/twemoji/+1.png?v=15")!,
+        ]
+    }
+
+    func toggleLike(postID: Int, liked: Bool) async throws -> LinuxDoPost {
+        toggleLikeCalls.append((postID, liked))
+        let post = postsByID[postID] ?? Self.fallbackPost(id: postID)
+        return post.replacingForumState(
+            likeCount: max(0, post.effectiveLikeCount + (liked ? 1 : -1)),
+            actionsSummary: [LinuxDoPostActionSummary(id: 2, count: max(0, post.effectiveLikeCount + (liked ? 1 : -1)), acted: liked, canAct: true)]
+        )
+    }
+
+    func toggleReaction(postID: Int, reactionID: String) async throws -> LinuxDoPost {
+        toggleReactionCalls.append((postID, reactionID))
+        let post = postsByID[postID] ?? Self.fallbackPost(id: postID)
+        return post.replacingForumState(
+            reactions: [LinuxDoReaction(id: reactionID, count: 1, users: [])],
+            currentUserReaction: reactionID
+        )
+    }
+
+    func createReply(topicID: Int, raw: String, replyToPostNumber: Int?) async throws -> LinuxDoPost {
+        createReplyCalls.append((topicID, raw, replyToPostNumber))
+        return nextCreatedPost ?? LinuxDoPost(
+            id: 9_001,
+            topicID: topicID,
+            postNumber: (replyToPostNumber ?? 1) + 1,
+            replyToPostNumber: replyToPostNumber,
+            username: "tester",
+            name: nil,
+            avatarURL: nil,
+            cookedHTML: "<p>\(raw)</p>",
+            createdAt: nil,
+            updatedAt: nil,
+            likeCount: 0,
+            replyCount: 0,
+            reads: 0,
+            score: nil,
+            actionsSummary: []
+        )
+    }
+
+    func createTopic(title: String, raw: String, categoryID: Int?) async throws -> LinuxDoPost {
+        createTopicCalls.append((title, raw, categoryID))
+        return nextCreatedPost ?? LinuxDoPost(
+            id: 9_002,
+            topicID: 9_002,
+            topicSlug: "created-topic",
+            postNumber: 1,
+            replyToPostNumber: nil,
+            username: "tester",
+            name: nil,
+            avatarURL: nil,
+            cookedHTML: "<p>\(raw)</p>",
+            raw: raw,
+            createdAt: nil,
+            updatedAt: nil,
+            likeCount: 0,
+            replyCount: 0,
+            reads: 0,
+            score: nil,
+            actionsSummary: []
+        )
+    }
+
     func fetchCurrentUser() async throws -> LinuxDoCurrentUser {
         currentUser
     }
@@ -1160,6 +1543,26 @@ private final class FakeLinuxDoClient: LinuxDoClienting, @unchecked Sendable {
     }
 
     func revokeUserAPIKey() async {}
+
+    private static func fallbackPost(id: Int) -> LinuxDoPost {
+        LinuxDoPost(
+            id: id,
+            topicID: nil,
+            postNumber: 1,
+            replyToPostNumber: nil,
+            username: "tester",
+            name: nil,
+            avatarURL: nil,
+            cookedHTML: "<p>Post</p>",
+            createdAt: nil,
+            updatedAt: nil,
+            likeCount: 0,
+            replyCount: 0,
+            reads: 0,
+            score: nil,
+            actionsSummary: []
+        )
+    }
 }
 
 private struct MockLinuxDoResponse: Sendable {

@@ -89,7 +89,28 @@ struct LinuxDoTopicDetailView: View {
                         LinuxDoPostView(
                             post: post,
                             contentBlocks: store.contentBlocks(for: post),
-                            isTopicOwner: post.postNumber == 1
+                            isTopicOwner: post.postNumber == 1,
+                            repliesState: state.replyStates[post.id] ?? LinuxDoPostRepliesState(),
+                            replyComposer: state.replyComposers[post.id] ?? LinuxDoComposerState(),
+                            replyDraft: Binding(
+                                get: { store.topicStates[topicID]?.replyComposers[post.id]?.raw ?? "" },
+                                set: { store.setReplyDraft(topicID: topicID, postID: post.id, raw: $0) }
+                            ),
+                            emojiURL: { store.emojiURL(for: $0) },
+                            isLikePending: state.pendingLikePostIDs.contains(post.id),
+                            isReactionPending: state.pendingReactionPostIDs.contains(post.id),
+                            canWrite: store.canWriteForum,
+                            onToggleReplies: { store.toggleReplies(topicID: topicID, postID: post.id) },
+                            onBeginReply: { store.beginReply(topicID: topicID, postID: post.id) },
+                            onCancelReply: { store.cancelReply(topicID: topicID, postID: post.id) },
+                            onSubmitReply: { Task { await store.submitReply(topicID: topicID, postID: post.id) } },
+                            onToggleLike: { Task { await store.toggleLike(topicID: topicID, postID: post.id) } },
+                            onToggleReaction: { reactionID in Task { await store.toggleReaction(topicID: topicID, postID: post.id, reactionID: reactionID) } },
+                            onOpenInBrowser: {
+                                if let url = post.postURL ?? detail.topicURL {
+                                    NSWorkspace.shared.open(url)
+                                }
+                            }
                         )
                             .padding(.leading, LinuxDoDetailLayout.postRowLeading)
                             .padding(.trailing, LinuxDoDetailLayout.contentTrailing)
@@ -198,69 +219,70 @@ private struct LinuxDoPostView: View {
     let post: LinuxDoPost
     let contentBlocks: [LinuxDoContentBlock]
     let isTopicOwner: Bool
+    let repliesState: LinuxDoPostRepliesState
+    let replyComposer: LinuxDoComposerState
+    @Binding var replyDraft: String
+    let emojiURL: (String) -> URL?
+    let isLikePending: Bool
+    let isReactionPending: Bool
+    let canWrite: Bool
+    let onToggleReplies: () -> Void
+    let onBeginReply: () -> Void
+    let onCancelReply: () -> Void
+    let onSubmitReply: () -> Void
+    let onToggleLike: () -> Void
+    let onToggleReaction: (String) -> Void
+    let onOpenInBrowser: () -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
-            VStack(spacing: 8) {
-                AsyncImage(url: post.avatarURL) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
-                    Image(systemName: "person.crop.circle.fill")
-                        .foregroundStyle(Color.stxMuted)
-                }
-                .frame(width: 38, height: 38)
-                .clipShape(Circle())
-                .overlay(Circle().stroke(Color.stxAccent.opacity(isTopicOwner ? 0.45 : 0.18), lineWidth: 1))
-
-                Text("#\(post.postNumber)")
-                    .font(.sora(9).monospacedDigit())
-                    .foregroundStyle(Color.stxMuted)
-            }
-            .frame(width: 48)
+            LinuxDoPostAvatarColumn(post: post, isTopicOwner: isTopicOwner)
 
             VStack(alignment: .leading, spacing: 11) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(post.name?.isEmpty == false ? post.name! : "@\(post.username)")
-                        .font(.sora(12, weight: .semibold))
-                    if isTopicOwner {
-                        Text("OP")
-                            .font(.sora(8, weight: .bold))
-                            .foregroundStyle(Color.stxAccent)
-                            .padding(.horizontal, 5)
-                            .frame(height: 16)
-                            .background(Color.stxAccent.opacity(0.12), in: Capsule())
-                    }
-                    if let replyTo = post.replyToPostNumber {
-                        Text("replying to #\(replyTo)")
-                            .font(.sora(9))
-                            .foregroundStyle(Color.stxMuted)
-                    }
-                    Spacer(minLength: 0)
-                    Text(post.createdAt.map { Format.relativeDate($0) } ?? "Unknown time")
-                        .font(.sora(9))
-                        .foregroundStyle(Color.stxMuted)
-                }
+                LinuxDoPostHeader(post: post, isTopicOwner: isTopicOwner)
 
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(contentBlocks) { block in
-                        LinuxDoContentBlockView(block: block)
-                    }
-                }
+                LinuxDoPostBody(contentBlocks: contentBlocks)
 
-                HStack(spacing: 12) {
-                    if post.likeCount > 0 {
-                        Label("\(post.likeCount)", systemImage: "heart")
-                    }
-                    if post.replyCount > 0 {
-                        Label("\(post.replyCount)", systemImage: "arrowshape.turn.up.left")
-                    }
-                    if post.reads > 0 {
-                        Label("\(post.reads)", systemImage: "eye")
-                    }
-                    Spacer(minLength: 0)
+                LinuxDoReactionChipRow(
+                    reactions: post.visibleReactions,
+                    currentUserReaction: post.currentUserReaction,
+                    emojiURL: emojiURL,
+                    isPending: isReactionPending,
+                    onToggleReaction: onToggleReaction
+                )
+
+                LinuxDoPostActionBar(
+                    post: post,
+                    repliesState: repliesState,
+                    isLikePending: isLikePending,
+                    isReactionPending: isReactionPending,
+                    canWrite: canWrite,
+                    emojiURL: emojiURL,
+                    onToggleReplies: onToggleReplies,
+                    onBeginReply: onBeginReply,
+                    onToggleLike: onToggleLike,
+                    onToggleReaction: onToggleReaction,
+                    onOpenInBrowser: onOpenInBrowser
+                )
+
+                LinuxDoPostReplyPreviewList(
+                    repliesState: repliesState,
+                    contentBlocks: { LinuxDoContentParser.blocks(from: $0.cookedHTML) }
+                )
+
+                if replyComposer.isPresented {
+                    LinuxDoComposer(
+                        title: "Reply to #\(post.postNumber)",
+                        placeholder: "Write a reply",
+                        raw: $replyDraft,
+                        isSubmitting: replyComposer.isSubmitting,
+                        error: replyComposer.error,
+                        canSubmit: replyComposer.canSubmitReply,
+                        submitTitle: "Reply",
+                        onCancel: onCancelReply,
+                        onSubmit: onSubmitReply
+                    )
                 }
-                .font(.sora(9).monospacedDigit())
-                .foregroundStyle(Color.stxMuted)
             }
             .padding(.bottom, 16)
             .overlay(alignment: .bottom) {
@@ -270,6 +292,398 @@ private struct LinuxDoPostView: View {
             }
         }
         .padding(.top, 18)
+    }
+}
+
+private struct LinuxDoPostAvatarColumn: View {
+    let post: LinuxDoPost
+    let isTopicOwner: Bool
+
+    var body: some View {
+        VStack(spacing: 8) {
+            AsyncImage(url: post.avatarURL) { image in
+                image.resizable().scaledToFill()
+            } placeholder: {
+                Image(systemName: "person.crop.circle.fill")
+                    .foregroundStyle(Color.stxMuted)
+            }
+            .frame(width: 38, height: 38)
+            .clipShape(Circle())
+            .overlay(Circle().stroke(Color.stxAccent.opacity(isTopicOwner ? 0.45 : 0.18), lineWidth: 1))
+
+            Text("#\(post.postNumber)")
+                .font(.sora(9).monospacedDigit())
+                .foregroundStyle(Color.stxMuted)
+        }
+        .frame(width: 48)
+    }
+}
+
+private struct LinuxDoPostHeader: View {
+    let post: LinuxDoPost
+    let isTopicOwner: Bool
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(post.displayAuthorName)
+                .font(.sora(12, weight: .semibold))
+            if isTopicOwner {
+                Text("OP")
+                    .font(.sora(8, weight: .bold))
+                    .foregroundStyle(Color.stxAccent)
+                    .padding(.horizontal, 5)
+                    .frame(height: 16)
+                    .background(Color.stxAccent.opacity(0.12), in: Capsule())
+            }
+            if let replyTo = post.replyToPostNumber {
+                Text("replying to #\(replyTo)")
+                    .font(.sora(9))
+                    .foregroundStyle(Color.stxMuted)
+            }
+            Spacer(minLength: 0)
+            Text(post.createdAt.map { Format.relativeDate($0) } ?? "Unknown time")
+                .font(.sora(9))
+                .foregroundStyle(Color.stxMuted)
+        }
+    }
+}
+
+private struct LinuxDoPostBody: View {
+    let contentBlocks: [LinuxDoContentBlock]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(contentBlocks) { block in
+                LinuxDoContentBlockView(block: block)
+            }
+        }
+    }
+}
+
+private struct LinuxDoReactionChipRow: View {
+    let reactions: [LinuxDoReaction]
+    let currentUserReaction: String?
+    let emojiURL: (String) -> URL?
+    let isPending: Bool
+    let onToggleReaction: (String) -> Void
+
+    var body: some View {
+        if !reactions.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(reactions) { reaction in
+                        Button {
+                            onToggleReaction(reaction.id)
+                        } label: {
+                            HStack(spacing: 5) {
+                                LinuxDoReactionGlyph(
+                                    reactionID: reaction.id,
+                                    displayText: reaction.displayText,
+                                    imageURL: emojiURL(reaction.id),
+                                    size: 18
+                                )
+                                Text("\(reaction.count)")
+                                    .font(.sora(10, weight: .semibold).monospacedDigit())
+                            }
+                            .padding(.horizontal, 8)
+                            .frame(height: 26)
+                            .background(chipBackground(for: reaction), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isPending)
+                        .help("React with \(reaction.id)")
+                    }
+                }
+            }
+        }
+    }
+
+    private func chipBackground(for reaction: LinuxDoReaction) -> Color {
+        currentUserReaction == reaction.id ? Color.stxAccent.opacity(0.18) : Color.primary.opacity(0.055)
+    }
+}
+
+private struct LinuxDoPostActionBar: View {
+    let post: LinuxDoPost
+    let repliesState: LinuxDoPostRepliesState
+    let isLikePending: Bool
+    let isReactionPending: Bool
+    let canWrite: Bool
+    let emojiURL: (String) -> URL?
+    let onToggleReplies: () -> Void
+    let onBeginReply: () -> Void
+    let onToggleLike: () -> Void
+    let onToggleReaction: (String) -> Void
+    let onOpenInBrowser: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button(action: onToggleLike) {
+                Label("\(post.effectiveLikeCount)", systemImage: post.isLikedByCurrentUser ? "heart.fill" : "heart")
+                    .foregroundStyle(post.isLikedByCurrentUser ? .red : Color.stxMuted)
+            }
+            .disabled(!canWrite || isLikePending || !post.canToggleLike)
+            .help(canWrite ? "Like" : "Sign in with a browser session to like")
+
+            Button(action: onBeginReply) {
+                Label("Reply", systemImage: "arrowshape.turn.up.left")
+            }
+            .disabled(!canWrite)
+            .help(canWrite ? "Reply" : "Sign in with a browser session to reply")
+
+            if post.replyCount > 0 || repliesState.hasLoaded {
+                Button(action: onToggleReplies) {
+                    Label(
+                        repliesState.isExpanded ? "Hide \(max(post.replyCount, repliesState.replies.count))" : "\(max(post.replyCount, repliesState.replies.count)) replies",
+                        systemImage: repliesState.isExpanded ? "chevron.up" : "chevron.down"
+                    )
+                }
+                .disabled(repliesState.isLoading)
+                .help(repliesState.isExpanded ? "Hide replies" : "Show replies")
+            }
+
+            Menu {
+                ForEach(LinuxDoReactionCatalog.defaultReactionIDs, id: \.self) { reactionID in
+                    Button {
+                        onToggleReaction(reactionID)
+                    } label: {
+                        HStack {
+                            LinuxDoReactionGlyph(
+                                reactionID: reactionID,
+                                displayText: LinuxDoReactionCatalog.displayText(for: reactionID),
+                                imageURL: emojiURL(reactionID),
+                                size: 16
+                            )
+                            Text(reactionID)
+                        }
+                    }
+                }
+            } label: {
+                Image(systemName: "face.smiling")
+                    .frame(width: 18, height: 18)
+            }
+            .disabled(!canWrite || isReactionPending)
+            .help(canWrite ? "Add reaction" : "Sign in with a browser session to react")
+
+            if post.reads > 0 {
+                Label("\(post.reads)", systemImage: "eye")
+                    .foregroundStyle(Color.stxMuted)
+            }
+
+            Spacer(minLength: 0)
+
+            Button(action: onOpenInBrowser) {
+                Image(systemName: "safari")
+                    .frame(width: 18, height: 18)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.stxMuted)
+            .help("Open in browser")
+        }
+        .buttonStyle(.plain)
+        .font(.sora(10).monospacedDigit())
+        .foregroundStyle(Color.stxMuted)
+    }
+}
+
+private struct LinuxDoReactionGlyph: View {
+    let reactionID: String
+    let displayText: String
+    let imageURL: URL?
+    let size: CGFloat
+
+    var body: some View {
+        Group {
+            if let imageURL {
+                AsyncImage(url: imageURL) { phase in
+                    switch phase {
+                    case .empty:
+                        ProgressView()
+                            .controlSize(.small)
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFit()
+                    case .failure:
+                        fallback
+                    @unknown default:
+                        fallback
+                    }
+                }
+            } else {
+                fallback
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityLabel(Text(reactionID))
+    }
+
+    private var fallback: some View {
+        Text(displayText)
+            .font(.sora(size - 2))
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
+    }
+}
+
+private struct LinuxDoPostReplyPreviewList: View {
+    let repliesState: LinuxDoPostRepliesState
+    let contentBlocks: (LinuxDoPost) -> [LinuxDoContentBlock]
+
+    var body: some View {
+        if repliesState.isExpanded {
+            VStack(alignment: .leading, spacing: 0) {
+                if repliesState.isLoading {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Loading replies")
+                            .font(.sora(10))
+                            .foregroundStyle(Color.stxMuted)
+                    }
+                    .padding(.vertical, 8)
+                }
+
+                if let error = repliesState.error {
+                    LinuxDoInlineError(message: error)
+                        .padding(.vertical, 8)
+                }
+
+                ForEach(repliesState.replies) { reply in
+                    LinuxDoReplyPreviewRow(reply: reply, contentBlocks: contentBlocks(reply))
+                }
+            }
+            .padding(.top, 4)
+        }
+    }
+}
+
+private struct LinuxDoReplyPreviewRow: View {
+    let reply: LinuxDoPost
+    let contentBlocks: [LinuxDoContentBlock]
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text("\(reply.effectiveLikeCount)")
+                .font(.sora(10, weight: .medium).monospacedDigit())
+                .foregroundStyle(Color.stxMuted)
+                .frame(width: 28, alignment: .trailing)
+            Image(systemName: "arrowshape.turn.up.left")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Color.stxMuted)
+                .frame(width: 16)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 5) {
+                    Text(reply.textPreview)
+                        .font(.sora(11, weight: .medium))
+                        .lineLimit(2)
+                    Text("–")
+                        .foregroundStyle(Color.stxMuted)
+                    Text(reply.displayAuthorName)
+                        .foregroundStyle(Color.stxAccent)
+                    Text(reply.createdAt.map { Format.relativeDate($0) } ?? "")
+                        .foregroundStyle(Color.stxMuted)
+                }
+                .font(.sora(10))
+
+                if contentBlocks.count > 1 {
+                    Text(contentBlocks.dropFirst().map { plainText($0) }.joined(separator: " "))
+                        .font(.sora(10))
+                        .foregroundStyle(Color.stxMuted)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 8)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Color.primary.opacity(0.06)).frame(height: 1)
+        }
+    }
+
+    private func plainText(_ block: LinuxDoContentBlock) -> String {
+        switch block.kind {
+        case .paragraph(let nodes), .heading(_, let nodes):
+            nodes.map(\.plainPreview).joined()
+        case .quote(_, let blocks), .details(_, let blocks), .spoiler(let blocks):
+            blocks.map(plainText).joined(separator: " ")
+        case .codeBlock(_, let code), .rawHTML(let code):
+            code
+        case .list(_, let items):
+            items.flatMap(\.blocks).map(plainText).joined(separator: " ")
+        case .image, .onebox, .table, .divider:
+            ""
+        }
+    }
+}
+
+private struct LinuxDoComposer: View {
+    let title: String
+    let placeholder: String
+    @Binding var raw: String
+    let isSubmitting: Bool
+    let error: String?
+    let canSubmit: Bool
+    let submitTitle: String
+    let onCancel: () -> Void
+    let onSubmit: () -> Void
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(title)
+                    .font(.sora(11, weight: .semibold))
+                Spacer(minLength: 0)
+                Button("Cancel", action: onCancel)
+                    .controlSize(.small)
+            }
+
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: $raw)
+                    .font(.sora(12))
+                    .frame(minHeight: 84)
+                    .scrollContentBackground(.hidden)
+                    .focused($isFocused)
+                if raw.isEmpty {
+                    Text(placeholder)
+                        .font(.sora(12))
+                        .foregroundStyle(Color.stxMuted)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 8)
+                        .allowsHitTesting(false)
+                }
+            }
+            .padding(6)
+            .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 7))
+            .overlay {
+                RoundedRectangle(cornerRadius: 7)
+                    .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+            }
+
+            if let error {
+                LinuxDoInlineError(message: error)
+            }
+
+            HStack {
+                Spacer(minLength: 0)
+                Button {
+                    onSubmit()
+                } label: {
+                    if isSubmitting {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Label(submitTitle, systemImage: "paperplane")
+                    }
+                }
+                .controlSize(.small)
+                .disabled(!canSubmit)
+            }
+        }
+        .padding(10)
+        .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 7))
+        .onAppear {
+            isFocused = true
+        }
     }
 }
 
@@ -627,6 +1041,27 @@ private struct LinuxDoPostVisibility: Equatable {
     let id: Int
     let postNumber: Int
     let minY: CGFloat
+}
+
+private extension LinuxDoInlineNode {
+    var plainPreview: String {
+        switch self {
+        case .text(let text), .code(let text):
+            text
+        case .strong(let children), .emphasis(let children), .strikethrough(let children), .spoiler(let children):
+            children.map(\.plainPreview).joined()
+        case .link(_, let children):
+            children.map(\.plainPreview).joined()
+        case .image(_, let alt, _, _, _):
+            alt ?? ""
+        case .mention(let username, _):
+            "@\(username)"
+        case .hashtag(let text, _):
+            text
+        case .lineBreak:
+            "\n"
+        }
+    }
 }
 
 private struct LinuxDoPostVisibilityPreference: PreferenceKey {

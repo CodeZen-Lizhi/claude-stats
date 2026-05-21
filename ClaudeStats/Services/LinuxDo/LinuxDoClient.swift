@@ -6,6 +6,13 @@ protocol LinuxDoClienting: Sendable {
     func fetchTopic(id: Int, slug: String?, now: Date) async throws -> LinuxDoTopicDetail
     func fetchTopicPage(id: Int, slug: String?, page: Int, now: Date) async throws -> LinuxDoTopicDetail
     func fetchPosts(topicID: Int, postIDs: [Int]) async throws -> [LinuxDoPost]
+    func fetchPostReplies(postID: Int) async throws -> [LinuxDoPost]
+    func fetchReactionUsers(postID: Int, reactionID: String?) async throws -> [LinuxDoReaction]
+    func fetchEmojiCatalog() async throws -> [String: URL]
+    func toggleLike(postID: Int, liked: Bool) async throws -> LinuxDoPost
+    func toggleReaction(postID: Int, reactionID: String) async throws -> LinuxDoPost
+    func createReply(topicID: Int, raw: String, replyToPostNumber: Int?) async throws -> LinuxDoPost
+    func createTopic(title: String, raw: String, categoryID: Int?) async throws -> LinuxDoPost
     func fetchCurrentUser() async throws -> LinuxDoCurrentUser
     func fetchUser(username: String) async throws -> LinuxDoCurrentUser
     func fetchCSRFToken() async throws -> String
@@ -126,6 +133,78 @@ struct LinuxDoClient: LinuxDoClienting {
         return LinuxDoResponseMapper.posts(from: response)
     }
 
+    func fetchPostReplies(postID: Int) async throws -> [LinuxDoPost] {
+        let response: [PostResponse] = try await get(path: "/posts/\(postID)/replies.json")
+        return response.map(\.model)
+    }
+
+    func fetchReactionUsers(postID: Int, reactionID: String? = nil) async throws -> [LinuxDoReaction] {
+        var queryItems = [URLQueryItem(name: "include_likes", value: "true")]
+        if let reactionID, !reactionID.isEmpty {
+            queryItems.append(URLQueryItem(name: "reaction_value", value: reactionID))
+        }
+        let response: ReactionUsersResponse = try await get(
+            path: "/discourse-reactions/posts/\(postID)/reactions-users.json",
+            queryItems: queryItems
+        )
+        return LinuxDoResponseMapper.reactionUsers(from: response)
+    }
+
+    func fetchEmojiCatalog() async throws -> [String: URL] {
+        let response: EmojiCatalogResponse = try await get(path: "/emojis.json")
+        return LinuxDoResponseMapper.emojiURLs(from: response)
+    }
+
+    func toggleLike(postID: Int, liked: Bool) async throws -> LinuxDoPost {
+        if liked {
+            let response: PostResponse = try await json(
+                path: "/post_actions.json",
+                method: "POST",
+                body: PostActionRequest(id: postID, postActionTypeID: 2),
+                requiresWebSession: true
+            )
+            return response.model
+        }
+        let response: PostResponse = try await json(
+            path: "/post_actions/\(postID).json",
+            method: "DELETE",
+            body: DeletePostActionRequest(postActionTypeID: 2),
+            requiresWebSession: true
+        )
+        return response.model
+    }
+
+    func toggleReaction(postID: Int, reactionID: String) async throws -> LinuxDoPost {
+        let encodedReaction = reactionID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? reactionID
+        let response: PostResponse = try await json(
+            path: "/discourse-reactions/posts/\(postID)/custom-reactions/\(encodedReaction)/toggle.json",
+            method: "PUT",
+            body: EmptyRequest(),
+            requiresWebSession: true
+        )
+        return response.model
+    }
+
+    func createReply(topicID: Int, raw: String, replyToPostNumber: Int?) async throws -> LinuxDoPost {
+        let response: PostResponse = try await json(
+            path: "/posts.json",
+            method: "POST",
+            body: CreatePostRequest(raw: raw, topicID: topicID, replyToPostNumber: replyToPostNumber),
+            requiresWebSession: true
+        )
+        return response.model
+    }
+
+    func createTopic(title: String, raw: String, categoryID: Int?) async throws -> LinuxDoPost {
+        let response: PostResponse = try await json(
+            path: "/posts.json",
+            method: "POST",
+            body: CreatePostRequest(title: title, raw: raw, categoryID: categoryID),
+            requiresWebSession: true
+        )
+        return response.model
+    }
+
     func fetchCurrentUser() async throws -> LinuxDoCurrentUser {
         let response: CurrentUserResponse = try await get(path: "/session/current.json", requiresAuthentication: true)
         let currentUser = response.currentUser.currentUser
@@ -186,12 +265,31 @@ struct LinuxDoClient: LinuxDoClienting {
         try await request(path: path, queryItems: queryItems, method: "GET", requiresAuthentication: requiresAuthentication)
     }
 
+    private func json<T: Decodable, Body: Encodable>(
+        path: String,
+        method: String,
+        body: Body,
+        requiresWebSession: Bool
+    ) async throws -> T {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return try await request(
+            path: path,
+            method: method,
+            requiresAuthentication: true,
+            requiresWebSession: requiresWebSession,
+            bodyData: try encoder.encode(body)
+        )
+    }
+
     private func request<T: Decodable>(
         path: String,
         queryItems: [URLQueryItem] = [],
         method: String,
         requiresAuthentication: Bool,
-        allowsEmptyResponse: Bool = false
+        requiresWebSession: Bool = false,
+        allowsEmptyResponse: Bool = false,
+        bodyData: Data? = nil
     ) async throws -> T {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
             throw ClientError.invalidURL
@@ -208,10 +306,15 @@ struct LinuxDoClient: LinuxDoClienting {
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
-        if method != "GET" {
+        if method != "GET" || bodyData != nil {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
-        let credential = credentials.readAuthCredential()
+        request.httpBody = bodyData
+        let credential = try await credential(
+            requiresAuthentication: requiresAuthentication,
+            requiresWebSession: requiresWebSession,
+            method: method
+        )
         if requiresAuthentication, credential == nil {
             throw ClientError.unauthorized
         }
@@ -277,6 +380,52 @@ struct LinuxDoClient: LinuxDoClienting {
             Log.network.error("LinuxDo decode failed for \(path, privacy: .public): \(message, privacy: .public)")
             throw ClientError.decoding(message)
         }
+    }
+
+    private func credential(
+        requiresAuthentication: Bool,
+        requiresWebSession: Bool,
+        method: String
+    ) async throws -> LinuxDoAuthCredential? {
+        guard requiresWebSession else {
+            return credentials.readAuthCredential()
+        }
+        guard var session = credentials.readWebSession(), session.isAuthenticated else {
+            throw ClientError.unauthorized
+        }
+        if method != "GET", session.csrfToken?.isEmpty != false {
+            let csrf = try await fetchCSRFToken(using: session)
+            session = session.with(csrfToken: csrf, username: session.username, avatarURL: session.avatarURL)
+            try? credentials.saveWebSession(session)
+        }
+        if requiresAuthentication || session.isAuthenticated {
+            return .webSession(session)
+        }
+        return nil
+    }
+
+    private func fetchCSRFToken(using session: LinuxDoWebSession) async throws -> String {
+        guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
+            throw ClientError.invalidURL
+        }
+        components.path = "/session/csrf"
+        guard let url = components.url else { throw ClientError.invalidURL }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 25
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+
+        let response: CSRFResponse = try await perform(
+            request: request,
+            path: "/session/csrf",
+            method: "GET",
+            credential: .webSession(session),
+            allowsEmptyResponse: false
+        )
+        return response.csrf
     }
 
     private func apply(credential: LinuxDoAuthCredential?, to request: inout URLRequest) {
@@ -391,6 +540,50 @@ struct LinuxDoClient: LinuxDoClienting {
         let version = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "dev"
         return "ClaudeStats/\(version)"
     }()
+}
+
+private struct EmptyRequest: Encodable {}
+
+private struct PostActionRequest: Encodable {
+    let id: Int
+    let postActionTypeID: Int
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case postActionTypeID = "post_action_type_id"
+    }
+}
+
+private struct DeletePostActionRequest: Encodable {
+    let postActionTypeID: Int
+
+    enum CodingKeys: String, CodingKey {
+        case postActionTypeID = "post_action_type_id"
+    }
+}
+
+private struct CreatePostRequest: Encodable {
+    let title: String?
+    let raw: String
+    let topicID: Int?
+    let categoryID: Int?
+    let replyToPostNumber: Int?
+
+    init(title: String? = nil, raw: String, topicID: Int? = nil, categoryID: Int? = nil, replyToPostNumber: Int? = nil) {
+        self.title = title
+        self.raw = raw
+        self.topicID = topicID
+        self.categoryID = categoryID
+        self.replyToPostNumber = replyToPostNumber
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case title
+        case raw
+        case topicID = "topic_id"
+        case categoryID = "category"
+        case replyToPostNumber = "reply_to_post_number"
+    }
 }
 
 private struct EmptyResponse: Decodable {}
