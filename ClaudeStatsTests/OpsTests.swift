@@ -213,6 +213,41 @@ struct OpsCommandRunnerTests {
     }
 }
 
+struct OpsServiceBrewTests {
+    @Test("brew environment fronts Homebrew paths for GUI launches")
+    func brewEnvironmentFrontsHomebrewPathsForGUILaunches() {
+        let environment = OpsService.readOnlyBrewEnvironment(
+            base: ["PATH": "/usr/bin:/opt/homebrew/bin:/bin"],
+            brewPath: "/opt/homebrew/bin/brew"
+        )
+        let pathParts = environment["PATH"]?.split(separator: ":").map(String.init) ?? []
+
+        #expect(Array(pathParts.prefix(2)) == ["/opt/homebrew/bin", "/opt/homebrew/sbin"])
+        #expect(pathParts.filter { $0 == "/opt/homebrew/bin" }.count == 1)
+        #expect(environment["HOMEBREW_NO_AUTO_UPDATE"] == "1")
+        #expect(environment["HOMEBREW_NO_ANALYTICS"] == "1")
+    }
+
+    @Test("brew doctor warnings remain doctor output")
+    func brewDoctorWarningsRemainDoctorOutput() {
+        let warning = """
+        Please note that these warnings are just used to help the Homebrew maintainers.
+
+        Warning: /usr/bin occurs before /opt/homebrew/bin in your PATH.
+        """
+        let presentation = OpsService.brewDoctorPresentation(for: OpsCommandResult(
+            exitCode: 1,
+            stdout: "",
+            stderr: warning,
+            launchError: nil,
+            timedOut: false
+        ))
+
+        #expect(presentation.output.contains("Warning: /usr/bin occurs before /opt/homebrew/bin"))
+        #expect(presentation.error == nil)
+    }
+}
+
 @MainActor
 struct OpsStoreTests {
     @Test("terminate requires confirmation before service call")

@@ -42,6 +42,11 @@ enum SkillsDetailTab: String, CaseIterable, Identifiable, Sendable, Hashable {
     }
 }
 
+enum SkillsScanMode: Sendable, Hashable {
+    case indexOnly
+    case fullHash
+}
+
 enum SkillScope: Sendable, Hashable {
     case global
     case project(path: String)
@@ -273,7 +278,7 @@ struct LocalSkillItem: Identifiable, Sendable, Hashable {
     let files: [SkillFileEntry]
     let modifiedAt: Date?
     let contentHash: String?
-    let skillMarkdown: String
+    let skillMarkdown: String?
 
     var normalizedName: String {
         Self.normalizedName(name)
@@ -378,7 +383,6 @@ struct LocalSkillDetailModel: Identifiable, Sendable, Hashable {
     let primaryFacts: [SkillFactModel]
     let installedCopies: [LocalSkillCopyRowModel]
     let files: [SkillFileRowModel]
-    let markdownDocument: SkillMarkdownDocument?
     let actions: LocalSkillActionModel?
 
     init(group: LocalSkillGroup) {
@@ -393,13 +397,6 @@ struct LocalSkillDetailModel: Identifiable, Sendable, Hashable {
         files = primary?.files.map(SkillFileRowModel.init(entry:)) ?? []
         actions = primary.map {
             LocalSkillActionModel(folderPath: $0.folderPath, skillMarkdownPath: $0.skillMarkdownPath)
-        }
-        markdownDocument = primary.map {
-            SkillMarkdownDocument(
-                id: "local:\($0.id)",
-                contentHash: $0.contentHash,
-                text: $0.skillMarkdown
-            )
         }
 
         var facts: [SkillFactModel] = []
@@ -443,13 +440,15 @@ struct SkillsSnapshot: Sendable, Hashable {
     let providers: [SkillProviderDefinition]
     let summary: SkillsSummary
     let scannedAt: Date?
+    let scanMode: SkillsScanMode
 
     static let empty = SkillsSnapshot(
         skills: [],
         groups: [],
         providers: [],
         summary: .empty,
-        scannedAt: nil
+        scannedAt: nil,
+        scanMode: .indexOnly
     )
 }
 

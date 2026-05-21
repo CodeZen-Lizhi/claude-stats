@@ -6,15 +6,31 @@ private enum SkillsPaneMetrics {
     static let detailMinWidth: CGFloat = 420
     static let listIdealWidth: CGFloat = 390
     static let detailIdealWidth: CGFloat = 560
-    static let stackedBreakpoint: CGFloat = 800
+    static let stackedEnterWidth: CGFloat = 760
+    static let sideBySideEnterWidth: CGFloat = 840
     static let listMinHeight: CGFloat = 220
     static let detailMinHeight: CGFloat = 300
     static let listMaxWidth: CGFloat = 480
+    static let sideBySideSplitConfiguration = HoverableSplitViewConfiguration(
+        primaryMinimumPaneLength: listMinWidth,
+        primaryMaximumPaneLength: listMaxWidth,
+        secondaryMinimumPaneLength: detailMinWidth
+    )
+    static let stackedSplitConfiguration = HoverableSplitViewConfiguration(
+        primaryMinimumPaneLength: listMinHeight,
+        secondaryMinimumPaneLength: detailMinHeight
+    )
+}
+
+private enum SkillsWorkspaceLayout {
+    case sideBySide
+    case stacked
 }
 
 struct SkillsWorkspaceView: View {
     @Bindable var store: SkillsStore
     @Environment(AppEnvironment.self) private var env
+    @State private var workspaceLayout: SkillsWorkspaceLayout = .sideBySide
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -28,6 +44,7 @@ struct SkillsWorkspaceView: View {
             StxRule()
             SkillsWorkspaceBar(
                 selectedTab: store.selectedTab,
+                layout: workspaceLayout,
                 providers: store.snapshot.providers,
                 selectedProviderID: $store.selectedProviderID,
                 scopeFilter: $store.scopeFilter,
@@ -45,6 +62,7 @@ struct SkillsWorkspaceView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .task {
+            await Task.yield()
             await store.loadIfNeeded(sessions: env.store.sessions)
         }
         .onChange(of: env.store.lastRefreshedAt) { _, _ in
@@ -59,26 +77,43 @@ struct SkillsWorkspaceView: View {
 
     private var workspace: some View {
         GeometryReader { proxy in
-            if proxy.size.width < SkillsPaneMetrics.stackedBreakpoint {
-                stackedWorkspace
-            } else {
-                sideBySideWorkspace
-            }
+            workspaceContent
+                .onAppear {
+                    updateWorkspaceLayout(width: proxy.size.width)
+                }
+                .onChange(of: proxy.size.width) { _, width in
+                    updateWorkspaceLayout(width: width)
+                }
+        }
+    }
+
+    @ViewBuilder
+    private var workspaceContent: some View {
+        switch workspaceLayout {
+        case .sideBySide:
+            sideBySideWorkspace
+        case .stacked:
+            stackedWorkspace
         }
     }
 
     private var sideBySideWorkspace: some View {
-        HSplitView {
+        HoverableSplitView(
+            axis: .vertical,
+            primaryFraction: 0.38,
+            configuration: SkillsPaneMetrics.sideBySideSplitConfiguration
+        ) {
             listColumn
                 .frame(
-                    minWidth: SkillsPaneMetrics.listMinWidth,
+                    minWidth: 0,
                     idealWidth: SkillsPaneMetrics.listIdealWidth,
                     maxWidth: SkillsPaneMetrics.listMaxWidth,
                     maxHeight: .infinity
                 )
+        } secondary: {
             detailPane
                 .frame(
-                    minWidth: SkillsPaneMetrics.detailMinWidth,
+                    minWidth: 0,
                     idealWidth: SkillsPaneMetrics.detailIdealWidth,
                     maxWidth: .infinity,
                     maxHeight: .infinity
@@ -87,9 +122,14 @@ struct SkillsWorkspaceView: View {
     }
 
     private var stackedWorkspace: some View {
-        VSplitView {
+        HoverableSplitView(
+            axis: .horizontal,
+            primaryFraction: 0.42,
+            configuration: SkillsPaneMetrics.stackedSplitConfiguration
+        ) {
             listColumn
                 .frame(minHeight: SkillsPaneMetrics.listMinHeight, maxHeight: .infinity)
+        } secondary: {
             detailPane
                 .frame(minHeight: SkillsPaneMetrics.detailMinHeight, maxHeight: .infinity)
         }
@@ -118,7 +158,10 @@ struct SkillsWorkspaceView: View {
             selectedTab: store.selectedTab,
             selectedDetailTab: $store.selectedDetailTab,
             localDetail: store.selectedLocalDetailModel,
+            localMarkdownDocument: store.selectedLocalMarkdownDocument,
+            isLocalMarkdownLoading: store.isLocalMarkdownLoading,
             remoteDetail: store.selectedRemoteDetailModel,
+            loadLocalMarkdownDocument: store.loadSelectedLocalMarkdownDocument,
             loadRemoteDetail: store.loadRemoteDetail(id:)
         )
     }
@@ -157,6 +200,17 @@ struct SkillsWorkspaceView: View {
             await store.reloadLocalIfProjectRootsChanged(sessions: env.store.sessions)
         }
     }
+
+    private func updateWorkspaceLayout(width: CGFloat) {
+        switch workspaceLayout {
+        case .sideBySide where width < SkillsPaneMetrics.stackedEnterWidth:
+            workspaceLayout = .stacked
+        case .stacked where width > SkillsPaneMetrics.sideBySideEnterWidth:
+            workspaceLayout = .sideBySide
+        default:
+            break
+        }
+    }
 }
 
 private struct SkillsHeader: View {
@@ -185,19 +239,10 @@ private struct SkillsHeader: View {
 
             Spacer(minLength: 12)
 
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 10) {
-                    summaryLabel
-                    loadingIndicator
-                    refreshButton
-                }
-                VStack(alignment: .trailing, spacing: 8) {
-                    summaryLabel
-                    HStack(spacing: 8) {
-                        loadingIndicator
-                        refreshButton
-                    }
-                }
+            HStack(spacing: 10) {
+                summaryLabel
+                loadingIndicator
+                refreshButton
             }
         }
         .padding(.horizontal, horizontalInset)
@@ -238,6 +283,7 @@ private struct SkillsHeader: View {
 
 private struct SkillsWorkspaceBar: View {
     let selectedTab: SkillsWorkspaceTab
+    let layout: SkillsWorkspaceLayout
     let providers: [SkillProviderDefinition]
     @Binding var selectedProviderID: String?
     @Binding var scopeFilter: SkillScopeFilter
@@ -276,6 +322,7 @@ private struct SkillsWorkspaceBar: View {
             Spacer(minLength: 8)
             SkillsWorkspaceControls(
                 selectedTab: selectedTab,
+                layout: layout,
                 providers: providers,
                 selectedProviderID: $selectedProviderID,
                 scopeFilter: $scopeFilter,
@@ -291,6 +338,7 @@ private struct SkillsWorkspaceBar: View {
 
 private struct SkillsWorkspaceControls: View {
     let selectedTab: SkillsWorkspaceTab
+    let layout: SkillsWorkspaceLayout
     let providers: [SkillProviderDefinition]
     @Binding var selectedProviderID: String?
     @Binding var scopeFilter: SkillScopeFilter
@@ -301,9 +349,12 @@ private struct SkillsWorkspaceControls: View {
     let deleteAPIKey: () -> Void
     @State private var showingFilters = false
 
+    @ViewBuilder
     var body: some View {
-        ViewThatFits(in: .horizontal) {
+        switch layout {
+        case .sideBySide:
             inlineControls
+        case .stacked:
             compactControls
         }
     }
@@ -723,7 +774,10 @@ private struct SkillsDetailPane: View {
     let selectedTab: SkillsWorkspaceTab
     @Binding var selectedDetailTab: SkillsDetailTab
     let localDetail: LocalSkillDetailModel?
+    let localMarkdownDocument: SkillMarkdownDocument?
+    let isLocalMarkdownLoading: Bool
     let remoteDetail: RemoteSkillDetailModel?
+    let loadLocalMarkdownDocument: () async -> Void
     let loadRemoteDetail: (String) async -> Void
 
     var body: some View {
@@ -748,7 +802,13 @@ private struct SkillsDetailPane: View {
                         SkillsLocalActions(actions: actions)
                     }
                 } content: {
-                    SkillsLocalDetail(selectedTab: selectedDetailTab, detail: detail)
+                    SkillsLocalDetail(
+                        selectedTab: selectedDetailTab,
+                        detail: detail,
+                        markdownDocument: localMarkdownDocument,
+                        isMarkdownLoading: isLocalMarkdownLoading,
+                        loadMarkdownDocument: loadLocalMarkdownDocument
+                    )
                 }
             } else {
                 emptyInspector
@@ -862,6 +922,9 @@ private struct SkillsInspectorShell<Actions: View, Content: View>: View {
 private struct SkillsLocalDetail: View {
     let selectedTab: SkillsDetailTab
     let detail: LocalSkillDetailModel
+    let markdownDocument: SkillMarkdownDocument?
+    let isMarkdownLoading: Bool
+    let loadMarkdownDocument: () async -> Void
 
     var body: some View {
         detailBody
@@ -873,11 +936,14 @@ private struct SkillsLocalDetail: View {
         case .overview:
             localOverview
         case .skill:
-            if let document = detail.markdownDocument {
+            if let document = markdownDocument {
                 SkillMarkdownViewer(document: document)
                     .equatable()
             } else {
-                SkillsLoadingState(message: "No SKILL.md snapshot available.")
+                SkillsLoadingState(message: isMarkdownLoading ? "Loading SKILL.md..." : "No SKILL.md snapshot available.")
+                    .task(id: detail.id) {
+                        await loadMarkdownDocument()
+                    }
             }
         case .files:
             SkillFilesList(files: detail.files)
@@ -1063,21 +1129,18 @@ private struct SkillsLocalActions: View {
     let actions: LocalSkillActionModel
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            actionButtons(showLabels: true)
-            actionButtons(showLabels: false)
-        }
+        actionButtons
     }
 
-    private func actionButtons(showLabels: Bool) -> some View {
+    private var actionButtons: some View {
         HStack(spacing: 8) {
-            SkillsToolbarButton("Copy Path", systemImage: "doc.on.doc", showLabel: showLabels) {
+            SkillsToolbarButton("Copy Path", systemImage: "doc.on.doc", showLabel: false) {
                 SkillsClipboard.copy(actions.folderPath)
             }
-            SkillsToolbarButton("Reveal", systemImage: "finder", showLabel: showLabels) {
+            SkillsToolbarButton("Reveal", systemImage: "finder", showLabel: false) {
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: actions.skillMarkdownPath)])
             }
-            SkillsToolbarButton("Open", systemImage: "arrow.up.right.square", showLabel: showLabels) {
+            SkillsToolbarButton("Open", systemImage: "arrow.up.right.square", showLabel: false) {
                 NSWorkspace.shared.open(URL(fileURLWithPath: actions.skillMarkdownPath))
             }
         }
@@ -1088,20 +1151,17 @@ private struct SkillsRemoteActions: View {
     let actions: RemoteSkillActionModel
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            actionButtons(showLabels: true)
-            actionButtons(showLabels: false)
-        }
+        actionButtons
     }
 
-    private func actionButtons(showLabels: Bool) -> some View {
+    private var actionButtons: some View {
         HStack(spacing: 8) {
-            SkillsToolbarButton("Copy Install", systemImage: "doc.on.doc", showLabel: showLabels, disabled: actions.installCommand == nil) {
+            SkillsToolbarButton("Copy Install", systemImage: "doc.on.doc", showLabel: false, disabled: actions.installCommand == nil) {
                 if let command = actions.installCommand {
                     SkillsClipboard.copy(command)
                 }
             }
-            SkillsToolbarButton("Open", systemImage: "arrow.up.right.square", showLabel: showLabels, disabled: remoteURL == nil) {
+            SkillsToolbarButton("Open", systemImage: "arrow.up.right.square", showLabel: false, disabled: remoteURL == nil) {
                 if let remoteURL {
                     NSWorkspace.shared.open(remoteURL)
                 }

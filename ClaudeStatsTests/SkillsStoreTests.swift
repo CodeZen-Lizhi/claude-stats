@@ -43,7 +43,8 @@ struct SkillsStoreTests {
         #expect(initialDetail.title == "Alpha Skill")
         #expect(initialDetail.copyCount == 1)
         #expect(initialDetail.primaryFacts.contains { $0.label == "Provider" && $0.value == "Codex" })
-        #expect(initialDetail.markdownDocument?.text.contains("Alpha Skill") == true)
+        await store.loadSelectedLocalMarkdownDocument()
+        #expect(store.selectedLocalMarkdownDocument?.text.contains("Alpha Skill") == true)
         #expect(store.selectedLocalDetailModel == initialDetail)
 
         store.searchText = "beta"
@@ -135,6 +136,7 @@ struct SkillsStoreTests {
 
         store.selectRemoteSkill(remote)
         await store.loadRemoteDetail(id: remote.id)
+        await store.waitForLocalHashRefresh()
 
         #expect(store.remoteDetails[remote.id]?.detail?.hash == "remote-hash")
         #expect(store.remoteDetails[remote.id]?.audit?.audits.first?.provider == "Socket")
@@ -152,6 +154,119 @@ struct SkillsStoreTests {
         #expect(remoteDetail.audits.first?.auditedAtText == nil)
         #expect(remoteDetail.actions.installCommand?.contains("npx skills add") == true)
         #expect(store.selectedRemoteDetailModel == remoteDetail)
+    }
+
+    @Test("Remote install state upgrades after full local hashes arrive")
+    func remoteInstallStateUpgradesAfterFullHash() async throws {
+        let root = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let localSkill = root.appendingPathComponent(".codex/skills/react-native", isDirectory: true)
+        try TempDir.write(
+            """
+            ---
+            name: React Native
+            description: Local copy
+            ---
+            """,
+            to: localSkill.appendingPathComponent("SKILL.md")
+        )
+        try TempDir.write("helper", to: localSkill.appendingPathComponent("references/helper.md"))
+
+        let roots = [
+            SkillRootDefinition(
+                provider: SkillProviderDefinition(id: "codex", displayName: "Codex"),
+                scope: .global,
+                url: root.appendingPathComponent(".codex/skills", isDirectory: true),
+                maxDepth: 4
+            ),
+        ]
+        let indexSnapshot = SkillsLocalScanner.scanSync(roots: roots, scannedAt: Date(timeIntervalSince1970: 1), mode: .indexOnly)
+        let fullHashSnapshot = SkillsLocalScanner.scanSync(roots: roots, scannedAt: Date(timeIntervalSince1970: 2), mode: .fullHash)
+        let localHash = try #require(fullHashSnapshot.skills.first?.contentHash)
+
+        let remote = RemoteSkillSummary(
+            id: "expo/skills/react-native",
+            slug: "react-native",
+            name: "React Native",
+            source: "expo/skills"
+        )
+        let fakeClient = FakeSkillsShClient()
+        fakeClient.searchResults = [remote]
+        fakeClient.details[remote.id] = RemoteSkillDetail.testValue(id: remote.id, hash: localHash)
+
+        let store = SkillsStore(
+            scanner: DelayedFullHashScanner(indexSnapshot: indexSnapshot, fullHashSnapshot: fullHashSnapshot),
+            client: fakeClient,
+            credentials: InMemorySkillsShCredentialStore(apiKey: "sk_test")
+        )
+
+        await store.loadIfNeeded(sessions: [])
+        store.selectedTab = .discover
+        store.searchText = "react"
+        await store.searchOrLoadTrending()
+        store.selectRemoteSkill(remote)
+        await store.loadRemoteDetail(id: remote.id)
+
+        #expect(store.installState(for: remote) == .possiblyInstalled)
+        await store.waitForLocalHashRefresh()
+        #expect(store.installState(for: remote) == .installed)
+        #expect(store.discoverRows.first?.installState == .installed)
+    }
+
+    @Test("Project root changes during scanning trigger a pending reload")
+    func projectRootChangesDuringScanningTriggerPendingReload() async throws {
+        let root = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let firstRoot = root.appendingPathComponent("first/.codex/skills", isDirectory: true)
+        try TempDir.write(
+            """
+            ---
+            name: Alpha Skill
+            ---
+            """,
+            to: firstRoot.appendingPathComponent("alpha/SKILL.md")
+        )
+        let secondRoot = root.appendingPathComponent("second/.codex/skills", isDirectory: true)
+        try TempDir.write(
+            """
+            ---
+            name: Beta Skill
+            ---
+            """,
+            to: secondRoot.appendingPathComponent("beta/SKILL.md")
+        )
+
+        let provider = SkillProviderDefinition(id: "codex", displayName: "Codex")
+        let firstSnapshot = SkillsLocalScanner.scanSync(
+            roots: [SkillRootDefinition(provider: provider, scope: .global, url: firstRoot, maxDepth: 4)],
+            scannedAt: Date(timeIntervalSince1970: 1),
+            mode: .indexOnly
+        )
+        let secondSnapshot = SkillsLocalScanner.scanSync(
+            roots: [SkillRootDefinition(provider: provider, scope: .global, url: secondRoot, maxDepth: 4)],
+            scannedAt: Date(timeIntervalSince1970: 2),
+            mode: .indexOnly
+        )
+        let scannerState = QueuedSkillsScannerState(
+            indexSnapshots: [firstSnapshot, secondSnapshot],
+            fullHashSnapshot: secondSnapshot
+        )
+        let store = SkillsStore(
+            scanner: QueuedSkillsScanner(state: scannerState),
+            client: FakeSkillsShClient(),
+            credentials: InMemorySkillsShCredentialStore()
+        )
+
+        async let firstReload: Void = store.reloadLocal(sessions: [makeSession(cwd: root.appendingPathComponent("first").path)])
+        try? await Task.sleep(nanoseconds: 25_000_000)
+        await store.reloadLocalIfProjectRootsChanged(sessions: [makeSession(cwd: root.appendingPathComponent("second").path)])
+        await firstReload
+
+        #expect(await scannerState.indexScanCount() == 2)
+        #expect(store.visibleLocalRows.map(\.name) == ["Beta Skill"])
+        #expect(store.selectedLocalDetail?.title == "Beta Skill")
     }
 
     @Test("Curated rows cache remote lookup and selected skill")
@@ -254,6 +369,72 @@ final class FakeSkillsShClient: SkillsShClienting, @unchecked Sendable {
     func audit(id: String, apiKey: String) async throws -> SkillsShAuditReport? {
         audits[id]
     }
+}
+
+private struct DelayedFullHashScanner: SkillsLocalScanning {
+    let indexSnapshot: SkillsSnapshot
+    let fullHashSnapshot: SkillsSnapshot
+
+    func scan(sessions: [Session], mode: SkillsScanMode) async -> SkillsSnapshot {
+        switch mode {
+        case .indexOnly:
+            return indexSnapshot
+        case .fullHash:
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            return fullHashSnapshot
+        }
+    }
+}
+
+private struct QueuedSkillsScanner: SkillsLocalScanning {
+    let state: QueuedSkillsScannerState
+
+    func scan(sessions: [Session], mode: SkillsScanMode) async -> SkillsSnapshot {
+        await state.scan(mode: mode)
+    }
+}
+
+private actor QueuedSkillsScannerState {
+    private var indexSnapshots: [SkillsSnapshot]
+    private let fullHashSnapshot: SkillsSnapshot
+    private var indexCalls = 0
+
+    init(indexSnapshots: [SkillsSnapshot], fullHashSnapshot: SkillsSnapshot) {
+        self.indexSnapshots = indexSnapshots
+        self.fullHashSnapshot = fullHashSnapshot
+    }
+
+    func scan(mode: SkillsScanMode) async -> SkillsSnapshot {
+        switch mode {
+        case .indexOnly:
+            indexCalls += 1
+            if indexCalls == 1 {
+                try? await Task.sleep(nanoseconds: 150_000_000)
+            }
+            guard !indexSnapshots.isEmpty else { return .empty }
+            return indexSnapshots.removeFirst()
+        case .fullHash:
+            return fullHashSnapshot
+        }
+    }
+
+    func indexScanCount() -> Int {
+        indexCalls
+    }
+}
+
+private func makeSession(cwd: String) -> Session {
+    Session(
+        id: "codex::\(cwd)",
+        externalID: cwd,
+        provider: .codex,
+        projectDirectoryName: cwd.replacingOccurrences(of: "/", with: "-"),
+        filePath: "\(cwd)/session.jsonl",
+        cwd: cwd,
+        lastModified: Date(timeIntervalSince1970: 100),
+        fileSize: 100,
+        stats: nil
+    )
 }
 
 final class OneShotSkillsShCredentialStore: SkillsShCredentialStoring, @unchecked Sendable {

@@ -11,6 +11,7 @@ import AppKit
 struct SidebarColumn: View {
     @Binding var page: MainPage
     var availablePages: [MainPage]
+    var isLinuxDoActive = false
     var onOpenSettings: () -> Void
     var onOpenLinuxDo: () -> Void
     var onOpenSessions: () -> Void
@@ -29,7 +30,7 @@ struct SidebarColumn: View {
             SidebarRow(
                 title: MainPage.linuxDo.title,
                 symbol: MainPage.linuxDo.symbol,
-                isSelected: false,
+                isSelected: isLinuxDoActive,
                 trailingSymbol: "chevron.right",
                 showsTrailingOnHover: true
             ) {
@@ -204,6 +205,7 @@ struct SidebarRow: View {
     return SidebarColumn(
         page: $page,
         availablePages: [.dashboard, .configurations, .usage, .activity, .git],
+        isLinuxDoActive: false,
         onOpenSettings: {},
         onOpenLinuxDo: {},
         onOpenSessions: {},

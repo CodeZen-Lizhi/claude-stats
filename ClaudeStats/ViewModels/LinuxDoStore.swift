@@ -24,6 +24,41 @@ struct LinuxDoTopicDetailState: Sendable {
     var error: String?
 }
 
+enum LinuxDoAuthenticationStatus: Equatable, Sendable {
+    case guest
+    case userAPIKey
+    case webSession(username: String?)
+
+    var isAuthenticated: Bool {
+        switch self {
+        case .guest:
+            false
+        case .userAPIKey, .webSession:
+            true
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .guest:
+            "Guest"
+        case .userAPIKey:
+            "User API Key"
+        case .webSession:
+            "Browser session"
+        }
+    }
+
+    var username: String? {
+        switch self {
+        case .webSession(let username):
+            username
+        case .guest, .userAPIKey:
+            nil
+        }
+    }
+}
+
 @MainActor
 @Observable
 final class LinuxDoStore {
@@ -31,10 +66,12 @@ final class LinuxDoStore {
     private(set) var listStates: [String: LinuxDoListState] = [:]
     private(set) var topicStates: [Int: LinuxDoTopicDetailState] = [:]
     private(set) var currentUser: LinuxDoCurrentUser?
+    private(set) var authenticationStatus: LinuxDoAuthenticationStatus
     private(set) var notifications: [LinuxDoNotification] = []
     private(set) var notificationAuthorization: LinuxDoNotificationAuthorizationStatus = .notDetermined
     private(set) var isLoadingCategories = false
     private(set) var isSigningIn = false
+    private(set) var isAwaitingExternalBrowserSignIn = false
     private(set) var isRefreshingNotifications = false
     private(set) var lastError: String?
     private(set) var rateLimitedUntil: Date?
@@ -50,17 +87,11 @@ final class LinuxDoStore {
     var selectedTopicID: Int?
 
     var isAuthenticated: Bool {
-        credentials.readAuthCredential() != nil
+        authenticationStatus.isAuthenticated
     }
 
     var authenticationDescription: String {
-        if credentials.readAPIKey() != nil {
-            return "User API Key"
-        }
-        if let session = credentials.readWebSession(), session.isAuthenticated {
-            return "Browser session"
-        }
-        return "Guest"
+        authenticationStatus.description
     }
 
     var selectedTopicState: LinuxDoTopicDetailState? {
@@ -94,6 +125,7 @@ final class LinuxDoStore {
         self.notificationService = notificationService
         self.client = client ?? LinuxDoClient(credentials: credentials)
         self.authService = authService ?? LinuxDoAuthService(credentials: credentials)
+        self.authenticationStatus = Self.authenticationStatus(from: credentials)
         self.selectedFeed = LinuxDoFeed.stored(preferences.linuxDoSelectedFeed) ?? .latest
     }
 
@@ -103,6 +135,7 @@ final class LinuxDoStore {
     }
 
     func start() {
+        refreshAuthenticationState()
         Task {
             notificationAuthorization = await notificationService.authorizationStatus()
             if preferences.linuxDoNotificationsEnabled {
@@ -112,11 +145,14 @@ final class LinuxDoStore {
     }
 
     func loadInitialIfNeeded() async {
+        Log.app.info("LinuxDo initial load started")
         await loadCategoriesIfNeeded()
         await loadCurrentFeedIfNeeded()
+        refreshAuthenticationState()
         if isAuthenticated {
             await loadCurrentUserIfNeeded()
         }
+        Log.app.info("LinuxDo initial load finished")
     }
 
     func selectFeed(_ feed: LinuxDoFeed) {
@@ -170,6 +206,7 @@ final class LinuxDoStore {
         listStates[selectedFeed.key] = state
         do {
             let list = try await client.fetchTopicList(feed: selectedFeed, page: nextPage, now: .now)
+            refreshAuthenticationState()
             state.topics.append(contentsOf: list.topics)
             state.nextPage = list.nextPage
             state.lastFetchedAt = list.fetchedAt
@@ -178,6 +215,7 @@ final class LinuxDoStore {
         } catch {
             state.isLoading = false
             state.error = userFacingMessage(error)
+            Log.network.error("LinuxDo feed page load failed: \(state.error ?? "unknown", privacy: .public)")
             handle(error)
         }
         listStates[selectedFeed.key] = state
@@ -255,6 +293,7 @@ final class LinuxDoStore {
         lastError = nil
         do {
             _ = try await authService.login(presentationAnchor: presentationAnchor)
+            refreshAuthenticationState()
             await loadCurrentUserIfNeeded(force: true)
             await refreshNotifications(announce: false)
         } catch LinuxDoAuthService.AuthError.cancelled {
@@ -262,6 +301,59 @@ final class LinuxDoStore {
         } catch {
             lastError = userFacingMessage(error)
         }
+        refreshAuthenticationState()
+        isSigningIn = false
+    }
+
+    @discardableResult
+    func beginExternalBrowserSignIn() -> Bool {
+        lastError = nil
+        do {
+            let url = try authService.beginExternalBrowserLogin()
+            guard NSWorkspace.shared.open(url) else {
+                authService.cancelExternalBrowserLogin()
+                isAwaitingExternalBrowserSignIn = false
+                lastError = "Could not open the LinuxDo authorization page in your default browser."
+                return false
+            }
+            isAwaitingExternalBrowserSignIn = true
+            Log.app.info("LinuxDo external browser authorization opened")
+            return true
+        } catch {
+            isAwaitingExternalBrowserSignIn = false
+            lastError = userFacingMessage(error)
+            Log.app.error("LinuxDo external browser authorization failed to start: \(self.lastError ?? "unknown", privacy: .public)")
+            return false
+        }
+    }
+
+    @discardableResult
+    func handleOpenURL(_ url: URL) -> Bool {
+        guard LinuxDoAuthService.isCallbackURL(url) else { return false }
+        Log.app.info("LinuxDo authorization callback received")
+        Task { @MainActor in
+            await completeExternalBrowserSignIn(callbackURL: url)
+        }
+        return true
+    }
+
+    func completeExternalBrowserSignIn(callbackURL: URL) async {
+        isSigningIn = true
+        lastError = nil
+        do {
+            _ = try authService.completeExternalBrowserLogin(callbackURL: callbackURL)
+            credentials.deleteWebSession()
+            refreshAuthenticationState()
+            await loadCurrentUserIfNeeded(force: true)
+            await refreshNotifications(announce: false)
+            isAwaitingExternalBrowserSignIn = false
+            Log.app.info("LinuxDo external browser authorization completed")
+        } catch {
+            isAwaitingExternalBrowserSignIn = false
+            lastError = userFacingMessage(error)
+            Log.app.error("LinuxDo external browser authorization failed: \(self.lastError ?? "unknown", privacy: .public)")
+        }
+        refreshAuthenticationState()
         isSigningIn = false
     }
 
@@ -277,19 +369,24 @@ final class LinuxDoStore {
 
         do {
             try credentials.saveWebSession(session)
+            refreshAuthenticationState()
             let user = try await client.fetchCurrentUser()
             let csrfToken = try? await client.fetchCSRFToken()
             let enrichedSession = session.with(csrfToken: csrfToken, username: user.username)
             try credentials.saveWebSession(enrichedSession)
+            refreshAuthenticationState()
             currentUser = user
             preferences.linuxDoLastLoginUsername = user.username
+            Log.app.info("LinuxDo web session sign-in succeeded for @\(user.username, privacy: .public)")
             await refreshNotifications(announce: false)
             isSigningIn = false
             return true
         } catch {
             credentials.deleteWebSession()
+            refreshAuthenticationState()
             currentUser = nil
             lastError = userFacingMessage(error)
+            Log.app.error("LinuxDo web session sign-in failed: \(self.lastError ?? "unknown", privacy: .public)")
             isSigningIn = false
             return false
         }
@@ -305,7 +402,16 @@ final class LinuxDoStore {
         preferences.linuxDoNotificationDeliveredIDs = []
         currentUser = nil
         notifications = []
+        refreshAuthenticationState()
         stopNotificationPolling()
+        Log.app.info("LinuxDo signed out")
+    }
+
+    func refreshAuthenticationState() {
+        authenticationStatus = Self.authenticationStatus(from: credentials)
+        if !authenticationStatus.isAuthenticated {
+            currentUser = nil
+        }
     }
 
     func setNotificationsEnabled(_ enabled: Bool) async {
@@ -350,6 +456,7 @@ final class LinuxDoStore {
             preferences.linuxDoNotificationDeliveredIDs = Array(delivered.sorted().suffix(80))
         } catch {
             handle(error)
+            Log.network.error("LinuxDo notification refresh failed: \(self.userFacingMessage(error), privacy: .public)")
         }
     }
 
@@ -376,6 +483,7 @@ final class LinuxDoStore {
             categories = fresh
             try? cache.writeCategories(fresh, now: .now)
         } catch {
+            Log.network.error("LinuxDo categories load failed: \(self.userFacingMessage(error), privacy: .public)")
             handle(error)
         }
     }
@@ -405,6 +513,7 @@ final class LinuxDoStore {
         listStates[feed.key] = state
         do {
             let list = try await client.fetchTopicList(feed: feed, page: 0, now: .now)
+            refreshAuthenticationState()
             state.topics = list.topics
             state.nextPage = list.nextPage
             state.lastFetchedAt = list.fetchedAt
@@ -419,6 +528,7 @@ final class LinuxDoStore {
             state.isLoading = false
             state.isRefreshing = false
             state.error = userFacingMessage(error)
+            Log.network.error("LinuxDo feed load failed for \(feed.key, privacy: .public): \(state.error ?? "unknown", privacy: .public)")
             handle(error)
         }
         listStates[feed.key] = state
@@ -432,6 +542,10 @@ final class LinuxDoStore {
             currentUser = user
             preferences.linuxDoLastLoginUsername = user.username
         } catch {
+            if let clientError = error as? LinuxDoClient.ClientError, clientError == .unauthorized {
+                handle(error)
+                return
+            }
             if preferences.linuxDoLastLoginUsername.isEmpty {
                 lastError = userFacingMessage(error)
             }
@@ -459,6 +573,7 @@ final class LinuxDoStore {
             case .unauthorized:
                 credentials.deleteAPIKey()
                 credentials.deleteWebSession()
+                refreshAuthenticationState()
                 currentUser = nil
                 preferences.linuxDoNotificationsEnabled = false
                 stopNotificationPolling()
@@ -479,5 +594,15 @@ final class LinuxDoStore {
             return authError.description
         }
         return error.localizedDescription
+    }
+
+    private static func authenticationStatus(from credentials: any LinuxDoCredentialStoring) -> LinuxDoAuthenticationStatus {
+        if credentials.readAPIKey() != nil {
+            return .userAPIKey
+        }
+        if let session = credentials.readWebSession(), session.isAuthenticated {
+            return .webSession(username: session.username)
+        }
+        return .guest
     }
 }

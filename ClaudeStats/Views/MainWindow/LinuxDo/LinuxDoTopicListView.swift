@@ -58,7 +58,7 @@ struct LinuxDoTopicListView: View {
             }
             .font(.sora(12))
         } else {
-            ScrollView {
+            AppScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     if let error = state.error {
                         LinuxDoInlineError(message: error)
@@ -151,4 +151,3 @@ struct LinuxDoInlineError: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 }
-

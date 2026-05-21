@@ -1,14 +1,18 @@
 import CryptoKit
 import Foundation
 
-struct SkillsLocalScanner: Sendable {
+protocol SkillsLocalScanning: Sendable {
+    func scan(sessions: [Session], mode: SkillsScanMode) async -> SkillsSnapshot
+}
+
+struct SkillsLocalScanner: SkillsLocalScanning, Sendable {
     private let homeDirectory: URL
 
     init(homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser) {
         self.homeDirectory = homeDirectory
     }
 
-    func scan(sessions: [Session]) async -> SkillsSnapshot {
+    func scan(sessions: [Session], mode: SkillsScanMode = .fullHash) async -> SkillsSnapshot {
         let homeDirectory = homeDirectory
         return await Task.detached(priority: .utility) {
             let roots = Self.defaultRoots(homeDirectory: homeDirectory, sessions: sessions)
@@ -17,7 +21,8 @@ struct SkillsLocalScanner: Sendable {
                 codexPluginCacheURL: homeDirectory.appendingPathComponent(".codex/plugins/cache", isDirectory: true),
                 claudeMarketplaceURL: homeDirectory.appendingPathComponent(".claude/plugins/marketplaces", isDirectory: true),
                 codexConfigURL: homeDirectory.appendingPathComponent(".codex/config.toml"),
-                scannedAt: .now
+                scannedAt: .now,
+                mode: mode
             )
         }.value
     }
@@ -27,18 +32,20 @@ struct SkillsLocalScanner: Sendable {
         codexPluginCacheURL: URL? = nil,
         claudeMarketplaceURL: URL? = nil,
         codexConfigURL: URL? = nil,
-        scannedAt: Date = .now
+        scannedAt: Date = .now,
+        mode: SkillsScanMode = .fullHash
     ) -> SkillsSnapshot {
         var skills: [LocalSkillItem] = []
         for root in roots {
             skills += scanSkillDirectories(
                 root: root,
-                plugin: nil
+                plugin: nil,
+                mode: mode
             )
         }
 
         if let codexPluginCacheURL {
-            skills += scanCodexPluginCache(root: codexPluginCacheURL, configURL: codexConfigURL)
+            skills += scanCodexPluginCache(root: codexPluginCacheURL, configURL: codexConfigURL, mode: mode)
         }
 
         if let claudeMarketplaceURL {
@@ -54,7 +61,7 @@ struct SkillsLocalScanner: Sendable {
                 maxDepth: 9,
                 allowsHiddenDirectories: false
             )
-            skills += scanSkillDirectories(root: root, plugin: nil)
+            skills += scanSkillDirectories(root: root, plugin: nil, mode: mode)
         }
 
         let deduped = dedupeByRealPath(skills)
@@ -94,7 +101,8 @@ struct SkillsLocalScanner: Sendable {
             groups: groups,
             providers: providers,
             summary: summary,
-            scannedAt: scannedAt
+            scannedAt: scannedAt,
+            scanMode: mode
         )
     }
 
@@ -186,7 +194,8 @@ struct SkillsLocalScanner: Sendable {
 
     private static func scanSkillDirectories(
         root: SkillRootDefinition,
-        plugin: SkillPluginMetadata?
+        plugin: SkillPluginMetadata?,
+        mode: SkillsScanMode
     ) -> [LocalSkillItem] {
         guard directoryExists(root.url) else { return [] }
 
@@ -200,7 +209,7 @@ struct SkillsLocalScanner: Sendable {
             guard visited.insert(visitKey).inserted else { continue }
 
             if current.url.appendingPathComponent("SKILL.md").isReadableRegularFile {
-                if let item = makeSkill(from: current.url, root: root, plugin: plugin) {
+                if let item = makeSkill(from: current.url, root: root, plugin: plugin, mode: mode) {
                     output.append(item)
                 }
                 continue
@@ -227,7 +236,8 @@ struct SkillsLocalScanner: Sendable {
     private static func makeSkill(
         from folderURL: URL,
         root: SkillRootDefinition,
-        plugin: SkillPluginMetadata?
+        plugin: SkillPluginMetadata?,
+        mode: SkillsScanMode
     ) -> LocalSkillItem? {
         let skillURL = folderURL.appendingPathComponent("SKILL.md")
         guard let markdown = try? String(contentsOf: skillURL, encoding: .utf8) else { return nil }
@@ -246,7 +256,7 @@ struct SkillsLocalScanner: Sendable {
         let realPath = resolvedPath(folderURL)
         let files = collectFiles(in: folderURL)
         let stats = folderStats(files: files, markdown: markdown)
-        let hash = folderHash(folderURL: folderURL, files: files)
+        let hash = mode == .fullHash ? folderHash(folderURL: folderURL, files: files) : nil
         let id = "\(root.provider.id):\(root.scope.id):\(realPath)"
 
         return LocalSkillItem(
@@ -270,7 +280,7 @@ struct SkillsLocalScanner: Sendable {
             files: files,
             modifiedAt: values?.contentModificationDate ?? files.compactMap(\.modifiedAt).max(),
             contentHash: hash,
-            skillMarkdown: markdown
+            skillMarkdown: nil
         )
     }
 
@@ -332,7 +342,7 @@ struct SkillsLocalScanner: Sendable {
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
-    private static func scanCodexPluginCache(root: URL, configURL: URL?) -> [LocalSkillItem] {
+    private static func scanCodexPluginCache(root: URL, configURL: URL?, mode: SkillsScanMode) -> [LocalSkillItem] {
         guard directoryExists(root) else { return [] }
         let enabledMap = codexPluginEnabledMap(configURL: configURL)
         var output: [LocalSkillItem] = []
@@ -364,7 +374,7 @@ struct SkillsLocalScanner: Sendable {
                     maxDepth: 4,
                     allowsHiddenDirectories: false
                 )
-                output += scanSkillDirectories(root: rootDefinition, plugin: metadata)
+                output += scanSkillDirectories(root: rootDefinition, plugin: metadata, mode: mode)
             }
         }
 

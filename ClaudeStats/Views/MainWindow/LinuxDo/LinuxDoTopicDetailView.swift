@@ -31,7 +31,7 @@ struct LinuxDoTopicDetailView: View {
             VStack(alignment: .leading, spacing: 0) {
                 header(detail: detail, state: state)
                 StxRule()
-                ScrollView {
+                AppScrollView {
                     LazyVStack(alignment: .leading, spacing: 14) {
                         if let error = state.error {
                             LinuxDoInlineError(message: error)
@@ -128,8 +128,8 @@ private struct LinuxDoPostView: View {
             }
 
             VStack(alignment: .leading, spacing: 9) {
-                ForEach(blocks) { block in
-                    LinuxDoContentBlockView(block: block)
+                ForEach(blocks.indices, id: \.self) { index in
+                    LinuxDoContentBlockView(block: blocks[index])
                 }
             }
             .padding(.leading, 36)
@@ -171,10 +171,10 @@ private struct LinuxDoContentBlockView: View {
             .background(Color.black.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
         case .list(let items):
             VStack(alignment: .leading, spacing: 4) {
-                ForEach(items, id: \.self) { item in
+                ForEach(items.indices, id: \.self) { index in
                     HStack(alignment: .top, spacing: 6) {
                         Text("-")
-                        Text(item)
+                        Text(items[index])
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .font(.sora(12))

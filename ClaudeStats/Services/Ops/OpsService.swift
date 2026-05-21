@@ -57,7 +57,7 @@ struct OpsService: OpsServicing {
 
     func loadBrew() async -> OpsBrewSnapshot {
         guard let brewPath = await brewExecutablePath() else { return .missing }
-        let brewEnvironment = readOnlyBrewEnvironment()
+        let brewEnvironment = readOnlyBrewEnvironment(brewPath: brewPath)
 
         async let formulae = runner.run(OpsCommandInvocation(
             executablePath: brewPath,
@@ -127,19 +127,16 @@ struct OpsService: OpsServicing {
         if !servicesResult.isSuccess {
             errors.append("brew services list --json: \(servicesResult.errorText)")
         }
-        let doctorOutput: String
-        if doctorResult.isSuccess {
-            doctorOutput = doctorResult.outputText.isEmpty ? "brew doctor produced no output." : doctorResult.outputText
-        } else {
-            errors.append("brew doctor: \(doctorResult.errorText)")
-            doctorOutput = "Unable to run brew doctor: \(doctorResult.errorText)"
+        let doctorPresentation = Self.brewDoctorPresentation(for: doctorResult)
+        if let doctorError = doctorPresentation.error {
+            errors.append(doctorError)
         }
 
         return OpsBrewSnapshot(
             brewPath: brewPath,
             packages: packages,
             services: serviceItems,
-            doctorOutput: doctorOutput,
+            doctorOutput: doctorPresentation.output,
             lastCommandOutput: nil,
             errors: errors
         )
@@ -381,11 +378,52 @@ struct OpsService: OpsServicing {
         ).first { $0.pid == pid }
     }
 
-    private func readOnlyBrewEnvironment() -> [String: String] {
+    private func readOnlyBrewEnvironment(brewPath: String) -> [String: String] {
+        Self.readOnlyBrewEnvironment(base: environment, brewPath: brewPath)
+    }
+
+    static func readOnlyBrewEnvironment(base environment: [String: String], brewPath: String) -> [String: String] {
         var next = environment
         next["HOMEBREW_NO_AUTO_UPDATE"] = "1"
         next["HOMEBREW_NO_ANALYTICS"] = "1"
+        next["PATH"] = brewAwarePath(existingPath: environment["PATH"], brewPath: brewPath)
         return next
+    }
+
+    static func brewDoctorPresentation(for result: OpsCommandResult) -> (output: String, error: String?) {
+        let output = result.outputText
+        if result.isSuccess {
+            return (output.isEmpty ? "brew doctor produced no output." : output, nil)
+        }
+
+        if !output.isEmpty, result.launchError == nil, !result.timedOut {
+            return (output, nil)
+        }
+
+        let error = result.errorText
+        return ("Unable to run brew doctor: \(error)", "brew doctor: \(error)")
+    }
+
+    private static func brewAwarePath(existingPath: String?, brewPath: String) -> String {
+        let brewBinDirectory = URL(fileURLWithPath: brewPath).deletingLastPathComponent()
+        let brewPrefix = brewBinDirectory.deletingLastPathComponent()
+        let preferredPaths = [
+            brewPrefix.appendingPathComponent("bin", isDirectory: true).path,
+            brewPrefix.appendingPathComponent("sbin", isDirectory: true).path,
+        ]
+        let fallbackPaths = ["/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+        let existingPaths = existingPath?
+            .split(separator: ":")
+            .map(String.init) ?? []
+
+        var seen = Set<String>()
+        return (preferredPaths + existingPaths + fallbackPaths)
+            .filter { path in
+                guard !path.isEmpty, !seen.contains(path) else { return false }
+                seen.insert(path)
+                return true
+            }
+            .joined(separator: ":")
     }
 
     private func brewExecutablePath() async -> String? {

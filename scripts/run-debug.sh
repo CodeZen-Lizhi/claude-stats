@@ -12,6 +12,7 @@ cd "$(dirname "$0")/.."
 DERIVED=/tmp/Codex-stats-build
 APP="$DERIVED/Build/Products/Debug/Claude Stats.app"
 APP_PROCESS_PATTERN="Claude Stats.app/Contents/MacOS/Claude Stats"
+LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
 running_app_pids() {
     pgrep -f "$APP_PROCESS_PATTERN" 2>/dev/null || true
@@ -55,12 +56,27 @@ stop_running_app() {
     return 1
 }
 
+unregister_bundle_if_present() {
+    local bundle="$1"
+    if [[ -d "$bundle" ]]; then
+        echo "==> Unregistering stale Claude Stats bundle: $bundle"
+        "$LSREGISTER" -u "$bundle" 2>/dev/null || true
+    fi
+}
+
+cleanup_stale_registrations() {
+    unregister_bundle_if_present "/Applications/Claude Stats.app"
+    unregister_bundle_if_present "/tmp/claude-stats-build/Build/Products/Debug/Claude Stats.app"
+    unregister_bundle_if_present "/tmp/Codex-stats-build-tests/Build/Products/Debug/Claude Stats.app"
+}
+
 bash scripts/build-ghosttykit.sh
 bash scripts/build-linguist-runtime.sh
 bash scripts/generate.sh
 
 # Kill any running instance so the rebuild can replace it.
 stop_running_app
+cleanup_stale_registrations
 
 xcodebuild \
     -project ClaudeStats.xcodeproj \
@@ -70,8 +86,7 @@ xcodebuild \
     build
 
 # Refresh Launch Services so the just-built bundle is the registered one.
-/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
-    -f "$APP" 2>/dev/null || true
+"$LSREGISTER" -f "$APP" 2>/dev/null || true
 
 open "$APP"
 for ((i = 0; i < 20; i++)); do

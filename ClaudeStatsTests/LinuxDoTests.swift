@@ -161,6 +161,34 @@ struct LinuxDoTests {
         }
     }
 
+    @Test("External browser auth prepares URL and requires a pending request")
+    func externalBrowserAuthLifecycle() throws {
+        let credentials = InMemoryLinuxDoCredentialStore(clientID: "client-browser")
+        let service = LinuxDoAuthService(
+            baseURL: try #require(URL(string: "https://linux.do")),
+            credentials: credentials
+        )
+
+        let url = try service.beginExternalBrowserLogin()
+        let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        let query = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value ?? "") })
+
+        #expect(components.path == "/user-api-key/new")
+        #expect(query["client_id"] == "client-browser")
+        #expect(query["auth_redirect"] == "claude-stats://linuxdo-auth")
+        #expect(service.hasPendingExternalBrowserLogin)
+        #expect(LinuxDoAuthService.isCallbackURL(try #require(URL(string: "claude-stats://linuxdo-auth?payload=abc"))))
+        #expect(LinuxDoAuthService.isCallbackURL(try #require(URL(string: "claude-stats:/linuxdo-auth?payload=abc"))))
+
+        service.cancelExternalBrowserLogin()
+        #expect(!service.hasPendingExternalBrowserLogin)
+        #expect(throws: LinuxDoAuthService.AuthError.noPendingExternalLogin) {
+            try service.completeExternalBrowserLogin(
+                callbackURL: try #require(URL(string: "claude-stats://linuxdo-auth?payload=abc"))
+            )
+        }
+    }
+
     @Test("Cache distinguishes fresh and stale list entries")
     func cacheFreshAndStale() throws {
         let root = try TempDir.make()
@@ -283,6 +311,30 @@ struct LinuxDoTests {
 
         #expect(credentials.readWebSession() == nil)
         #expect(!store.isAuthenticated)
+    }
+
+    @Test("Store caches auth summary for render-time access")
+    func storeCachesAuthSummaryForRenderAccess() {
+        let credentials = CountingLinuxDoCredentialStore(webSession: Self.webSession(username: "tester"))
+        let store = LinuxDoStore(
+            preferences: Self.makePreferences(),
+            credentials: credentials,
+            notificationService: FakeLinuxDoNotificationService(),
+            client: FakeLinuxDoClient()
+        )
+
+        let readsAfterInit = credentials.readCount
+
+        #expect(store.isAuthenticated)
+        #expect(store.authenticationDescription == "Browser session")
+        #expect(store.authenticationStatus.username == "tester")
+        #expect(credentials.readCount == readsAfterInit)
+
+        credentials.deleteWebSession()
+        store.refreshAuthenticationState()
+
+        #expect(!store.isAuthenticated)
+        #expect(store.authenticationDescription == "Guest")
     }
 
     @Test("Client sends API key credentials")
@@ -531,6 +583,63 @@ private final class LinuxDoCallCounter: @unchecked Sendable {
             count += 1
             return count
         }
+    }
+}
+
+private final class CountingLinuxDoCredentialStore: LinuxDoCredentialStoring, @unchecked Sendable {
+    private let lock = NSLock()
+    private var apiKey: String?
+    private var clientID: String
+    private var webSession: LinuxDoWebSession?
+    private var apiKeyReads = 0
+    private var webSessionReads = 0
+
+    init(apiKey: String? = nil, clientID: String = "test-client-id", webSession: LinuxDoWebSession? = nil) {
+        self.apiKey = apiKey
+        self.clientID = clientID
+        self.webSession = webSession
+    }
+
+    var readCount: Int {
+        lock.withLock { apiKeyReads + webSessionReads }
+    }
+
+    func readAPIKey() -> String? {
+        lock.withLock {
+            apiKeyReads += 1
+            return apiKey
+        }
+    }
+
+    func saveAPIKey(_ apiKey: String) {
+        lock.withLock { self.apiKey = apiKey }
+    }
+
+    func deleteAPIKey() {
+        lock.withLock { apiKey = nil }
+    }
+
+    func readWebSession() -> LinuxDoWebSession? {
+        lock.withLock {
+            webSessionReads += 1
+            return webSession
+        }
+    }
+
+    func saveWebSession(_ session: LinuxDoWebSession) {
+        lock.withLock { webSession = session }
+    }
+
+    func deleteWebSession() {
+        lock.withLock { webSession = nil }
+    }
+
+    func readClientID() -> String {
+        lock.withLock { clientID }
+    }
+
+    func saveClientID(_ clientID: String) {
+        lock.withLock { self.clientID = clientID }
     }
 }
 

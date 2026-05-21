@@ -237,8 +237,10 @@ shared code.
 
 - Content scroll regions must use the app-standard native scrollbar helpers:
   `AppScrollView` for SwiftUI content and `AppScrollbars.configure(_:axes:)` for
-  `NSScrollView` wrappers. Let macOS own scrollbar rendering and auto-hide
-  behavior; do not add custom-drawn scrollbar thumbs or suppress native
+  `NSScrollView` wrappers. `AppScrollView` must keep its underlying native
+  `NSScrollView` configured with the same helper so SwiftUI and AppKit scroll
+  regions share the same overlay/autohide behavior. Let macOS own scrollbar
+  rendering; do not add custom-drawn scrollbar thumbs or suppress native
   scrollers for normal content.
 - Compact horizontal affordances such as tab strips, ref pills, and short inline
   code snippets may keep indicators hidden when the surrounding design depends

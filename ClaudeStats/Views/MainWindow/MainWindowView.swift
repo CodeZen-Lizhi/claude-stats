@@ -69,6 +69,8 @@ struct MainWindowView: View {
     @State private var selectedSessionID: String?
     @State private var toggleHovering = false
     @State private var trafficLights = TrafficLightPositioner()
+    @State private var linuxDoWebLoginPresented = false
+    @State private var linuxDoSignInEnabled = true
 
     private var availablePages: [MainPage] {
         var pages: [MainPage] = [.dashboard, .configurations, .usage, .leaderboards]
@@ -168,6 +170,7 @@ struct MainWindowView: View {
                 SidebarColumn(
                     page: $page,
                     availablePages: availablePages,
+                    isLinuxDoActive: mode == .linuxDo,
                     onOpenSettings: openSettings,
                     onOpenLinuxDo: openLinuxDo,
                     onOpenSessions: openSessions,
@@ -178,7 +181,9 @@ struct MainWindowView: View {
             } linuxDoSidebar: {
                 LinuxDoSidebarColumn(
                     store: env.linuxDo,
-                    onExit: closeLinuxDo
+                    signInEnabled: linuxDoSignInEnabled,
+                    onExit: closeLinuxDo,
+                    onSignIn: openLinuxDoSignIn
                 )
             } sessionsSidebar: {
                 SessionSidebarColumn(
@@ -235,8 +240,7 @@ struct MainWindowView: View {
             trafficLights.attach(to: window)
         })
         .onAppear {
-            page = MainPage(rawValue: pageRaw) ?? .dashboard
-            if !availablePages.contains(page) { page = .dashboard }
+            normalizeNavigationState()
             if mode == .sessions { clearInvalidSessionSelection() }
             DockVisibilityCoordinator.shared.acquire()
             Log.app.info("Main window opened on page \(page.rawValue, privacy: .public)")
@@ -245,7 +249,17 @@ struct MainWindowView: View {
             DockVisibilityCoordinator.shared.release()
             Log.app.info("Main window closed")
         }
-        .onChange(of: page) { _, new in pageRaw = new.rawValue }
+        .sheet(isPresented: $linuxDoWebLoginPresented) {
+            LinuxDoWebLoginSheet(store: env.linuxDo, isPresented: $linuxDoWebLoginPresented)
+        }
+        .onChange(of: page) { _, new in
+            guard availablePages.contains(new) else {
+                page = .dashboard
+                pageRaw = MainPage.dashboard.rawValue
+                return
+            }
+            pageRaw = new.rawValue
+        }
         .onChange(of: env.store.lastRefreshedAt) { _, _ in
             if mode == .sessions { clearInvalidSessionSelection() }
         }
@@ -301,7 +315,7 @@ struct MainWindowView: View {
         case .dashboard:
             DashboardView()
         case .linuxDo:
-            LinuxDoWorkspaceView(store: env.linuxDo)
+            DashboardView()
         case .configurations:
             ConfigurationsView()
         case .usage:
@@ -355,7 +369,27 @@ struct MainWindowView: View {
     }
 
     private func openLinuxDo() {
-        transition(to: .linuxDo)
+        linuxDoSignInEnabled = false
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(150))
+            page = availablePages.contains(page) ? page : .dashboard
+            pageRaw = page.rawValue
+            sidebarVisible = true
+            Log.app.info("Opening LinuxDo mode")
+            transition(to: .linuxDo)
+            try? await Task.sleep(for: .seconds(2))
+            guard mode == .linuxDo else { return }
+            linuxDoSignInEnabled = true
+        }
+    }
+
+    private func openLinuxDoSignIn() {
+        guard linuxDoSignInEnabled else {
+            Log.app.info("Ignoring LinuxDo sign-in trigger during mode transition")
+            return
+        }
+        Log.app.info("Opening LinuxDo web sign-in sheet")
+        linuxDoWebLoginPresented = true
     }
 
     private func openConfigs() {
@@ -379,6 +413,7 @@ struct MainWindowView: View {
     }
 
     private func closeLinuxDo() {
+        Log.app.info("Closing LinuxDo mode")
         transition(to: .app)
     }
 
@@ -397,7 +432,7 @@ struct MainWindowView: View {
     private func openFloatingStatsDestination(_ destination: FloatingStatsMainWindowDestination) {
         switch destination {
         case .page(let nextPage):
-            page = nextPage
+            page = availablePages.contains(nextPage) ? nextPage : .dashboard
             transition(to: .app)
         case .network:
             transition(to: .network)
@@ -422,6 +457,25 @@ struct MainWindowView: View {
             withAnimation(MainWindowMotion.modeSwitchAnimation) {
                 modeRaw = nextMode.rawValue
             }
+        }
+    }
+
+    private func normalizeNavigationState() {
+        if MainWindowMode(rawValue: modeRaw) == nil {
+            modeRaw = MainWindowMode.app.rawValue
+        }
+
+        let storedPage = MainPage(rawValue: pageRaw) ?? .dashboard
+        if availablePages.contains(storedPage) {
+            page = storedPage
+            pageRaw = storedPage.rawValue
+        } else {
+            page = .dashboard
+            pageRaw = MainPage.dashboard.rawValue
+        }
+
+        if mode == .linuxDo {
+            sidebarVisible = true
         }
     }
 }

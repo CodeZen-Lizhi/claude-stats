@@ -13,6 +13,7 @@ final class LinuxDoAuthService: NSObject {
         case decryptionFailed
         case nonceMismatch
         case invalidPayload
+        case noPendingExternalLogin
         case saveFailed(String)
 
         var description: String {
@@ -31,6 +32,8 @@ final class LinuxDoAuthService: NSObject {
                 "Linux.do returned a sign-in response for a different request."
             case .invalidPayload:
                 "Linux.do returned an unexpected sign-in response."
+            case .noPendingExternalLogin:
+                "Start LinuxDo browser authorization again from Claude Stats."
             case .saveFailed:
                 "Could not save the Linux.do API key."
             }
@@ -48,6 +51,7 @@ final class LinuxDoAuthService: NSObject {
     private let baseURL: URL
     private var presentationProvider: PresentationProvider?
     private var authSession: ASWebAuthenticationSession?
+    private var pendingExternalLogin: PendingExternalLogin?
 
     init(
         baseURL: URL = URL(string: "https://linux.do")!,
@@ -83,6 +87,50 @@ final class LinuxDoAuthService: NSObject {
         return payload
     }
 
+    func beginExternalBrowserLogin() throws -> URL {
+        let clientID = credentials.readClientID()
+        let nonce = Self.makeNonce()
+        let privateKey = try Self.generatePrivateKey()
+        let publicKeyPEM = try Self.publicKeyPEM(from: privateKey)
+        let authURL = try Self.authURL(
+            baseURL: baseURL,
+            clientID: clientID,
+            nonce: nonce,
+            publicKeyPEM: publicKeyPEM
+        )
+        pendingExternalLogin = PendingExternalLogin(clientID: clientID, nonce: nonce, privateKey: privateKey)
+        return authURL
+    }
+
+    func completeExternalBrowserLogin(callbackURL: URL) throws -> AuthPayload {
+        guard let pendingExternalLogin else {
+            throw AuthError.noPendingExternalLogin
+        }
+
+        let encryptedPayload = try Self.payload(from: callbackURL)
+        let payload = try Self.decryptPayload(encryptedPayload, privateKey: pendingExternalLogin.privateKey)
+        guard payload.nonce == pendingExternalLogin.nonce else {
+            self.pendingExternalLogin = nil
+            throw AuthError.nonceMismatch
+        }
+        do {
+            try credentials.saveAPIKey(payload.key)
+        } catch {
+            throw AuthError.saveFailed(error.localizedDescription)
+        }
+        credentials.saveClientID(pendingExternalLogin.clientID)
+        self.pendingExternalLogin = nil
+        return payload
+    }
+
+    func cancelExternalBrowserLogin() {
+        pendingExternalLogin = nil
+    }
+
+    var hasPendingExternalBrowserLogin: Bool {
+        pendingExternalLogin != nil
+    }
+
     nonisolated static func authURL(
         baseURL: URL,
         clientID: String,
@@ -104,14 +152,18 @@ final class LinuxDoAuthService: NSObject {
     }
 
     nonisolated static func payload(from callbackURL: URL) throws -> String {
-        guard callbackURL.scheme == "claude-stats",
-              callbackURL.host == "linuxdo-auth" || callbackURL.path == "/linuxdo-auth",
+        guard isCallbackURL(callbackURL),
               let components = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false),
               let payload = components.queryItems?.first(where: { $0.name == "payload" })?.value,
               !payload.isEmpty else {
             throw AuthError.missingPayload
         }
         return payload
+    }
+
+    nonisolated static func isCallbackURL(_ url: URL) -> Bool {
+        url.scheme == "claude-stats"
+            && (url.host == "linuxdo-auth" || url.path == "/linuxdo-auth")
     }
 
     nonisolated static func decryptPayload(_ encryptedPayload: String, privateKey: SecKey) throws -> AuthPayload {
@@ -214,6 +266,12 @@ final class LinuxDoAuthService: NSObject {
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
+    }
+
+    private struct PendingExternalLogin {
+        let clientID: String
+        let nonce: String
+        let privateKey: SecKey
     }
 
     private final class PresentationProvider: NSObject, ASWebAuthenticationPresentationContextProviding {

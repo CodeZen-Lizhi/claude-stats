@@ -2,7 +2,9 @@ import SwiftUI
 
 struct LinuxDoSidebarColumn: View {
     @Bindable var store: LinuxDoStore
+    var signInEnabled = true
     var onExit: () -> Void
+    var onSignIn: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -15,7 +17,7 @@ struct LinuxDoSidebarColumn: View {
                 action: onExit
             )
 
-            LinuxDoSourceColumn(store: store)
+            LinuxDoSourceColumn(store: store, signInEnabled: signInEnabled, onSignIn: onSignIn)
                 .frame(maxHeight: .infinity)
         }
         .padding(.bottom, 10)
@@ -24,10 +26,17 @@ struct LinuxDoSidebarColumn: View {
 
 struct LinuxDoSourceColumn: View {
     @Bindable var store: LinuxDoStore
+    var signInEnabled = true
+    var onSignIn: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ScrollView {
+            accountSummary
+                .padding(12)
+
+            StxRule()
+
+            AppScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     searchSection
                     feedSection
@@ -36,10 +45,6 @@ struct LinuxDoSourceColumn: View {
                 }
                 .padding(12)
             }
-
-            StxRule()
-            accountSummary
-                .padding(12)
         }
     }
 
@@ -111,19 +116,61 @@ struct LinuxDoSourceColumn: View {
     }
 
     private var accountSummary: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if let user = store.currentUser {
-                Label("@\(user.username)", systemImage: "person.crop.circle")
-                    .font(.sora(12, weight: .medium))
-            } else {
-                Label(store.isAuthenticated ? "Signed in" : "Guest browsing", systemImage: store.isAuthenticated ? "checkmark.seal" : "person")
-                    .font(.sora(12, weight: .medium))
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: store.isAuthenticated ? "checkmark.seal" : "person")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(store.isAuthenticated ? Color.stxAccent : Color.stxMuted)
+                    .frame(width: 18)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(accountTitle)
+                        .font(.sora(12, weight: .medium))
+                        .lineLimit(1)
+                    Text(accountSubtitle)
+                        .font(.sora(10))
+                        .foregroundStyle(Color.stxMuted)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 0)
             }
-            Text(store.isAuthenticated ? "\(store.authenticationDescription) active. Notifications are available in Settings." : "Public feeds are available without signing in.")
-                .font(.sora(10))
-                .foregroundStyle(Color.stxMuted)
-                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 8) {
+                if store.isSigningIn {
+                    ProgressView()
+                        .controlSize(.small)
+                } else if store.isAuthenticated {
+                    Button("Sign Out") {
+                        Task { await store.signOut() }
+                    }
+                    .controlSize(.small)
+                } else {
+                    Button {
+                        onSignIn()
+                    } label: {
+                        Label("Sign In", systemImage: "person.crop.circle.badge.plus")
+                    }
+                    .controlSize(.small)
+                    .disabled(!signInEnabled)
+                }
+                Spacer(minLength: 0)
+            }
         }
+    }
+
+    private var accountTitle: String {
+        if let user = store.currentUser {
+            return "@\(user.username)"
+        }
+        if let username = store.authenticationStatus.username, !username.isEmpty {
+            return "@\(username)"
+        }
+        return store.isAuthenticated ? "Signed in" : "Guest browsing"
+    }
+
+    private var accountSubtitle: String {
+        store.isAuthenticated ? "\(store.authenticationDescription) active." : "Public feeds do not require sign-in."
     }
 
     private func sourceHeader(_ title: String) -> some View {

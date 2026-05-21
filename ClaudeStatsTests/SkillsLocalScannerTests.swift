@@ -82,6 +82,7 @@ struct SkillsLocalScannerTests {
         #expect(hatch.frontmatter.creator == "Codex")
         #expect(hatch.frontmatter.allowedTools == "imagegen")
         #expect(hatch.description == "Create animated pets")
+        #expect(hatch.contentHash != nil)
 
         let plugin = try #require(snapshot.skills.first { $0.name == "SwiftUI Patterns" })
         #expect(plugin.scope == .plugin)
@@ -89,6 +90,18 @@ struct SkillsLocalScannerTests {
         #expect(plugin.plugin?.version == "2.0.0")
 
         #expect(!snapshot.skills.contains { $0.folderName == "hatch-link" })
+
+        let indexOnlySnapshot = SkillsLocalScanner.scanSync(
+            roots: roots,
+            codexPluginCacheURL: root.appendingPathComponent(".codex/plugins/cache", isDirectory: true),
+            scannedAt: Date(timeIntervalSince1970: 2),
+            mode: .indexOnly
+        )
+        let indexOnlyHatch = try #require(indexOnlySnapshot.groups.first { $0.name == "Hatch Pet" }?.primarySkill)
+        #expect(indexOnlyHatch.stats.referencesCount == 1)
+        #expect(indexOnlyHatch.files.contains { $0.path == "SKILL.md" })
+        #expect(indexOnlyHatch.contentHash == nil)
+        #expect(indexOnlySnapshot.scanMode == .indexOnly)
     }
 
     @Test("Default roots include project cwd skill directories")
