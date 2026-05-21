@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ClaudeStatsIconography
 
 /// Secondary main-window sidebar for browsing provider-scoped sessions.
 struct SessionSidebarColumn: View {
@@ -107,7 +108,7 @@ struct SessionSidebarColumn: View {
                         }
                     }
                 } label: {
-                    Image(systemName: "line.3.horizontal.decrease")
+                    FunctionalIconView(systemSymbolName: "line.3.horizontal.decrease")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Color.stxMuted)
                         .frame(width: 24, height: 22)
@@ -128,7 +129,7 @@ struct SessionSidebarColumn: View {
         @Bindable var vm = vm
 
         return HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
+            FunctionalIconView(systemSymbolName: "magnifyingglass")
                 .font(.system(size: 11))
                 .foregroundStyle(Color.stxMuted)
                 .accessibilityHidden(true)
@@ -140,7 +141,7 @@ struct SessionSidebarColumn: View {
                 Button {
                     vm.searchText = ""
                 } label: {
-                    Image(systemName: "xmark.circle.fill")
+                    FunctionalIconView(systemSymbolName: "xmark.circle.fill")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(Color.stxMuted)
                 }
@@ -254,12 +255,12 @@ private struct ProjectSidebarRow: View {
     var body: some View {
         Button(action: toggle) {
             HStack(spacing: 8) {
-                Image(systemName: "chevron.right")
+                FunctionalIconView(systemSymbolName: "chevron.right")
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(Color.stxMuted)
                     .rotationEffect(.degrees(isExpanded ? 90 : 0))
                     .frame(width: 10)
-                Image(systemName: "folder")
+                FunctionalIconView(systemSymbolName: "folder")
                     .font(.system(size: 12))
                     .foregroundStyle(Color.stxMuted)
                     .frame(width: 16)
@@ -350,7 +351,7 @@ private struct HeaderIconButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: systemName)
+            FunctionalIconView(systemSymbolName: systemName)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(enabled ? Color.stxMuted : Color.stxMuted.opacity(0.35))
                 .frame(width: 24, height: 22)

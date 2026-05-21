@@ -1,4 +1,5 @@
 import SwiftUI
+import ClaudeStatsIconography
 
 /// The status-item content: an icon plus a compact tokens-or-cost figure for
 /// the configured period.
@@ -10,7 +11,7 @@ struct MenuBarLabel: View {
         let summary = env.store.summary(for: prefs.menuBarPeriod, provider: prefs.selectedProvider)
         let value = valueText(summary: summary, metric: prefs.menuBarMetric)
         HStack(spacing: 4) {
-            Image(systemName: "chart.bar.xaxis")
+            FunctionalIconView(systemSymbolName: "chart.bar.xaxis")
             Text(value)
                 .monospacedDigit()
                 .stxNumericValueTransition(value: value)

@@ -1,4 +1,5 @@
 import SwiftUI
+import ClaudeStatsIconography
 
 /// Shared row renderer for git DAG lists. It draws the lane rail, commit node,
 /// refs, author avatar, subject, and relative date while leaving selection
@@ -266,7 +267,7 @@ struct GitBackButton: View {
                 Text("[")
                     .foregroundStyle(Color.stxBracket)
                     .offset(y: -1)
-                Image(systemName: "chevron.left")
+                FunctionalIconView(systemSymbolName: "chevron.left")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(hovering ? Color.primary : Color.stxMuted)
                 Text("]")

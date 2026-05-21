@@ -1,4 +1,5 @@
 import SwiftUI
+import ClaudeStatsIconography
 
 /// Claude-style overview Dashboard: 8 stat cards (4×2) scoped by an
 /// "All / 30d / 7d" range, then a side-by-side row with the 3-month Claude
@@ -365,7 +366,7 @@ struct DashboardView: View {
             if isCTA {
                 Button { openFeaturesSettings() } label: {
                     BracketBox(spacing: 5) {
-                        Label("OPEN FEATURES", systemImage: "switch.2")
+                        FunctionalLabel("OPEN FEATURES", systemSymbolName: "switch.2")
                             .labelStyle(.titleAndIcon)
                             .font(.sora(10))
                             .tracking(0.8)

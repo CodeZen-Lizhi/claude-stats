@@ -1,4 +1,5 @@
 import SwiftUI
+import ClaudeStatsIconography
 
 /// The full detail of one commit — reached via the **MORE** button in
 /// ``GitGraphView``'s expanded row. Shows concise metadata (hash, author,
@@ -220,7 +221,7 @@ struct CommitDetailView: View {
                 }
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "chevron.right")
+                    FunctionalIconView(systemSymbolName: "chevron.right")
                         .font(.system(size: 8, weight: .bold))
                         .foregroundStyle(Color.stxMuted)
                         .frame(width: 10)
@@ -279,7 +280,7 @@ private struct FileRow: View {
                 .font(.sora(10)).foregroundStyle(.primary)
                 .lineLimit(1).truncationMode(.middle)
             Spacer(minLength: 4)
-            Image(systemName: "chevron.left.forwardslash.chevron.right")
+            FunctionalIconView(systemSymbolName: "chevron.left.forwardslash.chevron.right")
                 .font(.system(size: 8, weight: .bold))
                 .foregroundStyle(Color.stxMuted)
                 .opacity(hovering ? 1 : 0)

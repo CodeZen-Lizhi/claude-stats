@@ -1,4 +1,5 @@
 import SwiftUI
+import ClaudeStatsIconography
 
 /// Provider-scoped sessions landing page shown when the user enters Sessions
 /// from the main sidebar. Selecting a concrete transcript in the secondary
@@ -54,7 +55,7 @@ struct SessionsOverviewDetailView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
-                Image(systemName: provider.iconSystemName)
+                FunctionalIconView(systemSymbolName: provider.iconSystemName)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(provider.accentColor)
                 Text("SESSIONS")
@@ -74,10 +75,7 @@ struct SessionsOverviewDetailView: View {
 
     private var emptyState: some View {
         ContentUnavailableView {
-            Label(
-                env.store.isLoading ? "Scanning Sessions" : "No Sessions",
-                systemImage: env.store.isLoading ? "arrow.triangle.2.circlepath" : "tray"
-            )
+            FunctionalLabel(env.store.isLoading ? "Scanning Sessions" : "No Sessions", systemSymbolName: env.store.isLoading ? "arrow.triangle.2.circlepath" : "tray")
         } description: {
             Text(emptyStateMessage)
         }

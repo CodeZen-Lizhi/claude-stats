@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ClaudeStatsIconography
 
 /// Wide Activity page for the main window. The compact menu-bar panel and share
 /// export keep using `AIActivityView`; this view owns the desktop layout.
@@ -132,7 +133,7 @@ struct MainActivityView: View {
                     .font(.sora(13, weight: .semibold))
                     .tracking(1.0)
                 Spacer()
-                Image(systemName: "lock.shield")
+                FunctionalIconView(systemSymbolName: "lock.shield")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.stxMuted)
                     .accessibilityHidden(true)

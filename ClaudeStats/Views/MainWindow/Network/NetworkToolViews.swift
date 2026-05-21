@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ClaudeStatsIconography
 
 struct NetworkProxyView: View {
     @Bindable var store: NetworkDebuggerStore
@@ -33,7 +34,7 @@ struct NetworkProxyView: View {
     private var localProxyCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
-                Label("Local Proxy", systemImage: "network")
+                FunctionalLabel("Local Proxy", systemSymbolName: "network")
                     .font(.sora(14, weight: .semibold))
                 NetworkStatusBadge(
                     text: store.statusMessage,
@@ -54,21 +55,21 @@ struct NetworkProxyView: View {
                 Button {
                     store.startCapture()
                 } label: {
-                    Label("Start Capture", systemImage: "play.fill")
+                    FunctionalLabel("Start Capture", systemSymbolName: "play.fill")
                 }
                 .disabled(store.captureStatus.isListening)
 
                 Button {
                     store.stopCapture()
                 } label: {
-                    Label("Stop", systemImage: "stop.fill")
+                    FunctionalLabel("Stop", systemSymbolName: "stop.fill")
                 }
                 .disabled(!store.captureStatus.isListening)
 
                 Button {
                     store.clearFlows()
                 } label: {
-                    Label("Clear", systemImage: "trash")
+                    FunctionalLabel("Clear", systemSymbolName: "trash")
                 }
                 .disabled(store.flows.isEmpty)
 
@@ -82,7 +83,7 @@ struct NetworkProxyView: View {
     private var systemProxyCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
-                Label("System Proxy", systemImage: "switch.2")
+                FunctionalLabel("System Proxy", systemSymbolName: "switch.2")
                     .font(.sora(14, weight: .semibold))
                 NetworkStatusBadge(
                     text: store.systemProxyStatus.isEnabled ? "Enabled" : "Idle",
@@ -94,7 +95,7 @@ struct NetworkProxyView: View {
 
             HStack(alignment: .center, spacing: 12) {
                 Toggle(isOn: $store.autoEnableSystemProxyOnStart) {
-                    Label("Auto-enable on start", systemImage: "bolt.horizontal")
+                    FunctionalLabel("Auto-enable on start", systemSymbolName: "bolt.horizontal")
                         .font(.sora(11, weight: .medium))
                 }
                 .toggleStyle(.checkbox)
@@ -104,14 +105,14 @@ struct NetworkProxyView: View {
                 Button {
                     store.enableSystemProxy()
                 } label: {
-                    Label("Enable", systemImage: "switch.2")
+                    FunctionalLabel("Enable", systemSymbolName: "switch.2")
                 }
                 .disabled(!store.captureStatus.isListening || store.systemProxyStatus.isEnabled || store.isSystemProxyWorking)
 
                 Button {
                     store.disableSystemProxy()
                 } label: {
-                    Label("Restore", systemImage: "arrow.uturn.backward")
+                    FunctionalLabel("Restore", systemSymbolName: "arrow.uturn.backward")
                 }
                 .disabled(!store.systemProxyStatus.isEnabled || store.isSystemProxyWorking)
             }
@@ -132,7 +133,7 @@ struct NetworkProxyView: View {
 
     private var commandsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Manual Setup", systemImage: "terminal")
+            FunctionalLabel("Manual Setup", systemSymbolName: "terminal")
                 .font(.sora(14, weight: .semibold))
 
             Text("Use these commands when system proxy cannot be changed automatically.")
@@ -174,7 +175,7 @@ struct NetworkUpstreamView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
-                Label("Upstream Proxy", systemImage: "arrow.triangle.branch")
+                FunctionalLabel("Upstream Proxy", systemSymbolName: "arrow.triangle.branch")
                     .font(.sora(14, weight: .semibold))
                 NetworkStatusBadge(
                     text: upstreamBadgeText,
@@ -224,14 +225,14 @@ struct NetworkUpstreamView: View {
                 Button {
                     store.applyCurrentUpstreamProxy()
                 } label: {
-                    Label("Apply Route", systemImage: "arrow.triangle.2.circlepath")
+                    FunctionalLabel("Apply Route", systemSymbolName: "arrow.triangle.2.circlepath")
                 }
                 .disabled(store.isUpstreamProxyWorking)
 
                 Button {
                     store.testUpstreamProxy()
                 } label: {
-                    Label("Test", systemImage: "checkmark.circle")
+                    FunctionalLabel("Test", systemSymbolName: "checkmark.circle")
                 }
                 .disabled(store.isUpstreamProxyWorking)
             }
@@ -285,12 +286,12 @@ struct NetworkUpstreamView: View {
                 Button {
                     store.createUpstreamEnvironment()
                 } label: {
-                    Label("New Env", systemImage: "plus")
+                    FunctionalLabel("New Env", systemSymbolName: "plus")
                 }
                 Button {
                     store.duplicateSelectedUpstreamEnvironment()
                 } label: {
-                    Label("Duplicate", systemImage: "doc.on.doc")
+                    FunctionalLabel("Duplicate", systemSymbolName: "doc.on.doc")
                 }
             }
 
@@ -313,18 +314,18 @@ struct NetworkUpstreamView: View {
                 Button {
                     store.createManualUpstreamProfileFromCurrentFields()
                 } label: {
-                    Label("Save Manual as Profile", systemImage: "square.and.arrow.down")
+                    FunctionalLabel("Save Manual as Profile", systemSymbolName: "square.and.arrow.down")
                 }
                 Button {
                     store.saveDetectedSystemProxyAsProfile()
                 } label: {
-                    Label("Save Detected System Proxy", systemImage: "wand.and.stars")
+                    FunctionalLabel("Save Detected System Proxy", systemSymbolName: "wand.and.stars")
                 }
                 Spacer()
                 Button {
                     store.saveUpstreamEnvironments()
                 } label: {
-                    Label("Save Environments", systemImage: "checkmark.circle")
+                    FunctionalLabel("Save Environments", systemSymbolName: "checkmark.circle")
                 }
             }
             .font(.sora(11, weight: .medium))
@@ -341,7 +342,7 @@ struct NetworkUpstreamView: View {
                     store.selectUpstreamProfile(profile.id)
                 } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: profile.settings.isEnabled ? "arrow.triangle.branch" : "arrow.forward")
+                        FunctionalIconView(systemSymbolName: profile.settings.isEnabled ? "arrow.triangle.branch" : "arrow.forward")
                             .foregroundStyle(profile.settings.isEnabled ? Color.stxAccent : Color.stxMuted)
                             .frame(width: 16)
                         VStack(alignment: .leading, spacing: 2) {
@@ -356,12 +357,12 @@ struct NetworkUpstreamView: View {
                         }
                         Spacer()
                         if profile.credentialRef?.hasSecretReference == true {
-                            Image(systemName: "key.fill")
+                            FunctionalIconView(systemSymbolName: "key.fill")
                                 .font(.system(size: 10))
                                 .foregroundStyle(Color.stxMuted)
                         }
                         if profile.isAutoDetected {
-                            Image(systemName: "wand.and.stars")
+                            FunctionalIconView(systemSymbolName: "wand.and.stars")
                                 .font(.system(size: 10))
                                 .foregroundStyle(Color.stxMuted)
                         }
@@ -393,27 +394,27 @@ struct NetworkUpstreamView: View {
                 Button {
                     store.moveSelectedUpstreamRouteRule(offset: -1)
                 } label: {
-                    Image(systemName: "chevron.up")
+                    FunctionalIconView(systemSymbolName: "chevron.up")
                 }
                 .buttonStyle(.plain)
                 .disabled(store.selectedUpstreamRouteRule == nil)
                 Button {
                     store.moveSelectedUpstreamRouteRule(offset: 1)
                 } label: {
-                    Image(systemName: "chevron.down")
+                    FunctionalIconView(systemSymbolName: "chevron.down")
                 }
                 .buttonStyle(.plain)
                 .disabled(store.selectedUpstreamRouteRule == nil)
                 Button {
                     store.createUpstreamRouteRule()
                 } label: {
-                    Image(systemName: "plus")
+                    FunctionalIconView(systemSymbolName: "plus")
                 }
                 .buttonStyle(.plain)
                 Button {
                     store.deleteSelectedUpstreamRouteRule()
                 } label: {
-                    Image(systemName: "trash")
+                    FunctionalIconView(systemSymbolName: "trash")
                 }
                 .buttonStyle(.plain)
                 .disabled(store.selectedUpstreamRouteRule == nil)
@@ -523,7 +524,7 @@ struct NetworkUpstreamView: View {
         switch store.upstreamProxyMode {
         case .automatic:
             Toggle(isOn: $store.askBeforeChainingExistingSystemProxy) {
-                Label("Ask before chaining existing system proxy", systemImage: "questionmark.bubble")
+                FunctionalLabel("Ask before chaining existing system proxy", systemSymbolName: "questionmark.bubble")
                     .font(.sora(11, weight: .medium))
             }
             .toggleStyle(.checkbox)
@@ -603,7 +604,7 @@ struct NetworkUpstreamView: View {
     private func routeProbePanel(_ probe: NetworkRouteProbeResult) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label("Route Diagnostics", systemImage: probe.isReachable ? "checkmark.seal" : "exclamationmark.triangle")
+                FunctionalLabel("Route Diagnostics", systemSymbolName: probe.isReachable ? "checkmark.seal" : "exclamationmark.triangle")
                     .font(.sora(12, weight: .semibold))
                     .foregroundStyle(probe.isReachable ? Color.green : Color.red)
                 Spacer()
@@ -615,7 +616,7 @@ struct NetworkUpstreamView: View {
             }
             ForEach(probe.steps) { step in
                 HStack(spacing: 9) {
-                    Image(systemName: probeStepSymbol(step.status))
+                    FunctionalIconView(systemSymbolName: probeStepSymbol(step.status))
                         .foregroundStyle(probeStepColor(step.status))
                         .frame(width: 16)
                     VStack(alignment: .leading, spacing: 2) {
@@ -716,7 +717,7 @@ struct NetworkHelperView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
-                Label("Privileged Helper", systemImage: "wrench.and.screwdriver")
+                FunctionalLabel("Privileged Helper", systemSymbolName: "wrench.and.screwdriver")
                     .font(.sora(14, weight: .semibold))
                 NetworkStatusBadge(
                     text: helperBadgeText,
@@ -727,7 +728,7 @@ struct NetworkHelperView: View {
                 Button {
                     store.refreshHelperStatus()
                 } label: {
-                    Label("Check", systemImage: "arrow.clockwise")
+                    FunctionalLabel("Check", systemSymbolName: "arrow.clockwise")
                 }
                 .font(.sora(10, weight: .medium))
                 .disabled(store.isHelperWorking)
@@ -752,7 +753,7 @@ struct NetworkHelperView: View {
                 Button {
                     store.performHelperAction(action)
                 } label: {
-                    Label(action.title, systemImage: helperActionSymbol(action))
+                    FunctionalLabel(action.title, systemSymbolName: helperActionSymbol(action))
                 }
                 .disabled(store.isHelperWorking)
             }
@@ -760,14 +761,14 @@ struct NetworkHelperView: View {
             Button {
                 store.performHelperAction(.reinstall)
             } label: {
-                Label("Reinstall", systemImage: "arrow.clockwise.circle")
+                FunctionalLabel("Reinstall", systemSymbolName: "arrow.clockwise.circle")
             }
             .disabled(!canRunPrivilegedHelperAction || store.helperState.installedVersion == nil || store.isHelperWorking)
 
             Button {
                 store.performHelperAction(.openSettings)
             } label: {
-                Label("Open Settings", systemImage: "gear")
+                FunctionalLabel("Open Settings", systemSymbolName: "gear")
             }
             .disabled(!canRunPrivilegedHelperAction || store.isHelperWorking)
         }
@@ -830,7 +831,7 @@ private struct NetworkStatusBadge: View {
     var tint: Color
 
     var body: some View {
-        Label(text, systemImage: symbol)
+        FunctionalLabel(text, systemSymbolName: symbol)
             .font(.sora(10, weight: .semibold))
             .foregroundStyle(tint)
             .lineLimit(1)
@@ -856,7 +857,7 @@ private struct NetworkInfoGrid: View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
             ForEach(items, id: \.self) { item in
                 HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: item.symbol)
+                    FunctionalIconView(systemSymbolName: item.symbol)
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(Color.stxMuted)
                         .frame(width: 16)
@@ -882,7 +883,7 @@ private struct NetworkInlineMessage: View {
     var symbol: String
 
     var body: some View {
-        Label(text, systemImage: symbol)
+        FunctionalLabel(text, systemSymbolName: symbol)
             .font(.sora(11))
             .foregroundStyle(tint)
             .lineLimit(2)
@@ -904,7 +905,7 @@ struct NetworkCertificatesView: View {
     private var caCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Label("Root CA", systemImage: "checkmark.shield")
+                FunctionalLabel("Root CA", systemSymbolName: "checkmark.shield")
                     .font(.sora(14, weight: .semibold))
                 Spacer()
                 Text(store.certificateState.isTrusted ? "Trusted" : "Not trusted")
@@ -927,14 +928,14 @@ struct NetworkCertificatesView: View {
                 Button {
                     store.generateRootCA()
                 } label: {
-                    Label("Generate Root CA", systemImage: "plus")
+                    FunctionalLabel("Generate Root CA", systemSymbolName: "plus")
                 }
                 .disabled(store.isCertificateWorking)
 
                 Button {
                     store.trustRootCA()
                 } label: {
-                    Label("Trust in Keychain", systemImage: "key")
+                    FunctionalLabel("Trust in Keychain", systemSymbolName: "key")
                 }
                 .disabled(store.certificateState.rootCAPath == nil || store.isCertificateWorking)
             }
@@ -952,7 +953,7 @@ struct NetworkCertificatesView: View {
     private var mitmCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Label("HTTPS MITM", systemImage: "lock.open")
+                FunctionalLabel("HTTPS MITM", systemSymbolName: "lock.open")
                     .font(.sora(14, weight: .semibold))
                 Spacer()
                 Toggle("", isOn: $store.certificateState.isMITMEnabled)
@@ -970,7 +971,7 @@ struct NetworkCertificatesView: View {
                     store.addSSLHost(newHost)
                     newHost = ""
                 } label: {
-                    Image(systemName: "plus")
+                    FunctionalIconView(systemSymbolName: "plus")
                 }
                 .help("Add host")
             }
@@ -988,7 +989,7 @@ struct NetworkCertificatesView: View {
                             Button {
                                 store.removeSSLHost(host)
                             } label: {
-                                Image(systemName: "xmark")
+                                FunctionalIconView(systemSymbolName: "xmark")
                                     .font(.system(size: 9, weight: .bold))
                             }
                             .buttonStyle(.plain)
@@ -1028,7 +1029,7 @@ struct NetworkRulesView: View {
     private var rulesList: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("Rules", systemImage: "slider.horizontal.3")
+                FunctionalLabel("Rules", systemSymbolName: "slider.horizontal.3")
                     .font(.sora(14, weight: .semibold))
                 Spacer()
                 Menu {
@@ -1036,7 +1037,7 @@ struct NetworkRulesView: View {
                         Button(kind.title) { store.createRule(kind: kind) }
                     }
                 } label: {
-                    Image(systemName: "plus")
+                    FunctionalIconView(systemSymbolName: "plus")
                 }
                 .menuStyle(.borderlessButton)
             }
@@ -1051,12 +1052,12 @@ struct NetworkRulesView: View {
                 Button {
                     store.exportRulesToPasteboard()
                 } label: {
-                    Label("Export", systemImage: "square.and.arrow.up")
+                    FunctionalLabel("Export", systemSymbolName: "square.and.arrow.up")
                 }
                 Button {
                     store.importRulesFromPasteboard()
                 } label: {
-                    Label("Import", systemImage: "square.and.arrow.down")
+                    FunctionalLabel("Import", systemSymbolName: "square.and.arrow.down")
                 }
             }
             .font(.sora(10, weight: .medium))
@@ -1211,7 +1212,7 @@ struct NetworkRulesView: View {
                 Button {
                     chooseLocalPath()
                 } label: {
-                    Label("Choose", systemImage: "folder")
+                    FunctionalLabel("Choose", systemSymbolName: "folder")
                 }
             }
             HStack {
@@ -1268,7 +1269,7 @@ struct NetworkRulesView: View {
                     Button {
                         removeHeaderOperation(operation.id)
                     } label: {
-                        Image(systemName: "minus.circle")
+                        FunctionalIconView(systemSymbolName: "minus.circle")
                     }
                     .buttonStyle(.plain)
                 }
@@ -1276,7 +1277,7 @@ struct NetworkRulesView: View {
             Button {
                 addHeaderOperation()
             } label: {
-                Label("Add Header Operation", systemImage: "plus.circle")
+                FunctionalLabel("Add Header Operation", systemSymbolName: "plus.circle")
             }
             .buttonStyle(.borderless)
         }
@@ -1308,20 +1309,20 @@ struct NetworkRulesView: View {
             Button {
                 store.saveSelectedRule()
             } label: {
-                Label("Save", systemImage: "checkmark")
+                FunctionalLabel("Save", systemSymbolName: "checkmark")
             }
             .keyboardShortcut("s", modifiers: [.command])
 
             Button {
                 store.duplicateSelectedRule()
             } label: {
-                Label("Duplicate", systemImage: "plus.square.on.square")
+                FunctionalLabel("Duplicate", systemSymbolName: "plus.square.on.square")
             }
 
             Button(role: .destructive) {
                 store.deleteSelectedRule()
             } label: {
-                Label("Delete", systemImage: "trash")
+                FunctionalLabel("Delete", systemSymbolName: "trash")
             }
 
             Spacer()
@@ -1329,17 +1330,17 @@ struct NetworkRulesView: View {
             Button {
                 store.moveSelectedRuleUp()
             } label: {
-                Image(systemName: "arrow.up")
+                FunctionalIconView(systemSymbolName: "arrow.up")
             }
             Button {
                 store.moveSelectedRuleDown()
             } label: {
-                Image(systemName: "arrow.down")
+                FunctionalIconView(systemSymbolName: "arrow.down")
             }
             Button {
                 store.testSelectedRuleAgainstSelectedFlow()
             } label: {
-                Label("Test", systemImage: "checkmark.circle")
+                FunctionalLabel("Test", systemSymbolName: "checkmark.circle")
             }
         }
         .font(.sora(10, weight: .medium))
@@ -1356,18 +1357,18 @@ struct NetworkRulesView: View {
     private var pluginsPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("Plugins", systemImage: "puzzlepiece.extension")
+                FunctionalLabel("Plugins", systemSymbolName: "puzzlepiece.extension")
                     .font(.sora(14, weight: .semibold))
                 Spacer()
                 Button {
                     installPlugin()
                 } label: {
-                    Label("Install", systemImage: "square.and.arrow.down")
+                    FunctionalLabel("Install", systemSymbolName: "square.and.arrow.down")
                 }
                 Button {
                     store.refreshPlugins()
                 } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
+                    FunctionalLabel("Refresh", systemSymbolName: "arrow.clockwise")
                 }
             }
             .font(.sora(10, weight: .medium))
@@ -1397,13 +1398,13 @@ struct NetworkRulesView: View {
     private var breakpointsPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("Breakpoints", systemImage: "pause.circle")
+                FunctionalLabel("Breakpoints", systemSymbolName: "pause.circle")
                     .font(.sora(14, weight: .semibold))
                 Spacer()
                 Button {
                     store.refreshBreakpoints()
                 } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
+                    FunctionalLabel("Refresh", systemSymbolName: "arrow.clockwise")
                 }
             }
             .font(.sora(10, weight: .medium))
@@ -1461,17 +1462,17 @@ struct NetworkRulesView: View {
                 Button {
                     store.resolveBreakpoint(item, decision: .execute)
                 } label: {
-                    Label("Continue", systemImage: "play.fill")
+                    FunctionalLabel("Continue", systemSymbolName: "play.fill")
                 }
                 Button(role: .destructive) {
                     store.resolveBreakpoint(item, decision: .abort)
                 } label: {
-                    Label("Drop", systemImage: "xmark")
+                    FunctionalLabel("Drop", systemSymbolName: "xmark")
                 }
                 Button {
                     store.resolveBreakpoint(item, decision: .cancel)
                 } label: {
-                    Label("Cancel", systemImage: "arrow.uturn.backward")
+                    FunctionalLabel("Cancel", systemSymbolName: "arrow.uturn.backward")
                 }
                 Spacer()
             }
@@ -1503,13 +1504,13 @@ struct NetworkRulesView: View {
             Button {
                 store.reloadPlugin(plugin)
             } label: {
-                Image(systemName: "arrow.clockwise")
+                FunctionalIconView(systemSymbolName: "arrow.clockwise")
             }
             .buttonStyle(.plain)
             Button(role: .destructive) {
                 store.deletePlugin(plugin)
             } label: {
-                Image(systemName: "trash")
+                FunctionalIconView(systemSymbolName: "trash")
             }
             .buttonStyle(.plain)
         }

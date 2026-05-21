@@ -1,6 +1,7 @@
 import Defaults
 import GhosttyEmbed
 import SwiftUI
+import ClaudeStatsIconography
 
 @MainActor
 final class TerminalManager: ObservableObject {
@@ -73,7 +74,7 @@ struct NotchTerminalView: View {
         VStack(spacing: 0) {
             if enableTerminalFeature {
                 HStack {
-                    Image(systemName: "apple.terminal")
+                    FunctionalIconView(systemSymbolName: "apple.terminal")
                         .foregroundStyle(.secondary)
                         .font(.system(size: 11))
 
@@ -87,7 +88,7 @@ struct NotchTerminalView: View {
                     Button {
                         terminalManager.restartShell()
                     } label: {
-                        Image(systemName: "arrow.counterclockwise")
+                        FunctionalIconView(systemSymbolName: "arrow.counterclockwise")
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
                     }
@@ -116,7 +117,7 @@ struct NotchTerminalView: View {
                     }
             } else {
                 VStack(spacing: 8) {
-                    Image(systemName: "apple.terminal")
+                    FunctionalIconView(systemSymbolName: "apple.terminal")
                         .font(.system(size: 28))
                         .foregroundStyle(.secondary)
 

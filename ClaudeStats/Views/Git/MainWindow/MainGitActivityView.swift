@@ -1,4 +1,5 @@
 import SwiftUI
+import ClaudeStatsIconography
 
 /// Main-window Git surface. Unlike the compact menu-bar pane, this view is a
 /// repository-oriented workspace with stable selection and a denser desktop
@@ -247,7 +248,7 @@ private struct GitRepoSelectionRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 9) {
-                Image(systemName: symbol)
+                FunctionalIconView(systemSymbolName: symbol)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(isSelected ? Color.stxAccent : Color.stxMuted)
                     .frame(width: 16)
@@ -791,7 +792,7 @@ private struct GitRecentCommitsTable: View {
                 isExpanded.toggle()
             }
         } label: {
-            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+            FunctionalIconView(systemSymbolName: isExpanded ? "chevron.up" : "chevron.down")
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(Color.stxMuted)
                 .frame(width: 18, height: 18)
@@ -922,7 +923,7 @@ private struct MainGitMineToggle: View {
             withAnimation(.easeOut(duration: 0.18)) { onlyMyCommits.toggle() }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: onlyMyCommits ? "checkmark.square.fill" : "square")
+                FunctionalIconView(systemSymbolName: onlyMyCommits ? "checkmark.square.fill" : "square")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(onlyMyCommits ? Color.stxAccent : Color.stxMuted)
                 Text("My Commits")

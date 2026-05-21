@@ -1,4 +1,5 @@
 import SwiftUI
+import ClaudeStatsIconography
 
 struct ReleaseHistoryPanel: View {
     let entries: [ReleaseHistoryEntry]
@@ -40,7 +41,7 @@ struct ReleaseHistoryPanel: View {
             Spacer(minLength: 12)
 
             Button(action: onClose) {
-                Image(systemName: "xmark")
+                FunctionalIconView(systemSymbolName: "xmark")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.stxMuted)
                     .frame(width: 28, height: 28)

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ClaudeStatsIconography
 
 /// Top-level page shown in the main window's detail column. Settings live in
 /// their own main-window mode, not as a `MainPage`.
@@ -292,7 +293,7 @@ struct MainWindowView: View {
         Button {
             withAnimation(.easeInOut(duration: 0.22)) { sidebarVisible.toggle() }
         } label: {
-            Image(systemName: "sidebar.left")
+            FunctionalIconView(systemSymbolName: "sidebar.left")
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(toggleHovering ? .primary : Color.stxMuted)
                 .frame(width: 24, height: 22)

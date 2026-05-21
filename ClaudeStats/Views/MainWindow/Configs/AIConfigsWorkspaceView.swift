@@ -1,4 +1,5 @@
 import SwiftUI
+import ClaudeStatsIconography
 
 struct AIConfigsWorkspaceView: View {
     let section: AIConfigsSection
@@ -95,7 +96,7 @@ struct AIConfigsWorkspaceView: View {
 
     private func toolbar(projectCount: Int, documentCount: Int) -> some View {
         HStack(spacing: 10) {
-            Label(section.title, systemImage: section.symbol)
+            FunctionalLabel(section.title, systemSymbolName: section.symbol)
                 .font(.sora(12, weight: .semibold))
                 .foregroundStyle(Color.stxAccent)
             Text("\(projectCount) scopes")
@@ -110,7 +111,7 @@ struct AIConfigsWorkspaceView: View {
             Button {
                 refresh()
             } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
+                FunctionalLabel("Refresh", systemSymbolName: "arrow.clockwise")
             }
             .controlSize(.small)
             .disabled(env.aiConfigs.isLoading)
@@ -214,7 +215,7 @@ private struct AIConfigsBrowserPane: View {
 
     private func paneHeader(_ title: String, symbol: String) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: symbol)
+            FunctionalIconView(systemSymbolName: symbol)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Color.stxMuted)
             Text(title)
@@ -234,7 +235,7 @@ private struct AIConfigProjectRow: View {
     var body: some View {
         Button(action: select) {
             HStack(alignment: .top, spacing: 10) {
-                Image(systemName: project.configsIconName)
+                FunctionalIconView(systemSymbolName: project.configsIconName)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(isSelected ? Color.stxAccent : Color.stxMuted)
                     .frame(width: 18)
@@ -285,7 +286,7 @@ private struct AIConfigDocumentRow: View {
     var body: some View {
         Button(action: select) {
             HStack(alignment: .top, spacing: 9) {
-                Image(systemName: document.kind.symbol)
+                FunctionalIconView(systemSymbolName: document.kind.symbol)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(iconColor)
                     .frame(width: 16)

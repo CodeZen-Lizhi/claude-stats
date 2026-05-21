@@ -1,4 +1,5 @@
 import SwiftUI
+import ClaudeStatsIconography
 import AppKit
 
 /// The main window's left column. Two regions stacked vertically:
@@ -159,7 +160,7 @@ struct SidebarRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Image(systemName: symbol)
+                FunctionalIconView(systemSymbolName: symbol)
                     .font(.system(size: 13, weight: .medium))
                     .frame(width: 18)
                     .foregroundStyle(isSelected ? Color.stxAccent : Color.stxMuted)
@@ -174,7 +175,7 @@ struct SidebarRow: View {
                         .lineLimit(1)
                 }
                 if let trailingSymbol {
-                    Image(systemName: trailingSymbol)
+                    FunctionalIconView(systemSymbolName: trailingSymbol)
                         .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(isSelected ? Color.stxAccent : Color.stxMuted)
                         .opacity(showsTrailingOnHover ? (hovering ? 1 : 0) : 1)

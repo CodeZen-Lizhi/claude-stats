@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ClaudeStatsIconography
 
 struct ConfigurationsView: View {
     @Environment(AppEnvironment.self) private var env
@@ -133,7 +134,7 @@ struct ConfigurationsView: View {
                 Button {
                     Task { await vm.importCurrent(keyStorageMode: env.preferences.apiProviderKeyStorageMode) }
                 } label: {
-                    Label("Import Current", systemImage: "square.and.arrow.down")
+                    FunctionalLabel("Import Current", systemSymbolName: "square.and.arrow.down")
                 }
                 .controlSize(.small)
                 .disabled(vm.isWorking)
@@ -141,15 +142,15 @@ struct ConfigurationsView: View {
                     Button {
                         Task { await vm.addProvider(keyStorageMode: env.preferences.apiProviderKeyStorageMode) }
                     } label: {
-                        Label("Provider", systemImage: "plus")
+                        FunctionalLabel("Provider", systemSymbolName: "plus")
                     }
                     Button {
                         Task { await vm.addUniversalProvider(keyStorageMode: env.preferences.apiProviderKeyStorageMode) }
                     } label: {
-                        Label("Universal Provider", systemImage: "point.3.connected.trianglepath.dotted")
+                        FunctionalLabel("Universal Provider", systemSymbolName: "point.3.connected.trianglepath.dotted")
                     }
                 } label: {
-                    Image(systemName: "plus")
+                    FunctionalIconView(systemSymbolName: "plus")
                         .frame(width: 22, height: 22)
                 }
                 .menuStyle(.button)
@@ -363,7 +364,7 @@ struct ConfigurationsView: View {
             Button(role: .destructive) {
                 Task { await vm.deleteSelectedProvider(keyStorageMode: env.preferences.apiProviderKeyStorageMode) }
             } label: {
-                actionLabel("Delete", systemImage: "trash", showLabels: showLabels)
+                actionFunctionalLabel("Delete", systemSymbolName: "trash", showLabels: showLabels)
             }
             .fixedSize(horizontal: showLabels, vertical: false)
             .disabled(!vm.canDeleteSelectedProvider || vm.isWorking)
@@ -374,7 +375,7 @@ struct ConfigurationsView: View {
             Button {
                 vm.resetDraft(keyStorageMode: env.preferences.apiProviderKeyStorageMode)
             } label: {
-                actionLabel("Revert", systemImage: "arrow.uturn.backward", showLabels: showLabels)
+                actionFunctionalLabel("Revert", systemSymbolName: "arrow.uturn.backward", showLabels: showLabels)
             }
             .fixedSize(horizontal: showLabels, vertical: false)
             .disabled(!vm.draftIsDirty || vm.isWorking)
@@ -385,7 +386,7 @@ struct ConfigurationsView: View {
                     await vm.saveDraft(rawMode: editorMode == .raw, keyStorageMode: env.preferences.apiProviderKeyStorageMode)
                 }
             } label: {
-                actionLabel("Save Provider", systemImage: "square.and.arrow.down", showLabels: showLabels)
+                actionFunctionalLabel("Save Provider", systemSymbolName: "square.and.arrow.down", showLabels: showLabels)
             }
             .fixedSize(horizontal: showLabels, vertical: false)
             .disabled(!vm.canSaveSelectedProvider || !vm.draftIsDirty || vm.isWorking)
@@ -396,7 +397,7 @@ struct ConfigurationsView: View {
                     await vm.enableSelectedProvider(rawMode: editorMode == .raw, keyStorageMode: env.preferences.apiProviderKeyStorageMode)
                 }
             } label: {
-                actionLabel("Enable Provider", systemImage: "bolt.fill", showLabels: showLabels)
+                actionFunctionalLabel("Enable Provider", systemSymbolName: "bolt.fill", showLabels: showLabels)
             }
             .fixedSize(horizontal: showLabels, vertical: false)
             .buttonStyle(.borderedProminent)
@@ -406,11 +407,11 @@ struct ConfigurationsView: View {
     }
 
     @ViewBuilder
-    private func actionLabel(_ title: String, systemImage: String, showLabels: Bool) -> some View {
+    private func actionFunctionalLabel(_ title: String, systemSymbolName: String, showLabels: Bool) -> some View {
         if showLabels {
-            Label(title, systemImage: systemImage)
+            FunctionalLabel(title, systemSymbolName: systemSymbolName)
         } else {
-            Image(systemName: systemImage)
+            FunctionalIconView(systemSymbolName: systemSymbolName)
                 .frame(width: 22, height: 18)
         }
     }
@@ -557,7 +558,7 @@ private struct CLIEnvironmentSection: View {
                 Button {
                     Task { await vm.refresh() }
                 } label: {
-                    Label(vm.isLoading ? "Refreshing" : "Refresh", systemImage: "arrow.clockwise")
+                    FunctionalLabel(vm.isLoading ? "Refreshing" : "Refresh", systemSymbolName: "arrow.clockwise")
                 }
                 .controlSize(.small)
                 .disabled(vm.isLoading || vm.isCleaning)
@@ -587,7 +588,7 @@ private struct CLIEnvironmentSection: View {
 
             if let lastError = vm.lastError {
                 HStack(spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle")
+                    FunctionalIconView(systemSymbolName: "exclamationmark.triangle")
                     Text(lastError)
                         .lineLimit(2)
                     Spacer(minLength: 8)
@@ -618,7 +619,7 @@ private struct CLIEnvironmentStatusCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center, spacing: 10) {
-                Image(systemName: "terminal")
+                FunctionalIconView(systemSymbolName: "terminal")
                     .font(.system(size: 18, weight: .medium))
                     .foregroundStyle(Color.stxMuted)
                 Text(cli.shortName)
@@ -647,26 +648,26 @@ private struct CLIEnvironmentStatusCard: View {
                             Button {
                                 copyText(cli.installCommand)
                             } label: {
-                                Label("Copy Install", systemImage: "doc.on.doc")
+                                FunctionalLabel("Copy Install", systemSymbolName: "doc.on.doc")
                             }
                             Button {
                                 openURL(cli.installURL)
                             } label: {
-                                Label("Install Page", systemImage: "arrow.up.right.square")
+                                FunctionalLabel("Install Page", systemSymbolName: "arrow.up.right.square")
                             }
                         }
                         HStack(spacing: 8) {
                             Button {
                                 copyText(cli.installCommand)
                             } label: {
-                                Image(systemName: "doc.on.doc")
+                                FunctionalIconView(systemSymbolName: "doc.on.doc")
                                     .frame(width: 22, height: 18)
                             }
                             .help("Copy Install")
                             Button {
                                 openURL(cli.installURL)
                             } label: {
-                                Image(systemName: "arrow.up.right.square")
+                                FunctionalIconView(systemSymbolName: "arrow.up.right.square")
                                     .frame(width: 22, height: 18)
                             }
                             .help("Install Page")
@@ -689,11 +690,11 @@ private struct CLIEnvironmentStatusCard: View {
             ProgressView()
                 .controlSize(.small)
         } else if status?.isInstalled == true {
-            Image(systemName: "checkmark.circle")
+            FunctionalIconView(systemSymbolName: "checkmark.circle")
                 .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(status?.isOutdated == true ? .orange : Color(red: 0.0, green: 0.65, blue: 0.38))
         } else {
-            Image(systemName: "exclamationmark.circle")
+            FunctionalIconView(systemSymbolName: "exclamationmark.circle")
                 .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(.orange)
         }
@@ -731,7 +732,7 @@ private struct CLIEnvironmentConflictPanel: View {
         } else {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .center, spacing: 10) {
-                    Image(systemName: "exclamationmark.triangle")
+                    FunctionalIconView(systemSymbolName: "exclamationmark.triangle")
                         .foregroundStyle(.orange)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Environment variable conflicts")
@@ -744,7 +745,7 @@ private struct CLIEnvironmentConflictPanel: View {
                     Button {
                         vm.selectAllDeletableConflicts()
                     } label: {
-                        Label("Select All", systemImage: "checklist")
+                        FunctionalLabel("Select All", systemSymbolName: "checklist")
                     }
                     .controlSize(.small)
                     .disabled(vm.isCleaning || vm.conflicts.allSatisfy { !$0.isDeletable })
@@ -752,7 +753,7 @@ private struct CLIEnvironmentConflictPanel: View {
                     Button(role: .destructive) {
                         requestDelete()
                     } label: {
-                        Label("Delete Selected", systemImage: "trash")
+                        FunctionalLabel("Delete Selected", systemSymbolName: "trash")
                     }
                     .controlSize(.small)
                     .disabled(vm.selectedDeletableCount == 0 || vm.isCleaning)
@@ -784,7 +785,7 @@ private struct CLIEnvironmentConflictPanel: View {
 
     private var cleanPanel: some View {
         HStack(spacing: 10) {
-            Image(systemName: "checkmark.circle")
+            FunctionalIconView(systemSymbolName: "checkmark.circle")
                 .foregroundStyle(Color(red: 0.0, green: 0.65, blue: 0.38))
             VStack(alignment: .leading, spacing: 2) {
                 Text("No environment conflicts")
@@ -837,7 +838,7 @@ private struct CLIEnvironmentConflictRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Button(action: toggleSelection) {
-                Image(systemName: conflict.isDeletable ? (isSelected ? "checkmark.square.fill" : "square") : "lock")
+                FunctionalIconView(systemSymbolName: conflict.isDeletable ? (isSelected ? "checkmark.square.fill" : "square") : "lock")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(conflict.isDeletable ? Color.stxAccent : Color.stxMuted)
                     .frame(width: 18, height: 18)
@@ -869,7 +870,7 @@ private struct CLIEnvironmentConflictRow: View {
                     Button {
                         toggleReveal()
                     } label: {
-                        Image(systemName: isRevealed ? "eye.slash" : "eye")
+                        FunctionalIconView(systemSymbolName: isRevealed ? "eye.slash" : "eye")
                             .frame(width: 18, height: 16)
                     }
                     .buttonStyle(.plain)
@@ -886,7 +887,7 @@ private struct CLIEnvironmentConflictRow: View {
                     Button {
                         copyText(conflict.varName)
                     } label: {
-                        Image(systemName: "doc.on.doc")
+                        FunctionalIconView(systemSymbolName: "doc.on.doc")
                             .frame(width: 18, height: 16)
                     }
                     .buttonStyle(.plain)
@@ -894,7 +895,7 @@ private struct CLIEnvironmentConflictRow: View {
                     Button {
                         copyText(conflict.sourceDescription)
                     } label: {
-                        Image(systemName: "point.topleft.down.curvedto.point.bottomright.up")
+                        FunctionalIconView(systemSymbolName: "point.topleft.down.curvedto.point.bottomright.up")
                             .frame(width: 18, height: 16)
                     }
                     .buttonStyle(.plain)

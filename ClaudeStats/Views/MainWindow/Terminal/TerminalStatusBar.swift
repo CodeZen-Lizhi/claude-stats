@@ -1,6 +1,7 @@
 import Foundation
 import GhosttyEmbed
 import SwiftUI
+import ClaudeStatsIconography
 
 struct TerminalStatusBar: View {
     let tabs: [EmbeddedTerminalTabItem]
@@ -25,7 +26,7 @@ struct TerminalStatusBar: View {
             }
 
             HStack(spacing: 7) {
-                Image(systemName: "folder")
+                FunctionalIconView(systemSymbolName: "folder")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(TerminalPalette.dimmed)
                     .frame(width: 14)
@@ -53,7 +54,7 @@ struct TerminalStatusBar: View {
             if showsTabActions {
                 statusDivider
                 Button(action: onNewTab) {
-                    Image(systemName: "plus")
+                    FunctionalIconView(systemSymbolName: "plus")
                         .font(.system(size: 12, weight: .semibold))
                         .frame(width: 22, height: 22)
                 }
@@ -63,7 +64,7 @@ struct TerminalStatusBar: View {
                 .help("New Terminal Tab")
 
                 Button(action: onCloseSelectedTab) {
-                    Image(systemName: "xmark")
+                    FunctionalIconView(systemSymbolName: "xmark")
                         .font(.system(size: 11, weight: .bold))
                         .frame(width: 22, height: 22)
                 }
@@ -84,7 +85,7 @@ struct TerminalStatusBar: View {
                 Button {
                     onSelect(tab.id)
                 } label: {
-                    Label(tab.title, systemImage: tab.id == selectedTab?.id ? "checkmark" : "terminal")
+                    FunctionalLabel(tab.title, systemSymbolName: tab.id == selectedTab?.id ? "checkmark" : "terminal")
                 }
             }
 
@@ -95,7 +96,7 @@ struct TerminalStatusBar: View {
                 .disabled(selectedTab == nil)
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "terminal")
+                FunctionalIconView(systemSymbolName: "terminal")
                 Text("Terminal")
             }
             .font(.sora(11, weight: .medium))

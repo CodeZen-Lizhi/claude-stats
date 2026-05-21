@@ -1,4 +1,5 @@
 import SwiftUI
+import ClaudeStatsIconography
 
 struct UsageLimitPanel: View {
     let provider: ProviderKind
@@ -50,7 +51,7 @@ struct UsageLimitPanel: View {
                     .controlSize(.mini)
             }
             Button(action: onRefresh) {
-                Image(systemName: "arrow.clockwise")
+                FunctionalIconView(systemSymbolName: "arrow.clockwise")
                     .font(.system(size: 11, weight: .semibold))
             }
             .buttonStyle(.plain)
@@ -95,7 +96,7 @@ struct UsageLimitPanel: View {
                 waitingContent(report: report)
             case .unavailable:
                 stateContent(
-                    systemImage: "exclamationmark.triangle.fill",
+                    systemSymbolName: "exclamationmark.triangle.fill",
                     title: L10n.string("usage.limit.unavailable_title",
                                        defaultValue: "Usage limits unavailable"),
                     message: report.message,
@@ -103,7 +104,7 @@ struct UsageLimitPanel: View {
                 )
             case .setupRequired:
                 stateContent(
-                    systemImage: "wrench.and.screwdriver.fill",
+                    systemSymbolName: "wrench.and.screwdriver.fill",
                     title: L10n.string("usage.limit.setup_required_title",
                                        defaultValue: "Setup required"),
                     message: report.message,
@@ -114,7 +115,7 @@ struct UsageLimitPanel: View {
             }
         } else {
             stateContent(
-                systemImage: "clock.arrow.circlepath",
+                systemSymbolName: "clock.arrow.circlepath",
                 title: isLoading
                     ? L10n.string("usage.limit.checking_title", defaultValue: "Checking usage limits")
                     : L10n.string("usage.limit.not_loaded_title", defaultValue: "Usage limits not loaded"),
@@ -147,7 +148,7 @@ struct UsageLimitPanel: View {
     private func setupRequiredContent(message: String?) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             stateContent(
-                systemImage: "terminal.fill",
+                systemSymbolName: "terminal.fill",
                 title: L10n.string("usage.limit.connect_usage_sources",
                                    defaultValue: "Connect Claude usage sources"),
                 message: message,
@@ -162,7 +163,7 @@ struct UsageLimitPanel: View {
     private func waitingContent(report: UsageLimitReport) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             stateContent(
-                systemImage: "clock.arrow.circlepath",
+                systemSymbolName: "clock.arrow.circlepath",
                 title: L10n.format("usage.limit.waiting_for_response",
                                    defaultValue: "Waiting for the next %@ response",
                                    provider.shortName),
@@ -264,10 +265,9 @@ struct UsageLimitPanel: View {
         }
     }
 
-    private func stateContent(systemImage: String, title: String, message: String?, lastCapturedAt: Date?) -> some View {
+    private func stateContent(systemSymbolName: String, title: String, message: String?, lastCapturedAt: Date?) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: systemImage)
-                .font(.system(size: 13, weight: .semibold))
+            FunctionalIconView(systemSymbolName: systemSymbolName, size: 13)
                 .foregroundStyle(Color.stxMuted)
                 .frame(width: 18)
                 .accessibilityHidden(true)

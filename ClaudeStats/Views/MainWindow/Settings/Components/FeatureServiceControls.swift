@@ -1,4 +1,5 @@
 import SwiftUI
+import ClaudeStatsIconography
 
 struct GitHubConnectionSettings: View {
     @Environment(AppEnvironment.self) private var env
@@ -176,7 +177,7 @@ struct LeaderboardProfileSettings: View {
                 Button {
                     Task { await env.leaderboards.randomizeAvatar() }
                 } label: {
-                    Image(systemName: "arrow.triangle.2.circlepath")
+                    FunctionalIconView(systemSymbolName: "arrow.triangle.2.circlepath")
                         .font(.system(size: 13, weight: .semibold))
                         .frame(width: 28, height: 28)
                 }

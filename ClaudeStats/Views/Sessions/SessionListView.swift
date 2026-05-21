@@ -1,4 +1,5 @@
 import SwiftUI
+import ClaudeStatsIconography
 
 struct SessionListView: View {
     /// `export` renders a static, non-scrolling slice of the sessions scoped to
@@ -19,7 +20,7 @@ struct SessionListView: View {
         } else {
             VStack(spacing: 0) {
                 HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass").foregroundStyle(Color.stxMuted)
+                    FunctionalIconView(systemSymbolName: "magnifyingglass").foregroundStyle(Color.stxMuted)
                     TextField(L10n.string("sessions.search.placeholder", defaultValue: "Search project or title"),
                               text: $vm.searchText)
                         .textFieldStyle(.plain)
@@ -75,7 +76,7 @@ struct SessionListView: View {
                                      defaultValue: "No %@ Data",
                                      provider.shortName))
                 } icon: {
-                    Image(systemName: "tray")
+                    FunctionalIconView(systemSymbolName: "tray")
                 }
             } description: {
                 if let path = store.dataDirectoryPath(for: provider) {
@@ -103,7 +104,7 @@ struct SessionListView: View {
                                 ? L10n.string("sessions.empty.no_sessions", defaultValue: "No Sessions")
                                 : L10n.string("sessions.empty.no_matches", defaultValue: "No Matches"))
                         } icon: {
-                            Image(systemName: providerSessions.isEmpty ? "tray" : "magnifyingglass")
+                            FunctionalIconView(systemSymbolName: providerSessions.isEmpty ? "tray" : "magnifyingglass")
                         }
                     } description: {
                         Text(providerSessions.isEmpty

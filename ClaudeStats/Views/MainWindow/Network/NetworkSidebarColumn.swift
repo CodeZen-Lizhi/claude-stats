@@ -1,4 +1,5 @@
 import SwiftUI
+import ClaudeStatsIconography
 
 struct NetworkSidebarColumn: View {
     @Bindable var store: NetworkDebuggerStore
@@ -83,7 +84,7 @@ struct NetworkSidebarColumn: View {
                 Button {
                     store.resetTrafficFilters()
                 } label: {
-                    Label("Clear Filters", systemImage: "xmark.circle")
+                    FunctionalLabel("Clear Filters", systemSymbolName: "xmark.circle")
                         .font(.sora(11, weight: .medium))
                         .foregroundStyle(Color.stxMuted)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -189,7 +190,7 @@ struct NetworkSidebarColumn: View {
                 section = .traffic
             } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: NetworkSection.traffic.symbol)
+                    FunctionalIconView(systemSymbolName: NetworkSection.traffic.symbol)
                         .font(.system(size: 13, weight: .medium))
                         .frame(width: 18)
                         .foregroundStyle(section == .traffic ? Color.stxAccent : Color.stxMuted)
@@ -215,7 +216,7 @@ struct NetworkSidebarColumn: View {
                     store.trafficSidebarLayer = .filters
                 }
             } label: {
-                Image(systemName: "chevron.right")
+                FunctionalIconView(systemSymbolName: "chevron.right")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(trafficFiltersHover ? Color.stxAccent : Color.stxMuted)
                     .frame(width: Self.trafficChipHeight, height: Self.trafficChipHeight)
@@ -246,7 +247,7 @@ struct NetworkSidebarColumn: View {
                         store.startCapture()
                     }
                 } label: {
-                    Image(systemName: store.captureStatus.isListening ? "pause.fill" : "play.fill")
+                    FunctionalIconView(systemSymbolName: store.captureStatus.isListening ? "pause.fill" : "play.fill")
                         .font(.system(size: 13, weight: .semibold))
                         .frame(maxWidth: .infinity)
                         .frame(height: 28)
@@ -257,7 +258,7 @@ struct NetworkSidebarColumn: View {
                 Button {
                     store.clearFlows()
                 } label: {
-                    Image(systemName: "trash")
+                    FunctionalIconView(systemSymbolName: "trash")
                         .font(.system(size: 13, weight: .medium))
                         .frame(maxWidth: .infinity)
                         .frame(height: 28)
@@ -290,7 +291,7 @@ struct NetworkSidebarColumn: View {
 
     private var filterField: some View {
         HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
+            FunctionalIconView(systemSymbolName: "magnifyingglass")
                 .font(.system(size: 11))
                 .foregroundStyle(Color.stxMuted)
             TextField("Filter", text: $store.searchText)
@@ -300,7 +301,7 @@ struct NetworkSidebarColumn: View {
                 Button {
                     store.searchText = ""
                 } label: {
-                    Image(systemName: "xmark.circle.fill")
+                    FunctionalIconView(systemSymbolName: "xmark.circle.fill")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Color.stxMuted)
                 }
@@ -323,7 +324,7 @@ struct NetworkSidebarColumn: View {
                 isExpanded.wrappedValue.toggle()
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "chevron.right")
+                    FunctionalIconView(systemSymbolName: "chevron.right")
                         .font(.system(size: 9, weight: .semibold))
                         .rotationEffect(.degrees(isExpanded.wrappedValue ? 90 : 0))
                         .foregroundStyle(Color.stxMuted)
@@ -353,7 +354,7 @@ struct NetworkSidebarColumn: View {
     ) -> some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                Image(systemName: symbol)
+                FunctionalIconView(systemSymbolName: symbol)
                     .font(.system(size: 12, weight: .medium))
                     .frame(width: 16)
                     .foregroundStyle(selected ? Color.stxAccent : Color.stxMuted)

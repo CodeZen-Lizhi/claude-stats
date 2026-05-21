@@ -1,4 +1,5 @@
 import SwiftUI
+import ClaudeStatsIconography
 
 enum FloatingProviderStatusContent: Equatable {
     case summary(FloatingProviderStatusSummary)
@@ -65,7 +66,7 @@ struct FloatingProviderStatusView: View {
 
     private func messageView(_ message: String) -> some View {
         HStack(spacing: 6) {
-            Image(systemName: "wifi.exclamationmark")
+            FunctionalIconView(systemSymbolName: "wifi.exclamationmark")
                 .font(.system(size: 9, weight: .semibold))
             Text(message)
                 .font(.sora(8, weight: .medium))

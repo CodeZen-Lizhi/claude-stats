@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ClaudeStatsIconography
 
 public struct AtollIslandPreviewView: View {
     public let configuration: AtollIslandPreviewConfiguration
@@ -104,7 +105,7 @@ private struct AtollIslandClosedPreviewColumn: View {
 
     private var disabledClosedActivity: some View {
         HStack(spacing: 8) {
-            Image(systemName: configuration.selectedTab.systemImage)
+            FunctionalIconView(systemSymbolName: configuration.selectedTab.iconName)
                 .font(.system(size: 13, weight: .semibold))
             Text("Off")
                 .font(.system(size: 11, weight: .semibold, design: .rounded))
@@ -144,13 +145,13 @@ private struct AtollIslandClosedPreviewColumn: View {
 
     private var privacyClosedActivity: some View {
         HStack(spacing: 8) {
-            Image(systemName: "mic.fill")
+            FunctionalIconView(systemSymbolName: "mic.fill")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Color.orange)
             Rectangle()
                 .fill(.black)
                 .frame(maxWidth: .infinity)
-            Image(systemName: "video.fill")
+            FunctionalIconView(systemSymbolName: "video.fill")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Color.green)
         }
@@ -159,7 +160,7 @@ private struct AtollIslandClosedPreviewColumn: View {
 
     private var batteryClosedActivity: some View {
         HStack(spacing: 7) {
-            Image(systemName: "battery.75percent")
+            FunctionalIconView(systemSymbolName: "battery.75percent")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.green)
             Rectangle()
@@ -176,14 +177,14 @@ private struct AtollIslandClosedPreviewColumn: View {
 
     private var downloadClosedActivity: some View {
         HStack(spacing: 8) {
-            Image(systemName: "arrow.down.circle.fill")
+            FunctionalIconView(systemSymbolName: "arrow.down.circle.fill")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Color.accentColor)
             Rectangle()
                 .fill(.black)
                 .frame(maxWidth: .infinity)
             if configuration.settings.selectedDownloadIndicatorStyle == "Circle" {
-                Image(systemName: "circle.dotted")
+                FunctionalIconView(systemSymbolName: "circle.dotted")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.accentColor)
             } else {
@@ -196,7 +197,7 @@ private struct AtollIslandClosedPreviewColumn: View {
 
     private func closedBadge(symbol: String, title: String, tint: Color) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: symbol)
+            FunctionalIconView(systemSymbolName: symbol)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(tint)
             Rectangle()
@@ -525,7 +526,7 @@ private struct AtollIslandOpenPreviewColumn: View {
             HStack(spacing: 10) {
                 ForEach(sampleData.shelfItems) { item in
                     VStack(spacing: 7) {
-                        Image(systemName: item.symbol)
+                        FunctionalIconView(systemSymbolName: item.symbol)
                             .font(.system(size: 22, weight: .semibold))
                             .foregroundStyle(.white.opacity(0.86))
                         Text(item.title)
@@ -576,7 +577,7 @@ private struct AtollIslandOpenPreviewColumn: View {
         VStack(alignment: .leading, spacing: 12) {
             moduleTitle(symbol: "battery.75percent", title: "Battery")
             HStack(alignment: .center, spacing: 14) {
-                Image(systemName: "battery.75percent")
+                FunctionalIconView(systemSymbolName: "battery.75percent")
                     .font(.system(size: 34, weight: .semibold))
                     .foregroundStyle(.green)
                 VStack(alignment: .leading, spacing: 7) {
@@ -611,7 +612,7 @@ private struct AtollIslandOpenPreviewColumn: View {
         VStack(alignment: .leading, spacing: 12) {
             moduleTitle(symbol: "arrow.down.circle.fill", title: "Download")
             HStack(spacing: 14) {
-                Image(systemName: "arrow.down.circle.fill")
+                FunctionalIconView(systemSymbolName: "arrow.down.circle.fill")
                     .font(.system(size: 34, weight: .semibold))
                     .foregroundStyle(Color.accentColor)
                 VStack(alignment: .leading, spacing: 8) {
@@ -642,7 +643,7 @@ private struct AtollIslandOpenPreviewColumn: View {
                 }
             } else {
                 HStack(spacing: 12) {
-                    Image(systemName: "speaker.wave.2.fill")
+                    FunctionalIconView(systemSymbolName: "speaker.wave.2.fill")
                         .font(.system(size: 22, weight: .semibold))
                     tinyProgress(value: 0.64, color: configuration.settings.systemEventIndicatorUseAccent ? .accentColor : .white.opacity(0.82))
                         .frame(height: 8)
@@ -693,7 +694,7 @@ private struct AtollIslandOpenPreviewColumn: View {
     private var terminalContent: some View {
         VStack(spacing: 0) {
             HStack(spacing: 7) {
-                Image(systemName: "apple.terminal")
+                FunctionalIconView(systemSymbolName: "apple.terminal")
                     .font(.system(size: 11))
                     .foregroundStyle(.white.opacity(0.56))
                 Text(configuration.settings.terminalShellPath)
@@ -781,7 +782,7 @@ private struct AtollIslandOpenPreviewColumn: View {
 
     private func moduleTitle(symbol: String, title: String) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: symbol)
+            FunctionalIconView(systemSymbolName: symbol)
                 .font(.system(size: 14, weight: .semibold))
             Text(title)
                 .font(.system(size: 15, weight: .semibold))
@@ -814,7 +815,7 @@ private struct AtollIslandOpenPreviewColumn: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(tint.opacity(0.18))
-                Image(systemName: symbol)
+                FunctionalIconView(systemSymbolName: symbol)
                     .font(.system(size: 30, weight: .semibold))
                     .foregroundStyle(tint)
             }
@@ -840,7 +841,7 @@ private struct AtollIslandOpenPreviewColumn: View {
 
     private func emptyModule(symbol: String, title: String) -> some View {
         VStack(spacing: 9) {
-            Image(systemName: symbol)
+            FunctionalIconView(systemSymbolName: symbol)
                 .font(.system(size: 28, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.38))
             Text(title)
@@ -852,7 +853,7 @@ private struct AtollIslandOpenPreviewColumn: View {
 
     private var verticalHUD: some View {
         VStack(spacing: 8) {
-            Image(systemName: "speaker.wave.2.fill")
+            FunctionalIconView(systemSymbolName: "speaker.wave.2.fill")
                 .font(.system(size: 15, weight: .semibold))
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(Color.white.opacity(0.12))
@@ -879,7 +880,7 @@ private struct AtollIslandOpenPreviewColumn: View {
                 .trim(from: 0, to: 0.64)
                 .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 8, lineCap: .round))
                 .rotationEffect(.degrees(-90))
-            Image(systemName: "speaker.wave.2.fill")
+            FunctionalIconView(systemSymbolName: "speaker.wave.2.fill")
                 .font(.system(size: 16, weight: .semibold))
         }
         .frame(width: 82, height: 82)
@@ -897,7 +898,7 @@ private struct AtollIslandOpenPreviewColumn: View {
 
     private func lockWidget(title: String, value: String, symbol: String, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: symbol)
+            FunctionalIconView(systemSymbolName: symbol)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(tint)
             Text(value)
@@ -918,7 +919,7 @@ private struct AtollIslandOpenPreviewColumn: View {
                     .font(.system(size: 10, weight: .semibold, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.85))
             }
-            Image(systemName: "battery.75percent")
+            FunctionalIconView(systemSymbolName: "battery.75percent")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.green)
         }
@@ -947,7 +948,7 @@ private struct AtollIslandPreviewHeaderTabView: View {
     let tab: AtollIslandPreviewHeaderTab
 
     var body: some View {
-        Image(systemName: tab.symbol)
+        FunctionalIconView(systemSymbolName: tab.symbol)
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(tab.isSelected ? tab.accent : .gray)
             .frame(width: 26, height: 26)
@@ -968,7 +969,7 @@ private struct AtollIslandMetricCard: View {
     var body: some View {
         VStack(spacing: 5) {
             HStack(spacing: 4) {
-                Image(systemName: metric.symbol)
+                FunctionalIconView(systemSymbolName: metric.symbol)
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(metric.color.swiftUIColor)
                 Text(metric.title)
@@ -1149,7 +1150,7 @@ private func artwork(size: CGFloat, colors: [AtollSettingColor]) -> some View {
         )
         .frame(width: size, height: size)
         .overlay {
-            Image(systemName: "music.note")
+            FunctionalIconView(systemSymbolName: "music.note")
                 .font(.system(size: size * 0.32, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.88))
         }
@@ -1166,7 +1167,7 @@ private func timerRing(size: CGFloat, lineWidth: CGFloat, progress: Double, colo
                 style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
             )
             .rotationEffect(.degrees(-90))
-        Image(systemName: "timer")
+        FunctionalIconView(systemSymbolName: "timer")
             .font(.system(size: max(10, size * 0.25), weight: .semibold))
             .foregroundStyle(.white.opacity(0.86))
     }
@@ -1196,7 +1197,7 @@ private func waveform(color: Color) -> some View {
 }
 
 private func headerRoundIcon(_ symbol: String) -> some View {
-    Image(systemName: symbol)
+    FunctionalIconView(systemSymbolName: symbol)
         .font(.system(size: 11, weight: .semibold))
         .foregroundStyle(.white.opacity(0.86))
         .frame(width: 28, height: 28)

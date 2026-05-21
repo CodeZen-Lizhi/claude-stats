@@ -1,10 +1,11 @@
 import SwiftUI
+import ClaudeStatsIconography
 
 struct SystemMonitorPreview: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center) {
-                Label("System", systemImage: "cpu")
+                FunctionalLabel("System", systemSymbolName: "cpu")
                     .font(.sora(13, weight: .semibold))
                 Spacer()
                 Text("3s")

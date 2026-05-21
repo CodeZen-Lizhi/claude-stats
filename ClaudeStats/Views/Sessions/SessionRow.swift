@@ -1,4 +1,5 @@
 import SwiftUI
+import ClaudeStatsIconography
 import AppKit
 
 struct SessionRow: View {
@@ -7,7 +8,7 @@ struct SessionRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: session.provider.iconSystemName)
+            FunctionalIconView(systemSymbolName: session.provider.iconSystemName)
                 .foregroundStyle(session.provider.accentColor)
                 .frame(width: 18)
                 .padding(.top, 1)
@@ -32,10 +33,7 @@ struct SessionRow: View {
                 HStack(spacing: 6) {
                     if let stats = session.stats {
                         modelDots(stats.models)
-                        Label(
-                            Format.tokens(stats.totalTokens(includingCacheRead: env.preferences.includeCacheInTokens)),
-                            systemImage: "number"
-                        )
+                        FunctionalLabel(Format.tokens(stats.totalTokens(includingCacheRead: env.preferences.includeCacheInTokens)), systemSymbolName: "number")
                         .labelStyle(.titleAndIcon)
                         Text(Format.cost(stats.totalCost(for: env.preferences.costEstimationMode)))
                     }

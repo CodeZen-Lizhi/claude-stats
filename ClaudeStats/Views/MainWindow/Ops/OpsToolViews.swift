@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ClaudeStatsIconography
 
 struct OpsPortsView: View {
     @Bindable var store: OpsStore
@@ -80,14 +81,14 @@ struct OpsPortsView: View {
                     Button {
                         store.copyToClipboard(port.localhostURL)
                     } label: {
-                        Label("Copy URL", systemImage: "doc.on.doc")
+                        FunctionalLabel("Copy URL", systemSymbolName: "doc.on.doc")
                     }
                     .controlSize(.small)
 
                     Button {
                         store.copyToClipboard("kill -TERM \(port.item.pid)")
                     } label: {
-                        Label("Copy Kill", systemImage: "terminal")
+                        FunctionalLabel("Copy Kill", systemSymbolName: "terminal")
                     }
                     .controlSize(.small)
 
@@ -96,7 +97,7 @@ struct OpsPortsView: View {
                     Button(role: .destructive) {
                         store.requestTerminate(port.item)
                     } label: {
-                        Label("End", systemImage: "xmark.octagon")
+                        FunctionalLabel("End", systemSymbolName: "xmark.octagon")
                     }
                     .controlSize(.small)
                     .disabled(port.protectionReason != nil || !store.canRunAction)
@@ -155,7 +156,7 @@ struct OpsProcessesView: View {
                 Button {
                     store.refresh(.processes)
                 } label: {
-                    Image(systemName: "arrow.clockwise")
+                    FunctionalIconView(systemSymbolName: "arrow.clockwise")
                 }
                 .buttonStyle(.bordered)
                 .help("Refresh")
@@ -207,14 +208,14 @@ struct OpsProcessesView: View {
                     Button {
                         store.copyToClipboard(process.commandLine)
                     } label: {
-                        Label("Copy Command", systemImage: "doc.on.doc")
+                        FunctionalLabel("Copy Command", systemSymbolName: "doc.on.doc")
                     }
                     .controlSize(.small)
 
                     Button {
                         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: process.executablePath)])
                     } label: {
-                        Label("Reveal", systemImage: "folder")
+                        FunctionalLabel("Reveal", systemSymbolName: "folder")
                     }
                     .controlSize(.small)
                     .disabled(!process.canRevealExecutable)
@@ -224,7 +225,7 @@ struct OpsProcessesView: View {
                     Button(role: .destructive) {
                         store.requestTerminate(process.item)
                     } label: {
-                        Label("End", systemImage: "xmark.octagon")
+                        FunctionalLabel("End", systemSymbolName: "xmark.octagon")
                     }
                     .controlSize(.small)
                     .disabled(process.protectionReason != nil || !store.canRunAction)
@@ -248,7 +249,7 @@ struct OpsBrewView: View {
                 Button {
                     store.refresh(.brew)
                 } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
+                    FunctionalLabel("Refresh", systemSymbolName: "arrow.clockwise")
                 }
                 .controlSize(.small)
             }
@@ -266,7 +267,7 @@ struct OpsBrewView: View {
                     Button {
                         store.requestBrewCleanup()
                     } label: {
-                        Label("Cleanup", systemImage: "sparkles")
+                        FunctionalLabel("Cleanup", systemSymbolName: "sparkles")
                     }
                     .controlSize(.small)
                     .disabled(store.brewSnapshot.brewPath == nil || !store.canRunAction)
@@ -300,7 +301,7 @@ struct OpsBrewView: View {
                         Button {
                             store.requestBrewInstall(installText)
                         } label: {
-                            Label("Install", systemImage: "plus")
+                            FunctionalLabel("Install", systemSymbolName: "plus")
                         }
                         .controlSize(.small)
                         .disabled(store.brewSnapshot.brewPath == nil || !store.canRunAction || installText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -378,7 +379,7 @@ struct OpsEnvironmentView: View {
                 Button {
                     store.refresh(.environment)
                 } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
+                    FunctionalLabel("Refresh", systemSymbolName: "arrow.clockwise")
                 }
                 .controlSize(.small)
             }
@@ -404,13 +405,13 @@ struct OpsCleanupView: View {
                 Button {
                     store.refresh(.cleanup)
                 } label: {
-                    Label("Scan", systemImage: "arrow.clockwise")
+                    FunctionalLabel("Scan", systemSymbolName: "arrow.clockwise")
                 }
                 .controlSize(.small)
                 Button(role: .destructive) {
                     store.requestCleanupSelected()
                 } label: {
-                    Label("Clean Selected", systemImage: "trash")
+                    FunctionalLabel("Clean Selected", systemSymbolName: "trash")
                 }
                 .controlSize(.small)
                 .disabled(store.selectedCleanupKinds.isEmpty || !store.canRunAction)
@@ -448,7 +449,7 @@ struct OpsDiagnosticsView: View {
                 Button {
                     store.refresh(.diagnostics)
                 } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
+                    FunctionalLabel("Refresh", systemSymbolName: "arrow.clockwise")
                 }
                 .controlSize(.small)
             }
@@ -465,7 +466,7 @@ struct OpsDiagnosticsView: View {
                         Button {
                             store.runURLDiagnostics()
                         } label: {
-                            Label("Run", systemImage: "play")
+                            FunctionalLabel("Run", systemSymbolName: "play")
                         }
                         .controlSize(.small)
                         .disabled(!store.canRunAction || store.urlInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -547,7 +548,7 @@ private struct OpsTableToolbar: View {
         HStack(spacing: 10) {
             OpsSearchField(text: $searchText, placeholder: placeholder)
             Button(action: refresh) {
-                Label("Refresh", systemImage: "arrow.clockwise")
+                FunctionalLabel("Refresh", systemSymbolName: "arrow.clockwise")
                     .labelStyle(.iconOnly)
             }
             .buttonStyle(.bordered)
@@ -564,7 +565,7 @@ private struct OpsSearchField: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
+            FunctionalIconView(systemSymbolName: "magnifyingglass")
                 .font(.system(size: 11))
                 .foregroundStyle(Color.stxMuted)
             TextField(placeholder, text: $text)
@@ -574,7 +575,7 @@ private struct OpsSearchField: View {
                 Button {
                     text = ""
                 } label: {
-                    Image(systemName: "xmark.circle.fill")
+                    FunctionalIconView(systemSymbolName: "xmark.circle.fill")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Color.stxMuted)
                 }
@@ -734,7 +735,7 @@ private struct OpsBrewPackageRow: View {
         HStack(spacing: 10) {
             Button(action: select) {
                 HStack(spacing: 10) {
-                    Image(systemName: package.kind == .formula ? "shippingbox" : "app.dashed")
+                    FunctionalIconView(systemSymbolName: package.kind == .formula ? "shippingbox" : "app.dashed")
                         .foregroundStyle(isSelected ? Color.stxAccent : Color.stxMuted)
                         .frame(width: 18)
                     VStack(alignment: .leading, spacing: 2) {
@@ -754,14 +755,14 @@ private struct OpsBrewPackageRow: View {
             .buttonStyle(.plain)
 
             Button(action: upgrade) {
-                Image(systemName: "arrow.up.circle")
+                FunctionalIconView(systemSymbolName: "arrow.up.circle")
             }
             .buttonStyle(.plain)
             .disabled(!package.isOutdated || actionsDisabled)
             .help("Upgrade")
 
             Button(role: .destructive, action: uninstall) {
-                Image(systemName: "trash")
+                FunctionalIconView(systemSymbolName: "trash")
             }
             .buttonStyle(.plain)
             .disabled(actionsDisabled)
@@ -810,7 +811,7 @@ private struct OpsEnvironmentToolCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Image(systemName: statusSymbol)
+                FunctionalIconView(systemSymbolName: statusSymbol)
                     .foregroundStyle(statusColor)
                     .frame(width: 18)
                 Text(tool.name)
@@ -865,10 +866,10 @@ private struct OpsCleanupRow: View {
     var body: some View {
         Button(action: toggle) {
             HStack(spacing: 12) {
-                Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                FunctionalIconView(systemSymbolName: isSelected ? "checkmark.square.fill" : "square")
                     .foregroundStyle(isSelected ? Color.stxAccent : Color.stxMuted)
                     .frame(width: 18)
-                Image(systemName: item.kind.symbol)
+                FunctionalIconView(systemSymbolName: item.kind.symbol)
                     .foregroundStyle(Color.stxMuted)
                     .frame(width: 18)
                 VStack(alignment: .leading, spacing: 2) {
@@ -915,7 +916,7 @@ private struct OpsActionOutputCard: View {
                     Button {
                         clear()
                     } label: {
-                        Image(systemName: "xmark.circle")
+                        FunctionalIconView(systemSymbolName: "xmark.circle")
                     }
                     .buttonStyle(.plain)
                     .help("Clear")
@@ -947,7 +948,7 @@ private struct OpsInspectorTitle: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: symbol)
+            FunctionalIconView(systemSymbolName: symbol)
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(Color.stxAccent)
                 .frame(width: 26)

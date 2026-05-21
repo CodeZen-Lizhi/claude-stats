@@ -1,4 +1,5 @@
 import SwiftUI
+import ClaudeStatsIconography
 import AppKit
 
 /// Detail pane shown when the user picks a session from the sidebar tree.
@@ -40,7 +41,7 @@ struct SessionDetailView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
-                Image(systemName: "folder")
+                FunctionalIconView(systemSymbolName: "folder")
                     .font(.system(size: 13))
                     .foregroundStyle(Color.stxMuted)
                 Text(session.projectDisplayName)
@@ -184,7 +185,7 @@ struct SessionDetailView: View {
             Button {
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: session.filePath)])
             } label: {
-                Label("Reveal Transcript", systemImage: "doc.text.magnifyingglass")
+                FunctionalLabel("Reveal Transcript", systemSymbolName: "doc.text.magnifyingglass")
             }
             .buttonStyle(.bordered)
 
@@ -192,7 +193,7 @@ struct SessionDetailView: View {
                 Button {
                     NSWorkspace.shared.open(URL(fileURLWithPath: cwd))
                 } label: {
-                    Label("Open Project Folder", systemImage: "folder")
+                    FunctionalLabel("Open Project Folder", systemSymbolName: "folder")
                 }
                 .buttonStyle(.bordered)
             }
@@ -210,7 +211,7 @@ private struct TranscriptMessageRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Label(message.role.displayName, systemImage: message.role.symbol)
+                FunctionalLabel(message.role.displayName, systemSymbolName: message.role.symbol)
                     .font(.sora(10, weight: .semibold))
                     .foregroundStyle(message.role.accentColor)
 

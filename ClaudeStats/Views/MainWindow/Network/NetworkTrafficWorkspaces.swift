@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ClaudeStatsIconography
 
 private enum NetworkWorkspacePaneMetrics {
     static let webSocketSessionMinWidth: CGFloat = 220
@@ -115,8 +116,8 @@ struct NetworkWebSocketWorkspace: View {
                                     .lineLimit(1)
                                     .truncationMode(.middle)
                                 HStack(spacing: 8) {
-                                    Label("\(session.sentCount)", systemImage: "arrow.up")
-                                    Label("\(session.receivedCount)", systemImage: "arrow.down")
+                                    FunctionalLabel("\(session.sentCount)", systemSymbolName: "arrow.up")
+                                    FunctionalLabel("\(session.receivedCount)", systemSymbolName: "arrow.down")
                                     Spacer()
                                     Text(session.lastActivityAt.formatted(date: .omitted, time: .standard))
                                 }
@@ -160,7 +161,7 @@ struct NetworkWebSocketWorkspace: View {
             .padding(.trailing, 10)
 
             HStack {
-                Image(systemName: "magnifyingglass")
+                FunctionalIconView(systemSymbolName: "magnifyingglass")
                     .foregroundStyle(Color.stxMuted)
                 TextField("Search payload", text: $store.webSocketFilter.query)
                     .textFieldStyle(.plain)
@@ -202,7 +203,7 @@ struct NetworkWebSocketWorkspace: View {
                                     .truncationMode(.tail)
                                 Spacer()
                                 if message.isInjected {
-                                    Image(systemName: "paperplane.fill")
+                                    FunctionalIconView(systemSymbolName: "paperplane.fill")
                                         .foregroundStyle(Color.stxAccent)
                                 }
                             }
@@ -300,7 +301,7 @@ struct NetworkWebSocketWorkspace: View {
                 Button {
                     store.sendWebSocketMessage()
                 } label: {
-                    Label("Send", systemImage: "paperplane")
+                    FunctionalLabel("Send", systemSymbolName: "paperplane")
                 }
                 .disabled(store.selectedWebSocketSession?.isActive != true || store.webSocketSendDraft.payloadText.isEmpty)
             }
@@ -379,7 +380,7 @@ struct NetworkReplayWorkspace: View {
                 Button {
                     store.createComposeSession()
                 } label: {
-                    Image(systemName: "plus")
+                    FunctionalIconView(systemSymbolName: "plus")
                 }
                 .buttonStyle(.plain)
             }
@@ -448,7 +449,7 @@ struct NetworkReplayWorkspace: View {
             Button {
                 store.importRequestToReplay()
             } label: {
-                Label("Import to Replay", systemImage: "square.and.arrow.down")
+                FunctionalLabel("Import to Replay", systemSymbolName: "square.and.arrow.down")
             }
             .disabled(store.importRequestText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
@@ -463,7 +464,7 @@ struct NetworkReplayWorkspace: View {
                 Button {
                     store.sendSelectedReplaySession()
                 } label: {
-                    Label("Send", systemImage: "paperplane")
+                    FunctionalLabel("Send", systemSymbolName: "paperplane")
                 }
                 .disabled(store.selectedReplaySession == nil || store.isReplayWorking)
             }
@@ -512,7 +513,7 @@ struct NetworkReplayWorkspace: View {
                         Button {
                             removeHeader(header.id)
                         } label: {
-                            Image(systemName: "minus.circle")
+                            FunctionalIconView(systemSymbolName: "minus.circle")
                         }
                         .buttonStyle(.plain)
                     }
@@ -520,7 +521,7 @@ struct NetworkReplayWorkspace: View {
                 Button {
                     addHeader()
                 } label: {
-                    Label("Add Header", systemImage: "plus.circle")
+                    FunctionalLabel("Add Header", systemSymbolName: "plus.circle")
                 }
                 .buttonStyle(.borderless)
 
@@ -803,7 +804,7 @@ struct NetworkAutomateWorkspace: View {
                     Button {
                         store.runAutomate()
                     } label: {
-                        Label("Run", systemImage: "play.fill")
+                        FunctionalLabel("Run", systemSymbolName: "play.fill")
                     }
                     .disabled(store.automateDraft == nil || store.isAutomateWorking)
                 }
@@ -958,7 +959,7 @@ private struct NetworkWorkspaceEmptyState: View {
 @MainActor
 private func workspaceHeader(_ title: String, symbol: String) -> some View {
     HStack(spacing: 8) {
-        Image(systemName: symbol)
+        FunctionalIconView(systemSymbolName: symbol)
             .font(.sora(12, weight: .semibold))
             .foregroundStyle(.primary)
             .fixedSize()
@@ -1047,9 +1048,9 @@ private func workspaceAdaptiveActionButton(
 ) -> some View {
     Button(action: action) {
         if showsTitle {
-            Label(title, systemImage: symbol)
+            FunctionalLabel(title, systemSymbolName: symbol)
         } else {
-            Image(systemName: symbol)
+            FunctionalIconView(systemSymbolName: symbol)
                 .frame(width: 18)
         }
     }

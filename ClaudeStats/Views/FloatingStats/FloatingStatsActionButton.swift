@@ -1,4 +1,5 @@
 import SwiftUI
+import ClaudeStatsIconography
 
 struct FloatingStatsActionButton: View {
     @Environment(\.isEnabled) private var isEnabled
@@ -14,7 +15,7 @@ struct FloatingStatsActionButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: symbol)
+            FunctionalIconView(systemSymbolName: symbol)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(iconColor)
                 .frame(width: 32, height: 28)

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ClaudeStatsIconography
 
 struct LinuxDoTopicDetailView: View {
     @Bindable var store: LinuxDoStore
@@ -11,7 +12,7 @@ struct LinuxDoTopicDetailView: View {
                 detail(state: state, topicID: topicID)
             } else {
                 ContentUnavailableView {
-                    Label("Select a Topic", systemImage: "text.bubble")
+                    FunctionalLabel("Select a Topic", systemSymbolName: "text.bubble")
                 } description: {
                     Text("Choose a LinuxDo topic to read it here.")
                 }
@@ -49,7 +50,7 @@ struct LinuxDoTopicDetailView: View {
             }
         } else {
             ContentUnavailableView {
-                Label("Topic Unavailable", systemImage: "exclamationmark.triangle")
+                FunctionalLabel("Topic Unavailable", systemSymbolName: "exclamationmark.triangle")
             } description: {
                 Text(state.error ?? "Linux.do did not return this topic.")
             }
@@ -100,7 +101,7 @@ struct LinuxDoTopicDetailView: View {
                                 ProgressView()
                                     .controlSize(.small)
                             } else {
-                                Label("Load More Posts", systemImage: "arrow.down.circle")
+                                FunctionalLabel("Load More Posts", systemSymbolName: "arrow.down.circle")
                             }
                         }
                         .frame(maxWidth: .infinity)
@@ -139,13 +140,13 @@ struct LinuxDoTopicDetailView: View {
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 10) {
-                    Label("\(detail.postsCount)", systemImage: "text.bubble")
-                    Label("\(detail.posts.count) loaded", systemImage: "tray.and.arrow.down")
+                    FunctionalLabel("\(detail.postsCount)", systemSymbolName: "text.bubble")
+                    FunctionalLabel("\(detail.posts.count) loaded", systemSymbolName: "tray.and.arrow.down")
                     if state.isStale {
-                        Label("Stale", systemImage: "clock.badge.exclamationmark")
+                        FunctionalLabel("Stale", systemSymbolName: "clock.badge.exclamationmark")
                     }
                     if state.isJumping {
-                        Label("Jumping", systemImage: "arrow.up.and.down")
+                        FunctionalLabel("Jumping", systemSymbolName: "arrow.up.and.down")
                     }
                 }
                 .font(.sora(10).monospacedDigit())
@@ -169,7 +170,7 @@ struct LinuxDoTopicDetailView: View {
                 Button {
                     NSWorkspace.shared.open(url)
                 } label: {
-                    Label("Open", systemImage: "safari")
+                    FunctionalLabel("Open", systemSymbolName: "safari")
                 }
                 .controlSize(.small)
             }
@@ -193,7 +194,7 @@ private struct LinuxDoPostView: View {
                 AsyncImage(url: post.avatarURL) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {
-                    Image(systemName: "person.crop.circle.fill")
+                    FunctionalIconView(systemSymbolName: "person.crop.circle.fill")
                         .foregroundStyle(Color.stxMuted)
                 }
                 .frame(width: 38, height: 38)
@@ -237,13 +238,13 @@ private struct LinuxDoPostView: View {
 
                 HStack(spacing: 12) {
                     if post.likeCount > 0 {
-                        Label("\(post.likeCount)", systemImage: "heart")
+                        FunctionalLabel("\(post.likeCount)", systemSymbolName: "heart")
                     }
                     if post.replyCount > 0 {
-                        Label("\(post.replyCount)", systemImage: "arrowshape.turn.up.left")
+                        FunctionalLabel("\(post.replyCount)", systemSymbolName: "arrowshape.turn.up.left")
                     }
                     if post.reads > 0 {
-                        Label("\(post.reads)", systemImage: "eye")
+                        FunctionalLabel("\(post.reads)", systemSymbolName: "eye")
                     }
                     Spacer(minLength: 0)
                 }
@@ -285,7 +286,7 @@ private struct LinuxDoContentBlockView: View {
                             AsyncImage(url: avatarURL) { image in
                                 image.resizable().scaledToFill()
                             } placeholder: {
-                                Image(systemName: "quote.bubble")
+                                FunctionalIconView(systemSymbolName: "quote.bubble")
                                     .foregroundStyle(Color.stxMuted)
                             }
                             .frame(width: 18, height: 18)
@@ -535,7 +536,7 @@ private struct LinuxDoDisclosureBlockView: View {
             .padding(.top, 8)
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: icon)
+                FunctionalIconView(systemSymbolName: icon)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(Color.stxMuted)
                 LinuxDoInlineText(nodes: summary)
@@ -559,7 +560,7 @@ private struct LinuxDoTimelineRail: View {
                 ProgressView()
                     .controlSize(.small)
             } else {
-                Image(systemName: "line.3.horizontal")
+                FunctionalIconView(systemSymbolName: "line.3.horizontal")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Color.stxMuted)
             }

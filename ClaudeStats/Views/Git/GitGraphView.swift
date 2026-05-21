@@ -1,4 +1,5 @@
 import SwiftUI
+import ClaudeStatsIconography
 
 /// The commit DAG for one repository — gitk/GitLens-style: colored branch lanes
 /// drawn per row, commit nodes, merge bends, ref pills, author initials, subject,
@@ -221,7 +222,7 @@ struct GitGraphView: View {
                     Button { detailHash = commit.hash } label: {
                         BracketBox(spacing: 4) {
                             Text("MORE").font(.sora(9, weight: .semibold)).tracking(0.8)
-                            Image(systemName: "arrow.up.right").font(.system(size: 9, weight: .bold))
+                            FunctionalIconView(systemSymbolName: "arrow.up.right", size: 9)
                         }
                     }
                     .buttonStyle(.plain)

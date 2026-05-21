@@ -1,4 +1,5 @@
 import SwiftUI
+import ClaudeStatsIconography
 
 struct NotchIslandSettingsSidebar: View {
     @Binding var selection: NotchIslandSettingsTab
@@ -45,7 +46,7 @@ private struct NotchIslandSidebarRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Image(systemName: tab.symbol)
+                FunctionalIconView(systemSymbolName: tab.symbol)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(iconForeground)
                     .frame(width: 26, height: 26)

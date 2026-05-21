@@ -1,4 +1,5 @@
 import SwiftUI
+import ClaudeStatsIconography
 
 struct LinuxDoSidebarColumn: View {
     @Bindable var store: LinuxDoStore
@@ -88,7 +89,7 @@ struct LinuxDoSourceColumn: View {
             Button {
                 store.submitSearch()
             } label: {
-                Label("Search", systemImage: "magnifyingglass")
+                FunctionalLabel("Search", systemSymbolName: "magnifyingglass")
                     .frame(maxWidth: .infinity)
             }
             .controlSize(.small)
@@ -118,7 +119,7 @@ struct LinuxDoSourceColumn: View {
     private var accountSummary: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Image(systemName: store.isAuthenticated ? "checkmark.seal" : "person")
+                FunctionalIconView(systemSymbolName: store.isAuthenticated ? "checkmark.seal" : "person")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(store.isAuthenticated ? Color.stxAccent : Color.stxMuted)
                     .frame(width: 18)
@@ -149,7 +150,7 @@ struct LinuxDoSourceColumn: View {
                     Button {
                         onSignIn()
                     } label: {
-                        Label("Sign In", systemImage: "person.crop.circle.badge.plus")
+                        FunctionalLabel("Sign In", systemSymbolName: "person.crop.circle.badge.plus")
                     }
                     .controlSize(.small)
                     .disabled(!signInEnabled)
@@ -191,7 +192,7 @@ struct LinuxDoSourceColumn: View {
                         .frame(width: 8, height: 8)
                         .frame(width: 16)
                 } else {
-                    Image(systemName: symbol)
+                    FunctionalIconView(systemSymbolName: symbol)
                         .frame(width: 16)
                         .foregroundStyle(store.selectedFeed == feed ? Color.stxAccent : Color.stxMuted)
                 }
