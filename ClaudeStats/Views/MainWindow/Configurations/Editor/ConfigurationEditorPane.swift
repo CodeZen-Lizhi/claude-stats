@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import ClaudeStatsIconography
 
 struct ConfigurationEditorPane: View {
     let profile: ConfigProfile?
@@ -60,7 +59,7 @@ struct ConfigurationEditorPane: View {
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(editor.diagnostics) { diagnostic in
                     HStack(alignment: .top, spacing: 8) {
-                        FunctionalIconView(systemSymbolName: diagnostic.severity == .error ? "exclamationmark.triangle.fill" : "exclamationmark.triangle")
+                        Image(systemName: diagnostic.severity == .error ? "exclamationmark.triangle.fill" : "exclamationmark.triangle")
                             .foregroundStyle(diagnostic.severity == .error ? Color(red: 0.85, green: 0.22, blue: 0.18) : Color(red: 0.92, green: 0.58, blue: 0.16))
                             .frame(width: 16)
                         VStack(alignment: .leading, spacing: 2) {
@@ -124,7 +123,7 @@ private struct ConfigurationEditorToolbar: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            FunctionalIconView(systemSymbolName: iconName)
+            Image(systemName: iconName)
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(Color.stxMuted)
                 .frame(width: 18)
@@ -158,26 +157,26 @@ private struct ConfigurationEditorToolbar: View {
 
     private func actionButtons(showLabels: Bool) -> some View {
         HStack(spacing: 8) {
-            toolbarButton("Save to Profile", systemSymbolName: "tray.and.arrow.down", showLabels: showLabels, disabled: isWorking || !isDirty, action: saveToProfile)
-            toolbarButton("Save to Disk", systemSymbolName: "externaldrive", showLabels: showLabels, disabled: isWorking, action: saveToDisk)
-            toolbarButton("Revert", systemSymbolName: "arrow.counterclockwise", showLabels: showLabels, disabled: isWorking || !isDirty, action: revert)
-            toolbarButton("Apply Profile", systemSymbolName: "switch.2", showLabels: showLabels, disabled: isWorking || isDirty, action: applyProfile)
-            toolbarButton("Open External", systemSymbolName: "arrow.up.right.square", showLabels: showLabels, disabled: isWorking || path.isEmpty, action: openExternal)
+            toolbarButton("Save to Profile", systemImage: "tray.and.arrow.down", showLabels: showLabels, disabled: isWorking || !isDirty, action: saveToProfile)
+            toolbarButton("Save to Disk", systemImage: "externaldrive", showLabels: showLabels, disabled: isWorking, action: saveToDisk)
+            toolbarButton("Revert", systemImage: "arrow.counterclockwise", showLabels: showLabels, disabled: isWorking || !isDirty, action: revert)
+            toolbarButton("Apply Profile", systemImage: "switch.2", showLabels: showLabels, disabled: isWorking || isDirty, action: applyProfile)
+            toolbarButton("Open External", systemImage: "arrow.up.right.square", showLabels: showLabels, disabled: isWorking || path.isEmpty, action: openExternal)
         }
     }
 
     private func toolbarButton(
         _ title: String,
-        systemSymbolName: String,
+        systemImage: String,
         showLabels: Bool,
         disabled: Bool,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             if showLabels {
-                FunctionalLabel(title, systemSymbolName: systemSymbolName)
+                Label(title, systemImage: systemImage)
             } else {
-                FunctionalIconView(systemSymbolName: systemSymbolName)
+                Image(systemName: systemImage)
             }
         }
         .help(title)
@@ -204,7 +203,7 @@ private struct ConfigurationEditorStatusBar: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            FunctionalLabel("Line \(editor.cursorLine), column \(editor.cursorColumn)", systemSymbolName: "text.cursor")
+            Label("Line \(editor.cursorLine), column \(editor.cursorColumn)", systemImage: "text.cursor")
             Text("\(editor.draftCharacterCount) chars")
             if let diagnostic = editor.primaryDiagnostic {
                 Text(diagnostic.severity == .error ? "Error" : "Warning")
@@ -306,26 +305,26 @@ private struct ConfigurationProfileOverviewPane: View {
             Button {
                 applyProfile()
             } label: {
-                FunctionalLabel("Apply Profile", systemSymbolName: "switch.2")
+                Label("Apply Profile", systemImage: "switch.2")
             }
             .disabled(isWorking)
             Button {
                 duplicateProfile()
             } label: {
-                FunctionalLabel("Duplicate", systemSymbolName: "plus.square.on.square")
+                Label("Duplicate", systemImage: "plus.square.on.square")
             }
             .disabled(isWorking)
             Button(role: .destructive) {
                 deleteProfile()
             } label: {
-                FunctionalLabel("Delete", systemSymbolName: "trash")
+                Label("Delete", systemImage: "trash")
             }
             .disabled(isWorking)
             if latestBackupURL != nil {
                 Button {
                     revealBackup()
                 } label: {
-                    FunctionalLabel("Reveal Backup", systemSymbolName: "arrow.uturn.backward.circle")
+                    Label("Reveal Backup", systemImage: "arrow.uturn.backward.circle")
                 }
             }
         }

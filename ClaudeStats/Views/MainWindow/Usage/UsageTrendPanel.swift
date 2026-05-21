@@ -1,5 +1,4 @@
 import SwiftUI
-import ClaudeStatsIconography
 import Charts
 
 struct UsageTrendPanel: View {
@@ -188,7 +187,7 @@ private struct UsageIconButton: View {
 
     var body: some View {
         Button(action: action) {
-            FunctionalIconView(systemSymbolName: systemName)
+            Image(systemName: systemName)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(active ? Color.stxAccent : (hovering ? .primary : Color.stxMuted))
                 .frame(width: 26, height: 24)

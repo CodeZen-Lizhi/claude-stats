@@ -1,5 +1,4 @@
 import SwiftUI
-import ClaudeStatsIconography
 
 struct MainSystemMonitorView: View {
     @Environment(AppEnvironment.self) private var env
@@ -57,7 +56,7 @@ struct MainSystemMonitorView: View {
             Button {
                 Task { await vm.refreshNow() }
             } label: {
-                FunctionalLabel("Refresh", systemSymbolName: "arrow.clockwise")
+                Label("Refresh", systemImage: "arrow.clockwise")
                     .font(.sora(11, weight: .medium))
             }
             .buttonStyle(.bordered)

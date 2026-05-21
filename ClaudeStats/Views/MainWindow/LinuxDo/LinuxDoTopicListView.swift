@@ -1,5 +1,4 @@
 import SwiftUI
-import ClaudeStatsIconography
 
 struct LinuxDoTopicListView: View {
     @Bindable var store: LinuxDoStore
@@ -53,7 +52,7 @@ struct LinuxDoTopicListView: View {
             }
         } else if state.topics.isEmpty {
             ContentUnavailableView {
-                FunctionalLabel("No Topics", systemSymbolName: "tray")
+                Label("No Topics", systemImage: "tray")
             } description: {
                 Text(state.error ?? "Nothing to show for this feed yet.")
             }
@@ -178,7 +177,7 @@ private struct LinuxDoTopicRow: View {
     }
 
     private func stat(_ symbol: String, _ value: Int) -> some View {
-        FunctionalLabel("\(value)", systemSymbolName: symbol)
+        Label("\(value)", systemImage: symbol)
             .font(.sora(9).monospacedDigit())
             .foregroundStyle(Color.stxMuted)
             .labelStyle(.titleAndIcon)
@@ -189,7 +188,7 @@ struct LinuxDoInlineError: View {
     let message: String
 
     var body: some View {
-        FunctionalLabel(message, systemSymbolName: "exclamationmark.triangle")
+        Label(message, systemImage: "exclamationmark.triangle")
             .font(.sora(11))
             .foregroundStyle(.orange)
             .fixedSize(horizontal: false, vertical: true)

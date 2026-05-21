@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import ClaudeStatsIconography
 
 private enum SkillsPaneMetrics {
     static let listMinWidth: CGFloat = 320
@@ -274,7 +273,7 @@ private struct SkillsHeader: View {
                 refreshRemote()
             }
         } label: {
-            FunctionalLabel("Refresh", systemSymbolName: "arrow.clockwise")
+            Label("Refresh", systemImage: "arrow.clockwise")
         }
         .controlSize(.small)
         .disabled(isLoading)
@@ -302,7 +301,7 @@ private struct SkillsWorkspaceBar: View {
                     Button {
                         selectTab(tab)
                     } label: {
-                        FunctionalLabel(tab.title, systemSymbolName: tab.symbol)
+                        Label(tab.title, systemImage: tab.symbol)
                             .font(.sora(11, weight: selectedTab == tab ? .semibold : .medium))
                             .foregroundStyle(selectedTab == tab ? Color.stxAccent : Color.stxMuted)
                             .lineLimit(1)
@@ -389,7 +388,7 @@ private struct SkillsWorkspaceControls: View {
             Button {
                 showingFilters.toggle()
             } label: {
-                FunctionalIconView(systemSymbolName: "line.3.horizontal.decrease.circle")
+                Image(systemName: "line.3.horizontal.decrease.circle")
             }
             .controlSize(.small)
             .help("Filters")
@@ -426,7 +425,7 @@ private struct SkillsProviderPicker: View {
         Picker("Provider", selection: providerBinding) {
             Text("All providers").tag("all")
             ForEach(providers) { provider in
-                FunctionalLabel(provider.displayName, systemSymbolName: provider.symbol).tag(provider.id)
+                Label(provider.displayName, systemImage: provider.symbol).tag(provider.id)
             }
         }
         .labelsHidden()
@@ -471,9 +470,9 @@ private struct SkillsAPIKeyButton: View {
             showingPopover.toggle()
         } label: {
             if showLabel {
-                FunctionalLabel(hasAPIKey ? "API key saved" : "Set API key", systemSymbolName: hasAPIKey ? "key.fill" : "key")
+                Label(hasAPIKey ? "API key saved" : "Set API key", systemImage: hasAPIKey ? "key.fill" : "key")
             } else {
-                FunctionalIconView(systemSymbolName: hasAPIKey ? "key.fill" : "key")
+                Image(systemName: hasAPIKey ? "key.fill" : "key")
             }
         }
         .controlSize(.small)
@@ -503,7 +502,7 @@ private struct SkillsAPIKeyPopover: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 7) {
-                FunctionalIconView(systemSymbolName: hasAPIKey ? "key.fill" : "key")
+                Image(systemName: hasAPIKey ? "key.fill" : "key")
                     .foregroundStyle(hasAPIKey ? Color.stxAccent : Color.stxMuted)
                 Text(hasAPIKey ? "API key saved" : "skills.sh API key")
                     .font(.sora(12, weight: .semibold))
@@ -581,7 +580,7 @@ private struct SkillsListColumn: View {
             }
 
             HStack(spacing: 7) {
-                FunctionalIconView(systemSymbolName: "magnifyingglass")
+                Image(systemName: "magnifyingglass")
                     .font(.system(size: 11))
                     .foregroundStyle(Color.stxMuted)
                 TextField(searchPlaceholder, text: $searchText)
@@ -596,7 +595,7 @@ private struct SkillsListColumn: View {
                     Button {
                         searchRemote()
                     } label: {
-                        FunctionalIconView(systemSymbolName: "arrow.right")
+                        Image(systemName: "arrow.right")
                     }
                     .buttonStyle(.plain)
                     .help("Search skills.sh")
@@ -894,7 +893,7 @@ private struct SkillsInspectorShell<Actions: View, Content: View>: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: 8) {
-            FunctionalIconView(systemSymbolName: symbol)
+            Image(systemName: symbol)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Color.stxAccent)
                 .frame(width: 18)
@@ -983,7 +982,7 @@ private struct SkillsLocalDetail: View {
                         .font(.sora(12, weight: .semibold))
                     ForEach(detail.installedCopies) { copy in
                         HStack(alignment: .top, spacing: 9) {
-                            FunctionalIconView(systemSymbolName: copy.providerSymbol)
+                            Image(systemName: copy.providerSymbol)
                                 .foregroundStyle(Color.stxMuted)
                                 .frame(width: 18)
                             VStack(alignment: .leading, spacing: 3) {
@@ -1135,13 +1134,13 @@ private struct SkillsLocalActions: View {
 
     private var actionButtons: some View {
         HStack(spacing: 8) {
-            SkillsToolbarButton("Copy Path", systemSymbolName: "doc.on.doc", showLabel: false) {
+            SkillsToolbarButton("Copy Path", systemImage: "doc.on.doc", showLabel: false) {
                 SkillsClipboard.copy(actions.folderPath)
             }
-            SkillsToolbarButton("Reveal", systemSymbolName: "finder", showLabel: false) {
+            SkillsToolbarButton("Reveal", systemImage: "finder", showLabel: false) {
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: actions.skillMarkdownPath)])
             }
-            SkillsToolbarButton("Open", systemSymbolName: "arrow.up.right.square", showLabel: false) {
+            SkillsToolbarButton("Open", systemImage: "arrow.up.right.square", showLabel: false) {
                 NSWorkspace.shared.open(URL(fileURLWithPath: actions.skillMarkdownPath))
             }
         }
@@ -1157,12 +1156,12 @@ private struct SkillsRemoteActions: View {
 
     private var actionButtons: some View {
         HStack(spacing: 8) {
-            SkillsToolbarButton("Copy Install", systemSymbolName: "doc.on.doc", showLabel: false, disabled: actions.installCommand == nil) {
+            SkillsToolbarButton("Copy Install", systemImage: "doc.on.doc", showLabel: false, disabled: actions.installCommand == nil) {
                 if let command = actions.installCommand {
                     SkillsClipboard.copy(command)
                 }
             }
-            SkillsToolbarButton("Open", systemSymbolName: "arrow.up.right.square", showLabel: false, disabled: remoteURL == nil) {
+            SkillsToolbarButton("Open", systemImage: "arrow.up.right.square", showLabel: false, disabled: remoteURL == nil) {
                 if let remoteURL {
                     NSWorkspace.shared.open(remoteURL)
                 }
@@ -1275,10 +1274,10 @@ private struct SkillsRemoteRowContent: View, Equatable {
                 .truncationMode(.middle)
             HStack(spacing: 8) {
                 if let installs = skill.installs {
-                    FunctionalLabel("\(installs)", systemSymbolName: "arrow.down.circle")
+                    Label("\(installs)", systemImage: "arrow.down.circle")
                 }
                 if skill.isDuplicate {
-                    FunctionalLabel("Duplicate", systemSymbolName: "doc.on.doc")
+                    Label("Duplicate", systemImage: "doc.on.doc")
                 }
             }
             .font(.sora(9))
@@ -1425,7 +1424,7 @@ private struct SkillFilesList: View {
                 } else {
                     ForEach(files) { file in
                         HStack(spacing: 9) {
-                            FunctionalIconView(systemSymbolName: file.path == "SKILL.md" ? "doc.text" : "doc")
+                            Image(systemName: file.path == "SKILL.md" ? "doc.text" : "doc")
                                 .foregroundStyle(Color.stxMuted)
                                 .frame(width: 18)
                             Text(file.path)
@@ -1526,20 +1525,20 @@ private struct SkillsMiniMetric: View {
 
 private struct SkillsToolbarButton: View {
     let title: String
-    let systemSymbolName: String
+    let systemImage: String
     let showLabel: Bool
     let disabled: Bool
     let action: () -> Void
 
     init(
         _ title: String,
-        systemSymbolName: String,
+        systemImage: String,
         showLabel: Bool,
         disabled: Bool = false,
         action: @escaping () -> Void
     ) {
         self.title = title
-        self.systemSymbolName = systemSymbolName
+        self.systemImage = systemImage
         self.showLabel = showLabel
         self.disabled = disabled
         self.action = action
@@ -1548,9 +1547,9 @@ private struct SkillsToolbarButton: View {
     var body: some View {
         Button(action: action) {
             if showLabel {
-                FunctionalLabel(title, systemSymbolName: systemSymbolName)
+                Label(title, systemImage: systemImage)
             } else {
-                FunctionalIconView(systemSymbolName: systemSymbolName)
+                Image(systemName: systemImage)
             }
         }
         .controlSize(.small)
@@ -1566,7 +1565,7 @@ private struct SkillsEmptyState: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            FunctionalIconView(systemSymbolName: symbol)
+            Image(systemName: symbol)
                 .font(.system(size: 20, weight: .medium))
                 .foregroundStyle(Color.stxMuted)
             Text(title)

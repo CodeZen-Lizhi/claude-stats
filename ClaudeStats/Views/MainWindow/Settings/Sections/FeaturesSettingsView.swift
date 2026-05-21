@@ -1,5 +1,4 @@
 import SwiftUI
-import ClaudeStatsIconography
 
 struct FeaturesSettingsView: View {
     @Environment(AppEnvironment.self) private var env
@@ -174,7 +173,7 @@ private struct ActivityFeaturePreview: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                FunctionalLabel("Activity", systemSymbolName: "waveform")
+                Label("Activity", systemImage: "waveform")
                     .font(.sora(12, weight: .semibold))
                 Spacer()
                 Text("Today")
@@ -207,7 +206,7 @@ private struct GitTrackingFeaturePreview: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                FunctionalLabel("Repository activity", systemSymbolName: "folder")
+                Label("Repository activity", systemImage: "folder")
                     .font(.sora(12, weight: .semibold))
                 Spacer()
                 Text("+1.8k")
@@ -245,7 +244,7 @@ private struct SystemMonitorFeaturePreview: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                FunctionalLabel("System", systemSymbolName: "cpu")
+                Label("System", systemImage: "cpu")
                     .font(.sora(12, weight: .semibold))
                 Spacer()
                 Text("3s")
@@ -266,7 +265,7 @@ private struct GitHubFeaturePreview: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                FunctionalLabel("Overlap", systemSymbolName: "square.grid.3x3")
+                Label("Overlap", systemImage: "square.grid.3x3")
                     .font(.sora(12, weight: .semibold))
                 Spacer()
                 Text("90d")
@@ -315,7 +314,7 @@ private struct LeaderboardsFeaturePreview: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                FunctionalLabel("Leaderboard", systemSymbolName: "trophy")
+                Label("Leaderboard", systemImage: "trophy")
                     .font(.sora(12, weight: .semibold))
                 Spacer()
                 Text("Daily")
@@ -389,7 +388,7 @@ private struct NotchIslandFeaturePreview: View {
 
             HStack(spacing: 24) {
                 ForEach(["house.fill", "tray.fill", "timer", "chart.xyaxis.line"], id: \.self) { symbol in
-                    FunctionalIconView(systemSymbolName: symbol)
+                    Image(systemName: symbol)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(symbol == "house.fill" ? Color.primary : Color.stxMuted)
                         .frame(width: 26, height: 26)

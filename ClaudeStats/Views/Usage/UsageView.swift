@@ -1,5 +1,4 @@
 import SwiftUI
-import ClaudeStatsIconography
 import Charts
 
 struct UsageView: View {
@@ -292,7 +291,7 @@ struct UsageView: View {
     private func controlButton(systemName: String, active: Bool, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             BracketBox(spacing: 3) {
-                FunctionalIconView(systemSymbolName: systemName, size: 9)
+                Image(systemName: systemName).font(.system(size: 9, weight: .bold))
             }
         }
         .buttonStyle(.plain)

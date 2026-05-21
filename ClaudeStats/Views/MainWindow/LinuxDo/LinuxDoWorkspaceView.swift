@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import ClaudeStatsIconography
 
 private enum LinuxDoPaneMetrics {
     static let listMinWidth: CGFloat = 340
@@ -69,7 +68,7 @@ private struct LinuxDoHeader: View {
                 Button {
                     Task { await store.refreshCurrentFeed() }
                 } label: {
-                    FunctionalLabel("Refresh", systemSymbolName: "arrow.clockwise")
+                    Label("Refresh", systemImage: "arrow.clockwise")
                 }
                 .controlSize(.small)
                 .disabled(store.currentListState.isLoading || store.currentListState.isRefreshing)
@@ -77,7 +76,7 @@ private struct LinuxDoHeader: View {
                 Button {
                     NSWorkspace.shared.open(URL(string: "https://linux.do")!)
                 } label: {
-                    FunctionalLabel("Open", systemSymbolName: "safari")
+                    Label("Open", systemImage: "safari")
                 }
                 .controlSize(.small)
             }

@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import ClaudeStatsIconography
 
 struct AIConfigsSidebarColumn: View {
     @Binding var section: AIConfigsSection
@@ -75,7 +74,7 @@ struct AIConfigsSidebarColumn: View {
                 Button {
                     refresh()
                 } label: {
-                    FunctionalIconView(systemSymbolName: "arrow.clockwise")
+                    Image(systemName: "arrow.clockwise")
                         .font(.system(size: 12, weight: .semibold))
                         .frame(width: 24, height: 22)
                 }
@@ -98,7 +97,7 @@ struct AIConfigsSidebarColumn: View {
 
     private var searchField: some View {
         HStack(spacing: 6) {
-            FunctionalIconView(systemSymbolName: "magnifyingglass")
+            Image(systemName: "magnifyingglass")
                 .font(.system(size: 11))
                 .foregroundStyle(Color.stxMuted)
                 .accessibilityHidden(true)
@@ -110,7 +109,7 @@ struct AIConfigsSidebarColumn: View {
                 Button {
                     searchText = ""
                 } label: {
-                    FunctionalIconView(systemSymbolName: "xmark.circle.fill")
+                    Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(Color.stxMuted)
                 }
@@ -151,7 +150,7 @@ private struct AIConfigsSidebarSectionRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                FunctionalIconView(systemSymbolName: section.symbol)
+                Image(systemName: section.symbol)
                     .font(.system(size: 13, weight: .medium))
                     .frame(width: 18)
                     .foregroundStyle(isSelected ? Color.stxAccent : Color.stxMuted)

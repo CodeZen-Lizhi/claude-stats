@@ -1,5 +1,4 @@
 import SwiftUI
-import ClaudeStatsIconography
 
 struct FeatureControlCard<Preview: View, Controls: View>: View {
     let title: String
@@ -42,7 +41,7 @@ struct FeatureControlCard<Preview: View, Controls: View>: View {
                 .accessibilityHidden(true)
 
             HStack(alignment: .top, spacing: 12) {
-                FunctionalIconView(systemSymbolName: symbol)
+                Image(systemName: symbol)
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(Color.stxAccent)
                     .frame(width: 24, height: 24)
@@ -70,7 +69,7 @@ struct FeatureControlCard<Preview: View, Controls: View>: View {
                 Spacer(minLength: 8)
                 if let onConfigure {
                     Button(action: onConfigure) {
-                        FunctionalLabel("Configure", systemSymbolName: "slider.horizontal.3")
+                        Label("Configure", systemImage: "slider.horizontal.3")
                             .labelStyle(.titleAndIcon)
                     }
                     .controlSize(.small)
@@ -123,7 +122,7 @@ struct FeatureDisabledNotice: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            FunctionalIconView(systemSymbolName: "power")
+            Image(systemName: "power")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.stxAccent)
                 .frame(width: 22, height: 22)

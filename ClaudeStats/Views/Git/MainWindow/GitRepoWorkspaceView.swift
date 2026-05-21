@@ -1,5 +1,4 @@
 import SwiftUI
-import ClaudeStatsIconography
 
 struct GitRepoWorkspaceView: View {
     @Environment(AppEnvironment.self) private var env
@@ -129,7 +128,7 @@ struct GitRepoWorkspaceView: View {
                     Button {
                         vm.loadMore()
                     } label: {
-                        FunctionalLabel("More", systemSymbolName: "plus")
+                        Label("More", systemImage: "plus")
                             .font(.sora(10, weight: .semibold))
                     }
                     .buttonStyle(.plain)
@@ -399,7 +398,7 @@ private struct GitCommitInspector: View {
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                             Spacer(minLength: 6)
-                            FunctionalIconView(systemSymbolName: "chevron.right")
+                            Image(systemName: "chevron.right")
                                 .font(.system(size: 8, weight: .bold))
                                 .foregroundStyle(Color.stxMuted)
                         }
@@ -435,7 +434,7 @@ private struct GitCommitInspector: View {
     private func workingTreeSummary(_ summary: GitWorkingTreeSummary) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 9) {
-                FunctionalIconView(systemSymbolName: "square.and.pencil")
+                Image(systemName: "square.and.pencil")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(GitPalette.head)
                     .frame(width: 28, height: 28)

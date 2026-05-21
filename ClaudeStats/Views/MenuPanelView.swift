@@ -1,5 +1,4 @@
 import SwiftUI
-import ClaudeStatsIconography
 import AppKit
 
 /// Which pane of the stats panel is shown.
@@ -164,7 +163,7 @@ struct StatsPanelBody: View {
                     openWindow(id: GitActivityView.windowID)
                 } label: {
                     BracketBox(spacing: 4) {
-                        FunctionalIconView(systemSymbolName: "arrow.triangle.branch", size: 10)
+                        Image(systemName: "arrow.triangle.branch").font(.system(size: 10, weight: .bold))
                     }
                 }
                 .buttonStyle(.plain)
@@ -179,7 +178,7 @@ struct StatsPanelBody: View {
                         if env.store.isLoading {
                             ProgressView().controlSize(.mini)
                         } else {
-                            FunctionalIconView(systemSymbolName: "arrow.clockwise", size: 10)
+                            Image(systemName: "arrow.clockwise").font(.system(size: 10, weight: .bold))
                         }
                     }
                 }
@@ -193,7 +192,7 @@ struct StatsPanelBody: View {
                     openWindow(id: MainWindowView.windowID)
                 } label: {
                     BracketBox(spacing: 4) {
-                        FunctionalIconView(systemSymbolName: "macwindow", size: 10)
+                        Image(systemName: "macwindow").font(.system(size: 10, weight: .bold))
                     }
                 }
                 .buttonStyle(.plain)
@@ -245,7 +244,7 @@ struct MenuPanelView: View {
                 NotificationCenter.default.post(name: .openSettingsInMainWindow, object: nil)
             } label: {
                 BracketBox(spacing: 5) {
-                    FunctionalLabel("SETTINGS", systemSymbolName: "gearshape")
+                    Label("SETTINGS", systemImage: "gearshape")
                         .labelStyle(.titleAndIcon)
                         .font(.sora(10))
                         .tracking(0.8)
@@ -261,7 +260,7 @@ struct MenuPanelView: View {
                 openWindow(id: ShareExportView.windowID)
             } label: {
                 BracketBox(spacing: 5) {
-                    FunctionalLabel("SHARE", systemSymbolName: "square.and.arrow.up")
+                    Label("SHARE", systemImage: "square.and.arrow.up")
                         .labelStyle(.titleAndIcon)
                         .font(.sora(10))
                         .tracking(0.8)
@@ -274,7 +273,7 @@ struct MenuPanelView: View {
                 NSApplication.shared.terminate(nil)
             } label: {
                 BracketBox(spacing: 5) {
-                    FunctionalLabel("QUIT", systemSymbolName: "power")
+                    Label("QUIT", systemImage: "power")
                         .labelStyle(.titleAndIcon)
                         .font(.sora(10))
                         .tracking(0.8)
@@ -293,7 +292,7 @@ struct MenuPanelView: View {
             env.updater.checkForUpdates()
         } label: {
             HStack(spacing: 5) {
-                FunctionalIconView(systemSymbolName: "arrow.down.circle.fill")
+                Image(systemName: "arrow.down.circle.fill")
                     .font(.system(size: 10, weight: .bold))
                 Text("UPDATE")
                     .font(.sora(10, weight: .semibold))

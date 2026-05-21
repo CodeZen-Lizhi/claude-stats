@@ -1,5 +1,4 @@
 import SwiftUI
-import ClaudeStatsIconography
 
 struct LeaderboardMetricChips: View {
     @Binding var metric: LeaderboardMetric
@@ -94,7 +93,7 @@ struct LeaderboardDailyPeriodControl: View {
                             help: String,
                             action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            FunctionalIconView(systemSymbolName: systemName)
+            Image(systemName: systemName)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(disabled ? Color.stxMuted.opacity(0.35) : Color.stxMuted)
                 .frame(width: 24, height: 30)
@@ -163,7 +162,7 @@ private struct LeaderboardChipLabel: View {
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
                 .opacity(compact ? 0 : 1)
-            FunctionalIconView(systemSymbolName: symbolName)
+            Image(systemName: symbolName)
                 .font(.system(size: 12, weight: .semibold))
                 .opacity(compact ? 1 : 0)
         }

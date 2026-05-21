@@ -1,5 +1,4 @@
 import SwiftUI
-import ClaudeStatsIconography
 import Charts
 import AppKit
 
@@ -112,7 +111,7 @@ struct GitActivityView: View {
         let vm = activityModel
         return Button { vm.onlyMyCommits.toggle() } label: {
             BracketBox(spacing: 6) {
-                FunctionalIconView(systemSymbolName: vm.onlyMyCommits ? "checkmark.square.fill" : "square")
+                Image(systemName: vm.onlyMyCommits ? "checkmark.square.fill" : "square")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(vm.onlyMyCommits ? Color.stxAccent : Color.stxMuted)
                 Text("MY COMMITS")
@@ -441,7 +440,7 @@ private struct RecentCommitsPanel: View {
                 isExpanded.toggle()
             }
         } label: {
-            FunctionalIconView(systemSymbolName: isExpanded ? "chevron.up" : "chevron.down")
+            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(Color.stxMuted)
                 .frame(width: 18, height: 18)
@@ -554,7 +553,7 @@ private struct RepoTimelineRow: View {
     }
 
     private var chevron: some View {
-        FunctionalIconView(systemSymbolName: "chevron.right")
+        Image(systemName: "chevron.right")
             .font(.system(size: 8, weight: .bold))
             .foregroundStyle(hovering ? Color.primary.opacity(0.75) : Color.stxMuted)
             .frame(width: 16, height: 16)

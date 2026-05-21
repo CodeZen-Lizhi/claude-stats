@@ -1,5 +1,4 @@
 import SwiftUI
-import ClaudeStatsIconography
 
 struct FloatingStatsPanelView: View {
     @Environment(AppEnvironment.self) private var env
@@ -256,7 +255,7 @@ struct FloatingStatsPanelView: View {
                     .foregroundStyle(Color.stxMuted)
             }
             Spacer(minLength: 8)
-            FunctionalIconView(systemSymbolName: "arrow.up.and.down.and.arrow.left.and.right")
+            Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(Color.stxMuted)
                 .accessibilityHidden(true)

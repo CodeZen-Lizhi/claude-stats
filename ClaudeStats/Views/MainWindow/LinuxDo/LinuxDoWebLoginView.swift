@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import ClaudeStatsIconography
 @preconcurrency import WebKit
 
 struct LinuxDoWebLoginSheet: View {
@@ -32,7 +31,7 @@ struct LinuxDoWebLoginSheet: View {
                 Button {
                     openExternalBrowserSignIn()
                 } label: {
-                    FunctionalLabel("Open in Browser", systemSymbolName: "arrow.up.right.square")
+                    Label("Open in Browser", systemImage: "arrow.up.right.square")
                 }
                 .controlSize(.small)
                 .disabled(isVerifying || store.isSigningIn)

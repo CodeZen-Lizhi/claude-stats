@@ -1,5 +1,4 @@
 import SwiftUI
-import ClaudeStatsIconography
 
 enum AIConfigsPaneMetrics {
     static let browserMinWidth: CGFloat = 300
@@ -43,7 +42,7 @@ struct AIConfigsMetricCard: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 if let symbol {
-                    FunctionalIconView(systemSymbolName: symbol)
+                    Image(systemName: symbol)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(tint)
                         .frame(width: 16)
@@ -88,7 +87,7 @@ struct AIConfigsEmptyState: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            FunctionalIconView(systemSymbolName: symbol)
+            Image(systemName: symbol)
                 .font(.system(size: 24, weight: .medium))
                 .foregroundStyle(Color.stxMuted)
             Text(title)

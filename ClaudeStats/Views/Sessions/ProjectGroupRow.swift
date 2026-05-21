@@ -1,5 +1,4 @@
 import SwiftUI
-import ClaudeStatsIconography
 
 /// A tappable header row for one project: folder glyph, project name, session
 /// count, and a disclosure chevron that rotates when the group is expanded.
@@ -11,7 +10,7 @@ struct ProjectGroupRow: View {
     var body: some View {
         Button(action: toggle) {
             HStack(spacing: 10) {
-                FunctionalIconView(systemSymbolName: "folder")
+                Image(systemName: "folder")
                     .foregroundStyle(Color.stxMuted)
                     .frame(width: 18)
 
@@ -25,7 +24,7 @@ struct ProjectGroupRow: View {
                 Text("\(group.count)")
                     .font(.sora(9).monospacedDigit())
                     .foregroundStyle(Color.stxMuted)
-                FunctionalIconView(systemSymbolName: "chevron.right")
+                Image(systemName: "chevron.right")
                     .font(.sora(9, weight: .semibold))
                     .foregroundStyle(Color.stxMuted)
                     .rotationEffect(.degrees(isExpanded ? 90 : 0))

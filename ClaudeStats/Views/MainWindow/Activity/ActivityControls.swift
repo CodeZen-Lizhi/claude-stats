@@ -1,5 +1,4 @@
 import SwiftUI
-import ClaudeStatsIconography
 
 struct ActivityControls: View {
     @Binding var range: ActivityRange
@@ -66,7 +65,7 @@ struct ActivityControls: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            FunctionalIconView(systemSymbolName: systemName)
+            Image(systemName: systemName)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(disabled ? Color.stxMuted.opacity(0.35) : Color.stxMuted)
                 .frame(width: 24, height: 22)

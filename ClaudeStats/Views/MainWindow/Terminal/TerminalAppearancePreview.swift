@@ -1,5 +1,4 @@
 import SwiftUI
-import ClaudeStatsIconography
 
 struct TerminalAppearancePreview: View {
     @Environment(\.colorScheme) private var hostColorScheme
@@ -44,7 +43,7 @@ struct TerminalAppearancePreview: View {
             previewTab(title: "claude-stats", selected: true)
             previewTab(title: "build", selected: false)
             Spacer(minLength: 0)
-            FunctionalIconView(systemSymbolName: "plus")
+            Image(systemName: "plus")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(TerminalPalette.muted)
                 .frame(width: 30, height: 30)
@@ -56,7 +55,7 @@ struct TerminalAppearancePreview: View {
 
     private func previewTab(title: String, selected: Bool) -> some View {
         HStack(spacing: 8) {
-            FunctionalIconView(systemSymbolName: "terminal")
+            Image(systemName: "terminal")
                 .font(.system(size: 11, weight: .semibold))
             Text(title)
                 .font(.system(size: 12, weight: selected ? .semibold : .regular, design: .monospaced))
@@ -97,7 +96,7 @@ struct TerminalAppearancePreview: View {
 
     private var previewStatus: some View {
         HStack(spacing: 8) {
-            FunctionalIconView(systemSymbolName: "folder")
+            Image(systemName: "folder")
                 .font(.system(size: 11, weight: .medium))
             Text("~/dev/mac/claude-stats")
                 .font(.system(size: 11, weight: .regular, design: .monospaced))

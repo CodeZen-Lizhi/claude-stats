@@ -1,6 +1,5 @@
 import SpriteKit
 import SwiftUI
-import ClaudeStatsIconography
 
 struct TokenTownView: View {
     @Environment(AppEnvironment.self) private var env
@@ -81,7 +80,7 @@ struct TokenTownView: View {
     private func hud(map: TownMap, town: TownStore) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
-                FunctionalLabel("Token Town", systemSymbolName: MainPage.town.symbol)
+                Label("Token Town", systemImage: MainPage.town.symbol)
                     .font(.sora(16, weight: .semibold))
                 Text(map.weather.displayName)
                     .font(.sora(10, weight: .semibold))
@@ -146,7 +145,7 @@ struct TokenTownView: View {
                 Button {
                     town.resetLayout()
                 } label: {
-                    FunctionalIconView(systemSymbolName: "arrow.counterclockwise")
+                    Image(systemName: "arrow.counterclockwise")
                         .frame(width: 24, height: 22)
                 }
                 .buttonStyle(.plain)
@@ -180,7 +179,7 @@ struct TokenTownView: View {
                             town.discover(secret)
                         } label: {
                             HStack {
-                                FunctionalIconView(systemSymbolName: town.state.discoveredSecrets.contains(secret) ? "sparkles" : "questionmark.diamond")
+                                Image(systemName: town.state.discoveredSecrets.contains(secret) ? "sparkles" : "questionmark.diamond")
                                 Text(secret.replacingOccurrences(of: "-", with: " "))
                                 Spacer()
                             }
@@ -203,7 +202,7 @@ struct TokenTownView: View {
     private func selectedContent(map: TownMap, town: TownStore) -> some View {
         if let building = town.selectedBuilding {
             VStack(alignment: .leading, spacing: 8) {
-                FunctionalLabel(building.kind.displayName, systemSymbolName: "building.2")
+                Label(building.kind.displayName, systemImage: "building.2")
                     .font(.sora(13, weight: .semibold))
                 if let label = building.sourceLabel {
                     Text(label)
@@ -217,14 +216,14 @@ struct TokenTownView: View {
             }
         } else if let item = town.selectedPlacedItem {
             VStack(alignment: .leading, spacing: 8) {
-                FunctionalLabel(item.kind.displayName, systemSymbolName: item.kind.systemSymbol)
+                Label(item.kind.displayName, systemImage: item.kind.systemSymbol)
                     .font(.sora(13, weight: .semibold))
                 metricRow("Footprint", "\(item.footprint.size.width)x\(item.footprint.size.height)")
                 metricRow("Placed", Format.shortDate(item.purchasedAt))
             }
         } else if case .resident = town.selectedEntity {
             VStack(alignment: .leading, spacing: 8) {
-                FunctionalLabel("Town resident", systemSymbolName: "figure.walk")
+                Label("Town resident", systemImage: "figure.walk")
                     .font(.sora(13, weight: .semibold))
                 metricRow("Activity", town.state.residentMemory.lastActivity.displayName)
                 Text(town.state.residentMemory.thought)
@@ -233,13 +232,13 @@ struct TokenTownView: View {
             }
         } else if case .tile(let point) = town.selectedEntity, map.grid.contains(point) {
             VStack(alignment: .leading, spacing: 8) {
-                FunctionalLabel("Tile \(point.x), \(point.y)", systemSymbolName: "square.grid.3x3")
+                Label("Tile \(point.x), \(point.y)", systemImage: "square.grid.3x3")
                     .font(.sora(13, weight: .semibold))
                 metricRow("Kind", map.grid[point].rawValue)
             }
         } else {
             VStack(alignment: .leading, spacing: 8) {
-                FunctionalLabel("No selection", systemSymbolName: "cursorarrow")
+                Label("No selection", systemImage: "cursorarrow")
                     .font(.sora(13, weight: .semibold))
                 Text("Click buildings, residents, items, or tiles in the town.")
                     .font(.sora(11))
@@ -250,7 +249,7 @@ struct TokenTownView: View {
 
     private func thoughtBubble(town: TownStore) -> some View {
         HStack(spacing: 10) {
-            FunctionalIconView(systemSymbolName: "quote.bubble")
+            Image(systemName: "quote.bubble")
                 .foregroundStyle(Color.stxAccent)
             Text(town.state.residentMemory.thought)
                 .font(.sora(11))
@@ -293,7 +292,7 @@ struct TokenTownView: View {
         } label: {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    FunctionalIconView(systemSymbolName: item.kind.systemSymbol)
+                    Image(systemName: item.kind.systemSymbol)
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(Color.stxAccent)
                         .frame(width: 28, height: 28)
@@ -321,7 +320,7 @@ struct TokenTownView: View {
 
     private func statPill(title: String, value: String, symbol: String) -> some View {
         HStack(spacing: 6) {
-            FunctionalIconView(systemSymbolName: symbol)
+            Image(systemName: symbol)
             VStack(alignment: .leading, spacing: 0) {
                 Text(title)
                     .font(.sora(8, weight: .semibold))
@@ -337,7 +336,7 @@ struct TokenTownView: View {
 
     private func iconButton(_ help: String, symbol: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            FunctionalIconView(systemSymbolName: symbol)
+            Image(systemName: symbol)
                 .font(.system(size: 12, weight: .semibold))
                 .frame(width: 28, height: 24)
         }

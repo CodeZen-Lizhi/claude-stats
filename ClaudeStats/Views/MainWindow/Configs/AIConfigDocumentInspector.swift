@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import ClaudeStatsIconography
 
 struct AIConfigDocumentInspector: View {
     let document: AIConfigDocument?
@@ -31,7 +30,7 @@ struct AIConfigDocumentInspector: View {
 
     private func previewToolbar(_ document: AIConfigDocument) -> some View {
         HStack(alignment: .center, spacing: 10) {
-            FunctionalIconView(systemSymbolName: document.kind.symbol)
+            Image(systemName: document.kind.symbol)
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(Color.stxMuted)
                 .frame(width: 18)
@@ -63,28 +62,28 @@ struct AIConfigDocumentInspector: View {
 
     private func actionButtons(_ document: AIConfigDocument, showLabels: Bool) -> some View {
         HStack(spacing: 8) {
-            toolbarButton("Open", systemSymbolName: "arrow.up.right.square", showLabels: showLabels, disabled: !document.exists) {
+            toolbarButton("Open", systemImage: "arrow.up.right.square", showLabels: showLabels, disabled: !document.exists) {
                 NSWorkspace.shared.open(URL(fileURLWithPath: document.path))
             }
-            toolbarButton("Reveal", systemSymbolName: "finder", showLabels: showLabels, disabled: !document.exists) {
+            toolbarButton("Reveal", systemImage: "finder", showLabels: showLabels, disabled: !document.exists) {
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: document.path)])
             }
-            toolbarButton("Refresh", systemSymbolName: "arrow.clockwise", showLabels: showLabels, disabled: false, action: refresh)
+            toolbarButton("Refresh", systemImage: "arrow.clockwise", showLabels: showLabels, disabled: false, action: refresh)
         }
     }
 
     private func toolbarButton(
         _ title: String,
-        systemSymbolName: String,
+        systemImage: String,
         showLabels: Bool,
         disabled: Bool,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             if showLabels {
-                FunctionalLabel(title, systemSymbolName: systemSymbolName)
+                Label(title, systemImage: systemImage)
             } else {
-                FunctionalIconView(systemSymbolName: systemSymbolName)
+                Image(systemName: systemImage)
             }
         }
         .controlSize(.small)
@@ -96,7 +95,7 @@ struct AIConfigDocumentInspector: View {
         VStack(alignment: .leading, spacing: 6) {
             ForEach(diagnostics) { diagnostic in
                 HStack(alignment: .top, spacing: 8) {
-                    FunctionalIconView(systemSymbolName: diagnostic.severity == .error ? "exclamationmark.triangle.fill" : "exclamationmark.triangle")
+                    Image(systemName: diagnostic.severity == .error ? "exclamationmark.triangle.fill" : "exclamationmark.triangle")
                         .foregroundStyle(diagnostic.severity == .error ? Color(red: 0.85, green: 0.22, blue: 0.18) : Color(red: 0.92, green: 0.58, blue: 0.16))
                         .frame(width: 16)
                     VStack(alignment: .leading, spacing: 2) {

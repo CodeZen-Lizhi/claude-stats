@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import ClaudeStatsIconography
 
 struct NetworkTrafficView: View {
     @Bindable var store: NetworkDebuggerStore
@@ -163,7 +162,7 @@ private struct NetworkTrafficWorkspaceBar: View {
                         store.refreshInterceptQueue()
                     }
                 } label: {
-                    FunctionalLabel(workspace.title, systemSymbolName: workspace.symbol)
+                    Label(workspace.title, systemImage: workspace.symbol)
                         .font(.sora(11, weight: store.selectedTrafficWorkspace == workspace ? .semibold : .medium))
                         .foregroundStyle(store.selectedTrafficWorkspace == workspace ? Color.stxAccent : Color.stxMuted)
                         .lineLimit(1)
@@ -186,14 +185,14 @@ private struct NetworkTrafficWorkspaceBar: View {
                 Button {
                     store.createComposeSession()
                 } label: {
-                    FunctionalLabel("Compose", systemSymbolName: "plus")
+                    Label("Compose", systemImage: "plus")
                 }
                 .controlSize(.small)
             } else if store.selectedTrafficWorkspace == .automate, let flow = store.selectedFlow {
                 Button {
                     store.sendFlowToAutomate(flow)
                 } label: {
-                    FunctionalLabel("Use Selected", systemSymbolName: "paperplane")
+                    Label("Use Selected", systemImage: "paperplane")
                 }
                 .controlSize(.small)
             }
@@ -233,7 +232,7 @@ struct NetworkTrafficLayoutControls: View {
     private func layoutButton(_ mode: NetworkTrafficLayoutMode, action: @escaping () -> Void) -> some View {
         let isSelected = preferences.networkTrafficLayoutMode == mode
         return Button(action: action) {
-            FunctionalIconView(systemSymbolName: mode.symbol)
+            Image(systemName: mode.symbol)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(isSelected ? Color.stxAccent : Color.stxMuted)
                 .frame(width: 26, height: 24)
@@ -288,7 +287,7 @@ private struct NetworkTrafficAutoLayoutPopover: View {
             Button {
                 preferences.resetNetworkTrafficAutoBreakpoint()
             } label: {
-                FunctionalLabel("Reset to 900 pt", systemSymbolName: "arrow.counterclockwise")
+                Label("Reset to 900 pt", systemImage: "arrow.counterclockwise")
             }
             .buttonStyle(.borderless)
             .controlSize(.small)
@@ -1136,7 +1135,7 @@ private struct NetworkPayloadPane: View {
                             store.deleteFlow(flow.id)
                         }
                     } label: {
-                        FunctionalIconView(systemSymbolName: "ellipsis.circle")
+                        Image(systemName: "ellipsis.circle")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(Color.stxMuted)
                     }
@@ -1151,7 +1150,7 @@ private struct NetworkPayloadPane: View {
 
     private func actionButton(_ systemName: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            FunctionalIconView(systemSymbolName: systemName)
+            Image(systemName: systemName)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Color.stxMuted)
                 .frame(width: 20, height: 20)
@@ -1286,7 +1285,7 @@ private struct NetworkPayloadPane: View {
 
     private func commentEditor(for flow: NetworkFlow) -> some View {
         HStack(spacing: 8) {
-            FunctionalLabel("Comment", systemSymbolName: "text.bubble")
+            Label("Comment", systemImage: "text.bubble")
                 .font(.sora(10, weight: .semibold))
                 .foregroundStyle(Color.stxMuted)
             TextField("Add a note for this flow", text: Binding {
@@ -1538,7 +1537,7 @@ private struct NetworkReplayEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                FunctionalLabel("Edit and Resend", systemSymbolName: "arrow.clockwise")
+                Label("Edit and Resend", systemImage: "arrow.clockwise")
                     .font(.sora(15, weight: .semibold))
                 Spacer()
                 Button("Cancel") {
@@ -1576,7 +1575,7 @@ private struct NetworkReplayEditor: View {
                                 Button {
                                     removeHeader(header.id)
                                 } label: {
-                                    FunctionalIconView(systemSymbolName: "minus.circle")
+                                    Image(systemName: "minus.circle")
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -1584,7 +1583,7 @@ private struct NetworkReplayEditor: View {
                         Button {
                             addHeader()
                         } label: {
-                            FunctionalLabel("Add Header", systemSymbolName: "plus.circle")
+                            Label("Add Header", systemImage: "plus.circle")
                         }
                         .buttonStyle(.borderless)
                     }

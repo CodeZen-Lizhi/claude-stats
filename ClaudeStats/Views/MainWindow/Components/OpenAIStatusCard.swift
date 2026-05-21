@@ -1,5 +1,4 @@
 import SwiftUI
-import ClaudeStatsIconography
 
 struct OpenAIStatusCard: View {
     let status: OpenAIStatusViewModel
@@ -40,14 +39,14 @@ struct OpenAIStatusCard: View {
             Button {
                 Task { await status.refresh(force: true) }
             } label: {
-                FunctionalIconView(systemSymbolName: "arrow.clockwise")
+                Image(systemName: "arrow.clockwise")
                     .font(.system(size: 11, weight: .semibold))
             }
             .buttonStyle(.plain)
             .foregroundStyle(Color.stxMuted)
             .help(L10n.string("status.openai.refresh", defaultValue: "Refresh OpenAI Status"))
             Link(destination: status.statusPageURL) {
-                FunctionalIconView(systemSymbolName: "arrow.up.right.square")
+                Image(systemName: "arrow.up.right.square")
                     .font(.system(size: 11, weight: .semibold))
             }
             .buttonStyle(.plain)
@@ -117,7 +116,7 @@ struct OpenAIStatusCard: View {
 
     private func groupRow(_ group: OpenAIStatusGroup) -> some View {
         HStack(alignment: .center, spacing: 10) {
-            FunctionalIconView(systemSymbolName: group.status.symbolName)
+            Image(systemName: group.status.symbolName)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(group.status.tint)
                 .frame(width: 16)
@@ -134,7 +133,7 @@ struct OpenAIStatusCard: View {
 
     private func incidentRow(_ incident: OpenAIStatusIncident) -> some View {
         HStack(alignment: .top, spacing: 8) {
-            FunctionalIconView(systemSymbolName: "exclamationmark.triangle.fill")
+            Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(incident.impact.tint)
                 .frame(width: 16)
@@ -155,7 +154,7 @@ struct OpenAIStatusCard: View {
 
     private func cachedStatusRow(_ message: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
-            FunctionalIconView(systemSymbolName: "wifi.slash")
+            Image(systemName: "wifi.slash")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(Color.stxMuted)
                 .frame(width: 16)

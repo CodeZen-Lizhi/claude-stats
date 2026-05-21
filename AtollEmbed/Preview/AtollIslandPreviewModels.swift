@@ -50,7 +50,7 @@ public enum AtollIslandPreviewTab: String, CaseIterable, Identifiable, Sendable 
         }
     }
 
-    public var iconName: String {
+    public var systemImage: String {
         switch self {
         case .island: "capsule.tophalf.filled"
         case .appearance: "paintpalette"

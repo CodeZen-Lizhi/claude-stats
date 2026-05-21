@@ -1,6 +1,5 @@
 import GhosttyEmbed
 import SwiftUI
-import ClaudeStatsIconography
 
 struct TerminalTabStrip: View {
     let tabs: [EmbeddedTerminalTabItem]
@@ -30,7 +29,7 @@ struct TerminalTabStrip: View {
             }
 
             Button(action: onNewTab) {
-                FunctionalIconView(systemSymbolName: "plus")
+                Image(systemName: "plus")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(TerminalPalette.muted)
                     .frame(width: 30, height: 30)
@@ -69,7 +68,7 @@ private struct TerminalTabButton: View {
         HStack(spacing: 7) {
             Button(action: onSelect) {
                 HStack(spacing: 8) {
-                    FunctionalIconView(systemSymbolName: "terminal")
+                    Image(systemName: "terminal")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(iconColor)
                         .frame(width: 14)
@@ -91,7 +90,7 @@ private struct TerminalTabButton: View {
             .buttonStyle(.plain)
 
             Button(action: onClose) {
-                FunctionalIconView(systemSymbolName: "xmark")
+                Image(systemName: "xmark")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(hovering || isSelected ? TerminalPalette.muted : .clear)
                     .frame(width: 18, height: 18)

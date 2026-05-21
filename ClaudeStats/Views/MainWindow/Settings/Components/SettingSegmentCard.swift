@@ -1,5 +1,4 @@
 import SwiftUI
-import ClaudeStatsIconography
 
 /// Two-up "radio cards" picker — the `适用于编程 / 适用于日常工作` motif
 /// from the Codex screenshot. Renders each option as a card with an icon,
@@ -35,7 +34,7 @@ struct SettingSegmentCard<Value: Hashable>: View {
         } label: {
             HStack(alignment: .center, spacing: 12) {
                 if let symbol = option.symbol {
-                    FunctionalIconView(systemSymbolName: symbol)
+                    Image(systemName: symbol)
                         .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(isSelected ? Color.stxAccent : Color.stxMuted)
                         .frame(width: 22, height: 22)

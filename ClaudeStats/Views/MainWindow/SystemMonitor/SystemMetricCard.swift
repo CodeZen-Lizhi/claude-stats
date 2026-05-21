@@ -1,5 +1,4 @@
 import SwiftUI
-import ClaudeStatsIconography
 
 struct SystemMetricLegend: Identifiable {
     let id: String
@@ -54,7 +53,7 @@ struct SystemMetricCard<Content: View>: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: 8) {
-            FunctionalIconView(systemSymbolName: symbol)
+            Image(systemName: symbol)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Color.stxMuted)
                 .frame(width: 18)

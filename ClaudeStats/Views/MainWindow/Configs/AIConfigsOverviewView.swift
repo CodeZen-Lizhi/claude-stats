@@ -1,5 +1,4 @@
 import SwiftUI
-import ClaudeStatsIconography
 
 struct AIConfigsOverviewView: View {
     let searchText: String
@@ -79,7 +78,7 @@ struct AIConfigsOverviewView: View {
                 VStack(spacing: 8) {
                     ForEach(documents.prefix(5)) { document in
                         HStack(alignment: .top, spacing: 9) {
-                            FunctionalIconView(systemSymbolName: document.diagnostics.contains(where: { $0.severity == .error }) ? "exclamationmark.triangle.fill" : "exclamationmark.triangle")
+                            Image(systemName: document.diagnostics.contains(where: { $0.severity == .error }) ? "exclamationmark.triangle.fill" : "exclamationmark.triangle")
                                 .foregroundStyle(document.diagnostics.contains(where: { $0.severity == .error }) ? Color(red: 0.85, green: 0.22, blue: 0.18) : Color(red: 0.92, green: 0.58, blue: 0.16))
                                 .frame(width: 16)
                             VStack(alignment: .leading, spacing: 3) {
@@ -122,7 +121,7 @@ struct AIConfigsOverviewView: View {
                 LazyVStack(spacing: 8) {
                     ForEach(projects.prefix(8)) { project in
                         HStack(spacing: 10) {
-                            FunctionalIconView(systemSymbolName: project.configsIconName)
+                            Image(systemName: project.configsIconName)
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundStyle(Color.stxMuted)
                                 .frame(width: 18)
@@ -153,7 +152,7 @@ struct AIConfigsOverviewView: View {
 
     private func sectionTitle(_ title: String, symbol: String) -> some View {
         HStack(spacing: 8) {
-            FunctionalIconView(systemSymbolName: symbol)
+            Image(systemName: symbol)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Color.stxAccent)
             Text(title)

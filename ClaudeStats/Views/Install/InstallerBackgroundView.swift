@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import ClaudeStatsIconography
 
 /// A previewable mock of the DMG install window. The release DMG uses Finder's
 /// real app and Applications icons over a matching generated background.
@@ -114,7 +113,7 @@ private struct ApplicationsFolderIcon: View {
                 .overlay(Circle().stroke(.black.opacity(0.22), lineWidth: 1))
                 .frame(width: 58, height: 58)
                 .overlay {
-                    FunctionalIconView(systemSymbolName: "arrow.turn.up.right")
+                    Image(systemName: "arrow.turn.up.right")
                         .font(.system(size: 31, weight: .heavy))
                         .foregroundStyle(Color(red: 0.16, green: 0.17, blue: 0.19))
                         .offset(x: 2, y: -1)
@@ -170,7 +169,7 @@ private struct FinderTitleBar: View {
             }
 
             HStack(spacing: 8) {
-                FunctionalIconView(systemSymbolName: "arrow.down.app.fill")
+                Image(systemName: "arrow.down.app.fill")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(.secondary)
                 Text(verbatim: "Claude Stats")
@@ -195,9 +194,9 @@ private struct FinderTitleBar: View {
 private struct FinderPathBar: View {
     var body: some View {
         HStack(spacing: 8) {
-            FunctionalIconView(systemSymbolName: "arrow.down.app.fill")
+            Image(systemName: "arrow.down.app.fill")
             Text(verbatim: "Claude Stats")
-            FunctionalIconView(systemSymbolName: "chevron.right")
+            Image(systemName: "chevron.right")
                 .font(.system(size: 12, weight: .bold))
             Image(nsImage: NSImage(named: NSImage.applicationIconName) ?? NSApplication.shared.applicationIconImage)
                 .resizable()

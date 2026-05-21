@@ -58,9 +58,6 @@ packages:
   SwiftSoup:
     url: https://github.com/scinfu/SwiftSoup
     from: "2.13.5"
-  PhosphorSwift:
-    url: https://github.com/phosphor-icons/swift
-    from: "2.1.0"
 
 settings:
   base:
@@ -250,30 +247,6 @@ targets:
           ENABLE_HARDENED_RUNTIME: YES
           OTHER_CODE_SIGN_FLAGS: "--timestamp"
 
-  ClaudeStatsIconography:
-    type: framework
-    platform: macOS
-    sources:
-      - path: ClaudeStatsIconography
-    dependencies:
-      - package: PhosphorSwift
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.claudestats.ClaudeStatsIconography
-        PRODUCT_NAME: ClaudeStatsIconography
-        PRODUCT_MODULE_NAME: ClaudeStatsIconography
-        GENERATE_INFOPLIST_FILE: YES
-        SWIFT_VERSION: "6.0"
-        SWIFT_STRICT_CONCURRENCY: complete
-        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
-      configs:
-        ReleaseSigned:
-          CODE_SIGN_STYLE: Manual
-          CODE_SIGN_IDENTITY: "$(SIGN_IDENTITY)"
-          DEVELOPMENT_TEAM: "$(APPLE_TEAM_ID)"
-          ENABLE_HARDENED_RUNTIME: YES
-          OTHER_CODE_SIGN_FLAGS: "--timestamp"
-
   AtollEmbed:
     type: framework
     platform: macOS
@@ -298,7 +271,6 @@ targets:
         buildPhase: resources
     dependencies:
       - target: GhosttyEmbed
-      - target: ClaudeStatsIconography
       - package: Defaults
       - package: KeyboardShortcuts
       - package: SwiftUIIntrospect
@@ -368,7 +340,6 @@ targets:
         buildPhase: resources
     dependencies:
       - package: Sparkle
-      - target: ClaudeStatsIconography
       - target: RockxyBackendEmbed
       - target: RockxyHelperTool
         link: false
@@ -518,7 +489,6 @@ targets:
       - path: ClaudeStatsTests
     dependencies:
       - target: ClaudeStats
-      - target: ClaudeStatsIconography
       - target: RockxyBackendEmbed
       - target: AtollEmbed
     settings:

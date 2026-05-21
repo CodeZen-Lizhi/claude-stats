@@ -1,5 +1,4 @@
 import SwiftUI
-import ClaudeStatsIconography
 
 struct LeaderboardListColumn: View {
     let metric: LeaderboardMetric
@@ -124,7 +123,7 @@ struct LeaderboardListColumn: View {
 
     private var disabledPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
-            FunctionalIconView(systemSymbolName: "trophy")
+            Image(systemName: "trophy")
                 .font(.system(size: 22, weight: .medium))
                 .foregroundStyle(Color.stxAccent)
             Text("Leaderboards are off")
@@ -135,7 +134,7 @@ struct LeaderboardListColumn: View {
                 .fixedSize(horizontal: false, vertical: true)
             Button(action: onOpenSettings) {
                 BracketBox(spacing: 5) {
-                    FunctionalLabel("OPEN FEATURES", systemSymbolName: "switch.2")
+                    Label("OPEN FEATURES", systemImage: "switch.2")
                         .labelStyle(.titleAndIcon)
                         .font(.sora(10, weight: .medium))
                         .tracking(0.8)

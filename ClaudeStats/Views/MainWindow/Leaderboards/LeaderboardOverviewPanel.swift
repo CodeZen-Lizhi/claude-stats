@@ -1,5 +1,4 @@
 import SwiftUI
-import ClaudeStatsIconography
 
 struct LeaderboardTitleHeader: View {
     let isLoadingScores: Bool
@@ -150,7 +149,7 @@ private struct LeaderboardIconActionButton: View {
 
     var body: some View {
         Button(action: action) {
-            FunctionalIconView(systemSymbolName: systemName)
+            Image(systemName: systemName)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(isDisabled ? Color.stxAccent.opacity(0.35) : Color.stxAccent)
                 .frame(width: 42, height: 36)

@@ -1,5 +1,4 @@
 import SwiftUI
-import ClaudeStatsIconography
 import Charts
 import AppKit
 
@@ -163,7 +162,7 @@ struct AIActivityView: View {
 
     private func stepButton(systemName: String, disabled: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            FunctionalIconView(systemSymbolName: systemName)
+            Image(systemName: systemName)
                 .font(.system(size: 9, weight: .bold))
                 .frame(width: 16, height: 16)
                 .contentShape(Rectangle())

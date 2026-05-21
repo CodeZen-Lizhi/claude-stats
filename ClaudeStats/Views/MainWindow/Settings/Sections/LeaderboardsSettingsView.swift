@@ -1,5 +1,4 @@
 import SwiftUI
-import ClaudeStatsIconography
 
 struct LeaderboardsSettingsView: View {
     @Environment(AppEnvironment.self) private var env
@@ -43,7 +42,7 @@ struct LeaderboardsSettingsView: View {
         let canSubmitActivity = env.preferences.aiActivityAnalysisEnabled && ScreenTimeService.canRead()
         return SettingGroup(title: "Activity Score") {
             HStack(alignment: .top, spacing: 10) {
-                FunctionalIconView(systemSymbolName: canSubmitActivity ? "checkmark.circle" : "exclamationmark.triangle")
+                Image(systemName: canSubmitActivity ? "checkmark.circle" : "exclamationmark.triangle")
                     .foregroundStyle(canSubmitActivity ? Color.stxMuted : Color.stxAccent)
                 Text(canSubmitActivity
                      ? "Activity minutes will be included in leaderboard syncs."
