@@ -335,6 +335,34 @@ final class LinuxDoStore {
         cachedContentBlocks(for: post)
     }
 
+    func readingPosition(for topicID: Int) -> LinuxDoReadingPosition? {
+        preferences.linuxDoReadingPositions[topicID]
+    }
+
+    func recordReadingPosition(topicID: Int, postID: Int, postNumber: Int) {
+        guard topicID > 0, postID > 0, postNumber > 0 else { return }
+        let current = preferences.linuxDoReadingPositions[topicID]
+        guard current.map(\.postNumber) ?? 0 < postNumber else { return }
+        var positions = preferences.linuxDoReadingPositions
+        positions[topicID] = LinuxDoReadingPosition(
+            topicID: topicID,
+            postID: postID,
+            postNumber: postNumber,
+            updatedAt: .now
+        )
+        preferences.linuxDoReadingPositions = positions
+    }
+
+    @discardableResult
+    func continueReading(topicID: Int) async -> Int? {
+        guard let position = readingPosition(for: topicID),
+              let detail = topicStates[topicID]?.detail else { return nil }
+        let totalFloors = totalFloors(for: detail)
+        guard totalFloors >= 2,
+              (2...totalFloors).contains(position.postNumber) else { return nil }
+        return await jumpToPostIndex(topicID: topicID, index: position.postNumber - 1)
+    }
+
     func emojiURL(for reactionID: String) -> URL? {
         emojiURLsByID[reactionID] ?? fallbackEmojiURL(for: reactionID)
     }
@@ -1005,6 +1033,10 @@ final class LinuxDoStore {
     private func effectiveStream(for detail: LinuxDoTopicDetail) -> [Int] {
         if !detail.stream.isEmpty { return detail.stream }
         return detail.posts.sorted { $0.postNumber < $1.postNumber }.map(\.id)
+    }
+
+    private func totalFloors(for detail: LinuxDoTopicDetail) -> Int {
+        max(detail.stream.count, detail.postsCount, detail.posts.count)
     }
 
     private func refreshPaginationState(

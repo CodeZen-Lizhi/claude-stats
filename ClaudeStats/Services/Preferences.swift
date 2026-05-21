@@ -288,6 +288,16 @@ final class Preferences {
     var linuxDoSelectedFeed: String {
         didSet { defaults.set(linuxDoSelectedFeed, forKey: Keys.linuxDoSelectedFeed) }
     }
+    var linuxDoReadingPositions: [Int: LinuxDoReadingPosition] {
+        didSet {
+            let trimmed = Self.trimLinuxDoReadingPositions(linuxDoReadingPositions)
+            guard trimmed == linuxDoReadingPositions else {
+                linuxDoReadingPositions = trimmed
+                return
+            }
+            persistLinuxDoReadingPositions()
+        }
+    }
     /// Claude Status components shown on the Dashboard and monitored for
     /// optional notifications. Defaults to `claude.ai` and `Claude Code`.
     var claudeStatusVisibleComponentIDs: Set<String> {
@@ -501,6 +511,12 @@ final class Preferences {
             .compactMap { Int($0) }
         linuxDoLastLoginUsername = defaults.string(forKey: Keys.linuxDoLastLoginUsername) ?? ""
         linuxDoSelectedFeed = defaults.string(forKey: Keys.linuxDoSelectedFeed) ?? LinuxDoFeed.latest.storedValue
+        if let data = defaults.data(forKey: Keys.linuxDoReadingPositions),
+           let positions = try? JSONDecoder().decode([Int: LinuxDoReadingPosition].self, from: data) {
+            linuxDoReadingPositions = Self.trimLinuxDoReadingPositions(positions)
+        } else {
+            linuxDoReadingPositions = [:]
+        }
         let storedClaudeStatusComponentIDs = (defaults.string(forKey: Keys.claudeStatusVisibleComponentIDs) ?? "")
             .split(separator: ",")
             .map { String($0) }
@@ -581,6 +597,27 @@ final class Preferences {
         defaults.set(json, forKey: Keys.notchIslandScreenStyles)
     }
 
+    private func persistLinuxDoReadingPositions() {
+        guard let data = try? JSONEncoder().encode(linuxDoReadingPositions) else {
+            defaults.removeObject(forKey: Keys.linuxDoReadingPositions)
+            return
+        }
+        defaults.set(data, forKey: Keys.linuxDoReadingPositions)
+    }
+
+    private static func trimLinuxDoReadingPositions(
+        _ positions: [Int: LinuxDoReadingPosition],
+        limit: Int = 200
+    ) -> [Int: LinuxDoReadingPosition] {
+        guard positions.count > limit else { return positions }
+        return Dictionary(
+            uniqueKeysWithValues: positions
+                .sorted { lhs, rhs in lhs.value.updatedAt > rhs.value.updatedAt }
+                .prefix(limit)
+                .map { ($0.key, $0.value) }
+        )
+    }
+
     private static func decodeNotchIslandScreenStyles(_ raw: String?) -> [String: NotchIslandScreenStyle] {
         guard let raw,
               let data = raw.data(using: .utf8),
@@ -655,6 +692,7 @@ final class Preferences {
         static let linuxDoNotificationDeliveredIDs = "linuxDoNotificationDeliveredIDs"
         static let linuxDoLastLoginUsername = "linuxDoLastLoginUsername"
         static let linuxDoSelectedFeed = "linuxDoSelectedFeed"
+        static let linuxDoReadingPositions = "linuxDoReadingPositions"
         static let claudeStatusVisibleComponentIDs = "claudeStatusVisibleComponentIDs"
         static let claudeStatusNotificationsEnabled = "claudeStatusNotificationsEnabled"
         static let claudeStatusLastNotificationFingerprint = "claudeStatusLastNotificationFingerprint"

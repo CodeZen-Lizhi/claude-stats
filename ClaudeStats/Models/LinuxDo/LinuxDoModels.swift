@@ -194,6 +194,13 @@ struct LinuxDoTopicDetail: Codable, Hashable, Identifiable, Sendable {
     }
 }
 
+struct LinuxDoReadingPosition: Codable, Hashable, Sendable {
+    let topicID: Int
+    let postID: Int
+    let postNumber: Int
+    let updatedAt: Date
+}
+
 struct LinuxDoPost: Codable, Hashable, Identifiable, Sendable {
     let id: Int
     let topicID: Int?

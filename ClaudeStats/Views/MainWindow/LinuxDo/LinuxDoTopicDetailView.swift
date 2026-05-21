@@ -41,23 +41,38 @@ struct LinuxDoTopicDetailView: View {
                 Spacer()
             }
         } else if let detail = state.detail {
+            let totalFloors = totalFloors(for: detail)
             VStack(alignment: .leading, spacing: 0) {
-                header(detail: detail, state: state)
+                header(detail: detail, state: state, topicID: topicID, totalFloors: totalFloors)
                 StxRule()
-                HStack(spacing: 0) {
-                    topicScroll(detail: detail, state: state, topicID: topicID)
-                    Rectangle()
-                        .fill(Color.stxStroke)
-                        .frame(width: 1)
-                    LinuxDoTimelineRail(
-                        currentFloor: visiblePostNumber,
-                        totalFloors: max(detail.stream.count, detail.postsCount, detail.posts.count),
-                        isLoading: state.isJumping || state.isLoadingMore
-                    ) { floor in
-                        Task { await store.jumpToPostIndex(topicID: topicID, index: floor - 1) }
+                GeometryReader { geometry in
+                    let navigatorMode = LinuxDoReadingNavigatorLayout.mode(
+                        width: geometry.size.width,
+                        totalFloors: totalFloors
+                    )
+                    ZStack(alignment: navigatorAlignment(for: navigatorMode)) {
+                        topicScroll(detail: detail, state: state, topicID: topicID)
+                            .padding(.trailing, navigatorMode == .rail ? LinuxDoReadingNavigatorLayout.railReservedWidth : 0)
+
+                        LinuxDoReadingNavigator(
+                            mode: navigatorMode,
+                            currentFloor: visiblePostNumber,
+                            totalFloors: totalFloors,
+                            loadedFloors: detail.posts.map(\.postNumber),
+                            continueFloor: validReadingPosition(topicID: topicID, totalFloors: totalFloors)?.postNumber,
+                            isLoading: state.isJumping || state.isLoadingMore
+                        ) { floor in
+                            Task { await store.jumpToPostIndex(topicID: topicID, index: floor - 1) }
+                        }
+                        .padding(.top, navigatorMode == .rail ? 16 : 0)
+                        .padding(.trailing, navigatorMode == .rail ? 10 : 16)
+                        .padding(.bottom, navigatorMode == .compact ? 16 : 0)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: navigatorAlignment(for: navigatorMode))
                     }
-                    .frame(width: 72)
                 }
+            }
+            .onChange(of: topicID, initial: true) { _, _ in
+                visiblePostNumber = 1
             }
         } else {
             ContentUnavailableView {
@@ -157,7 +172,7 @@ struct LinuxDoTopicDetailView: View {
             }
             .coordinateSpace(name: "linuxdo-topic-scroll")
             .onPreferenceChange(LinuxDoPostVisibilityPreference.self) { values in
-                updateVisiblePost(values)
+                updateVisiblePost(values, topicID: topicID)
             }
             .onChange(of: state.scrollTargetPostID, initial: true) { _, postID in
                 guard let postID else { return }
@@ -169,14 +184,23 @@ struct LinuxDoTopicDetailView: View {
         }
     }
 
-    private func updateVisiblePost(_ values: [LinuxDoPostVisibility]) {
+    private func updateVisiblePost(_ values: [LinuxDoPostVisibility], topicID: Int) {
         guard let visible = values.min(by: { abs($0.minY - 12) < abs($1.minY - 12) }) else { return }
         let nextPostNumber = max(1, visible.postNumber)
-        guard nextPostNumber != visiblePostNumber else { return }
-        visiblePostNumber = nextPostNumber
+        if nextPostNumber != visiblePostNumber {
+            visiblePostNumber = nextPostNumber
+        }
+        if nextPostNumber > 1 {
+            store.recordReadingPosition(topicID: topicID, postID: visible.id, postNumber: nextPostNumber)
+        }
     }
 
-    private func header(detail: LinuxDoTopicDetail, state: LinuxDoTopicDetailState) -> some View {
+    private func header(
+        detail: LinuxDoTopicDetail,
+        state: LinuxDoTopicDetailState,
+        topicID: Int,
+        totalFloors: Int
+    ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(detail.displayTitle)
                 .font(.sora(18, weight: .semibold))
@@ -190,6 +214,16 @@ struct LinuxDoTopicDetailView: View {
                 }
                 if state.isJumping {
                     Label("Jumping", systemImage: "arrow.up.and.down")
+                }
+                if let position = visibleContinuePosition(topicID: topicID, totalFloors: totalFloors) {
+                    Button {
+                        Task { await store.continueReading(topicID: topicID) }
+                    } label: {
+                        Label("Continue #\(position.postNumber)", systemImage: "arrow.down.to.line")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.stxAccent)
+                    .help("Continue reading from #\(position.postNumber)")
                 }
             }
             .font(.sora(10).monospacedDigit())
@@ -213,6 +247,36 @@ struct LinuxDoTopicDetailView: View {
         .padding(.trailing, LinuxDoDetailLayout.contentTrailing)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func totalFloors(for detail: LinuxDoTopicDetail) -> Int {
+        max(detail.stream.count, detail.postsCount, detail.posts.count)
+    }
+
+    private func navigatorAlignment(for mode: LinuxDoReadingNavigatorMode) -> Alignment {
+        switch mode {
+        case .rail, .hidden:
+            .topTrailing
+        case .compact:
+            .bottomTrailing
+        }
+    }
+
+    private func validReadingPosition(topicID: Int, totalFloors: Int) -> LinuxDoReadingPosition? {
+        guard let position = store.readingPosition(for: topicID),
+              (2...max(2, totalFloors)).contains(position.postNumber),
+              position.postNumber <= totalFloors else {
+            return nil
+        }
+        return position
+    }
+
+    private func visibleContinuePosition(topicID: Int, totalFloors: Int) -> LinuxDoReadingPosition? {
+        guard let position = validReadingPosition(topicID: topicID, totalFloors: totalFloors),
+              visiblePostNumber + 1 < position.postNumber else {
+            return nil
+        }
+        return position
     }
 }
 
@@ -1343,70 +1407,6 @@ private struct LinuxDoDisclosureBlockView: View {
         }
         .padding(10)
         .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 7))
-    }
-}
-
-private struct LinuxDoTimelineRail: View {
-    let currentFloor: Int
-    let totalFloors: Int
-    let isLoading: Bool
-    let onJump: (Int) -> Void
-
-    var body: some View {
-        VStack(spacing: 10) {
-            if isLoading {
-                ProgressView()
-                    .controlSize(.small)
-            } else {
-                Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color.stxMuted)
-            }
-            Text("\(min(currentFloor, totalFloors))")
-                .font(.sora(14, weight: .semibold).monospacedDigit())
-            Text("/ \(max(totalFloors, 1))")
-                .font(.sora(9).monospacedDigit())
-                .foregroundStyle(Color.stxMuted)
-            GeometryReader { geometry in
-                ZStack(alignment: .top) {
-                    Capsule()
-                        .fill(Color.primary.opacity(0.1))
-                        .frame(width: 4)
-                    Capsule()
-                        .fill(Color.stxAccent.opacity(0.75))
-                        .frame(width: 4, height: handleY(in: geometry.size.height) + 8)
-                    Circle()
-                        .fill(Color.stxAccent)
-                        .frame(width: 14, height: 14)
-                        .offset(y: handleY(in: geometry.size.height))
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onEnded { value in
-                            onJump(floor(at: value.location.y, height: geometry.size.height))
-                        }
-                )
-            }
-            .frame(minHeight: 150)
-            Spacer(minLength: 0)
-        }
-        .padding(.top, 16)
-        .padding(.horizontal, 8)
-        .background(Color.primary.opacity(0.018))
-    }
-
-    private func handleY(in height: CGFloat) -> CGFloat {
-        guard totalFloors > 1 else { return 0 }
-        let ratio = CGFloat(max(0, min(currentFloor - 1, totalFloors - 1))) / CGFloat(totalFloors - 1)
-        return max(0, min(height - 14, ratio * (height - 14)))
-    }
-
-    private func floor(at y: CGFloat, height: CGFloat) -> Int {
-        guard totalFloors > 1, height > 14 else { return 1 }
-        let ratio = max(0, min(1, y / max(1, height - 14)))
-        return max(1, min(totalFloors, Int((ratio * CGFloat(totalFloors - 1)).rounded()) + 1))
     }
 }
 

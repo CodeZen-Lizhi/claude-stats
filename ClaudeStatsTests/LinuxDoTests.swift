@@ -658,6 +658,152 @@ struct LinuxDoTests {
         #expect(preferences.linuxDoNotificationDeliveredIDs == [11])
     }
 
+    @Test("Reading positions persist as JSON and trim to recent topics")
+    func readingPositionsPersistAndTrim() {
+        let suiteName = "ClaudeStatsTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        let preferences = Preferences(defaults: defaults)
+        let base = Date(timeIntervalSince1970: 1_000)
+
+        preferences.linuxDoReadingPositions = Dictionary(
+            uniqueKeysWithValues: (0..<205).map { index in
+                (
+                    index,
+                    LinuxDoReadingPosition(
+                        topicID: index,
+                        postID: 10_000 + index,
+                        postNumber: index + 1,
+                        updatedAt: base.addingTimeInterval(TimeInterval(index))
+                    )
+                )
+            }
+        )
+
+        #expect(preferences.linuxDoReadingPositions.count == 200)
+        #expect(preferences.linuxDoReadingPositions[0] == nil)
+        #expect(preferences.linuxDoReadingPositions[204]?.postNumber == 205)
+
+        let reloaded = Preferences(defaults: defaults)
+        #expect(reloaded.linuxDoReadingPositions == preferences.linuxDoReadingPositions)
+    }
+
+    @Test("Reading position only advances to the furthest floor")
+    func readingPositionOnlyAdvances() {
+        let preferences = Self.makePreferences()
+        let store = LinuxDoStore(
+            preferences: preferences,
+            credentials: InMemoryLinuxDoCredentialStore(),
+            notificationService: FakeLinuxDoNotificationService(),
+            client: FakeLinuxDoClient()
+        )
+
+        store.recordReadingPosition(topicID: 77, postID: 700, postNumber: 7)
+        store.recordReadingPosition(topicID: 77, postID: 500, postNumber: 5)
+        store.recordReadingPosition(topicID: 77, postID: 900, postNumber: 9)
+
+        #expect(store.readingPosition(for: 77)?.postID == 900)
+        #expect(store.readingPosition(for: 77)?.postNumber == 9)
+        #expect(preferences.linuxDoReadingPositions[77]?.postNumber == 9)
+    }
+
+    @Test("Continue reading uses the existing jump path")
+    func continueReadingUsesJumpPath() async throws {
+        let root = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let preferences = Self.makePreferences()
+        preferences.linuxDoReadingPositions = [
+            21: LinuxDoReadingPosition(
+                topicID: 21,
+                postID: 802,
+                postNumber: 3,
+                updatedAt: Date(timeIntervalSince1970: 100)
+            ),
+        ]
+        let detail = Self.detail(
+            id: 21,
+            postsCount: 4,
+            stream: [800, 801, 802, 803],
+            posts: [Self.post(id: 800, topicID: 21, postNumber: 1)]
+        )
+        let client = FakeLinuxDoClient(
+            topicDetail: detail,
+            postsByID: [802: Self.post(id: 802, topicID: 21, postNumber: 3)]
+        )
+        let store = LinuxDoStore(
+            preferences: preferences,
+            credentials: InMemoryLinuxDoCredentialStore(),
+            cache: LinuxDoCache(rootURL: root),
+            notificationService: FakeLinuxDoNotificationService(),
+            client: client
+        )
+
+        await store.loadTopic(id: 21, slug: "continue", force: true)
+        let target = await store.continueReading(topicID: 21)
+        let state = try #require(store.topicStates[21])
+
+        #expect(target == 802)
+        #expect(state.scrollTargetPostID == 802)
+        #expect(client.fetchPostsBatches == [[801, 802, 803]])
+    }
+
+    @Test("Continue reading ignores positions outside the current topic")
+    func continueReadingIgnoresOutOfRangePosition() async throws {
+        let root = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let preferences = Self.makePreferences()
+        preferences.linuxDoReadingPositions = [
+            22: LinuxDoReadingPosition(
+                topicID: 22,
+                postID: 999,
+                postNumber: 99,
+                updatedAt: Date(timeIntervalSince1970: 100)
+            ),
+        ]
+        let client = FakeLinuxDoClient(
+            topicDetail: Self.detail(
+                id: 22,
+                postsCount: 3,
+                stream: [900, 901, 902],
+                posts: [Self.post(id: 900, topicID: 22, postNumber: 1)]
+            )
+        )
+        let store = LinuxDoStore(
+            preferences: preferences,
+            credentials: InMemoryLinuxDoCredentialStore(),
+            cache: LinuxDoCache(rootURL: root),
+            notificationService: FakeLinuxDoNotificationService(),
+            client: client
+        )
+
+        await store.loadTopic(id: 22, slug: "short", force: true)
+        let target = await store.continueReading(topicID: 22)
+
+        #expect(target == nil)
+        #expect(client.fetchPostsBatches.isEmpty)
+    }
+
+    @Test("Reading navigator math clamps floors and samples long streams")
+    func readingNavigatorMath() {
+        #expect(LinuxDoReadingNavigatorLayout.mode(width: 700, totalFloors: 10) == .rail)
+        #expect(LinuxDoReadingNavigatorLayout.mode(width: 500, totalFloors: 10) == .compact)
+        #expect(LinuxDoReadingNavigatorLayout.mode(width: 900, totalFloors: 9) == .hidden)
+
+        let y = LinuxDoReadingNavigatorLayout.positionY(for: 6, totalFloors: 11, height: 100)
+        #expect(abs(y - 50) < 0.001)
+        #expect(LinuxDoReadingNavigatorLayout.floor(at: 50, totalFloors: 11, height: 100) == 6)
+        #expect(LinuxDoReadingNavigatorLayout.floor(at: -20, totalFloors: 11, height: 100) == 1)
+        #expect(LinuxDoReadingNavigatorLayout.floor(at: 200, totalFloors: 11, height: 100) == 11)
+        #expect(LinuxDoReadingNavigatorLayout.floor(at: 50, totalFloors: 1, height: 100) == 1)
+
+        let sampled = LinuxDoReadingNavigatorLayout.sampledFloors(Array(1...250), totalFloors: 250)
+        #expect(sampled.count <= 60)
+        #expect(sampled.first == 1)
+        #expect(sampled.last == 250)
+    }
+
     @Test("Jump to post index loads a stream window and keeps post order stable")
     func jumpToPostIndexLoadsMissingPosts() async throws {
         let root = try TempDir.make()
