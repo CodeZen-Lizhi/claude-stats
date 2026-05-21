@@ -97,6 +97,7 @@ struct LinuxDoCategory: Codable, Hashable, Identifiable, Sendable {
     let slug: String
     let colorHex: String?
     let textColorHex: String?
+    let iconName: String?
     let topicCount: Int
 }
 
@@ -149,7 +150,7 @@ struct LinuxDoTopicDetail: Codable, Hashable, Identifiable, Sendable {
     let categoryID: Int?
     let tags: [String]
     let postsCount: Int
-    let stream: [Int]
+    var stream: [Int]
     var posts: [LinuxDoPost]
     let fetchedAt: Date
 
@@ -326,12 +327,20 @@ struct LinuxDoWebSession: Codable, Hashable, Sendable {
     var cookies: [LinuxDoStoredCookie]
     var csrfToken: String?
     var username: String?
+    var avatarURL: URL?
     var savedAt: Date
 
-    init(cookies: [LinuxDoStoredCookie], csrfToken: String? = nil, username: String? = nil, savedAt: Date = .now) {
+    init(
+        cookies: [LinuxDoStoredCookie],
+        csrfToken: String? = nil,
+        username: String? = nil,
+        avatarURL: URL? = nil,
+        savedAt: Date = .now
+    ) {
         self.cookies = cookies
         self.csrfToken = csrfToken
         self.username = username
+        self.avatarURL = avatarURL
         self.savedAt = savedAt
     }
 
@@ -355,11 +364,12 @@ struct LinuxDoWebSession: Codable, Hashable, Sendable {
         return liveCookies.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
     }
 
-    func with(csrfToken: String?, username: String?) -> LinuxDoWebSession {
+    func with(csrfToken: String?, username: String?, avatarURL: URL? = nil) -> LinuxDoWebSession {
         LinuxDoWebSession(
             cookies: cookies,
             csrfToken: csrfToken ?? self.csrfToken,
             username: username ?? self.username,
+            avatarURL: avatarURL ?? self.avatarURL,
             savedAt: .now
         )
     }

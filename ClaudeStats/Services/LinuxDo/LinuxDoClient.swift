@@ -4,8 +4,10 @@ protocol LinuxDoClienting: Sendable {
     func fetchTopicList(feed: LinuxDoFeed, page: Int, now: Date) async throws -> LinuxDoTopicList
     func fetchCategories() async throws -> [LinuxDoCategory]
     func fetchTopic(id: Int, slug: String?, now: Date) async throws -> LinuxDoTopicDetail
+    func fetchTopicPage(id: Int, slug: String?, page: Int, now: Date) async throws -> LinuxDoTopicDetail
     func fetchPosts(topicID: Int, postIDs: [Int]) async throws -> [LinuxDoPost]
     func fetchCurrentUser() async throws -> LinuxDoCurrentUser
+    func fetchUser(username: String) async throws -> LinuxDoCurrentUser
     func fetchCSRFToken() async throws -> String
     func fetchNotifications(limit: Int) async throws -> [LinuxDoNotification]
     func revokeUserAPIKey() async
@@ -111,6 +113,12 @@ struct LinuxDoClient: LinuxDoClienting {
         return LinuxDoResponseMapper.topicDetail(from: response, now: now)
     }
 
+    func fetchTopicPage(id: Int, slug: String? = nil, page: Int, now: Date = .now) async throws -> LinuxDoTopicDetail {
+        let path = "/t/\(slug?.isEmpty == false ? slug! : "topic")/\(id).json"
+        let response: TopicDetailResponse = try await get(path: path, queryItems: [pageItem(page)])
+        return LinuxDoResponseMapper.topicDetail(from: response, now: now)
+    }
+
     func fetchPosts(topicID: Int, postIDs: [Int]) async throws -> [LinuxDoPost] {
         guard !postIDs.isEmpty else { return [] }
         let queryItems = postIDs.map { URLQueryItem(name: "post_ids[]", value: "\($0)") }
@@ -120,7 +128,26 @@ struct LinuxDoClient: LinuxDoClienting {
 
     func fetchCurrentUser() async throws -> LinuxDoCurrentUser {
         let response: CurrentUserResponse = try await get(path: "/session/current.json", requiresAuthentication: true)
-        return response.currentUser.currentUser
+        let currentUser = response.currentUser.currentUser
+        guard currentUser.avatarURL == nil else { return currentUser }
+        do {
+            let profileUser = try await fetchUser(username: currentUser.username)
+            return LinuxDoCurrentUser(
+                id: currentUser.id,
+                username: currentUser.username,
+                name: currentUser.name ?? profileUser.name,
+                avatarURL: profileUser.avatarURL
+            )
+        } catch {
+            Log.network.notice("LinuxDo profile avatar fallback failed for @\(currentUser.username, privacy: .public): \(String(describing: error), privacy: .public)")
+            return currentUser
+        }
+    }
+
+    func fetchUser(username: String) async throws -> LinuxDoCurrentUser {
+        let encodedUsername = username.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? username
+        let response: UserProfileResponse = try await get(path: "/u/\(encodedUsername).json")
+        return response.user.currentUser
     }
 
     func fetchCSRFToken() async throws -> String {

@@ -59,7 +59,10 @@ final class AppEnvironment {
         self.systemMonitor = systemMonitor
         self.networkDebugger = networkDebugger ?? NetworkDebuggerStore(preferences: preferences)
         self.ops = ops
-        self.linuxDo = linuxDo ?? LinuxDoStore(preferences: preferences)
+        let linuxDoCredentials: any LinuxDoCredentialStoring = Self.isRunningUnitTests
+            ? InMemoryLinuxDoCredentialStore()
+            : LinuxDoKeychainStore.shared
+        self.linuxDo = linuxDo ?? LinuxDoStore(preferences: preferences, credentials: linuxDoCredentials)
         self.dashboard = DashboardViewModel(pricing: pricing)
         self.gitActivity = GitActivityViewModel()
         self.claudeStatus = ClaudeStatusViewModel(preferences: preferences)

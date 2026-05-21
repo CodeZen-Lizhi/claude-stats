@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 private enum LinuxDoPaneMetrics {
@@ -15,7 +14,7 @@ struct LinuxDoWorkspaceView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            LinuxDoHeader(store: store)
+            LinuxDoHeader()
             StxRule()
             workspace
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -41,8 +40,6 @@ struct LinuxDoWorkspaceView: View {
 }
 
 private struct LinuxDoHeader: View {
-    @Bindable var store: LinuxDoStore
-
     var body: some View {
         HStack(alignment: .bottom, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
@@ -59,29 +56,8 @@ private struct LinuxDoHeader: View {
             }
 
             Spacer(minLength: 12)
-
-            HStack(spacing: 8) {
-                if store.currentListState.isRefreshing || store.isLoadingCategories {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-                Button {
-                    Task { await store.refreshCurrentFeed() }
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
-                .controlSize(.small)
-                .disabled(store.currentListState.isLoading || store.currentListState.isRefreshing)
-
-                Button {
-                    NSWorkspace.shared.open(URL(string: "https://linux.do")!)
-                } label: {
-                    Label("Open", systemImage: "safari")
-                }
-                .controlSize(.small)
-            }
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, LinuxDoLayout.contentInset)
         .padding(.top, 50)
         .padding(.bottom, 16)
     }

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 @testable import ClaudeStats
@@ -17,6 +18,34 @@ struct LinuxDoTests {
 
         for feed in feeds {
             #expect(LinuxDoFeed.stored(feed.storedValue) == feed)
+        }
+    }
+
+    @Test("Category response decodes Discourse icon names")
+    func categoryResponseDecodesIconNames() throws {
+        let data = Data(Self.categoriesJSON.utf8)
+        let response = try JSONDecoder().decode(CategoriesResponse.self, from: data)
+
+        #expect(response.categories.count == 2)
+        #expect(response.categories[0].name == "开发调优")
+        #expect(response.categories[0].iconName == "code")
+        #expect(response.categories[1].name == "运营反馈")
+        #expect(response.categories[1].iconName == "comments")
+    }
+
+    @Test("Category sidebar icons are semantic and unique")
+    func categorySidebarIconsAreSemanticAndUnique() {
+        let categories = Self.knownLinuxDoCategories
+        let symbols = categories.map { LinuxDoCategoryIcon.symbolName(for: $0) }
+
+        #expect(Set(symbols).count == categories.count)
+        #expect(symbols[categories.firstIndex { $0.slug == "resource" }!] == "point.3.connected.trianglepath.dotted")
+        #expect(symbols[categories.firstIndex { $0.slug == "wiki" }!] == "doc.richtext.fill")
+        #expect(symbols[categories.firstIndex { $0.slug == "reading" }!] == "book.closed.fill")
+        #expect(symbols[categories.firstIndex { $0.slug == "square" }!] == "hurricane")
+
+        for symbol in symbols {
+            #expect(NSImage(systemSymbolName: symbol, accessibilityDescription: nil) != nil)
         }
     }
 
@@ -527,6 +556,84 @@ struct LinuxDoTests {
         #expect(client.fetchPostsBatches == [[101, 102, 103]])
     }
 
+    @Test("Store falls back to topic pages when stream omits replies")
+    func storeFallsBackToTopicPagesWhenStreamOmitsReplies() async throws {
+        let root = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let detail = Self.detail(
+            id: 16,
+            postsCount: 3,
+            stream: [400],
+            posts: [Self.post(id: 400, topicID: 16, postNumber: 1)]
+        )
+        let pageTwo = Self.detail(
+            id: 16,
+            postsCount: 3,
+            stream: [400],
+            posts: [
+                Self.post(id: 401, topicID: 16, postNumber: 2),
+                Self.post(id: 402, topicID: 16, postNumber: 3),
+            ]
+        )
+        let client = FakeLinuxDoClient(
+            topicDetail: detail,
+            topicPages: [2: pageTwo]
+        )
+        let store = LinuxDoStore(
+            preferences: Self.makePreferences(),
+            credentials: InMemoryLinuxDoCredentialStore(),
+            cache: LinuxDoCache(rootURL: root),
+            notificationService: FakeLinuxDoNotificationService(),
+            client: client
+        )
+
+        await store.loadTopic(id: 16, slug: "fallback", force: true)
+        let initialState = try #require(store.topicStates[16])
+        #expect(initialState.remainingPostIDs.isEmpty)
+        #expect(initialState.hasMorePosts)
+
+        await store.loadMorePosts(topicID: 16)
+        let loadedState = try #require(store.topicStates[16])
+
+        #expect(client.fetchPostsBatches.isEmpty)
+        #expect(client.fetchTopicPages == [2])
+        #expect(loadedState.detail?.posts.map(\.id) == [400, 401, 402])
+        #expect(!loadedState.hasMorePosts)
+    }
+
+    @Test("Topic detail response keeps full post stream for lazy replies")
+    func topicDetailResponseKeepsFullPostStream() throws {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom(Self.decodeLinuxDoDate)
+        let response = try decoder.decode(TopicDetailResponse.self, from: Data("""
+        {
+          "id": 17,
+          "title": "Streamed replies",
+          "slug": "streamed-replies",
+          "posts_count": 3,
+          "post_stream": {
+            "posts": [
+              {
+                "id": 500,
+                "topic_id": 17,
+                "post_number": 1,
+                "username": "op",
+                "cooked": "<p>First</p>",
+                "created_at": "2026-05-21T10:00:00.000Z"
+              }
+            ],
+            "stream": [500, 501, 502]
+          }
+        }
+        """.utf8))
+        let detail = LinuxDoResponseMapper.topicDetail(from: response, now: Date(timeIntervalSince1970: 100))
+
+        #expect(detail.postsCount == 3)
+        #expect(detail.posts.map(\.id) == [500])
+        #expect(detail.stream == [500, 501, 502])
+    }
+
     @Test("Notification open loads the topic and targets the notification post number")
     func notificationOpenTargetsPostNumber() async throws {
         let root = try TempDir.make()
@@ -612,6 +719,25 @@ struct LinuxDoTests {
         #expect(!store.isAuthenticated)
     }
 
+    @Test("Store persists web session avatar after sign in")
+    func storePersistsWebSessionAvatarAfterSignIn() async throws {
+        let avatarURL = try #require(URL(string: "https://linux.do/user_avatar/linux.do/tester/96/1.png"))
+        let credentials = InMemoryLinuxDoCredentialStore()
+        let store = LinuxDoStore(
+            preferences: Self.makePreferences(),
+            credentials: credentials,
+            notificationService: FakeLinuxDoNotificationService(),
+            client: FakeLinuxDoClient(currentUser: LinuxDoCurrentUser(id: 1, username: "tester", name: nil, avatarURL: avatarURL))
+        )
+
+        let signedIn = await store.signInWithWebSession(Self.webSession())
+
+        #expect(signedIn)
+        #expect(store.currentUser?.avatarURL == avatarURL)
+        #expect(credentials.readWebSession()?.avatarURL == avatarURL)
+        #expect(store.authenticationStatus.avatarURL == avatarURL)
+    }
+
     @Test("Store caches auth summary for render-time access")
     func storeCachesAuthSummaryForRenderAccess() {
         let credentials = CountingLinuxDoCredentialStore(webSession: Self.webSession(username: "tester"))
@@ -660,6 +786,27 @@ struct LinuxDoTests {
         }
 
         _ = try await client.fetchCurrentUser()
+    }
+
+    @Test("Client fills missing current user avatar from profile response")
+    func clientFillsMissingCurrentUserAvatarFromProfileResponse() async throws {
+        let credentials = InMemoryLinuxDoCredentialStore(webSession: Self.webSession(csrfToken: "csrf-token"))
+        let client = Self.makeClient(credentials: credentials) { request in
+            switch request.url?.path {
+            case "/session/current.json":
+                return Self.response(body: Self.currentUserWithoutAvatarJSON)
+            case "/u/tester.json":
+                return Self.response(body: Self.userProfileJSON)
+            default:
+                Issue.record("Unexpected LinuxDo request path: \(request.url?.path ?? "nil")")
+                return Self.response(status: 404, body: "{}")
+            }
+        }
+
+        let user = try await client.fetchCurrentUser()
+
+        #expect(user.username == "tester")
+        #expect(user.avatarURL?.absoluteString == "https://linux.do/user_avatar/linux.do/tester/96/1.png")
     }
 
     @Test("Client retries public feed as guest after stale web session unauthorized")
@@ -842,11 +989,74 @@ struct LinuxDoTests {
     }
     """
 
+    nonisolated private static let currentUserWithoutAvatarJSON = """
+    {
+      "current_user": {
+        "id": 1,
+        "username": "tester",
+        "name": "Tester"
+      }
+    }
+    """
+
+    nonisolated private static let userProfileJSON = """
+    {
+      "user": {
+        "id": 1,
+        "username": "tester",
+        "name": "Tester",
+        "avatar_template": "/user_avatar/linux.do/tester/{size}/1.png"
+      }
+    }
+    """
+
     nonisolated private static let topicListJSON = """
     {
       "topic_list": {
         "topics": [
           { "id": 1, "title": "Guest Topic", "slug": "guest-topic", "tags": [] }
+        ]
+      }
+    }
+    """
+
+    nonisolated private static let knownLinuxDoCategories: [LinuxDoCategory] = [
+        LinuxDoCategory(id: 4, name: "开发调优", slug: "develop", colorHex: "32c3c3", textColorHex: "000000", iconName: "code", topicCount: 89_042),
+        LinuxDoCategory(id: 98, name: "国产替代", slug: "domestic", colorHex: "D12C25", textColorHex: "000000", iconName: "seedling", topicCount: 1_204),
+        LinuxDoCategory(id: 14, name: "资源荟萃", slug: "resource", colorHex: "12A89D", textColorHex: "000000", iconName: "square-share-nodes", topicCount: 25_300),
+        LinuxDoCategory(id: 42, name: "文档共建", slug: "wiki", colorHex: "9cb6c4", textColorHex: "000000", iconName: "book", topicCount: 930),
+        LinuxDoCategory(id: 27, name: "非我莫属", slug: "job", colorHex: "a8c6fe", textColorHex: "000000", iconName: "briefcase", topicCount: 7_604),
+        LinuxDoCategory(id: 32, name: "读书成诗", slug: "reading", colorHex: "e0d900", textColorHex: "000000", iconName: "book-open-reader", topicCount: 3_112),
+        LinuxDoCategory(id: 34, name: "前沿快讯", slug: "news", colorHex: "BB8FCE", textColorHex: "000000", iconName: "newspaper", topicCount: 11_008),
+        LinuxDoCategory(id: 92, name: "网络记忆", slug: "feeds", colorHex: "F7941D", textColorHex: "000000", iconName: "rss", topicCount: 2_280),
+        LinuxDoCategory(id: 36, name: "福利羊毛", slug: "welfare", colorHex: "E45735", textColorHex: "000000", iconName: "piggy-bank", topicCount: 8_455),
+        LinuxDoCategory(id: 11, name: "搞七捻三", slug: "gossip", colorHex: "3AB54A", textColorHex: "000000", iconName: "droplet", topicCount: 27_910),
+        LinuxDoCategory(id: 110, name: "虫洞广场", slug: "square", colorHex: "ff00f7", textColorHex: "000000", iconName: "hurricane", topicCount: 142),
+        LinuxDoCategory(id: 2, name: "运营反馈", slug: "feedback", colorHex: "808281", textColorHex: "000000", iconName: "comments", topicCount: 6_353),
+    ]
+
+    nonisolated private static let categoriesJSON = """
+    {
+      "category_list": {
+        "categories": [
+          {
+            "id": 4,
+            "name": "开发调优",
+            "slug": "develop",
+            "color": "32c3c3",
+            "text_color": "000000",
+            "icon": "code",
+            "topic_count": 89042
+          },
+          {
+            "id": 2,
+            "name": "运营反馈",
+            "slug": "feedback",
+            "color": "808281",
+            "text_color": "000000",
+            "icon": "comments",
+            "topic_count": 6353
+          }
         ]
       }
     }
@@ -886,21 +1096,28 @@ struct LinuxDoTests {
 private final class FakeLinuxDoClient: LinuxDoClienting, @unchecked Sendable {
     var topicList: LinuxDoTopicList
     var topicDetail: LinuxDoTopicDetail?
+    var topicPages: [Int: LinuxDoTopicDetail]
     var postsByID: [Int: LinuxDoPost]
     var notifications: [LinuxDoNotification]
+    var currentUser: LinuxDoCurrentUser
     var fetchTopicListCalls = 0
     var fetchPostsBatches: [[Int]] = []
+    var fetchTopicPages: [Int] = []
 
     init(
         topicList: LinuxDoTopicList = LinuxDoTopicList(topics: [], page: 0, nextPage: nil, fetchedAt: Date()),
         topicDetail: LinuxDoTopicDetail? = nil,
+        topicPages: [Int: LinuxDoTopicDetail] = [:],
         postsByID: [Int: LinuxDoPost] = [:],
-        notifications: [LinuxDoNotification] = []
+        notifications: [LinuxDoNotification] = [],
+        currentUser: LinuxDoCurrentUser = LinuxDoCurrentUser(id: 1, username: "tester", name: nil, avatarURL: nil)
     ) {
         self.topicList = topicList
         self.topicDetail = topicDetail
+        self.topicPages = topicPages
         self.postsByID = postsByID
         self.notifications = notifications
+        self.currentUser = currentUser
     }
 
     func fetchTopicList(feed: LinuxDoFeed, page: Int, now: Date) async throws -> LinuxDoTopicList {
@@ -916,13 +1133,22 @@ private final class FakeLinuxDoClient: LinuxDoClienting, @unchecked Sendable {
         topicDetail ?? LinuxDoTests.detail(id: id)
     }
 
+    func fetchTopicPage(id: Int, slug: String?, page: Int, now: Date) async throws -> LinuxDoTopicDetail {
+        fetchTopicPages.append(page)
+        return topicPages[page] ?? LinuxDoTests.detail(id: id, postsCount: 0, stream: [], posts: [])
+    }
+
     func fetchPosts(topicID: Int, postIDs: [Int]) async throws -> [LinuxDoPost] {
         fetchPostsBatches.append(postIDs)
         return postIDs.compactMap { postsByID[$0] }
     }
 
     func fetchCurrentUser() async throws -> LinuxDoCurrentUser {
-        LinuxDoCurrentUser(id: 1, username: "tester", name: nil, avatarURL: nil)
+        currentUser
+    }
+
+    func fetchUser(username: String) async throws -> LinuxDoCurrentUser {
+        currentUser
     }
 
     func fetchCSRFToken() async throws -> String {

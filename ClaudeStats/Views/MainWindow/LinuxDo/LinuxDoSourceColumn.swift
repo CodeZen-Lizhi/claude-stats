@@ -31,11 +31,6 @@ struct LinuxDoSourceColumn: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            accountSummary
-                .padding(12)
-
-            StxRule()
-
             AppScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     searchSection
@@ -45,6 +40,12 @@ struct LinuxDoSourceColumn: View {
                 }
                 .padding(12)
             }
+            .frame(maxHeight: .infinity)
+
+            StxRule()
+
+            accountSummary
+                .padding(12)
         }
     }
 
@@ -69,7 +70,7 @@ struct LinuxDoSourceColumn: View {
             .onChange(of: store.topPeriod) { _, new in
                 store.selectTopPeriod(new)
             }
-            sourceButton(title: "Top \(store.topPeriod.displayName)", symbol: "chart.line.uptrend.xyaxis", feed: .top(store.topPeriod))
+            sourceButton(title: "Top \(store.topPeriod.displayName)", symbol: "trophy.fill", feed: .top(store.topPeriod))
         }
     }
 
@@ -104,12 +105,7 @@ struct LinuxDoSourceColumn: View {
                     .padding(.vertical, 8)
             } else {
                 ForEach(store.categories.prefix(28)) { category in
-                    sourceButton(
-                        title: category.name,
-                        symbol: "folder",
-                        feed: .category(id: category.id, name: category.name, slug: category.slug),
-                        colorHex: category.colorHex
-                    )
+                    categorySourceButton(category)
                 }
             }
         }
@@ -118,10 +114,7 @@ struct LinuxDoSourceColumn: View {
     private var accountSummary: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Image(systemName: store.isAuthenticated ? "checkmark.seal" : "person")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(store.isAuthenticated ? Color.stxAccent : Color.stxMuted)
-                    .frame(width: 18)
+                accountAvatarControl
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(accountTitle)
@@ -136,27 +129,77 @@ struct LinuxDoSourceColumn: View {
                 Spacer(minLength: 0)
             }
 
-            HStack(spacing: 8) {
-                if store.isSigningIn {
+            if store.isSigningIn {
+                HStack(spacing: 8) {
                     ProgressView()
                         .controlSize(.small)
-                } else if store.isAuthenticated {
-                    Button("Sign Out") {
-                        Task { await store.signOut() }
-                    }
-                    .controlSize(.small)
-                } else {
-                    Button {
-                        onSignIn()
-                    } label: {
-                        Label("Sign In", systemImage: "person.crop.circle.badge.plus")
-                    }
-                    .controlSize(.small)
-                    .disabled(!signInEnabled)
+                    Text("Signing in")
+                        .font(.sora(10))
+                        .foregroundStyle(Color.stxMuted)
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
             }
         }
+    }
+
+    @ViewBuilder
+    private var accountAvatarControl: some View {
+        if store.isAuthenticated {
+            accountAvatar
+        } else {
+            Button {
+                onSignIn()
+            } label: {
+                accountAvatar
+            }
+            .buttonStyle(.plain)
+            .disabled(!signInEnabled || store.isSigningIn)
+            .help("Sign in to LinuxDo")
+            .accessibilityLabel("Sign in to LinuxDo")
+        }
+    }
+
+    private var accountAvatar: some View {
+        Group {
+            if store.isAuthenticated, let avatarURL = store.currentUser?.avatarURL ?? store.authenticationStatus.avatarURL {
+                AsyncImage(url: avatarURL) { image in
+                    image
+                        .resizable()
+                        .scaledToFill()
+                } placeholder: {
+                    accountAvatarFallback
+                }
+            } else {
+                accountAvatarFallback
+            }
+        }
+        .frame(width: 28, height: 28)
+        .clipShape(Circle())
+        .overlay {
+            Circle()
+                .stroke(store.isAuthenticated ? Color.stxAccent.opacity(0.35) : Color.primary.opacity(0.12), lineWidth: 1)
+        }
+    }
+
+    private var accountAvatarFallback: some View {
+        ZStack {
+            Circle()
+                .fill(store.isAuthenticated ? Color.stxAccent.opacity(0.16) : Color.primary.opacity(0.06))
+            if store.isAuthenticated {
+                Text(accountInitial)
+                    .font(.sora(11, weight: .semibold))
+                    .foregroundStyle(Color.stxAccent)
+            } else {
+                Image(systemName: "person")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.stxMuted)
+            }
+        }
+    }
+
+    private var accountInitial: String {
+        let username = store.currentUser?.username ?? store.authenticationStatus.username ?? ""
+        return username.trimmingCharacters(in: .whitespacesAndNewlines).first.map { String($0).uppercased() } ?? "L"
     }
 
     private var accountTitle: String {
@@ -210,6 +253,156 @@ struct LinuxDoSourceColumn: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    private func categorySourceButton(_ category: LinuxDoCategory) -> some View {
+        let feed = LinuxDoFeed.category(id: category.id, name: category.name, slug: category.slug)
+        return Button {
+            store.selectFeed(feed)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: LinuxDoCategoryIcon.symbolName(for: category))
+                    .font(.system(size: 13, weight: .semibold))
+                    .symbolRenderingMode(.monochrome)
+                    .foregroundStyle(Color(hex: category.colorHex ?? "") ?? Color.stxMuted)
+                    .frame(width: 16)
+                Text(category.name)
+                    .font(.sora(12, weight: store.selectedFeed == feed ? .semibold : .regular))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 9)
+            .frame(height: 28)
+            .background {
+                if store.selectedFeed == feed {
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(Color.stxAccent.opacity(0.13))
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+enum LinuxDoCategoryIcon {
+    static func symbolName(for category: LinuxDoCategory) -> String {
+        let slug = category.slug.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let symbol = symbolName(forKnownSlug: slug) {
+            return symbol
+        }
+
+        let icon = category.iconName?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let icon, let symbol = symbolName(forDiscourseIcon: icon) {
+            return symbol
+        }
+
+        return symbolName(forText: "\(category.name) \(slug)")
+    }
+
+    private static func symbolName(forKnownSlug slug: String) -> String? {
+        return switch slug {
+        case "develop":
+            "chevron.left.forwardslash.chevron.right"
+        case "domestic":
+            "leaf.fill"
+        case "resource":
+            "point.3.connected.trianglepath.dotted"
+        case "wiki":
+            "doc.richtext.fill"
+        case "job":
+            "briefcase.fill"
+        case "reading":
+            "book.closed.fill"
+        case "news":
+            "newspaper.fill"
+        case "feeds":
+            "dot.radiowaves.left.and.right"
+        case "welfare":
+            "gift.fill"
+        case "gossip":
+            "drop.fill"
+        case "square":
+            "hurricane"
+        case "feedback":
+            "bubble.left.and.bubble.right.fill"
+        default:
+            nil
+        }
+    }
+
+    private static func symbolName(forDiscourseIcon icon: String) -> String? {
+        return switch icon {
+        case "code":
+            "chevron.left.forwardslash.chevron.right"
+        case "seedling":
+            "leaf.fill"
+        case "share-nodes", "square-share-nodes", "share-alt", "share":
+            "point.3.connected.trianglepath.dotted"
+        case "hard-drive", "hdd":
+            "externaldrive.fill"
+        case "book":
+            "doc.richtext.fill"
+        case "book-open", "book-open-reader":
+            "book.closed.fill"
+        case "briefcase":
+            "briefcase.fill"
+        case "newspaper":
+            "newspaper.fill"
+        case "rss":
+            "dot.radiowaves.left.and.right"
+        case "piggy-bank":
+            "gift.fill"
+        case "droplet", "tint":
+            "drop.fill"
+        case "hurricane":
+            "hurricane"
+        case "comments":
+            "bubble.left.and.bubble.right.fill"
+        case "list", "list-ul":
+            "list.bullet"
+        case "bug", "worm":
+            "circle.hexagongrid.fill"
+        default:
+            nil
+        }
+    }
+
+    private static func symbolName(forText text: String) -> String {
+        let lowered = text.lowercased()
+        if lowered.contains("开发") || lowered.contains("code") || lowered.contains("dev") {
+            return "chevron.left.forwardslash.chevron.right"
+        }
+        if lowered.contains("资源") || lowered.contains("share") || lowered.contains("resource") {
+            return "point.3.connected.trianglepath.dotted"
+        }
+        if lowered.contains("文档") || lowered.contains("wiki") || lowered.contains("doc") {
+            return "doc.richtext.fill"
+        }
+        if lowered.contains("读书") || lowered.contains("reading") || lowered.contains("book") {
+            return "book.closed.fill"
+        }
+        if lowered.contains("新闻") || lowered.contains("快讯") || lowered.contains("news") {
+            return "newspaper.fill"
+        }
+        if lowered.contains("反馈") || lowered.contains("comment") || lowered.contains("feedback") {
+            return "bubble.left.and.bubble.right.fill"
+        }
+        if lowered.contains("工作") || lowered.contains("job") || lowered.contains("briefcase") {
+            return "briefcase.fill"
+        }
+        if lowered.contains("rss") || lowered.contains("feed") {
+            return "dot.radiowaves.left.and.right"
+        }
+        if lowered.contains("福利") || lowered.contains("welfare") {
+            return "gift.fill"
+        }
+        if lowered.contains("广场") || lowered.contains("square") {
+            return "hurricane"
+        }
+        if lowered.contains("国产") || lowered.contains("domestic") {
+            return "leaf.fill"
+        }
+        return "folder.badge.questionmark"
     }
 }
 

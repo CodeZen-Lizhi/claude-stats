@@ -154,6 +154,10 @@ struct CurrentUserResponse: Decodable, Sendable {
     }
 }
 
+struct UserProfileResponse: Decodable, Sendable {
+    let user: UserResponse
+}
+
 struct CSRFResponse: Decodable, Sendable {
     let csrf: String
 }
@@ -289,6 +293,7 @@ struct CategoryResponse: Decodable, Sendable {
     let slug: String
     let color: String?
     let textColor: String?
+    let icon: String?
     let topicCount: Int?
 
     enum CodingKeys: String, CodingKey {
@@ -297,6 +302,7 @@ struct CategoryResponse: Decodable, Sendable {
         case slug
         case color
         case textColor = "text_color"
+        case icon
         case topicCount = "topic_count"
     }
 
@@ -307,6 +313,7 @@ struct CategoryResponse: Decodable, Sendable {
             slug: slug,
             colorHex: color,
             textColorHex: textColor,
+            iconName: icon,
             topicCount: topicCount ?? 0
         )
     }

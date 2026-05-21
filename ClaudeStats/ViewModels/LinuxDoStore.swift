@@ -18,6 +18,7 @@ struct LinuxDoTopicDetailState: Sendable {
     var detail: LinuxDoTopicDetail?
     var loadedPostIDs: Set<Int> = []
     var remainingPostIDs: [Int] = []
+    var nextPage: Int?
     var scrollTargetPostID: Int?
     var timelineWarning: String?
     var isLoading = false
@@ -25,12 +26,16 @@ struct LinuxDoTopicDetailState: Sendable {
     var isJumping = false
     var isStale = false
     var error: String?
+
+    var hasMorePosts: Bool {
+        !remainingPostIDs.isEmpty || nextPage != nil
+    }
 }
 
 enum LinuxDoAuthenticationStatus: Equatable, Sendable {
     case guest
     case userAPIKey
-    case webSession(username: String?)
+    case webSession(username: String?, avatarURL: URL?)
 
     var isAuthenticated: Bool {
         switch self {
@@ -54,8 +59,17 @@ enum LinuxDoAuthenticationStatus: Equatable, Sendable {
 
     var username: String? {
         switch self {
-        case .webSession(let username):
+        case .webSession(let username, _):
             username
+        case .guest, .userAPIKey:
+            nil
+        }
+    }
+
+    var avatarURL: URL? {
+        switch self {
+        case .webSession(_, let avatarURL):
+            avatarURL
         case .guest, .userAPIKey:
             nil
         }
@@ -289,8 +303,7 @@ final class LinuxDoStore {
             if let detail = state.detail {
                 prewarmContentBlocks(for: detail.posts)
             }
-            state.loadedPostIDs = Set(cached.detail.posts.map(\.id))
-            state.remainingPostIDs = cached.detail.stream.filter { !state.loadedPostIDs.contains($0) }
+            refreshPaginationState(&state)
             state.isStale = cached.isStale
             topicStates[id] = state
             if !cached.isStale { return }
@@ -304,8 +317,7 @@ final class LinuxDoStore {
             let sorted = sortedDetail(detail)
             state.detail = sorted
             prewarmContentBlocks(for: sorted.posts)
-            state.loadedPostIDs = Set(sorted.posts.map(\.id))
-            state.remainingPostIDs = sorted.stream.filter { !state.loadedPostIDs.contains($0) }
+            refreshPaginationState(&state)
             state.isLoading = false
             state.isStale = false
             try? cache.writeTopic(sorted)
@@ -326,18 +338,58 @@ final class LinuxDoStore {
 
     func loadMorePosts(topicID: Int) async {
         var state = topicStates[topicID] ?? LinuxDoTopicDetailState()
-        guard !state.remainingPostIDs.isEmpty, !state.isLoadingMore else { return }
+        guard !state.isLoadingMore else { return }
+
+        if let nextPage = state.nextPage {
+            await loadMoreTopicPage(topicID: topicID, page: nextPage, state: state)
+            return
+        }
+
+        guard !state.remainingPostIDs.isEmpty else { return }
         let batch = Array(state.remainingPostIDs.prefix(20))
         state.isLoadingMore = true
         state.error = nil
         topicStates[topicID] = state
         do {
             let posts = try await client.fetchPosts(topicID: topicID, postIDs: batch)
+            state = topicStates[topicID] ?? state
             prewarmContentBlocks(for: posts)
             state.detail = mergedDetail(state.detail, adding: posts)
-            state.loadedPostIDs.formUnion(posts.map(\.id))
-            state.remainingPostIDs.removeAll { state.loadedPostIDs.contains($0) }
+            refreshPaginationState(&state)
             state.isLoadingMore = false
+            if posts.isEmpty {
+                state.timelineWarning = "Linux.do did not return more posts for this batch."
+                state.remainingPostIDs.removeAll { batch.contains($0) }
+            }
+            if let detail = state.detail {
+                try? cache.writeTopic(detail)
+            }
+        } catch {
+            state.isLoadingMore = false
+            state.error = userFacingMessage(error)
+            handle(error)
+        }
+        topicStates[topicID] = state
+    }
+
+    private func loadMoreTopicPage(topicID: Int, page: Int, state initialState: LinuxDoTopicDetailState) async {
+        guard let detail = initialState.detail else { return }
+        var state = initialState
+        state.isLoadingMore = true
+        state.error = nil
+        topicStates[topicID] = state
+        do {
+            let pageDetail = try await client.fetchTopicPage(id: topicID, slug: detail.slug, page: page, now: .now)
+            state = topicStates[topicID] ?? state
+            let knownIDs = state.loadedPostIDs
+            let newPosts = pageDetail.posts.filter { !knownIDs.contains($0.id) }
+            prewarmContentBlocks(for: newPosts)
+            state.detail = mergedDetail(state.detail, adding: newPosts, stream: pageDetail.stream)
+            refreshPaginationState(&state, currentPage: page, receivedNewPosts: !newPosts.isEmpty)
+            state.isLoadingMore = false
+            if newPosts.isEmpty {
+                state.timelineWarning = "Linux.do did not return more posts for this page."
+            }
             if let detail = state.detail {
                 try? cache.writeTopic(detail)
             }
@@ -535,7 +587,7 @@ final class LinuxDoStore {
             refreshAuthenticationState()
             let user = try await client.fetchCurrentUser()
             let csrfToken = try? await client.fetchCSRFToken()
-            let enrichedSession = session.with(csrfToken: csrfToken, username: user.username)
+            let enrichedSession = session.with(csrfToken: csrfToken, username: user.username, avatarURL: user.avatarURL)
             try credentials.saveWebSession(enrichedSession)
             refreshAuthenticationState()
             currentUser = user
@@ -633,11 +685,14 @@ final class LinuxDoStore {
         }
     }
 
-    private func mergedDetail(_ detail: LinuxDoTopicDetail?, adding posts: [LinuxDoPost]) -> LinuxDoTopicDetail? {
+    private func mergedDetail(_ detail: LinuxDoTopicDetail?, adding posts: [LinuxDoPost], stream: [Int] = []) -> LinuxDoTopicDetail? {
         guard var detail else { return nil }
         var byID = Dictionary(uniqueKeysWithValues: detail.posts.map { ($0.id, $0) })
         for post in posts {
             byID[post.id] = post
+        }
+        if !stream.isEmpty, Set(byID.keys).isSubset(of: Set(stream)) {
+            detail.stream = stream
         }
         detail.posts = sortedPosts(Array(byID.values), stream: detail.stream)
         return detail
@@ -662,6 +717,31 @@ final class LinuxDoStore {
     private func effectiveStream(for detail: LinuxDoTopicDetail) -> [Int] {
         if !detail.stream.isEmpty { return detail.stream }
         return detail.posts.sorted { $0.postNumber < $1.postNumber }.map(\.id)
+    }
+
+    private func refreshPaginationState(
+        _ state: inout LinuxDoTopicDetailState,
+        currentPage: Int? = nil,
+        receivedNewPosts: Bool = true
+    ) {
+        guard let detail = state.detail else {
+            state.loadedPostIDs = []
+            state.remainingPostIDs = []
+            state.nextPage = nil
+            return
+        }
+
+        state.loadedPostIDs = Set(detail.posts.map(\.id))
+        state.remainingPostIDs = detail.stream.filter { !state.loadedPostIDs.contains($0) }
+        guard state.remainingPostIDs.isEmpty,
+              detail.postsCount > state.loadedPostIDs.count,
+              receivedNewPosts else {
+            state.nextPage = nil
+            return
+        }
+
+        let streamOnlyCoversLoadedPosts = detail.stream.isEmpty || detail.stream.allSatisfy { state.loadedPostIDs.contains($0) }
+        state.nextPage = streamOnlyCoversLoadedPosts ? (currentPage.map { $0 + 1 } ?? 2) : nil
     }
 
     private func loadCategoriesIfNeeded() async {
@@ -735,6 +815,7 @@ final class LinuxDoStore {
             let user = try await client.fetchCurrentUser()
             currentUser = user
             preferences.linuxDoLastLoginUsername = user.username
+            persistWebSessionMetadata(for: user)
         } catch {
             if let clientError = error as? LinuxDoClient.ClientError, clientError == .unauthorized {
                 handle(error)
@@ -743,6 +824,18 @@ final class LinuxDoStore {
             if preferences.linuxDoLastLoginUsername.isEmpty {
                 lastError = userFacingMessage(error)
             }
+        }
+    }
+
+    private func persistWebSessionMetadata(for user: LinuxDoCurrentUser) {
+        guard let session = credentials.readWebSession(), session.isAuthenticated else { return }
+        let enrichedSession = session.with(csrfToken: nil, username: user.username, avatarURL: user.avatarURL)
+        guard enrichedSession != session else { return }
+        do {
+            try credentials.saveWebSession(enrichedSession)
+            refreshAuthenticationState()
+        } catch {
+            Log.app.notice("LinuxDo web session metadata save failed: \(String(describing: error), privacy: .public)")
         }
     }
 
@@ -795,7 +888,7 @@ final class LinuxDoStore {
             return .userAPIKey
         }
         if let session = credentials.readWebSession(), session.isAuthenticated {
-            return .webSession(username: session.username)
+            return .webSession(username: session.username, avatarURL: session.avatarURL)
         }
         return .guest
     }

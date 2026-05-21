@@ -1,6 +1,18 @@
 import AppKit
 import SwiftUI
 
+private enum LinuxDoDetailLayout {
+    static let contentLeading: CGFloat = 84
+    static let contentTrailing: CGFloat = 24
+    static let contentMaxWidth: CGFloat = 848
+    static let avatarColumnWidth: CGFloat = 48
+    static let avatarSpacing: CGFloat = 14
+    static var postRowLeading: CGFloat { contentLeading - avatarColumnWidth - avatarSpacing }
+    static var headerLeading: CGFloat { postRowLeading }
+    static var headerMaxWidth: CGFloat { contentMaxWidth + avatarColumnWidth + avatarSpacing }
+    static var totalMaxWidth: CGFloat { contentLeading + contentMaxWidth + contentTrailing }
+}
+
 struct LinuxDoTopicDetailView: View {
     @Bindable var store: LinuxDoStore
     @State private var visiblePostNumber = 1
@@ -63,12 +75,14 @@ struct LinuxDoTopicDetailView: View {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     if let error = state.error {
                         LinuxDoInlineError(message: error)
-                            .padding(.horizontal, 24)
+                            .padding(.leading, LinuxDoDetailLayout.contentLeading)
+                            .padding(.trailing, LinuxDoDetailLayout.contentTrailing)
                             .padding(.top, 14)
                     }
                     if let warning = state.timelineWarning {
                         LinuxDoInlineError(message: warning)
-                            .padding(.horizontal, 24)
+                            .padding(.leading, LinuxDoDetailLayout.contentLeading)
+                            .padding(.trailing, LinuxDoDetailLayout.contentTrailing)
                             .padding(.top, 14)
                     }
                     ForEach(detail.posts) { post in
@@ -77,6 +91,8 @@ struct LinuxDoTopicDetailView: View {
                             contentBlocks: store.contentBlocks(for: post),
                             isTopicOwner: post.postNumber == 1
                         )
+                            .padding(.leading, LinuxDoDetailLayout.postRowLeading)
+                            .padding(.trailing, LinuxDoDetailLayout.contentTrailing)
                             .id(post.id)
                             .background {
                                 GeometryReader { geometry in
@@ -91,12 +107,12 @@ struct LinuxDoTopicDetailView: View {
                                 }
                             }
                             .onAppear {
-                                if post.id == detail.posts.last?.id, !state.remainingPostIDs.isEmpty {
+                                if post.id == detail.posts.last?.id, state.hasMorePosts {
                                     Task { await store.loadMorePosts(topicID: topicID) }
                                 }
                             }
                     }
-                    if !state.remainingPostIDs.isEmpty {
+                    if state.hasMorePosts {
                         Button {
                             Task { await store.loadMorePosts(topicID: topicID) }
                         } label: {
@@ -107,14 +123,15 @@ struct LinuxDoTopicDetailView: View {
                                 Label("Load More Posts", systemImage: "arrow.down.circle")
                             }
                         }
-                        .frame(maxWidth: .infinity)
+                        .frame(maxWidth: LinuxDoDetailLayout.contentMaxWidth)
+                        .padding(.leading, LinuxDoDetailLayout.contentLeading)
+                        .padding(.trailing, LinuxDoDetailLayout.contentTrailing)
                         .padding(.vertical, 18)
                     }
                 }
-                .frame(maxWidth: 848, alignment: .leading)
-                .padding(.horizontal, 24)
+                .frame(maxWidth: LinuxDoDetailLayout.totalMaxWidth, alignment: .leading)
                 .padding(.vertical, 8)
-                .frame(maxWidth: .infinity, alignment: .top)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
             .coordinateSpace(name: "linuxdo-topic-scroll")
             .onPreferenceChange(LinuxDoPostVisibilityPreference.self) { values in
@@ -138,50 +155,42 @@ struct LinuxDoTopicDetailView: View {
     }
 
     private func header(detail: LinuxDoTopicDetail, state: LinuxDoTopicDetailState) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(detail.displayTitle)
-                    .font(.sora(18, weight: .semibold))
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: 10) {
-                    Label("\(detail.postsCount)", systemImage: "text.bubble")
-                    Label("\(detail.posts.count) loaded", systemImage: "tray.and.arrow.down")
-                    if state.isStale {
-                        Label("Stale", systemImage: "clock.badge.exclamationmark")
-                    }
-                    if state.isJumping {
-                        Label("Jumping", systemImage: "arrow.up.and.down")
-                    }
+        VStack(alignment: .leading, spacing: 8) {
+            Text(detail.displayTitle)
+                .font(.sora(18, weight: .semibold))
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 10) {
+                Label("\(detail.postsCount)", systemImage: "text.bubble")
+                Label("\(detail.posts.count) loaded", systemImage: "tray.and.arrow.down")
+                if state.isStale {
+                    Label("Stale", systemImage: "clock.badge.exclamationmark")
                 }
-                .font(.sora(10).monospacedDigit())
-                .foregroundStyle(Color.stxMuted)
-
-                if !detail.tags.isEmpty {
-                    HStack(spacing: 6) {
-                        ForEach(detail.tags.prefix(6), id: \.self) { tag in
-                            Text(tag)
-                                .font(.sora(9, weight: .medium))
-                                .foregroundStyle(Color.stxAccent)
-                                .padding(.horizontal, 7)
-                                .frame(height: 20)
-                                .background(Color.stxAccent.opacity(0.1), in: Capsule())
-                        }
-                    }
+                if state.isJumping {
+                    Label("Jumping", systemImage: "arrow.up.and.down")
                 }
             }
-            Spacer(minLength: 8)
-            if let url = detail.topicURL {
-                Button {
-                    NSWorkspace.shared.open(url)
-                } label: {
-                    Label("Open", systemImage: "safari")
+            .font(.sora(10).monospacedDigit())
+            .foregroundStyle(Color.stxMuted)
+
+            if !detail.tags.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(detail.tags.prefix(6), id: \.self) { tag in
+                        Text(tag)
+                            .font(.sora(9, weight: .medium))
+                            .foregroundStyle(Color.stxAccent)
+                            .padding(.horizontal, 7)
+                            .frame(height: 20)
+                            .background(Color.stxAccent.opacity(0.1), in: Capsule())
+                    }
                 }
-                .controlSize(.small)
             }
         }
-        .padding(.horizontal, 18)
+        .frame(maxWidth: LinuxDoDetailLayout.headerMaxWidth, alignment: .leading)
+        .padding(.leading, LinuxDoDetailLayout.headerLeading)
+        .padding(.trailing, LinuxDoDetailLayout.contentTrailing)
         .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
