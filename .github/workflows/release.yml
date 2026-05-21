@@ -77,7 +77,7 @@ jobs:
     runs-on: macos-26
     steps:
       - name: Checkout master
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: master
           fetch-depth: 0
@@ -138,7 +138,24 @@ jobs:
 
       - name: Install build tools
         run: |
-          brew install xcodegen zig@0.15 ruby-build go cmake pkg-config icu4c openssl@3 readline libyaml gmp
+          set -euo pipefail
+
+          formulae=(xcodegen zig@0.15 ruby-build go cmake pkg-config icu4c openssl@3 readline libyaml gmp)
+          missing=()
+          for formula in "${formulae[@]}"; do
+            if brew list --formula "$formula" >/dev/null 2>&1; then
+              echo "$formula already installed; skipping."
+            else
+              missing+=("$formula")
+            fi
+          done
+
+          if (( ${#missing[@]} > 0 )); then
+            brew install "${missing[@]}"
+          else
+            echo "All Homebrew build tools are already installed."
+          fi
+
           ZIG_PREFIX="$(brew --prefix zig@0.15)"
           ZIG_CACHE="$RUNNER_TEMP/zig-cache"
           mkdir -p "$ZIG_CACHE"
@@ -248,14 +265,14 @@ jobs:
           cat release_notes.html
 
       - name: Create GitHub Release (in source repo)
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           files: dist/*
           body_path: release_notes.md
 
       - name: Create GitHub Release (in public releases repo)
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           repository: 1pitaph/claude-stats-releases
           token: ${{ secrets.RELEASES_REPO_TOKEN }}
@@ -271,13 +288,43 @@ jobs:
 
       - name: Deploy appcast to GitHub Pages (public releases repo)
         if: steps.sparkle.outputs.enabled == 'true'
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          personal_token: ${{ secrets.RELEASES_REPO_TOKEN }}
-          external_repository: 1pitaph/claude-stats-releases
-          publish_dir: ./_site
-          publish_branch: gh-pages
-          keep_files: true
+        env:
+          RELEASES_REPO_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$RELEASES_REPO_TOKEN" ]]; then
+            echo "::error::RELEASES_REPO_TOKEN is required to publish the appcast."
+            exit 1
+          fi
+
+          PAGES_REPO="https://x-access-token:${RELEASES_REPO_TOKEN}@github.com/1pitaph/claude-stats-releases.git"
+          PAGES_DIR="$RUNNER_TEMP/claude-stats-releases-pages"
+          rm -rf "$PAGES_DIR"
+
+          if git ls-remote --exit-code --heads "$PAGES_REPO" gh-pages >/dev/null 2>&1; then
+            git clone --depth 1 --branch gh-pages "$PAGES_REPO" "$PAGES_DIR"
+          else
+            git clone --depth 1 "$PAGES_REPO" "$PAGES_DIR"
+            cd "$PAGES_DIR"
+            git checkout --orphan gh-pages
+            git rm -rf . >/dev/null 2>&1 || true
+          fi
+
+          cd "$PAGES_DIR"
+          rsync -a --checksum "$GITHUB_WORKSPACE/_site/" "$PAGES_DIR/"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+
+          if [[ -z "$(git status --porcelain)" ]]; then
+            echo "No GitHub Pages changes to publish."
+            exit 0
+          fi
+
+          git commit -m "chore: publish appcast for $GITHUB_REF_NAME"
+          git push origin gh-pages
 
       - name: Commit version bump back to master
         run: |
