@@ -3,6 +3,18 @@
 extension ReleaseHistoryCatalog {
     static let generatedEntries: [ReleaseHistoryEntry] = [
         ReleaseHistoryEntry(
+            version: "1.6.4",
+            date: "May 21, 2026",
+            headline: "新增基于本地使用统计数据生成的Token Town小镇游戏",
+            changes: [
+                "添加StatsPeriod的Codable支持以适配新功能",
+                "在侧边栏和主页面中新增Token Town入口",
+                "新增随机数生成、经济系统、状态存储等核心模块",
+                "新增完整的测试用例覆盖核心功能逻辑",
+                "新增SpriteKit渲染的小镇场景和交互视图",
+            ]
+        ),
+        ReleaseHistoryEntry(
             version: "1.6.3",
             date: "May 21, 2026",
             headline: "重构屏幕样式解析逻辑，新增NotchIslandScreenStyleResolver统一处理有效样式计算",
