@@ -95,6 +95,29 @@ PRODUCTS="$DERIVED/Build/Products/$CONFIGURATION"
 APP="$PRODUCTS/Claude Stats.app"
 ROCKXY_HELPER_TOOL="$APP/Contents/Library/HelperTools/RockxyHelperTool"
 
+codesign_release() {
+    local attempt=1
+    local max_attempts=3
+    local delay=5
+    local status=0
+
+    while true; do
+        if codesign "$@"; then
+            return 0
+        fi
+
+        status=$?
+        if [[ "$attempt" -ge "$max_attempts" ]]; then
+            return "$status"
+        fi
+
+        echo "warning: codesign failed on attempt $attempt/$max_attempts; retrying in ${delay}s" >&2
+        sleep "$delay"
+        attempt=$((attempt + 1))
+        delay=$((delay * 2))
+    done
+}
+
 xcodebuild \
     -project ClaudeStats.xcodeproj \
     -scheme ClaudeStats \
@@ -105,8 +128,11 @@ xcodebuild \
 
 [[ -d "$APP" ]] || { echo "error: build did not produce $APP" >&2; exit 1; }
 
+GITTOOLS_DIR="$APP/Contents/Resources/GitTools"
+bash scripts/gittools/prune-debug-symbols.sh "$GITTOOLS_DIR"
+
 echo "==> Verifying bundled GitTools runtime"
-bash scripts/verify-gittools-runtime.sh "$APP/Contents/Resources/GitTools"
+bash scripts/verify-gittools-runtime.sh "$GITTOOLS_DIR"
 
 if [[ $SIGNED -eq 1 ]]; then
     # Xcode combines our requested CloudKit entitlements with restricted values
@@ -135,30 +161,29 @@ if [[ $SIGNED -eq 1 ]]; then
             "$SPARKLE_FW/Versions/B/XPCServices/Installer.xpc" \
             "$SPARKLE_FW/Versions/B/Updater.app" \
             "$SPARKLE_FW/Versions/B/Autoupdate"; do
-            [[ -e "$item" ]] && codesign --force --options runtime --timestamp \
+            [[ -e "$item" ]] && codesign_release --force --options runtime --timestamp \
                 --sign "$SIGN_IDENTITY" "$item"
         done
-        codesign --force --options runtime --timestamp \
+        codesign_release --force --options runtime --timestamp \
             --sign "$SIGN_IDENTITY" "$SPARKLE_FW"
     fi
-    GITTOOLS_DIR="$APP/Contents/Resources/GitTools"
     if [[ -d "$GITTOOLS_DIR" ]]; then
         while IFS= read -r -d '' item; do
             if file "$item" | grep -q 'Mach-O'; then
-                codesign --force --options runtime --timestamp \
+                codesign_release --force --options runtime --timestamp \
                     --sign "$SIGN_IDENTITY" "$item"
             fi
-        done < <(find "$GITTOOLS_DIR" -type f -print0)
+        done < <(find "$GITTOOLS_DIR" -type d -name '*.dSYM' -prune -o -type f -print0)
     fi
     if [[ ! -f "$ROCKXY_HELPER_TOOL" ]]; then
         echo "error: missing bundled Rockxy helper at $ROCKXY_HELPER_TOOL" >&2
         exit 1
     fi
     echo "==> Re-signing Rockxy helper tool"
-    codesign --force --options runtime --timestamp \
+    codesign_release --force --options runtime --timestamp \
         --sign "$SIGN_IDENTITY" \
         "$ROCKXY_HELPER_TOOL"
-    codesign --force --options runtime --timestamp \
+    codesign_release --force --options runtime --timestamp \
         --sign "$SIGN_IDENTITY" \
         --entitlements "$SIGNED_ENTITLEMENTS" \
         "$APP"
@@ -247,7 +272,7 @@ assert_no_get_task_allow_entitlements() {
             fi
         fi
         rm -f "$entitlements"
-    done < <(find "$root" -type f -print0)
+    done < <(find "$root" -type d -name '*.dSYM' -prune -o -type f -print0)
 
     if [[ $found -ne 0 ]]; then
         exit 1
@@ -282,7 +307,7 @@ echo "==> Packaging DMG"
 make_dmg
 
 echo "==> Signing DMG"
-codesign --sign "$SIGN_IDENTITY" --timestamp "$DMG"
+codesign_release --sign "$SIGN_IDENTITY" --timestamp "$DMG"
 
 echo "==> Submitting to Apple notary service (this can take a few minutes)"
 NOTARY_ARGS=()

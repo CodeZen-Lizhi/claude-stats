@@ -11,6 +11,10 @@ SOURCE="${1:-}"
 SOURCE="$(cd "$SOURCE" && pwd)"
 [[ -x "$SOURCE/bin/github-linguist" ]] || { echo "error: missing executable bin/github-linguist" >&2; exit 1; }
 [[ -x "$SOURCE/bin/scc" ]] || { echo "error: missing executable bin/scc" >&2; exit 1; }
+if find "$SOURCE" -type d -name '*.dSYM' -print -quit | grep -q .; then
+    echo "error: GitTools runtime contains debug symbol bundles; prune them before packaging" >&2
+    exit 1
+fi
 
 TMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/gittools-verify.XXXXXX")"
 cleanup() {
@@ -67,6 +71,6 @@ while IFS= read -r -d '' item; do
                 ;;
         esac
     done < <(otool -L "$item" | sed '1d' | awk '{print $1}')
-done < <(find "$RELOCATED" -type f -print0)
+done < <(find "$RELOCATED" -type d -name '*.dSYM' -prune -o -type f -print0)
 
 echo "GitTools runtime verified: $SOURCE"

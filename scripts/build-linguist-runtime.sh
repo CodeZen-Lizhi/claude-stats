@@ -57,6 +57,7 @@ if [[ -n "${LINGUIST_RUNTIME_SOURCE:-}" ]]; then
     fi
     reset_runtime_payload
     rsync -a "$LINGUIST_RUNTIME_SOURCE/" "$TOOLS_DIR/"
+    bash scripts/gittools/prune-debug-symbols.sh "$TOOLS_DIR"
     RUNTIME_KIND="prebuilt"
     if [[ ! -f "$MANIFEST" ]]; then
         write_manifest "bundled" "bundled"

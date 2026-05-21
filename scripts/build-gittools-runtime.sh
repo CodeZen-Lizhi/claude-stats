@@ -116,7 +116,9 @@ SH
 chmod +x "$OUT/bin/github-linguist"
 
 echo "==> Rewriting Mach-O dependencies"
+bash scripts/gittools/prune-debug-symbols.sh "$OUT"
 bash scripts/gittools/fix-mach-o-install-names.sh "$OUT"
+bash scripts/gittools/prune-debug-symbols.sh "$OUT"
 
 cat > "$OUT/manifest.json" <<JSON
 {
