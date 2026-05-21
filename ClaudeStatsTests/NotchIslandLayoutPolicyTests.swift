@@ -57,4 +57,40 @@ struct NotchIslandLayoutPolicyTests {
         #expect(dynamic.width == standard.width + AtollNotchGeometry.dynamicIslandShadowInset * 2)
         #expect(dynamic.height == standard.height + AtollNotchGeometry.dynamicIslandTopOffset)
     }
+
+    @Test("Screen style resolver makes Same as notch explicit")
+    func screenStyleResolverMakesSameAsNotchExplicit() {
+        let descriptors = [
+            NotchIslandScreenDescriptor(
+                id: "display-a",
+                displayName: "External",
+                localizedName: "External",
+                hasPhysicalNotch: false
+            ),
+            NotchIslandScreenDescriptor(
+                id: "display-b",
+                displayName: "Projector",
+                localizedName: "Projector",
+                hasPhysicalNotch: false
+            ),
+            NotchIslandScreenDescriptor(
+                id: "built-in",
+                displayName: "Built-in",
+                localizedName: "Built-in",
+                hasPhysicalNotch: true
+            )
+        ]
+
+        let styles = NotchIslandScreenStyleResolver.effectiveStyles(
+            for: descriptors,
+            storedStyles: [
+                "display-b": .floatingIsland,
+                "built-in": .floatingIsland
+            ]
+        )
+
+        #expect(styles["display-a"] == .sameAsNotch)
+        #expect(styles["display-b"] == .floatingIsland)
+        #expect(styles["built-in"] == .sameAsNotch)
+    }
 }

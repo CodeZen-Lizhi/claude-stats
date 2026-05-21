@@ -7,6 +7,7 @@ import Foundation
 public final class AtollIslandRuntimeBridge {
     private var configuration: AtollIslandConfiguration
     private let screenName: String?
+    private let screenID: String?
     private let settingsOpener: () -> Void
     private let viewModel: DynamicIslandViewModel
     private weak var attachedWindow: NSWindow?
@@ -16,10 +17,12 @@ public final class AtollIslandRuntimeBridge {
 
     public init(
         screenName: String?,
+        screenID: String? = nil,
         configuration: AtollIslandConfiguration,
         settingsOpener: @escaping () -> Void
     ) {
         self.screenName = screenName
+        self.screenID = screenID
         self.configuration = configuration
         self.settingsOpener = settingsOpener
         AtollDefaultsBridge.sync(configuration)
@@ -30,7 +33,7 @@ public final class AtollIslandRuntimeBridge {
         coordinator.alwaysShowTabs = true
         coordinator.openLastTabByDefault = false
 
-        viewModel = DynamicIslandViewModel(screen: screenName)
+        viewModel = DynamicIslandViewModel(screen: screenName, screenID: screenID)
     }
 
     func configurePrimaryRuntimeContext() {

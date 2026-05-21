@@ -74,7 +74,7 @@ public enum AtollIslandSizing {
     }
 
     static func adjustedWindowSize(_ contentSize: CGSize, for screen: NSScreen) -> CGSize {
-        guard shouldUseDynamicIslandMode(for: screen.localizedName) else {
+        guard shouldUseDynamicIslandMode(for: screen) else {
             return contentSize
         }
         return CGSize(

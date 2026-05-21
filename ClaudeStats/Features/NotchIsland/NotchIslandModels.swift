@@ -77,6 +77,32 @@ struct NotchIslandScreenDescriptor: Identifiable, Equatable, Sendable {
     let hasPhysicalNotch: Bool
 }
 
+enum NotchIslandScreenStyleResolver {
+    static func effectiveStyle(
+        screenID: String,
+        hasPhysicalNotch: Bool,
+        storedStyles: [String: NotchIslandScreenStyle]
+    ) -> NotchIslandScreenStyle {
+        if hasPhysicalNotch {
+            return .sameAsNotch
+        }
+        return storedStyles[screenID] ?? .sameAsNotch
+    }
+
+    static func effectiveStyles(
+        for descriptors: [NotchIslandScreenDescriptor],
+        storedStyles: [String: NotchIslandScreenStyle]
+    ) -> [String: NotchIslandScreenStyle] {
+        descriptors.reduce(into: [:]) { result, descriptor in
+            result[descriptor.id] = effectiveStyle(
+                screenID: descriptor.id,
+                hasPhysicalNotch: descriptor.hasPhysicalNotch,
+                storedStyles: storedStyles
+            )
+        }
+    }
+}
+
 @MainActor
 enum NotchIslandScreenCatalog {
     static let fallbackScreenID = "main"

@@ -153,6 +153,7 @@ final class NotchIslandController {
 
         let bridge = AtollIslandRuntimeBridge(
             screenName: screen.localizedName,
+            screenID: NotchIslandScreenCatalog.id(for: screen),
             configuration: configuration,
             settingsOpener: {
                 NotificationCenter.default.post(name: .openSettingsInMainWindow, object: SettingsSection.notchIsland)
@@ -231,8 +232,26 @@ final class NotchIslandController {
             openOnHover: preferences.notchIslandHoverExpansionEnabled,
             showOnAllDisplays: targetScreens.count > 1,
             statsUpdateInterval: atollStatsUpdateInterval(for: preferences.systemMonitorRefreshRate),
-            screenStylesByScreenID: preferences.notchIslandScreenStyles.mapValues(\.atollStyle)
+            screenStylesByScreenID: screenStylesByScreenID(
+                for: preferences,
+                targetScreens: targetScreens
+            )
         )
+    }
+
+    private func screenStylesByScreenID(
+        for preferences: Preferences,
+        targetScreens: [NSScreen]
+    ) -> [String: AtollIslandScreenStyle] {
+        targetScreens.reduce(into: [:]) { result, screen in
+            let screenID = NotchIslandScreenCatalog.id(for: screen)
+            let style = NotchIslandScreenStyleResolver.effectiveStyle(
+                screenID: screenID,
+                hasPhysicalNotch: screen.safeAreaInsets.top > 0,
+                storedStyles: preferences.notchIslandScreenStyles
+            )
+            result[screenID] = style.atollStyle
+        }
     }
 
     private func atollStatsUpdateInterval(for refreshRate: SystemMonitorRefreshRate) -> TimeInterval {

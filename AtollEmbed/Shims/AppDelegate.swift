@@ -41,7 +41,7 @@ final class AppDelegate: NSObject {
     }
 
     private func adjustedSize(_ baseSize: CGSize, for screen: NSScreen) -> CGSize {
-        guard shouldUseDynamicIslandMode(for: screen.localizedName) else {
+        guard shouldUseDynamicIslandMode(for: screen) else {
             return baseSize
         }
 
