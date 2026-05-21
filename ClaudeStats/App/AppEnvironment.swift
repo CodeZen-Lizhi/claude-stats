@@ -36,6 +36,7 @@ final class AppEnvironment {
     let systemMonitor: SystemMonitorViewModel
     let networkDebugger: NetworkDebuggerStore
     let ops: OpsStore
+    let town: TownStore
 
     init(
         pricing: ModelPricing,
@@ -60,6 +61,7 @@ final class AppEnvironment {
         self.networkDebugger = networkDebugger ?? NetworkDebuggerStore(preferences: preferences)
         self.ops = ops
         self.linuxDo = linuxDo ?? LinuxDoStore(preferences: preferences)
+        self.town = TownStore(pricing: pricing)
         self.dashboard = DashboardViewModel(pricing: pricing)
         self.gitActivity = GitActivityViewModel()
         self.claudeStatus = ClaudeStatusViewModel(preferences: preferences)

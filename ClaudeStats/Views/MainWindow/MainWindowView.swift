@@ -4,7 +4,7 @@ import SwiftUI
 /// Top-level page shown in the main window's detail column. Settings live in
 /// their own main-window mode, not as a `MainPage`.
 enum MainPage: String, CaseIterable, Identifiable, Sendable {
-    case dashboard, linuxDo, configurations, usage, leaderboards, activity, git, system, skills, terminal
+    case dashboard, linuxDo, configurations, usage, town, leaderboards, activity, git, system, skills, terminal
     var id: String { rawValue }
 
     var title: String {
@@ -13,6 +13,7 @@ enum MainPage: String, CaseIterable, Identifiable, Sendable {
         case .linuxDo: "LinuxDo"
         case .configurations: L10n.string("main_page.switcher", defaultValue: "Switcher")
         case .usage: L10n.string("main_page.usage", defaultValue: "Usage")
+        case .town: "Token Town"
         case .leaderboards: L10n.string("main_page.leaderboards", defaultValue: "Leaderboards")
         case .activity: L10n.string("main_page.activity", defaultValue: "Activity")
         case .git: L10n.string("main_page.git", defaultValue: "Git")
@@ -28,6 +29,7 @@ enum MainPage: String, CaseIterable, Identifiable, Sendable {
         case .linuxDo: "globe.asia.australia"
         case .configurations: "slider.horizontal.3"
         case .usage: "chart.bar.xaxis"
+        case .town: "building.2"
         case .leaderboards: "trophy"
         case .activity: "waveform"
         case .git: "arrow.triangle.branch"
@@ -73,7 +75,7 @@ struct MainWindowView: View {
     @State private var linuxDoSignInEnabled = true
 
     private var availablePages: [MainPage] {
-        var pages: [MainPage] = [.dashboard, .configurations, .usage, .leaderboards]
+        var pages: [MainPage] = [.dashboard, .configurations, .usage, .town, .leaderboards]
         if env.preferences.aiActivityAnalysisEnabled { pages.append(.activity) }
         if env.preferences.gitTrackingEnabled { pages.append(.git) }
         if env.preferences.systemMonitorEnabled { pages.append(.system) }
@@ -320,6 +322,8 @@ struct MainWindowView: View {
             ConfigurationsView()
         case .usage:
             MainUsageView()
+        case .town:
+            TokenTownView()
         case .leaderboards:
             LeaderboardsView()
         case .activity:
