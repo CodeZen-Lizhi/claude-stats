@@ -10,3 +10,7 @@
 	path = ThirdParty/Rockxy
 	url = https://github.com/1pitaph/Rockxy.git
 	branch = integration/claude-stats
+[submodule "ThirdParty/TownGeneratorOS"]
+	path = ThirdParty/TownGeneratorOS
+	url = https://github.com/1pitaph/TownGeneratorOS.git
+	branch = integration/claude-stats
