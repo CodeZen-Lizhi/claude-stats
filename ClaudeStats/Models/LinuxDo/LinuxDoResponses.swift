@@ -348,6 +348,7 @@ struct PostResponse: Decodable, Sendable {
     let id: Int
     let topicID: Int?
     let postNumber: Int
+    let replyToPostNumber: Int?
     let username: String
     let name: String?
     let avatarTemplate: String?
@@ -356,11 +357,15 @@ struct PostResponse: Decodable, Sendable {
     let updatedAt: Date?
     let likeCount: Int?
     let replyCount: Int?
+    let reads: Int?
+    let score: Double?
+    let actionsSummary: [ActionSummary]?
 
     enum CodingKeys: String, CodingKey {
         case id
         case topicID = "topic_id"
         case postNumber = "post_number"
+        case replyToPostNumber = "reply_to_post_number"
         case username
         case name
         case avatarTemplate = "avatar_template"
@@ -369,6 +374,9 @@ struct PostResponse: Decodable, Sendable {
         case updatedAt = "updated_at"
         case likeCount = "like_count"
         case replyCount = "reply_count"
+        case reads
+        case score
+        case actionsSummary = "actions_summary"
     }
 
     var model: LinuxDoPost {
@@ -376,6 +384,7 @@ struct PostResponse: Decodable, Sendable {
             id: id,
             topicID: topicID,
             postNumber: postNumber,
+            replyToPostNumber: replyToPostNumber,
             username: username,
             name: name,
             avatarURL: LinuxDoURLResolver.avatarURL(from: avatarTemplate),
@@ -383,8 +392,21 @@ struct PostResponse: Decodable, Sendable {
             createdAt: createdAt,
             updatedAt: updatedAt,
             likeCount: likeCount ?? 0,
-            replyCount: replyCount ?? 0
+            replyCount: replyCount ?? 0,
+            reads: reads ?? 0,
+            score: score,
+            actionsSummary: actionsSummary?.map(\.model) ?? []
         )
+    }
+
+    struct ActionSummary: Decodable, Sendable {
+        let id: Int
+        let count: Int?
+        let acted: Bool?
+
+        var model: LinuxDoPostActionSummary {
+            LinuxDoPostActionSummary(id: id, count: count ?? 0, acted: acted ?? false)
+        }
     }
 }
 

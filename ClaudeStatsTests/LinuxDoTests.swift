@@ -20,21 +20,167 @@ struct LinuxDoTests {
         }
     }
 
-    @Test("Cooked HTML is reduced to native safe blocks")
+    @Test("Cooked HTML is reduced to ordered native blocks")
     func cookedHTMLBlocks() throws {
         let blocks = LinuxDoContentParser.blocks(from: """
         <p>Hello &amp; welcome</p>
         <blockquote>Keep it native</blockquote>
-        <pre><code>print(&quot;hi&quot;)</code></pre>
+        <pre><code>if true {
+            print(&quot;hi&quot;)
+        }</code></pre>
         <ul><li>One</li><li>Two</li></ul>
         <img src="/uploads/test.png">
         """)
 
-        #expect(blocks.contains(.paragraph("Hello & welcome")))
-        #expect(blocks.contains(.quote("Keep it native")))
-        #expect(blocks.contains(.code("print(\"hi\")")))
-        #expect(blocks.contains(.list(["One", "Two"])))
-        #expect(blocks.contains(.image(try #require(URL(string: "https://linux.do/uploads/test.png")))))
+        #expect(blocks.count == 5)
+        #expect(Self.plainText(blocks[0]) == "Hello & welcome")
+        if case .quote(attribution: _, blocks: let quoteBlocks) = blocks[1].kind {
+            #expect(Self.plainText(quoteBlocks.first) == "Keep it native")
+        } else {
+            Issue.record("Expected a quote block")
+        }
+        if case .codeBlock(_, let code) = blocks[2].kind {
+            #expect(code.contains("print(\"hi\")"))
+            #expect(code.contains("    "))
+        } else {
+            Issue.record("Expected a code block")
+        }
+        if case .list(false, let items) = blocks[3].kind {
+            #expect(items.map { Self.plainText($0.blocks.first) } == ["One", "Two"])
+        } else {
+            Issue.record("Expected an unordered list")
+        }
+        if case .image(let url, _, _, _, _) = blocks[4].kind {
+            #expect(url == URL(string: "https://linux.do/uploads/test.png")!)
+        } else {
+            Issue.record("Expected an image block")
+        }
+    }
+
+    @Test("Paragraph-wrapped post images become native image blocks")
+    func paragraphWrappedImagesBecomeBlocks() {
+        let blocks = LinuxDoContentParser.blocks(from: """
+        <p>Before <img class="emoji" src="/emoji/apple/wave.png" alt=":wave:"> after</p>
+        <p><img src="/uploads/direct.png" alt="Direct"></p>
+        <p><a href="/uploads/original.png"><img src="/uploads/thumb.png" alt="Linked"></a></p>
+        """)
+
+        #expect(blocks.count == 3)
+        #expect(Self.plainText(blocks[0]) == "Before :wave: after")
+        if case .image(let url, let alt, _, _, let linkURL) = blocks[1].kind {
+            #expect(url == URL(string: "https://linux.do/uploads/direct.png")!)
+            #expect(alt == "Direct")
+            #expect(linkURL == nil)
+        } else {
+            Issue.record("Expected a direct image block")
+        }
+        if case .image(let url, let alt, _, _, let linkURL) = blocks[2].kind {
+            #expect(url == URL(string: "https://linux.do/uploads/thumb.png")!)
+            #expect(alt == "Linked")
+            #expect(linkURL == URL(string: "https://linux.do/uploads/original.png")!)
+        } else {
+            Issue.record("Expected a linked image block")
+        }
+    }
+
+    @Test("Cooked HTML preserves rich Discourse shapes")
+    func cookedHTMLRichDiscourseShapes() throws {
+        let blocks = LinuxDoContentParser.blocks(from: """
+        <p><a class="mention" href="/u/alice">@alice</a> see <a href="/t/dexo/42">Dexo</a> <span class="spoiler">hidden</span> <a class="hashtag-cooked" href="/tag/swift">#swift</a></p>
+        <details><summary>More</summary><p>Inside</p></details>
+        <table><thead><tr><th>Name</th><th>Link</th></tr></thead><tbody><tr><td>Dexo</td><td><a href="/t/dexo/42">Topic</a></td></tr></tbody></table>
+        <aside class="onebox"><header><a href="https://github.com/Eilgnaw/dexo">Dexo</a></header><p>Native client</p></aside>
+        """)
+
+        #expect(blocks.count == 4)
+        if case .paragraph(let nodes) = blocks[0].kind {
+            #expect(nodes.contains(.mention(username: "alice", url: URL(string: "https://linux.do/u/alice")!)))
+            #expect(nodes.contains(.hashtag(text: "#swift", url: URL(string: "https://linux.do/tag/swift")!)))
+            #expect(Self.plainText(nodes).contains("hidden"))
+            guard case .some(.link(let url, _)) = nodes.first(where: {
+                if case .link = $0 { return true }
+                return false
+            }) else {
+                Issue.record("Expected a link node")
+                return
+            }
+            #expect(url == URL(string: "https://linux.do/t/dexo/42")!)
+        } else {
+            Issue.record("Expected a rich paragraph")
+        }
+
+        if case .details(let summary, let childBlocks) = blocks[1].kind {
+            #expect(Self.plainText(summary) == "More")
+            #expect(Self.plainText(childBlocks.first) == "Inside")
+        } else {
+            Issue.record("Expected details block")
+        }
+
+        if case .table(let headers, let rows) = blocks[2].kind {
+            #expect(headers.count == 2)
+            #expect(Self.plainText(headers[0].first) == "Name")
+            #expect(Self.plainText(headers[1].first) == "Link")
+            #expect(rows.first?.count == 2)
+            #expect(Self.plainText(rows.first?[1].first) == "Topic")
+        } else {
+            Issue.record("Expected table block")
+        }
+
+        if case .onebox(let onebox) = blocks[3].kind {
+            #expect(onebox.title == "Dexo")
+            #expect(onebox.description == "Native client")
+            #expect(onebox.url == URL(string: "https://github.com/Eilgnaw/dexo")!)
+        } else {
+            Issue.record("Expected onebox block")
+        }
+    }
+
+    @Test("Post response optional Discourse metadata decodes without breaking older shapes")
+    func postResponseMetadataDecode() throws {
+        let rich = try JSONDecoder().decode(PostResponse.self, from: Data("""
+        {
+          "id": 10,
+          "topic_id": 3,
+          "post_number": 2,
+          "reply_to_post_number": 1,
+          "username": "alice",
+          "cooked": "<p>Hello</p>",
+          "reads": 12,
+          "score": 3.5,
+          "actions_summary": [
+            { "id": 2, "count": 8, "acted": true, "ignored": "ok" }
+          ]
+        }
+        """.utf8)).model
+
+        #expect(rich.replyToPostNumber == 1)
+        #expect(rich.reads == 12)
+        #expect(rich.score == 3.5)
+        #expect(rich.actionsSummary == [LinuxDoPostActionSummary(id: 2, count: 8, acted: true)])
+
+        let old = try JSONDecoder().decode(PostResponse.self, from: Data("""
+        { "id": 11, "post_number": 1, "username": "bob", "cooked": "<p>Old</p>" }
+        """.utf8)).model
+
+        #expect(old.replyToPostNumber == nil)
+        #expect(old.reads == 0)
+        #expect(old.score == nil)
+        #expect(old.actionsSummary.isEmpty)
+    }
+
+    @Test("LinuxDo topic URLs map to native topic routes")
+    func topicRouteParsesLinuxDoURLs() throws {
+        let routed = try #require(LinuxDoTopicRoute(url: URL(string: "https://linux.do/t/dexo/42/7")!))
+        #expect(routed.id == 42)
+        #expect(routed.slug == "dexo")
+        #expect(routed.postNumber == 7)
+
+        let compact = try #require(LinuxDoTopicRoute(url: URL(string: "https://linux.do/t/42/3")!))
+        #expect(compact.id == 42)
+        #expect(compact.slug == nil)
+        #expect(compact.postNumber == 3)
+
+        #expect(LinuxDoTopicRoute(url: URL(string: "https://example.com/t/dexo/42")!) == nil)
     }
 
     @Test("Discourse topic list fixture decodes to app models")
@@ -294,6 +440,117 @@ struct LinuxDoTests {
         #expect(preferences.linuxDoNotificationDeliveredIDs == [11])
     }
 
+    @Test("Jump to post index loads a stream window and keeps post order stable")
+    func jumpToPostIndexLoadsMissingPosts() async throws {
+        let root = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let detail = Self.detail(
+            id: 9,
+            postsCount: 5,
+            stream: [100, 101, 102, 103, 104],
+            posts: [
+                Self.post(id: 100, topicID: 9, postNumber: 1),
+                Self.post(id: 104, topicID: 9, postNumber: 5),
+            ]
+        )
+        let client = FakeLinuxDoClient(
+            topicDetail: detail,
+            postsByID: [
+                101: Self.post(id: 101, topicID: 9, postNumber: 2),
+                102: Self.post(id: 102, topicID: 9, postNumber: 3),
+                103: Self.post(id: 103, topicID: 9, postNumber: 4),
+            ]
+        )
+        let store = LinuxDoStore(
+            preferences: Self.makePreferences(),
+            credentials: InMemoryLinuxDoCredentialStore(),
+            cache: LinuxDoCache(rootURL: root),
+            notificationService: FakeLinuxDoNotificationService(),
+            client: client
+        )
+
+        await store.loadTopic(id: 9, slug: "jump", force: true)
+
+        let alreadyLoaded = await store.jumpToPostIndex(topicID: 9, index: 0)
+        #expect(alreadyLoaded == 100)
+        #expect(client.fetchPostsBatches.isEmpty)
+
+        let target = await store.jumpToPostIndex(topicID: 9, index: 2)
+        let state = try #require(store.topicStates[9])
+
+        #expect(target == 102)
+        #expect(state.scrollTargetPostID == 102)
+        #expect(state.detail?.posts.map(\.id) == [100, 101, 102, 103, 104])
+        #expect(client.fetchPostsBatches == [[101, 102, 103]])
+    }
+
+    @Test("Notification open loads the topic and targets the notification post number")
+    func notificationOpenTargetsPostNumber() async throws {
+        let root = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let detail = Self.detail(
+            id: 12,
+            postsCount: 3,
+            stream: [200, 201, 202],
+            posts: [Self.post(id: 200, topicID: 12, postNumber: 1)]
+        )
+        let client = FakeLinuxDoClient(
+            topicDetail: detail,
+            postsByID: [
+                201: Self.post(id: 201, topicID: 12, postNumber: 2),
+                202: Self.post(id: 202, topicID: 12, postNumber: 3),
+            ]
+        )
+        let store = LinuxDoStore(
+            preferences: Self.makePreferences(),
+            credentials: InMemoryLinuxDoCredentialStore(),
+            cache: LinuxDoCache(rootURL: root),
+            notificationService: FakeLinuxDoNotificationService(),
+            client: client
+        )
+
+        let target = await store.openNotificationAndWait(Self.notification(id: 40, topicID: 12, postNumber: 2, slug: "notice"))
+        let state = try #require(store.topicStates[12])
+
+        #expect(store.selectedTopicID == 12)
+        #expect(target == 201)
+        #expect(state.scrollTargetPostID == 201)
+    }
+
+    @Test("Jump to post index warns when LinuxDo omits the target post")
+    func jumpToPostIndexWarnsWhenTargetIsMissing() async throws {
+        let root = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let detail = Self.detail(
+            id: 14,
+            postsCount: 3,
+            stream: [300, 301, 302],
+            posts: [Self.post(id: 300, topicID: 14, postNumber: 1)]
+        )
+        let client = FakeLinuxDoClient(
+            topicDetail: detail,
+            postsByID: [302: Self.post(id: 302, topicID: 14, postNumber: 3)]
+        )
+        let store = LinuxDoStore(
+            preferences: Self.makePreferences(),
+            credentials: InMemoryLinuxDoCredentialStore(),
+            cache: LinuxDoCache(rootURL: root),
+            notificationService: FakeLinuxDoNotificationService(),
+            client: client
+        )
+
+        await store.loadTopic(id: 14, slug: "missing", force: true)
+        let target = await store.jumpToPostIndex(topicID: 14, index: 1)
+        let state = try #require(store.topicStates[14])
+
+        #expect(target == nil)
+        #expect(state.scrollTargetPostID == nil)
+        #expect(state.timelineWarning == "That floor could not be loaded from Linux.do.")
+    }
+
     @Test("Store treats web session as authenticated and clears it on sign out")
     func storeWebSessionAuthAndLogout() async throws {
         let credentials = InMemoryLinuxDoCredentialStore(webSession: Self.webSession(username: "tester"))
@@ -411,7 +668,12 @@ struct LinuxDoTests {
         )
     }
 
-    nonisolated fileprivate static func detail(id: Int = 1) -> LinuxDoTopicDetail {
+    nonisolated fileprivate static func detail(
+        id: Int = 1,
+        postsCount: Int = 1,
+        stream: [Int] = [100],
+        posts: [LinuxDoPost]? = nil
+    ) -> LinuxDoTopicDetail {
         LinuxDoTopicDetail(
             id: id,
             title: "Detail",
@@ -419,36 +681,90 @@ struct LinuxDoTests {
             slug: "detail",
             categoryID: nil,
             tags: [],
-            postsCount: 1,
-            stream: [100],
-            posts: [
-                LinuxDoPost(
-                    id: 100,
-                    topicID: id,
-                    postNumber: 1,
-                    username: "user",
-                    name: nil,
-                    avatarURL: nil,
-                    cookedHTML: "<p>Hello</p>",
-                    createdAt: nil,
-                    updatedAt: nil,
-                    likeCount: 0,
-                    replyCount: 0
-                ),
-            ],
+            postsCount: postsCount,
+            stream: stream,
+            posts: posts ?? [Self.post(id: 100, topicID: id, postNumber: 1)],
             fetchedAt: Date()
+        )
+	}
+
+    nonisolated private static func post(id: Int, topicID: Int, postNumber: Int) -> LinuxDoPost {
+        LinuxDoPost(
+            id: id,
+            topicID: topicID,
+            postNumber: postNumber,
+            replyToPostNumber: postNumber > 1 ? 1 : nil,
+            username: "user\(postNumber)",
+            name: nil,
+            avatarURL: nil,
+            cookedHTML: "<p>Post \(postNumber)</p>",
+            createdAt: nil,
+            updatedAt: nil,
+            likeCount: 0,
+            replyCount: 0,
+            reads: 0,
+            score: nil,
+            actionsSummary: []
         )
     }
 
-    private static func notification(id: Int) -> LinuxDoNotification {
+    private static func plainText(_ block: LinuxDoContentBlock?) -> String {
+        guard let block else { return "" }
+        switch block.kind {
+        case .paragraph(let nodes):
+            return plainText(nodes)
+        case .heading(level: _, content: let nodes):
+            return plainText(nodes)
+        case .quote(attribution: _, blocks: let blocks):
+            return blocks.map { plainText($0) }.joined(separator: " ")
+        case .spoiler(let blocks):
+            return blocks.map { plainText($0) }.joined(separator: " ")
+        case .details(summary: _, blocks: let blocks):
+            return blocks.map { plainText($0) }.joined(separator: " ")
+        case .codeBlock(_, let code), .rawHTML(let code):
+            return code
+        case .list(_, let items):
+            return items.map { $0.blocks.map { plainText($0) }.joined(separator: " ") }.joined(separator: " ")
+        case .image, .onebox, .table, .divider:
+            return ""
+        }
+    }
+
+    private static func plainText(_ nodes: [LinuxDoInlineNode]) -> String {
+        nodes.map { node in
+            switch node {
+            case .text(let text), .code(let text):
+                return text
+            case .strong(let children), .emphasis(let children), .strikethrough(let children), .spoiler(let children):
+                return plainText(children)
+            case .link(_, let children):
+                return plainText(children)
+            case .image(_, let alt, _, _, _):
+                return alt ?? ""
+            case .mention(let username, _):
+                return "@\(username)"
+            case .hashtag(let text, _):
+                return text
+            case .lineBreak:
+                return "\n"
+            }
+        }.joined()
+    }
+
+    private static func notification(
+        id: Int,
+        topicID: Int? = 1,
+        postNumber: Int? = 1,
+        slug: String? = "topic"
+    ) -> LinuxDoNotification {
         LinuxDoNotification(
             id: id,
             notificationType: 1,
             read: false,
             createdAt: nil,
-            topicID: 1,
-            postNumber: 1,
-            slug: "topic",
+            topicID: topicID,
+            postNumber: postNumber,
+            slug: slug,
             title: "Notification \(id)",
             excerpt: "Body"
         )
@@ -521,14 +837,21 @@ struct LinuxDoTests {
 
 private final class FakeLinuxDoClient: LinuxDoClienting, @unchecked Sendable {
     var topicList: LinuxDoTopicList
+    var topicDetail: LinuxDoTopicDetail?
+    var postsByID: [Int: LinuxDoPost]
     var notifications: [LinuxDoNotification]
     var fetchTopicListCalls = 0
+    var fetchPostsBatches: [[Int]] = []
 
     init(
         topicList: LinuxDoTopicList = LinuxDoTopicList(topics: [], page: 0, nextPage: nil, fetchedAt: Date()),
+        topicDetail: LinuxDoTopicDetail? = nil,
+        postsByID: [Int: LinuxDoPost] = [:],
         notifications: [LinuxDoNotification] = []
     ) {
         self.topicList = topicList
+        self.topicDetail = topicDetail
+        self.postsByID = postsByID
         self.notifications = notifications
     }
 
@@ -542,11 +865,12 @@ private final class FakeLinuxDoClient: LinuxDoClienting, @unchecked Sendable {
     }
 
     func fetchTopic(id: Int, slug: String?, now: Date) async throws -> LinuxDoTopicDetail {
-        LinuxDoTests.detail(id: id)
+        topicDetail ?? LinuxDoTests.detail(id: id)
     }
 
     func fetchPosts(topicID: Int, postIDs: [Int]) async throws -> [LinuxDoPost] {
-        []
+        fetchPostsBatches.append(postIDs)
+        return postIDs.compactMap { postsByID[$0] }
     }
 
     func fetchCurrentUser() async throws -> LinuxDoCurrentUser {

@@ -18,8 +18,11 @@ struct LinuxDoTopicDetailState: Sendable {
     var detail: LinuxDoTopicDetail?
     var loadedPostIDs: Set<Int> = []
     var remainingPostIDs: [Int] = []
+    var scrollTargetPostID: Int?
+    var timelineWarning: String?
     var isLoading = false
     var isLoadingMore = false
+    var isJumping = false
     var isStale = false
     var error: String?
 }
@@ -222,17 +225,46 @@ final class LinuxDoStore {
     }
 
     func selectTopic(_ topic: LinuxDoTopicSummary) {
-        selectedTopicID = topic.id
+        openTopic(id: topic.id, slug: topic.slug)
+    }
+
+    func openTopic(id: Int, slug: String?, postNumber: Int? = nil) {
         Task {
-            await loadTopic(id: topic.id, slug: topic.slug, force: false)
+            await openTopicAndWait(id: id, slug: slug, postNumber: postNumber)
         }
+    }
+
+    @discardableResult
+    func openTopicAndWait(id: Int, slug: String?, postNumber: Int? = nil) async -> Int? {
+        selectedTopicID = id
+        await loadTopic(id: id, slug: slug, force: false)
+        if let postNumber {
+            return await jumpToPostNumber(topicID: id, postNumber: postNumber)
+        }
+        return nil
+    }
+
+    func openTopic(_ route: LinuxDoTopicRoute) {
+        openTopic(id: route.id, slug: route.slug, postNumber: route.postNumber)
+    }
+
+    func openNotification(_ notification: LinuxDoNotification) {
+        Task {
+            await openNotificationAndWait(notification)
+        }
+    }
+
+    @discardableResult
+    func openNotificationAndWait(_ notification: LinuxDoNotification) async -> Int? {
+        guard let topicID = notification.topicID else { return nil }
+        return await openTopicAndWait(id: topicID, slug: notification.slug, postNumber: notification.postNumber)
     }
 
     func loadTopic(id: Int, slug: String?, force: Bool) async {
         var state = topicStates[id] ?? LinuxDoTopicDetailState()
         if !force,
            let cached = cache.readTopic(id: id, ttl: 15 * 60, now: .now) {
-            state.detail = cached.detail
+            state.detail = sortedDetail(cached.detail)
             state.loadedPostIDs = Set(cached.detail.posts.map(\.id))
             state.remainingPostIDs = cached.detail.stream.filter { !state.loadedPostIDs.contains($0) }
             state.isStale = cached.isStale
@@ -245,7 +277,7 @@ final class LinuxDoStore {
         topicStates[id] = state
         do {
             let detail = try await client.fetchTopic(id: id, slug: slug, now: .now)
-            state.detail = detail
+            state.detail = sortedDetail(detail)
             state.loadedPostIDs = Set(detail.posts.map(\.id))
             state.remainingPostIDs = detail.stream.filter { !state.loadedPostIDs.contains($0) }
             state.isLoading = false
@@ -259,6 +291,13 @@ final class LinuxDoStore {
         topicStates[id] = state
     }
 
+    func consumeScrollTarget(topicID: Int, postID: Int) {
+        var state = topicStates[topicID] ?? LinuxDoTopicDetailState()
+        guard state.scrollTargetPostID == postID else { return }
+        state.scrollTargetPostID = nil
+        topicStates[topicID] = state
+    }
+
     func loadMorePosts(topicID: Int) async {
         var state = topicStates[topicID] ?? LinuxDoTopicDetailState()
         guard !state.remainingPostIDs.isEmpty, !state.isLoadingMore else { return }
@@ -268,8 +307,7 @@ final class LinuxDoStore {
         topicStates[topicID] = state
         do {
             let posts = try await client.fetchPosts(topicID: topicID, postIDs: batch)
-            state.detail?.posts.append(contentsOf: posts)
-            state.detail?.posts.sort { $0.postNumber < $1.postNumber }
+            state.detail = mergedDetail(state.detail, adding: posts)
             state.loadedPostIDs.formUnion(posts.map(\.id))
             state.remainingPostIDs.removeAll { state.loadedPostIDs.contains($0) }
             state.isLoadingMore = false
@@ -282,6 +320,79 @@ final class LinuxDoStore {
             handle(error)
         }
         topicStates[topicID] = state
+    }
+
+    @discardableResult
+    func jumpToPostNumber(topicID: Int, postNumber: Int) async -> Int? {
+        guard postNumber > 0 else { return nil }
+        return await jumpToPostIndex(topicID: topicID, index: postNumber - 1)
+    }
+
+    @discardableResult
+    func jumpToPostIndex(topicID: Int, index: Int) async -> Int? {
+        var state = topicStates[topicID] ?? LinuxDoTopicDetailState()
+        guard let detail = state.detail else { return nil }
+        let stream = effectiveStream(for: detail)
+        guard stream.indices.contains(index) else {
+            state.timelineWarning = "That floor is outside this topic's post stream."
+            topicStates[topicID] = state
+            return nil
+        }
+
+        let targetID = stream[index]
+        state.timelineWarning = nil
+        if state.loadedPostIDs.contains(targetID) {
+            state.scrollTargetPostID = targetID
+            topicStates[topicID] = state
+            return targetID
+        }
+
+        let lowerBound = max(0, index - 10)
+        let upperBound = min(stream.count, index + 11)
+        let batch = Array(stream[lowerBound..<upperBound]).filter { !state.loadedPostIDs.contains($0) }
+        guard !batch.isEmpty else {
+            if state.loadedPostIDs.contains(targetID) {
+                state.scrollTargetPostID = targetID
+            } else {
+                state.scrollTargetPostID = nil
+                state.timelineWarning = "That floor could not be loaded from Linux.do."
+            }
+            topicStates[topicID] = state
+            return state.loadedPostIDs.contains(targetID) ? targetID : nil
+        }
+
+        state.isJumping = true
+        state.isLoadingMore = true
+        state.error = nil
+        topicStates[topicID] = state
+
+        do {
+            let posts = try await client.fetchPosts(topicID: topicID, postIDs: batch)
+            state = topicStates[topicID] ?? state
+            state.detail = mergedDetail(state.detail, adding: posts)
+            state.loadedPostIDs.formUnion(posts.map(\.id))
+            state.remainingPostIDs.removeAll { state.loadedPostIDs.contains($0) }
+            if state.loadedPostIDs.contains(targetID) {
+                state.scrollTargetPostID = targetID
+                state.timelineWarning = nil
+            } else {
+                state.scrollTargetPostID = nil
+                state.timelineWarning = "That floor could not be loaded from Linux.do."
+            }
+            state.isJumping = false
+            state.isLoadingMore = false
+            if let detail = state.detail {
+                try? cache.writeTopic(detail)
+            }
+        } catch {
+            state.isJumping = false
+            state.isLoadingMore = false
+            state.timelineWarning = userFacingMessage(error)
+            state.error = userFacingMessage(error)
+            handle(error)
+        }
+        topicStates[topicID] = state
+        return state.loadedPostIDs.contains(targetID) ? targetID : nil
     }
 
     func signInWithUserAPIKey(presentationAnchor: NSWindow?) async {
@@ -468,6 +579,37 @@ final class LinuxDoStore {
         } catch {
             lastError = "Could not clear LinuxDo cache."
         }
+    }
+
+    private func mergedDetail(_ detail: LinuxDoTopicDetail?, adding posts: [LinuxDoPost]) -> LinuxDoTopicDetail? {
+        guard var detail else { return nil }
+        var byID = Dictionary(uniqueKeysWithValues: detail.posts.map { ($0.id, $0) })
+        for post in posts {
+            byID[post.id] = post
+        }
+        detail.posts = sortedPosts(Array(byID.values), stream: detail.stream)
+        return detail
+    }
+
+    private func sortedDetail(_ detail: LinuxDoTopicDetail) -> LinuxDoTopicDetail {
+        var copy = detail
+        copy.posts = sortedPosts(copy.posts, stream: copy.stream)
+        return copy
+    }
+
+    private func sortedPosts(_ posts: [LinuxDoPost], stream: [Int]) -> [LinuxDoPost] {
+        let streamOrder = Dictionary(uniqueKeysWithValues: stream.enumerated().map { ($0.element, $0.offset) })
+        return posts.sorted { lhs, rhs in
+            let lhsOrder = streamOrder[lhs.id] ?? Int.max
+            let rhsOrder = streamOrder[rhs.id] ?? Int.max
+            if lhsOrder != rhsOrder { return lhsOrder < rhsOrder }
+            return lhs.postNumber < rhs.postNumber
+        }
+    }
+
+    private func effectiveStream(for detail: LinuxDoTopicDetail) -> [Int] {
+        if !detail.stream.isEmpty { return detail.stream }
+        return detail.posts.sorted { $0.postNumber < $1.postNumber }.map(\.id)
     }
 
     private func loadCategoriesIfNeeded() async {

@@ -170,6 +170,7 @@ struct LinuxDoPost: Codable, Hashable, Identifiable, Sendable {
     let id: Int
     let topicID: Int?
     let postNumber: Int
+    let replyToPostNumber: Int?
     let username: String
     let name: String?
     let avatarURL: URL?
@@ -178,10 +179,19 @@ struct LinuxDoPost: Codable, Hashable, Identifiable, Sendable {
     let updatedAt: Date?
     let likeCount: Int
     let replyCount: Int
+    let reads: Int
+    let score: Double?
+    let actionsSummary: [LinuxDoPostActionSummary]
 
     var textPreview: String {
         cookedHTML.htmlStrippedAndDecoded
     }
+}
+
+struct LinuxDoPostActionSummary: Codable, Hashable, Sendable {
+    let id: Int
+    let count: Int
+    let acted: Bool
 }
 
 struct LinuxDoTopicList: Codable, Sendable {
@@ -217,6 +227,41 @@ struct LinuxDoNotification: Codable, Hashable, Identifiable, Sendable {
             return URL(string: "https://linux.do/t/\(slug)/\(topicID)/\(postNumber)")
         }
         return URL(string: "https://linux.do/t/\(slug)/\(topicID)")
+    }
+}
+
+struct LinuxDoTopicRoute: Hashable, Sendable {
+    let id: Int
+    let slug: String?
+    let postNumber: Int?
+
+    init(id: Int, slug: String?, postNumber: Int?) {
+        self.id = id
+        self.slug = slug?.isEmpty == false ? slug : nil
+        self.postNumber = postNumber
+    }
+
+    init?(url: URL) {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let host = components.host?.lowercased(),
+              host == "linux.do" || host.hasSuffix(".linux.do") else {
+            return nil
+        }
+
+        let parts = url.pathComponents.filter { $0 != "/" }
+        guard parts.first == "t" else { return nil }
+
+        if parts.count >= 2, let topicID = Int(parts[1]) {
+            self.init(id: topicID, slug: nil, postNumber: parts.indices.contains(2) ? Int(parts[2]) : nil)
+            return
+        }
+
+        if parts.count >= 3, let topicID = Int(parts[2]) {
+            self.init(id: topicID, slug: parts[1], postNumber: parts.indices.contains(3) ? Int(parts[3]) : nil)
+            return
+        }
+
+        return nil
     }
 }
 
@@ -334,24 +379,57 @@ enum LinuxDoAuthCredential: Equatable, Sendable {
     case webSession(LinuxDoWebSession)
 }
 
-enum LinuxDoContentBlock: Hashable, Sendable, Identifiable {
-    case paragraph(String)
-    case quote(String)
-    case code(String)
-    case list([String])
-    case image(URL)
-    case link(title: String, url: URL)
+struct LinuxDoContentBlock: Hashable, Sendable, Identifiable {
+    let id: String
+    let kind: LinuxDoContentBlockKind
+}
 
-    var id: String {
-        switch self {
-        case .paragraph(let text): "p:\(text.hashValue)"
-        case .quote(let text): "q:\(text.hashValue)"
-        case .code(let text): "c:\(text.hashValue)"
-        case .list(let items): "l:\(items.hashValue)"
-        case .image(let url): "i:\(url.absoluteString)"
-        case .link(let title, let url): "a:\(title.hashValue):\(url.absoluteString)"
-        }
-    }
+enum LinuxDoContentBlockKind: Hashable, Sendable {
+    case paragraph([LinuxDoInlineNode])
+    case heading(level: Int, content: [LinuxDoInlineNode])
+    case quote(attribution: LinuxDoQuoteAttribution?, blocks: [LinuxDoContentBlock])
+    case codeBlock(language: String?, code: String)
+    case list(ordered: Bool, items: [LinuxDoListItem])
+    case image(url: URL, alt: String?, width: Int?, height: Int?, linkURL: URL?)
+    case onebox(LinuxDoOnebox)
+    case table(headers: [[LinuxDoContentBlock]], rows: [[[LinuxDoContentBlock]]])
+    case details(summary: [LinuxDoInlineNode], blocks: [LinuxDoContentBlock])
+    case spoiler([LinuxDoContentBlock])
+    case divider
+    case rawHTML(String)
+}
+
+enum LinuxDoInlineNode: Hashable, Sendable {
+    case text(String)
+    case strong([LinuxDoInlineNode])
+    case emphasis([LinuxDoInlineNode])
+    case strikethrough([LinuxDoInlineNode])
+    case code(String)
+    case link(url: URL, children: [LinuxDoInlineNode])
+    case image(url: URL, alt: String?, width: Int?, height: Int?, isEmoji: Bool)
+    case mention(username: String, url: URL?)
+    case hashtag(text: String, url: URL?)
+    case spoiler([LinuxDoInlineNode])
+    case lineBreak
+}
+
+struct LinuxDoListItem: Hashable, Sendable {
+    let blocks: [LinuxDoContentBlock]
+}
+
+struct LinuxDoQuoteAttribution: Hashable, Sendable {
+    let username: String?
+    let avatarURL: URL?
+    let topicTitle: String?
+    let topicURL: URL?
+}
+
+struct LinuxDoOnebox: Hashable, Sendable {
+    let url: URL?
+    let title: String?
+    let description: String?
+    let imageURL: URL?
+    let faviconURL: URL?
 }
 
 extension String {

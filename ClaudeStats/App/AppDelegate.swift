@@ -1,11 +1,13 @@
 import AppKit
 import GhosttyEmbed
+import UserNotifications
 
 /// Owns the ``AppEnvironment`` and kicks off the first scan once AppKit has
 /// finished launching. `MenuBarExtra`'s label/window views don't run a normal
 /// `onAppear`/`task` lifecycle at launch, so the kickoff lives here instead.
 final class AppDelegate: GhosttyEmbed.AppDelegate {
     let env: AppEnvironment
+    private let linuxDoNotificationDelegate = LinuxDoUserNotificationDelegate()
 
     override init() {
         let terminalStore = MainActor.assumeIsolated {
@@ -19,6 +21,8 @@ final class AppDelegate: GhosttyEmbed.AppDelegate {
 
     override func applicationDidFinishLaunching(_ notification: Notification) {
         super.applicationDidFinishLaunching(notification)
+        linuxDoNotificationDelegate.fallback = self
+        UNUserNotificationCenter.current().delegate = linuxDoNotificationDelegate
         MainActor.assumeIsolated {
             Theme.registerFonts()
             env.start()
@@ -49,4 +53,48 @@ final class AppDelegate: GhosttyEmbed.AppDelegate {
     }
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
+}
+
+private final class LinuxDoUserNotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+    weak var fallback: GhosttyEmbed.AppDelegate?
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        if Self.topicRoute(from: notification.request.content.userInfo) != nil {
+            completionHandler([.banner, .sound])
+            return
+        }
+        fallback?.userNotificationCenter(center, willPresent: notification, withCompletionHandler: completionHandler)
+            ?? completionHandler([])
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        guard let route = Self.topicRoute(from: response.notification.request.content.userInfo) else {
+            fallback?.userNotificationCenter(center, didReceive: response, withCompletionHandler: completionHandler)
+                ?? completionHandler()
+            return
+        }
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(
+                name: .openMainWindowDestinationFromFloatingStats,
+                object: FloatingStatsMainWindowDestination.linuxDoTopic(route)
+            )
+        }
+        completionHandler()
+    }
+
+    private static func topicRoute(from userInfo: [AnyHashable: Any]) -> LinuxDoTopicRoute? {
+        guard let rawURL = userInfo["url"] as? String,
+              let url = URL(string: rawURL) else {
+            return nil
+        }
+        return LinuxDoTopicRoute(url: url)
+    }
 }

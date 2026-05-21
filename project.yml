@@ -55,6 +55,9 @@ packages:
   SwiftCollections:
     url: https://github.com/apple/swift-collections.git
     from: "1.1.0"
+  SwiftSoup:
+    url: https://github.com/scinfu/SwiftSoup
+    from: "2.13.5"
 
 settings:
   base:
@@ -349,6 +352,7 @@ targets:
       - package: Lottie
       - package: SwiftCollections
         product: Collections
+      - package: SwiftSoup
       - framework: ThirdParty/Atoll/Frameworks/MediaRemoteAdapter.framework
         embed: true
         codeSign: true

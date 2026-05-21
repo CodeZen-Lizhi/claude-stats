@@ -65,7 +65,11 @@ struct LinuxDoTopicListView: View {
                             .padding(12)
                     }
                     ForEach(state.topics) { topic in
-                        LinuxDoTopicRow(topic: topic, isSelected: store.selectedTopicID == topic.id) {
+                        LinuxDoTopicRow(
+                            topic: topic,
+                            categoryColorHex: categoryColor(for: topic),
+                            isSelected: store.selectedTopicID == topic.id
+                        ) {
                             store.selectTopic(topic)
                         }
                         .onAppear {
@@ -85,39 +89,78 @@ struct LinuxDoTopicListView: View {
             }
         }
     }
+
+    private func categoryColor(for topic: LinuxDoTopicSummary) -> String? {
+        guard let categoryID = topic.categoryID else { return nil }
+        return store.categories.first { $0.id == categoryID }?.colorHex
+    }
 }
 
 private struct LinuxDoTopicRow: View {
     let topic: LinuxDoTopicSummary
+    let categoryColorHex: String?
     let isSelected: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 7) {
-                Text(topic.displayTitle)
-                    .font(.sora(12, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if !topic.displayExcerpt.isEmpty {
-                    Text(topic.displayExcerpt)
-                        .font(.sora(10))
-                        .foregroundStyle(Color.stxMuted)
-                        .lineLimit(2)
+            HStack(alignment: .top, spacing: 10) {
+                if let imageURL = topic.imageURL {
+                    AsyncImage(url: imageURL) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Color.primary.opacity(0.04)
+                    }
+                    .frame(width: 54, height: 42)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
                 }
 
-                HStack(spacing: 10) {
-                    stat("bubble.left", topic.replyCount)
-                    stat("eye", topic.views)
-                    stat("heart", topic.likeCount)
-                    Spacer(minLength: 4)
-                    if let date = topic.lastPostedAt ?? topic.bumpedAt ?? topic.createdAt {
-                        Text(Format.relativeDate(date))
-                            .font(.sora(9))
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(alignment: .top, spacing: 6) {
+                        if let categoryColorHex {
+                            Circle()
+                                .fill(Color(hex: categoryColorHex) ?? Color.stxMuted)
+                                .frame(width: 7, height: 7)
+                                .padding(.top, 5)
+                        }
+                        Text(topic.displayTitle)
+                            .font(.sora(12, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    if !topic.tags.isEmpty {
+                        HStack(spacing: 5) {
+                            ForEach(topic.tags.prefix(3), id: \.self) { tag in
+                                Text(tag)
+                                    .font(.sora(8, weight: .medium))
+                                    .foregroundStyle(Color.stxAccent)
+                                    .padding(.horizontal, 5)
+                                    .frame(height: 16)
+                                    .background(Color.stxAccent.opacity(0.1), in: Capsule())
+                            }
+                        }
+                    }
+
+                    if !topic.displayExcerpt.isEmpty {
+                        Text(topic.displayExcerpt)
+                            .font(.sora(10))
                             .foregroundStyle(Color.stxMuted)
-                            .lineLimit(1)
+                            .lineLimit(2)
+                    }
+
+                    HStack(spacing: 10) {
+                        stat("bubble.left", topic.replyCount)
+                        stat("eye", topic.views)
+                        stat("heart", topic.likeCount)
+                        Spacer(minLength: 4)
+                        if let date = topic.lastPostedAt ?? topic.bumpedAt ?? topic.createdAt {
+                            Text(Format.relativeDate(date))
+                                .font(.sora(9))
+                                .foregroundStyle(Color.stxMuted)
+                                .lineLimit(1)
+                        }
                     }
                 }
             }
@@ -149,5 +192,16 @@ struct LinuxDoInlineError: View {
             .font(.sora(11))
             .foregroundStyle(.orange)
             .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+private extension Color {
+    init?(hex: String) {
+        let cleaned = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        guard let value = Int(cleaned, radix: 16) else { return nil }
+        let red = Double((value >> 16) & 0xff) / 255.0
+        let green = Double((value >> 8) & 0xff) / 255.0
+        let blue = Double(value & 0xff) / 255.0
+        self.init(red: red, green: green, blue: blue)
     }
 }

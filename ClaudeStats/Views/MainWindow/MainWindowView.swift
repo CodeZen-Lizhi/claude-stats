@@ -436,6 +436,9 @@ struct MainWindowView: View {
             transition(to: .app)
         case .network:
             transition(to: .network)
+        case .linuxDoTopic(let route):
+            env.linuxDo.openTopic(route)
+            openLinuxDo()
         }
     }
 
