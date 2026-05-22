@@ -36,6 +36,13 @@ enum MainPage: String, CaseIterable, Identifiable, Sendable {
         case .terminal: "terminal"
         }
     }
+
+    var assetName: String? {
+        switch self {
+        case .linuxDo: "LinuxDoLogo"
+        default: nil
+        }
+    }
 }
 
 extension Notification.Name {

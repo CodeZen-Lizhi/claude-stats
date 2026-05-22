@@ -51,4 +51,11 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
         case .about:     "info.circle"
         }
     }
+
+    var assetName: String? {
+        switch self {
+        case .linuxDo: "LinuxDoLogo"
+        default: nil
+        }
+    }
 }

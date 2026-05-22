@@ -30,6 +30,7 @@ struct SidebarColumn: View {
             SidebarRow(
                 title: MainPage.linuxDo.title,
                 symbol: MainPage.linuxDo.symbol,
+                assetName: MainPage.linuxDo.assetName,
                 isSelected: isLinuxDoActive,
                 trailingSymbol: "chevron.right",
                 showsTrailingOnHover: true
@@ -104,6 +105,7 @@ struct SidebarColumn: View {
             SidebarRow(
                 title: p.title,
                 symbol: p.symbol,
+                assetName: p.assetName,
                 isSelected: page == p
             ) {
                 clearTextFocus()
@@ -148,6 +150,7 @@ struct SidebarColumn: View {
 struct SidebarRow: View {
     let title: String
     let symbol: String
+    var assetName: String? = nil
     let isSelected: Bool
     var trailingText: String? = nil
     var trailingSymbol: String?
@@ -158,10 +161,7 @@ struct SidebarRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Image(systemName: symbol)
-                    .font(.system(size: 13, weight: .medium))
-                    .frame(width: 18)
-                    .foregroundStyle(isSelected ? Color.stxAccent : Color.stxMuted)
+                icon
                 Text(LocalizedStringKey(title))
                     .font(.sora(13))
                     .foregroundStyle(isSelected ? .primary : Color.stxMuted)
@@ -196,6 +196,23 @@ struct SidebarRow: View {
         .padding(.vertical, 1)
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.12), value: isSelected)
+    }
+
+    @ViewBuilder
+    private var icon: some View {
+        if let assetName {
+            Image(assetName)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 16, height: 16)
+                .opacity(isSelected ? 1 : 0.82)
+                .frame(width: 18)
+        } else {
+            Image(systemName: symbol)
+                .font(.system(size: 13, weight: .medium))
+                .frame(width: 18)
+                .foregroundStyle(isSelected ? Color.stxAccent : Color.stxMuted)
+        }
     }
 }
 
