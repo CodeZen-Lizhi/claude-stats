@@ -34,9 +34,26 @@ The app began as a focused macOS take on the open-source [Claude Statistics](htt
 
 ## Screens
 
-Screenshots live in [`docs/assets/screens`](docs/assets/screens), grouped here by product area.
+Screenshots and GIF demos live in [`docs/assets/screens`](docs/assets/screens), grouped here by product area.
 
 <details open>
+<summary><strong>Menu-bar extra</strong></summary>
+
+<p><strong>Usage panel</strong></p>
+<img src="docs/assets/screens/menubar-usage.gif" alt="Menu-bar extra usage panel">
+
+<p><strong>Activity panel</strong></p>
+<img src="docs/assets/screens/menubar-activity.gif" alt="Menu-bar extra activity panel">
+
+<p><strong>Git panel</strong></p>
+<img src="docs/assets/screens/menubar-git.gif" alt="Menu-bar extra Git panel">
+
+<p><strong>Share stats export</strong></p>
+<img src="docs/assets/screens/menubar-share-stats.gif" alt="Menu-bar share stats export flow">
+
+</details>
+
+<details>
 <summary><strong>Stats and activity</strong></summary>
 
 <p><strong>Dashboard overview</strong></p>
