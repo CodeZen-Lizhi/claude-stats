@@ -237,7 +237,6 @@ targets:
         SWIFT_VERSION: "5.0"
         SWIFT_STRICT_CONCURRENCY: minimal
         SWIFT_OBJC_BRIDGING_HEADER: ThirdParty/ghostty/macos/Sources/App/macOS/ghostty-bridging-header.h
-        OTHER_LDFLAGS: "$(inherited) -lstdc++"
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
       configs:
         ReleaseSigned:
