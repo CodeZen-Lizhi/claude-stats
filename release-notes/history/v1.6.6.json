@@ -1,0 +1,9 @@
+{
+  "headline": "新增prune-debug-symbols.sh脚本用于清理*.dSYM调试符号包",
+  "changes": [
+    "在构建GitTools和Linguist运行时流程中加入符号清理步骤",
+    "优化代码签名逻辑，增加失败重试机制",
+    "修复验证脚本，排除dSYM目录并加入残留dSYM检查",
+    "调整所有相关find命令以跳过dSYM目录"
+  ]
+}

@@ -3,6 +3,29 @@
 extension ReleaseHistoryCatalog {
     static let generatedEntries: [ReleaseHistoryEntry] = [
         ReleaseHistoryEntry(
+            version: "1.6.6",
+            date: "May 22, 2026",
+            headline: "新增prune-debug-symbols.sh脚本用于清理*.dSYM调试符号包",
+            changes: [
+                "在构建GitTools和Linguist运行时流程中加入符号清理步骤",
+                "优化代码签名逻辑，增加失败重试机制",
+                "修复验证脚本，排除dSYM目录并加入残留dSYM检查",
+                "调整所有相关find命令以跳过dSYM目录",
+            ]
+        ),
+        ReleaseHistoryEntry(
+            version: "1.6.5",
+            date: "May 22, 2026",
+            headline: "实现了Linux Do帖子的阅读位置自动保存功能，新增侧边/底部阅读导航栏，支持继续阅读跳转",
+            changes: [
+                "本提交完整实现了Linux.do论坛的扩展内容支持：",
+                "新增callout提示块、活动卡片、任务列表项等新内容模型",
+                "支持高亮、键盘按键、上下标等内联格式",
+                "完善引用块解析，支持Discourse侧边引用样式",
+                "重构表格数据模型，添加列表项唯一标识",
+            ]
+        ),
+        ReleaseHistoryEntry(
             version: "1.6.4",
             date: "May 21, 2026",
             headline: "新增基于本地使用统计数据生成的Token Town小镇游戏",
