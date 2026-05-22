@@ -1,0 +1,10 @@
+{
+  "headline": "新增LinuxDo图标资源文件及Contents.json配置",
+  "changes": [
+    "为MainPage和SettingsSection添加assetName属性以获取对应logo名称",
+    "修改SidebarRow组件，支持显示自定义资产图片替代系统图标",
+    "在侧边栏和设置侧边栏中为LinuxDo项添加logo展示",
+    "调整了截图表格的表头结构，将原本的行内标题改为表头形式，并且将分享统计导出的演示图折叠进详情块中，优化文档排版可读性",
+    "将原来的单张截图排版改为表格布局，让截图更整齐美观，同时更新了两个菜单面板的演示gif文件"
+  ]
+}
