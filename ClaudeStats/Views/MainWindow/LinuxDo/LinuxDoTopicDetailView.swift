@@ -7,6 +7,7 @@ private enum LinuxDoDetailLayout {
     static let contentMaxWidth: CGFloat = 848
     static let avatarColumnWidth: CGFloat = 48
     static let avatarSpacing: CGFloat = 14
+    static let readingPositionDebounceNanoseconds: UInt64 = 400_000_000
     static var postRowLeading: CGFloat { contentLeading - avatarColumnWidth - avatarSpacing }
     static var headerLeading: CGFloat { postRowLeading }
     static var headerMaxWidth: CGFloat { contentMaxWidth + avatarColumnWidth + avatarSpacing }
@@ -16,6 +17,9 @@ private enum LinuxDoDetailLayout {
 struct LinuxDoTopicDetailView: View {
     @Bindable var store: LinuxDoStore
     @State private var visiblePostNumber = 1
+    @State private var navigatorMode: LinuxDoReadingNavigatorMode = .hidden
+    @State private var lastRecordedPostNumber = 1
+    @State private var pendingReadingPosition: LinuxDoPendingReadingPosition?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -46,33 +50,46 @@ struct LinuxDoTopicDetailView: View {
                 header(detail: detail, state: state, topicID: topicID, totalFloors: totalFloors)
                 StxRule()
                 GeometryReader { geometry in
-                    let navigatorMode = LinuxDoReadingNavigatorLayout.mode(
+                    let resolvedNavigatorMode = LinuxDoReadingNavigatorLayout.mode(
                         width: geometry.size.width,
-                        totalFloors: totalFloors
+                        totalFloors: totalFloors,
+                        currentMode: navigatorMode
                     )
-                    ZStack(alignment: navigatorAlignment(for: navigatorMode)) {
+                    ZStack(alignment: .topTrailing) {
                         topicScroll(detail: detail, state: state, topicID: topicID)
-                            .padding(.trailing, navigatorMode == .rail ? LinuxDoReadingNavigatorLayout.railReservedWidth : 0)
 
-                        LinuxDoReadingNavigator(
-                            mode: navigatorMode,
+                        readingNavigator(
+                            mode: resolvedNavigatorMode,
                             currentFloor: visiblePostNumber,
                             totalFloors: totalFloors,
                             loadedFloors: detail.posts.map(\.postNumber),
                             continueFloor: validReadingPosition(topicID: topicID, totalFloors: totalFloors)?.postNumber,
-                            isLoading: state.isJumping || state.isLoadingMore
-                        ) { floor in
-                            Task { await store.jumpToPostIndex(topicID: topicID, index: floor - 1) }
-                        }
-                        .padding(.top, navigatorMode == .rail ? 16 : 0)
-                        .padding(.trailing, navigatorMode == .rail ? 10 : 16)
-                        .padding(.bottom, navigatorMode == .compact ? 16 : 0)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: navigatorAlignment(for: navigatorMode))
+                            isLoading: state.isJumping || state.isLoadingMore,
+                            topicID: topicID
+                        )
+                    }
+                    .onChange(of: geometry.size.width, initial: true) { _, width in
+                        updateNavigatorMode(width: width, totalFloors: totalFloors)
+                    }
+                    .onChange(of: totalFloors, initial: true) { _, floors in
+                        updateNavigatorMode(width: geometry.size.width, totalFloors: floors)
                     }
                 }
             }
-            .onChange(of: topicID, initial: true) { _, _ in
-                visiblePostNumber = 1
+            .task(id: pendingReadingPosition) {
+                guard pendingReadingPosition != nil else { return }
+                try? await Task.sleep(nanoseconds: LinuxDoDetailLayout.readingPositionDebounceNanoseconds)
+                await MainActor.run {
+                    guard !Task.isCancelled else { return }
+                    flushPendingReadingPosition()
+                }
+            }
+            .onChange(of: topicID, initial: true) { _, newTopicID in
+                flushPendingReadingPosition()
+                resetReadingState(topicID: newTopicID)
+            }
+            .onDisappear {
+                flushPendingReadingPosition()
             }
         } else {
             ContentUnavailableView {
@@ -88,14 +105,8 @@ struct LinuxDoTopicDetailView: View {
         ScrollViewReader { proxy in
             AppScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    if let error = state.error {
-                        LinuxDoInlineError(message: error)
-                            .padding(.leading, LinuxDoDetailLayout.contentLeading)
-                            .padding(.trailing, LinuxDoDetailLayout.contentTrailing)
-                            .padding(.top, 14)
-                    }
-                    if let warning = state.timelineWarning {
-                        LinuxDoInlineError(message: warning)
+                    ForEach(detailAlertMessages(for: state), id: \.self) { message in
+                        LinuxDoInlineError(message: message)
                             .padding(.leading, LinuxDoDetailLayout.contentLeading)
                             .padding(.trailing, LinuxDoDetailLayout.contentTrailing)
                             .padding(.top, 14)
@@ -135,11 +146,11 @@ struct LinuxDoTopicDetailView: View {
                                 GeometryReader { geometry in
                                     Color.clear.preference(
                                         key: LinuxDoPostVisibilityPreference.self,
-                                        value: [LinuxDoPostVisibility(
+                                        value: LinuxDoPostVisibility(
                                             id: post.id,
                                             postNumber: post.postNumber,
                                             minY: geometry.frame(in: .named("linuxdo-topic-scroll")).minY
-                                        )]
+                                        )
                                     )
                                 }
                             }
@@ -171,28 +182,105 @@ struct LinuxDoTopicDetailView: View {
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
             .coordinateSpace(name: "linuxdo-topic-scroll")
-            .onPreferenceChange(LinuxDoPostVisibilityPreference.self) { values in
-                updateVisiblePost(values, topicID: topicID)
+            .onPreferenceChange(LinuxDoPostVisibilityPreference.self) { visible in
+                updateVisiblePost(visible, topicID: topicID)
             }
             .onChange(of: state.scrollTargetPostID, initial: true) { _, postID in
                 guard let postID else { return }
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    proxy.scrollTo(postID, anchor: .top)
+                Task { @MainActor in
+                    await Task.yield()
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        proxy.scrollTo(postID, anchor: .top)
+                    }
+                    store.consumeScrollTarget(topicID: topicID, postID: postID)
                 }
-                store.consumeScrollTarget(topicID: topicID, postID: postID)
             }
         }
     }
 
-    private func updateVisiblePost(_ values: [LinuxDoPostVisibility], topicID: Int) {
-        guard let visible = values.min(by: { abs($0.minY - 12) < abs($1.minY - 12) }) else { return }
+    @ViewBuilder
+    private func readingNavigator(
+        mode: LinuxDoReadingNavigatorMode,
+        currentFloor: Int,
+        totalFloors: Int,
+        loadedFloors: [Int],
+        continueFloor: Int?,
+        isLoading: Bool,
+        topicID: Int
+    ) -> some View {
+        LinuxDoReadingNavigator(
+            mode: mode,
+            currentFloor: currentFloor,
+            totalFloors: totalFloors,
+            loadedFloors: loadedFloors,
+            continueFloor: continueFloor,
+            isLoading: isLoading
+        ) { floor in
+            Task { await store.jumpToPostNumber(topicID: topicID, postNumber: floor) }
+        }
+        .padding(.top, mode == .rail ? LinuxDoReadingNavigatorLayout.railTopInset : 0)
+        .padding(.trailing, mode == .rail
+            ? LinuxDoReadingNavigatorLayout.railTrailingInset
+            : LinuxDoReadingNavigatorLayout.compactTrailingInset
+        )
+        .padding(.bottom, mode == .compact ? LinuxDoReadingNavigatorLayout.compactBottomInset : 0)
+        .frame(
+            maxWidth: .infinity,
+            maxHeight: mode == .compact ? .infinity : nil,
+            alignment: navigatorAlignment(for: mode)
+        )
+    }
+
+    private func updateVisiblePost(_ visible: LinuxDoPostVisibility?, topicID: Int) {
+        guard let visible else { return }
         let nextPostNumber = max(1, visible.postNumber)
-        if nextPostNumber != visiblePostNumber {
-            visiblePostNumber = nextPostNumber
+        guard nextPostNumber != visiblePostNumber else { return }
+        visiblePostNumber = nextPostNumber
+        if nextPostNumber > max(1, lastRecordedPostNumber) {
+            lastRecordedPostNumber = nextPostNumber
+            pendingReadingPosition = LinuxDoPendingReadingPosition(
+                topicID: topicID,
+                postID: visible.id,
+                postNumber: nextPostNumber
+            )
         }
-        if nextPostNumber > 1 {
-            store.recordReadingPosition(topicID: topicID, postID: visible.id, postNumber: nextPostNumber)
+    }
+
+    private func detailAlertMessages(for state: LinuxDoTopicDetailState) -> [String] {
+        var messages: [String] = []
+        if let error = state.error, !error.isEmpty {
+            messages.append(error)
         }
+        if let warning = state.timelineWarning, !warning.isEmpty, !messages.contains(warning) {
+            messages.append(warning)
+        }
+        return messages
+    }
+
+    private func updateNavigatorMode(width: CGFloat, totalFloors: Int) {
+        let nextMode = LinuxDoReadingNavigatorLayout.mode(
+            width: width,
+            totalFloors: totalFloors,
+            currentMode: navigatorMode
+        )
+        guard nextMode != navigatorMode else { return }
+        navigatorMode = nextMode
+    }
+
+    private func resetReadingState(topicID: Int) {
+        visiblePostNumber = 1
+        lastRecordedPostNumber = store.readingPosition(for: topicID)?.postNumber ?? 1
+        pendingReadingPosition = nil
+    }
+
+    private func flushPendingReadingPosition() {
+        guard let pendingReadingPosition else { return }
+        self.pendingReadingPosition = nil
+        store.recordReadingPosition(
+            topicID: pendingReadingPosition.topicID,
+            postID: pendingReadingPosition.postID,
+            postNumber: pendingReadingPosition.postNumber
+        )
     }
 
     private func header(
@@ -1410,10 +1498,31 @@ private struct LinuxDoDisclosureBlockView: View {
     }
 }
 
-private struct LinuxDoPostVisibility: Equatable {
+struct LinuxDoPendingReadingPosition: Equatable {
+    let topicID: Int
+    let postID: Int
+    let postNumber: Int
+}
+
+struct LinuxDoPostVisibility: Equatable {
+    static let topGuideY: CGFloat = 12
+
     let id: Int
     let postNumber: Int
     let minY: CGFloat
+
+    var distanceToTopGuide: CGFloat {
+        abs(minY - Self.topGuideY)
+    }
+
+    func isBetterCandidate(than other: LinuxDoPostVisibility) -> Bool {
+        let distance = distanceToTopGuide
+        let otherDistance = other.distanceToTopGuide
+        if distance == otherDistance {
+            return postNumber < other.postNumber
+        }
+        return distance < otherDistance
+    }
 }
 
 private extension LinuxDoInlineNode {
@@ -1464,10 +1573,17 @@ private extension String {
     }
 }
 
-private struct LinuxDoPostVisibilityPreference: PreferenceKey {
-    static let defaultValue: [LinuxDoPostVisibility] = []
+struct LinuxDoPostVisibilityPreference: PreferenceKey {
+    static let defaultValue: LinuxDoPostVisibility? = nil
 
-    static func reduce(value: inout [LinuxDoPostVisibility], nextValue: () -> [LinuxDoPostVisibility]) {
-        value.append(contentsOf: nextValue())
+    static func reduce(value: inout LinuxDoPostVisibility?, nextValue: () -> LinuxDoPostVisibility?) {
+        guard let candidate = nextValue() else { return }
+        guard let current = value else {
+            value = candidate
+            return
+        }
+        if candidate.isBetterCandidate(than: current) {
+            value = candidate
+        }
     }
 }

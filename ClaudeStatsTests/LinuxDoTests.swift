@@ -701,6 +701,7 @@ struct LinuxDoTests {
         store.recordReadingPosition(topicID: 77, postID: 700, postNumber: 7)
         store.recordReadingPosition(topicID: 77, postID: 500, postNumber: 5)
         store.recordReadingPosition(topicID: 77, postID: 900, postNumber: 9)
+        store.recordReadingPosition(topicID: 77, postID: 901, postNumber: 9)
 
         #expect(store.readingPosition(for: 77)?.postID == 900)
         #expect(store.readingPosition(for: 77)?.postNumber == 9)
@@ -788,8 +789,10 @@ struct LinuxDoTests {
     @Test("Reading navigator math clamps floors and samples long streams")
     func readingNavigatorMath() {
         #expect(LinuxDoReadingNavigatorLayout.mode(width: 700, totalFloors: 10) == .rail)
+        #expect(LinuxDoReadingNavigatorLayout.mode(width: 640, totalFloors: 10) == .compact)
         #expect(LinuxDoReadingNavigatorLayout.mode(width: 500, totalFloors: 10) == .compact)
         #expect(LinuxDoReadingNavigatorLayout.mode(width: 900, totalFloors: 9) == .hidden)
+        #expect(LinuxDoReadingNavigatorLayout.railTrackHeight == 220)
 
         let y = LinuxDoReadingNavigatorLayout.positionY(for: 6, totalFloors: 11, height: 100)
         #expect(abs(y - 50) < 0.001)
@@ -802,6 +805,33 @@ struct LinuxDoTests {
         #expect(sampled.count <= 60)
         #expect(sampled.first == 1)
         #expect(sampled.last == 250)
+    }
+
+    @Test("Reading navigator mode uses hysteresis while resizing")
+    func readingNavigatorModeHysteresis() {
+        #expect(LinuxDoReadingNavigatorLayout.mode(width: 900, totalFloors: 9, currentMode: .rail) == .hidden)
+        #expect(LinuxDoReadingNavigatorLayout.mode(width: 660, totalFloors: 10, currentMode: .compact) == .rail)
+        #expect(LinuxDoReadingNavigatorLayout.mode(width: 640, totalFloors: 10, currentMode: .rail) == .rail)
+        #expect(LinuxDoReadingNavigatorLayout.mode(width: 640, totalFloors: 10, currentMode: .compact) == .compact)
+        #expect(LinuxDoReadingNavigatorLayout.mode(width: 579, totalFloors: 10, currentMode: .rail) == .compact)
+        #expect(LinuxDoReadingNavigatorLayout.mode(width: 700, totalFloors: 10, currentMode: .hidden) == .rail)
+    }
+
+    @Test("Post visibility prefers the row closest to the reading guide")
+    func postVisibilityPrefersClosestRow() {
+        let far = LinuxDoPostVisibility(id: 1, postNumber: 1, minY: -80)
+        let nearest = LinuxDoPostVisibility(id: 2, postNumber: 2, minY: 13)
+        let tiedEarlier = LinuxDoPostVisibility(id: 3, postNumber: 1, minY: 11)
+
+        #expect(nearest.isBetterCandidate(than: far))
+        #expect(tiedEarlier.isBetterCandidate(than: nearest))
+
+        var reduced: LinuxDoPostVisibility?
+        LinuxDoPostVisibilityPreference.reduce(value: &reduced) { far }
+        LinuxDoPostVisibilityPreference.reduce(value: &reduced) { nearest }
+        LinuxDoPostVisibilityPreference.reduce(value: &reduced) { tiedEarlier }
+
+        #expect(reduced?.id == 3)
     }
 
     @Test("Jump to post index loads a stream window and keeps post order stable")
@@ -847,6 +877,42 @@ struct LinuxDoTests {
         #expect(state.scrollTargetPostID == 102)
         #expect(state.detail?.posts.map(\.id) == [100, 101, 102, 103, 104])
         #expect(client.fetchPostsBatches == [[101, 102, 103]])
+    }
+
+    @Test("Jump to post number resolves the loaded post number instead of raw stream index")
+    func jumpToPostNumberResolvesPostNumberMismatch() async throws {
+        let root = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let detail = Self.detail(
+            id: 29,
+            postsCount: 4,
+            stream: [290, 291, 292, 293],
+            posts: [Self.post(id: 290, topicID: 29, postNumber: 1)]
+        )
+        let client = FakeLinuxDoClient(
+            topicDetail: detail,
+            postsByID: [
+                291: Self.post(id: 291, topicID: 29, postNumber: 2),
+                292: Self.post(id: 292, topicID: 29, postNumber: 4),
+                293: Self.post(id: 293, topicID: 29, postNumber: 5),
+            ]
+        )
+        let store = LinuxDoStore(
+            preferences: Self.makePreferences(),
+            credentials: InMemoryLinuxDoCredentialStore(),
+            cache: LinuxDoCache(rootURL: root),
+            notificationService: FakeLinuxDoNotificationService(),
+            client: client
+        )
+
+        await store.loadTopic(id: 29, slug: "mismatch", force: true)
+        let target = await store.jumpToPostNumber(topicID: 29, postNumber: 4)
+        let state = try #require(store.topicStates[29])
+
+        #expect(target == 292)
+        #expect(state.scrollTargetPostID == 292)
+        #expect(client.fetchPostsBatches == [[291, 292, 293]])
     }
 
     @Test("Store falls back to topic pages when stream omits replies")

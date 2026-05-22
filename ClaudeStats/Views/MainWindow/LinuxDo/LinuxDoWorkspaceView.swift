@@ -3,6 +3,7 @@ import SwiftUI
 private enum LinuxDoPaneMetrics {
     static let listMinWidth: CGFloat = 340
     static let detailMinWidth: CGFloat = 430
+    static let listDefaultFraction: CGFloat = 0.1
     static let detailConfiguration = HoverableSplitViewConfiguration(
         primaryMinimumPaneLength: listMinWidth,
         secondaryMinimumPaneLength: detailMinWidth
@@ -91,11 +92,16 @@ struct LinuxDoWorkspaceView: View {
     private var workspace: some View {
         HoverableSplitView(
             axis: .vertical,
-            primaryFraction: 0.42,
+            primaryFraction: LinuxDoPaneMetrics.listDefaultFraction,
             configuration: LinuxDoPaneMetrics.detailConfiguration
         ) {
             LinuxDoTopicListView(store: store)
-                .frame(minWidth: 0, idealWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
+                .frame(
+                    minWidth: 0,
+                    idealWidth: LinuxDoPaneMetrics.listMinWidth,
+                    maxWidth: .infinity,
+                    maxHeight: .infinity
+                )
         } secondary: {
             LinuxDoTopicDetailView(store: store)
                 .frame(minWidth: 0, idealWidth: 560, maxWidth: .infinity, maxHeight: .infinity)

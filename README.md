@@ -1,4 +1,20 @@
-# Claude Stats
+<p align="center">
+  <img src="docs/assets/claude-stats-icon.png" alt="Claude Stats app icon" width="128" height="128">
+</p>
+
+<h1 align="center">Claude Stats</h1>
+
+<p align="center">
+  Native macOS menu-bar stats, terminal, Notch Island, and network debugging for AI coding work.
+</p>
+
+<p align="center">
+  <a href="#features">Features</a> ·
+  <a href="#install">Install</a> ·
+  <a href="#build-from-source">Build From Source</a> ·
+  <a href="#open-source--third-party-modules">Open Source</a> ·
+  <a href="#contributing">Contributing</a>
+</p>
 
 Claude Stats is an open-source native macOS app for people who work in AI coding tools all day. It runs from the menu bar, reads local usage and activity data, and turns it into quick answers about sessions, tokens, cost, limits, repository activity, local status, and debugging context.
 
@@ -87,6 +103,7 @@ GhosttyEmbed/     app-side wrapper for embedded Ghostty terminal support
 RockxyBackendEmbed/ app-side wrapper for Rockxy proxy/debugging support
 ThirdParty/       git submodules for Atoll, Rockxy, and Ghostty
 ClaudeStatsTests/ parser, scanner, settings, integration, and feature tests
+docs/assets/      README images, icons, screenshots, and GIFs
 scripts/          project generation, local run/test, release, appcast tooling
 ```
 

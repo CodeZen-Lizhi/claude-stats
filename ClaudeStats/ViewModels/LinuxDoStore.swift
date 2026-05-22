@@ -745,11 +745,24 @@ final class LinuxDoStore {
     @discardableResult
     func jumpToPostNumber(topicID: Int, postNumber: Int) async -> Int? {
         guard postNumber > 0 else { return nil }
-        return await jumpToPostIndex(topicID: topicID, index: postNumber - 1)
+        if var state = topicStates[topicID],
+           let detail = state.detail,
+           let loadedPost = detail.posts.first(where: { $0.postNumber == postNumber }) {
+            state.timelineWarning = nil
+            state.scrollTargetPostID = loadedPost.id
+            topicStates[topicID] = state
+            return loadedPost.id
+        }
+        return await jumpToPostIndex(topicID: topicID, index: postNumber - 1, preferredPostNumber: postNumber)
     }
 
     @discardableResult
     func jumpToPostIndex(topicID: Int, index: Int) async -> Int? {
+        await jumpToPostIndex(topicID: topicID, index: index, preferredPostNumber: nil)
+    }
+
+    @discardableResult
+    private func jumpToPostIndex(topicID: Int, index: Int, preferredPostNumber: Int?) async -> Int? {
         var state = topicStates[topicID] ?? LinuxDoTopicDetailState()
         guard let detail = state.detail else { return nil }
         let stream = effectiveStream(for: detail)
@@ -761,7 +774,13 @@ final class LinuxDoStore {
 
         let targetID = stream[index]
         state.timelineWarning = nil
-        if state.loadedPostIDs.contains(targetID) {
+        if let preferredPostNumber,
+           let loadedPost = detail.posts.first(where: { $0.postNumber == preferredPostNumber }) {
+            state.scrollTargetPostID = loadedPost.id
+            topicStates[topicID] = state
+            return loadedPost.id
+        }
+        if preferredPostNumber == nil, state.loadedPostIDs.contains(targetID) {
             state.scrollTargetPostID = targetID
             topicStates[topicID] = state
             return targetID
@@ -771,14 +790,17 @@ final class LinuxDoStore {
         let upperBound = min(stream.count, index + 11)
         let batch = Array(stream[lowerBound..<upperBound]).filter { !state.loadedPostIDs.contains($0) }
         guard !batch.isEmpty else {
-            if state.loadedPostIDs.contains(targetID) {
+            if let preferredPostNumber,
+               let resolvedTargetID = state.detail?.posts.first(where: { $0.postNumber == preferredPostNumber })?.id {
+                state.scrollTargetPostID = resolvedTargetID
+            } else if preferredPostNumber == nil, state.loadedPostIDs.contains(targetID) {
                 state.scrollTargetPostID = targetID
             } else {
                 state.scrollTargetPostID = nil
                 state.timelineWarning = "That floor could not be loaded from Linux.do."
             }
             topicStates[topicID] = state
-            return state.loadedPostIDs.contains(targetID) ? targetID : nil
+            return state.scrollTargetPostID
         }
 
         state.isJumping = true
@@ -792,8 +814,11 @@ final class LinuxDoStore {
             state.detail = mergedDetail(state.detail, adding: posts)
             state.loadedPostIDs.formUnion(posts.map(\.id))
             state.remainingPostIDs.removeAll { state.loadedPostIDs.contains($0) }
-            if state.loadedPostIDs.contains(targetID) {
-                state.scrollTargetPostID = targetID
+            let resolvedTargetID: Int? = preferredPostNumber.flatMap { postNumber in
+                state.detail?.posts.first { $0.postNumber == postNumber }?.id
+            } ?? (state.loadedPostIDs.contains(targetID) ? targetID : nil)
+            if let resolvedTargetID {
+                state.scrollTargetPostID = resolvedTargetID
                 state.timelineWarning = nil
             } else {
                 state.scrollTargetPostID = nil
@@ -808,10 +833,14 @@ final class LinuxDoStore {
             state.isJumping = false
             state.isLoadingMore = false
             state.timelineWarning = userFacingMessage(error)
-            state.error = userFacingMessage(error)
+            state.error = nil
             handle(error)
         }
         topicStates[topicID] = state
+        if let preferredPostNumber,
+           let resolvedTargetID = state.detail?.posts.first(where: { $0.postNumber == preferredPostNumber })?.id {
+            return resolvedTargetID
+        }
         return state.loadedPostIDs.contains(targetID) ? targetID : nil
     }
 

@@ -8,13 +8,38 @@ enum LinuxDoReadingNavigatorMode: Equatable, Sendable {
 
 enum LinuxDoReadingNavigatorLayout {
     static let minimumFloors = 10
-    static let railBreakpoint: CGFloat = 620
-    static let railWidth: CGFloat = 52
-    static let railReservedWidth: CGFloat = 66
+    static let railEnterBreakpoint: CGFloat = 660
+    static let railExitBreakpoint: CGFloat = 580
+    static let railWidth: CGFloat = 48
+    static let railTopInset: CGFloat = 18
+    static let railTrailingInset: CGFloat = 12
+    static let railVerticalPadding: CGFloat = 10
+    static let railSpacing: CGFloat = 8
+    static let railCornerRadius: CGFloat = 14
+    static let railTrackHeight: CGFloat = 220
+    static let railMaxHeight: CGFloat = 300
+    static let compactTrailingInset: CGFloat = 16
+    static let compactBottomInset: CGFloat = 16
 
     static func mode(width: CGFloat, totalFloors: Int) -> LinuxDoReadingNavigatorMode {
         guard totalFloors >= minimumFloors else { return .hidden }
-        return width >= railBreakpoint ? .rail : .compact
+        return width >= railEnterBreakpoint ? .rail : .compact
+    }
+
+    static func mode(
+        width: CGFloat,
+        totalFloors: Int,
+        currentMode: LinuxDoReadingNavigatorMode
+    ) -> LinuxDoReadingNavigatorMode {
+        guard totalFloors >= minimumFloors else { return .hidden }
+        switch currentMode {
+        case .rail:
+            return width < railExitBreakpoint ? .compact : .rail
+        case .compact:
+            return width >= railEnterBreakpoint ? .rail : .compact
+        case .hidden:
+            return mode(width: width, totalFloors: totalFloors)
+        }
     }
 
     static func positionY(for floor: Int, totalFloors: Int, height: CGFloat) -> CGFloat {
@@ -73,19 +98,27 @@ struct LinuxDoReadingNavigator: View {
     }
 
     private var railBody: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: LinuxDoReadingNavigatorLayout.railSpacing) {
             statusGlyph
             floorSummary
             trackBody
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, LinuxDoReadingNavigatorLayout.railVerticalPadding)
         .frame(width: LinuxDoReadingNavigatorLayout.railWidth)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .frame(maxHeight: LinuxDoReadingNavigatorLayout.railMaxHeight, alignment: .top)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(.thinMaterial, in: RoundedRectangle(
+            cornerRadius: LinuxDoReadingNavigatorLayout.railCornerRadius,
+            style: .continuous
+        ))
         .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(
+                cornerRadius: LinuxDoReadingNavigatorLayout.railCornerRadius,
+                style: .continuous
+            )
                 .stroke(Color.primary.opacity(isHovering ? 0.16 : 0.08), lineWidth: 1)
         }
-        .shadow(color: .black.opacity(0.12), radius: isHovering ? 12 : 7, x: 0, y: 4)
+        .shadow(color: .black.opacity(0.10), radius: isHovering ? 9 : 5, x: 0, y: 3)
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.12)) {
                 isHovering = hovering
@@ -203,7 +236,7 @@ struct LinuxDoReadingNavigator: View {
             ZStack(alignment: .top) {
                 Capsule()
                     .fill(Color.primary.opacity(0.10))
-                    .frame(width: 3)
+                    .frame(width: 3, height: height)
 
                 Capsule()
                     .fill(Color.stxAccent.opacity(0.55))
@@ -227,7 +260,6 @@ struct LinuxDoReadingNavigator: View {
                             .stroke(Color.white.opacity(0.35), lineWidth: 0.5)
                     }
                     .offset(y: markerOffset(activeY, height: height, size: 8))
-                    .animation(.easeOut(duration: 0.12), value: activeFloor)
 
                 if previewFloor != nil || isHovering {
                     previewBubble(floor: activeFloor)
@@ -256,9 +288,8 @@ struct LinuxDoReadingNavigator: View {
                         onJump(floor)
                     }
             )
-            .animation(.easeOut(duration: 0.12), value: previewFloor)
         }
-        .frame(minHeight: 150)
+        .frame(height: LinuxDoReadingNavigatorLayout.railTrackHeight)
     }
 
     private func tick(floor: Int, height: CGFloat) -> some View {
