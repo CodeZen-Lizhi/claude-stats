@@ -122,30 +122,17 @@ private struct LeaderboardSegmentedChips<Value: Identifiable & Hashable>: View {
     let compact: Bool
 
     var body: some View {
-        HStack(spacing: 2) {
-            ForEach(values) { value in
-                chip(value)
-            }
-        }
-        .leaderboardSegmentedBackground()
-    }
-
-    private func chip(_ value: Value) -> some View {
-        let isSelected = selection == value
-        return Button {
-            withAnimation(.easeOut(duration: 0.18)) { selection = value }
-        } label: {
+        PillSegmentedBar(
+            values,
+            selection: $selection,
+            accessibilityLabel: { $0[keyPath: accessibilityLabel] }
+        ) { value, isSelected in
             LeaderboardChipLabel(
                 title: value[keyPath: label],
                 symbolName: value[keyPath: icon],
-                compact: compact,
-                isSelected: isSelected
+                compact: compact
             )
-            .leaderboardSelectedSegment(isSelected)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text(value[keyPath: accessibilityLabel]))
     }
 }
 
@@ -153,22 +140,16 @@ private struct LeaderboardChipLabel: View {
     let title: String
     let symbolName: String
     let compact: Bool
-    let isSelected: Bool
 
     var body: some View {
         ZStack {
             Text(title)
-                .font(.sora(11, weight: .medium))
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
                 .opacity(compact ? 0 : 1)
             Image(systemName: symbolName)
-                .font(.system(size: 12, weight: .semibold))
                 .opacity(compact ? 1 : 0)
         }
-        .foregroundStyle(isSelected ? .primary : Color.stxMuted)
-        .frame(width: compact ? 26 : nil, height: 20)
-        .padding(.horizontal, compact ? 5 : 10)
-        .padding(.vertical, 5)
+        .frame(width: compact ? 26 : nil)
     }
 }

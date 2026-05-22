@@ -278,43 +278,13 @@ private struct UsagePeriodChips: View {
     private static let values: [StatsPeriod] = [.today, .last7Days, .last30Days, .allTime]
 
     var body: some View {
-        HStack(spacing: 4) {
-            ForEach(Self.values) { value in
-                chip(value)
-            }
-        }
-        .padding(3)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.primary.opacity(0.06))
-        )
-    }
-
-    private func chip(_ value: StatsPeriod) -> some View {
-        let selected = period == value
-        return Button {
-            period = value
-        } label: {
+        PillSegmentedBar(
+            Self.values,
+            selection: $period,
+            help: { $0.displayName }
+        ) { value, _ in
             Text(label(for: value))
-                .font(.sora(11, weight: .medium))
-                .foregroundStyle(selected ? .primary : Color.stxMuted)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background {
-                    if selected {
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color.stxPanel)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .strokeBorder(Color.stxStroke, lineWidth: 1)
-                            )
-                    }
-                }
-                .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .animation(UsageTrendMotion.periodChip, value: selected)
-        .help(value.displayName)
     }
 
     private func label(for period: StatsPeriod) -> String {

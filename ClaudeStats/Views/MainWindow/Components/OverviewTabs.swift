@@ -1,49 +1,23 @@
 import SwiftUI
 
-/// Segmented "Overview | Models" pill used at the top of the Dashboard.
-/// Selection is animated via a single matched-geometry capsule slid under the
-/// active tab.
+/// Dashboard-specific wrapper around the reusable pill segmented bar.
 struct OverviewTabs: View {
     @Binding var section: DashboardViewModel.Section
-    @Namespace private var ns
 
     var body: some View {
-        HStack(spacing: 2) {
-            tab(.overview, label: "Overview")
-            tab(.models, label: "Models")
+        PillSegmentedBar(
+            Array(DashboardViewModel.Section.allCases),
+            selection: $section
+        ) { option, _ in
+            Text(LocalizedStringKey(Self.label(for: option)))
         }
-        .padding(3)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.primary.opacity(0.06))
-        )
     }
 
-    @ViewBuilder
-    private func tab(_ value: DashboardViewModel.Section, label: String) -> some View {
-        let isSelected = section == value
-        Button {
-            withAnimation(.easeOut(duration: 0.18)) { section = value }
-        } label: {
-            Text(LocalizedStringKey(label))
-                .font(.sora(12, weight: .medium))
-                .foregroundStyle(isSelected ? .primary : Color.stxMuted)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 5)
-                .background {
-                    if isSelected {
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color.stxPanel)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .strokeBorder(Color.stxStroke, lineWidth: 1)
-                            )
-                            .matchedGeometryEffect(id: "tab-pill", in: ns)
-                    }
-                }
-                .contentShape(Rectangle())
+    private static func label(for section: DashboardViewModel.Section) -> String {
+        switch section {
+        case .overview: "Overview"
+        case .models: "Models"
         }
-        .buttonStyle(.plain)
     }
 }
 

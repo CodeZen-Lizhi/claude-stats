@@ -160,16 +160,7 @@ extension LeaderboardPeriod {
         }
     }
 }
-
 extension View {
-    func leaderboardSegmentedBackground() -> some View {
-        padding(3)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.primary.opacity(0.06))
-            )
-    }
-
     func leaderboardSelectedSegment(_ isSelected: Bool) -> some View {
         background {
             if isSelected {

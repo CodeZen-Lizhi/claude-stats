@@ -82,48 +82,16 @@ private struct ActivityRangeChips: View {
     @Binding var range: ActivityRange
 
     var body: some View {
-        HStack(spacing: 4) {
-            ForEach(ActivityRange.allCases) { value in
-                chip(value)
-            }
+        PillSegmentedBar(
+            ActivityRange.allCases,
+            selection: $range,
+            help: { $0 == .day ? "Show one day" : "Show last \($0.dayCount) days" },
+            accessibilityLabel: { $0 == .day ? "Day" : "Last \($0.dayCount) days" }
+        ) { value, _ in
+            Text(value.mainWindowLabel)
         }
-        .padding(3)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.primary.opacity(0.06))
-        )
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Activity range")
-    }
-
-    private func chip(_ value: ActivityRange) -> some View {
-        let selected = range == value
-        return Button {
-            withAnimation(.easeOut(duration: 0.18)) {
-                range = value
-            }
-        } label: {
-            Text(value.mainWindowLabel)
-                .font(.sora(11, weight: .medium))
-                .foregroundStyle(selected ? .primary : Color.stxMuted)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background {
-                    if selected {
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color.stxPanel)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .strokeBorder(Color.stxStroke, lineWidth: 1)
-                            )
-                    }
-                }
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help(value == .day ? "Show one day" : "Show last \(value.dayCount) days")
-        .accessibilityLabel(value == .day ? "Day" : "Last \(value.dayCount) days")
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 

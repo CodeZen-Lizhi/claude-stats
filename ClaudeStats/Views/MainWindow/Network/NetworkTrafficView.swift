@@ -205,49 +205,23 @@ struct NetworkTrafficLayoutControls: View {
     @State private var showingAutoSettings = false
 
     var body: some View {
-        HStack(spacing: 4) {
-            layoutButton(.automatic) {
-                preferences.networkTrafficLayoutMode = .automatic
-                showingAutoSettings = true
+        PillSegmentedBar(
+            NetworkTrafficLayoutMode.allCases,
+            selection: $preferences.networkTrafficLayoutMode,
+            help: { $0.help },
+            accessibilityLabel: { $0.title },
+            onSelect: { mode in
+                showingAutoSettings = mode == .automatic
             }
-            .popover(isPresented: $showingAutoSettings, arrowEdge: .bottom) {
-                NetworkTrafficAutoLayoutPopover(preferences: preferences)
-                    .padding(14)
-                    .frame(width: 260)
-            }
-
-            layoutButton(.stacked) {
-                preferences.networkTrafficLayoutMode = .stacked
-            }
-
-            layoutButton(.sideBySide) {
-                preferences.networkTrafficLayoutMode = .sideBySide
-            }
-        }
-        .padding(3)
-        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.stxStroke.opacity(0.75), lineWidth: 1))
-    }
-
-    private func layoutButton(_ mode: NetworkTrafficLayoutMode, action: @escaping () -> Void) -> some View {
-        let isSelected = preferences.networkTrafficLayoutMode == mode
-        return Button(action: action) {
+        ) { mode, _ in
             Image(systemName: mode.symbol)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(isSelected ? Color.stxAccent : Color.stxMuted)
-                .frame(width: 26, height: 24)
-                .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(isSelected ? Color.stxAccent.opacity(0.14) : Color.clear)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .strokeBorder(isSelected ? Color.stxAccent.opacity(0.35) : Color.clear, lineWidth: 1)
-                )
+                .frame(width: 26)
         }
-        .buttonStyle(.plain)
-        .help(mode.help)
-        .accessibilityLabel(Text(mode.title))
+        .popover(isPresented: $showingAutoSettings, arrowEdge: .bottom) {
+            NetworkTrafficAutoLayoutPopover(preferences: preferences)
+                .padding(14)
+                .frame(width: 260)
+        }
     }
 }
 

@@ -874,42 +874,10 @@ private struct MainGitRangePicker: View {
     @Binding var range: GitRange
 
     var body: some View {
-        HStack(spacing: 4) {
-            ForEach(GitRange.allCases) { value in
-                chip(value)
-            }
-        }
-        .padding(3)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.primary.opacity(0.06))
-        )
-        .help("Select git activity range")
-    }
-
-    private func chip(_ value: GitRange) -> some View {
-        let isSelected = range == value
-        return Button {
-            withAnimation(.easeOut(duration: 0.18)) { range = value }
-        } label: {
+        PillSegmentedBar(GitRange.allCases, selection: $range) { value, _ in
             Text(value.shortLabel.lowercased())
-                .font(.sora(11, weight: .medium))
-                .foregroundStyle(isSelected ? .primary : Color.stxMuted)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background {
-                    if isSelected {
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color.stxPanel)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .strokeBorder(Color.stxStroke, lineWidth: 1)
-                            )
-                    }
-                }
-                .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .help("Select git activity range")
     }
 }
 
