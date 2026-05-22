@@ -39,21 +39,29 @@ Screenshots and GIF demos live in [`docs/assets/screens`](docs/assets/screens), 
 <details open>
 <summary><strong>Menu-bar extra</strong></summary>
 
-<p><strong>Usage panel</strong></p>
-<img src="docs/assets/screens/menubar-usage.gif" alt="Menu-bar extra usage panel">
-
-<p><strong>Activity panel</strong></p>
-<img src="docs/assets/screens/menubar-activity.gif" alt="Menu-bar extra activity panel">
-
-<p><strong>Git panel</strong></p>
-<img src="docs/assets/screens/menubar-git.gif" alt="Menu-bar extra Git panel">
+<table>
+  <tr>
+    <td width="33%">
+      <strong>Usage panel</strong><br>
+      <img src="docs/assets/screens/menubar-usage.gif" alt="Menu-bar extra usage panel" width="100%">
+    </td>
+    <td width="33%">
+      <strong>Activity panel</strong><br>
+      <img src="docs/assets/screens/menubar-activity.gif" alt="Menu-bar extra activity panel" width="100%">
+    </td>
+    <td width="33%">
+      <strong>Git panel</strong><br>
+      <img src="docs/assets/screens/menubar-git.gif" alt="Menu-bar extra Git panel" width="100%">
+    </td>
+  </tr>
+</table>
 
 <p><strong>Share stats export</strong></p>
 <img src="docs/assets/screens/menubar-share-stats.gif" alt="Menu-bar share stats export flow">
 
 </details>
 
-<details>
+<details open>
 <summary><strong>Stats and activity</strong></summary>
 
 <p><strong>Dashboard overview</strong></p>
