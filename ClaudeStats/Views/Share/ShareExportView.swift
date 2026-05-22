@@ -76,7 +76,7 @@ struct ShareExportView: View {
             .fixedSize(horizontal: false, vertical: true)
             .font(.sora(13))
             .tint(.stxAccent)
-            .background(Color.stxBackground)
+            .background(MenuBarSurface.backgroundFill)
             .environment(\.colorScheme, scheme)
     }
 

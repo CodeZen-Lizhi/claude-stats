@@ -33,48 +33,22 @@ struct ActivityControls: View {
     }
 
     private var dayStepper: some View {
-        HStack(spacing: 4) {
-            stepButton(systemName: "chevron.left", help: "Previous day") {
+        PillTimeStepperBar(
+            canStepForward: canStepForward,
+            isCenterSelected: true,
+            previousHelp: "Previous day",
+            nextHelp: "Next day",
+            centerAccessibilityLabel: "Selected day",
+            accessibilityLabel: "Day navigation",
+            onPrevious: {
                 onStepDay(-1)
-            }
-
-            Text(Format.day(selectedDay))
-                .font(.sora(11, weight: .medium).monospacedDigit())
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .frame(minWidth: 52)
-                .accessibilityLabel("Selected day")
-
-            stepButton(systemName: "chevron.right", disabled: !canStepForward, help: "Next day") {
+            },
+            onNext: {
                 onStepDay(1)
             }
+        ) { _ in
+            Text(Format.day(selectedDay))
         }
-        .padding(3)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.primary.opacity(0.06))
-        )
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Day navigation")
-    }
-
-    private func stepButton(
-        systemName: String,
-        disabled: Bool = false,
-        help: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(disabled ? Color.stxMuted.opacity(0.35) : Color.stxMuted)
-                .frame(width: 24, height: 22)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(disabled)
-        .help(help)
-        .accessibilityLabel(help)
     }
 }
 

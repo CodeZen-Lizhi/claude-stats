@@ -23,6 +23,19 @@ enum AppSurface {
         dark: (0.17, 0.17, 0.185)
     )
 
+    static let pillSelectedFill = Color.stxDynamic(
+        light: (1, 1, 1),
+        dark: (0.085, 0.085, 0.092)
+    )
+
+    static let pillSelectedStroke = Color(nsColor: NSColor(name: nil) { appearance in
+        let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        if isDark {
+            return NSColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.14)
+        }
+        return .clear
+    })
+
     static let pillForeground = Color.stxDynamic(
         light: (0.40, 0.40, 0.42),
         dark: (0.78, 0.78, 0.82)

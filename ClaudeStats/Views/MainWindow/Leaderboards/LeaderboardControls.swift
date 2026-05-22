@@ -46,63 +46,29 @@ struct LeaderboardDailyPeriodControl: View {
     }
 
     var body: some View {
-        dayStepper
-        .fixedSize(horizontal: true, vertical: false)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Daily leaderboard date")
-    }
-
-    private var dayStepper: some View {
-        HStack(spacing: 4) {
-            stepButton(systemName: "chevron.left", help: "Previous UTC day") {
+        PillTimeStepperBar(
+            canStepForward: canStepForward,
+            isCenterSelected: isSelected,
+            previousHelp: "Previous UTC day",
+            nextHelp: "Next UTC day",
+            centerHelp: "Show selected UTC day",
+            centerAccessibilityLabel: "Selected UTC day",
+            accessibilityLabel: "Daily leaderboard date",
+            onPrevious: {
                 stepDay(-1)
-            }
-
-            Button {
+            },
+            onNext: {
+                stepDay(1)
+            },
+            onCenter: {
                 withAnimation(.easeOut(duration: 0.18)) {
                     period = .day
                 }
-            } label: {
-                Text(LeaderboardDailyDateNavigator.label(for: selectedDate))
-                    .font(.sora(11, weight: .medium).monospacedDigit())
-                    .foregroundStyle(isSelected ? .primary : Color.stxMuted)
-                    .lineLimit(1)
-                    .frame(minWidth: 70)
-                    .frame(height: 30)
-                    .leaderboardSelectedSegment(isSelected)
-                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .help("Show selected UTC day")
-            .accessibilityLabel("Selected UTC day")
-            .accessibilityAddTraits(isSelected ? .isSelected : [])
-
-            stepButton(systemName: "chevron.right", disabled: !canStepForward, help: "Next UTC day") {
-                stepDay(1)
-            }
+        ) { _ in
+            Text(LeaderboardDailyDateNavigator.label(for: selectedDate))
         }
-        .padding(3)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.primary.opacity(0.06))
-        )
-    }
-
-    private func stepButton(systemName: String,
-                            disabled: Bool = false,
-                            help: String,
-                            action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(disabled ? Color.stxMuted.opacity(0.35) : Color.stxMuted)
-                .frame(width: 24, height: 30)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(disabled)
-        .help(help)
-        .accessibilityLabel(help)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private func stepDay(_ offset: Int) {

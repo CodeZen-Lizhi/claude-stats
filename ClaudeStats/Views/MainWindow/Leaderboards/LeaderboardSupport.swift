@@ -160,17 +160,3 @@ extension LeaderboardPeriod {
         }
     }
 }
-extension View {
-    func leaderboardSelectedSegment(_ isSelected: Bool) -> some View {
-        background {
-            if isSelected {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(AppSurface.panelFill)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .strokeBorder(Color.stxStroke, lineWidth: 1)
-                    )
-            }
-        }
-    }
-}

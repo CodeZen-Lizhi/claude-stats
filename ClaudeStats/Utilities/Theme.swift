@@ -84,12 +84,10 @@ extension Color {
         })
     }
 
-    /// Opaque popover backdrop (used directly only in previews — the live
-    /// popover keeps the system's translucent vibrancy background).
-    static let stxBackground = AppSurface.backgroundFill
-    /// Opaque panel fill — borderless near-white in light mode, dark surface in
-    /// dark mode.
-    static let stxPanel = AppSurface.panelFill
+    /// Compact menu-bar popover backdrop.
+    static let stxBackground = MenuBarSurface.backgroundFill
+    /// Compact menu-bar panel fill.
+    static let stxPanel = MenuBarSurface.panelFill
     /// Hairline for panel borders, dividers, chart grid lines.
     static let stxStroke = AppSurface.stroke
     /// Bracket glyphs (`[ ]`, scanline ends) — a touch brighter than `stxStroke`.
@@ -163,10 +161,10 @@ struct BracketBox<Content: View>: View {
 // MARK: - Panel container
 
 extension View {
-    /// Wraps the view as a bordered "instrument panel": opaque fill, a 1px
-    /// hairline border, near-sharp corners, and inset padding.
+    /// Wraps the view as a compact menu-bar instrument panel: opaque fill, a
+    /// 1px hairline border, square corners, and inset padding.
     func stxPanel(_ padding: CGFloat = 12) -> some View {
-        appSurface(.instrumentPanel, padding: padding)
+        menuBarSurface(.instrumentPanel, padding: padding)
     }
 }
 

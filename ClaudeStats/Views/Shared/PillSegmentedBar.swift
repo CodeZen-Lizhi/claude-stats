@@ -113,28 +113,13 @@ extension PillSegmentedBarStyle {
         itemHeight: 25,
         font: .sora(12, weight: .medium),
         background: Color.primary.opacity(0.06),
-        selectedBackground: Color.pillSegmentSelectedBackground,
-        selectedBorder: Color.pillSegmentSelectedBorder,
+        selectedBackground: AppSurface.pillSelectedFill,
+        selectedBorder: AppSurface.pillSelectedStroke,
         selectedBorderWidth: 1,
         selectedForeground: Color.primary,
         unselectedForeground: Color.stxMuted,
         selectionAnimation: .easeOut(duration: 0.18)
     )
-}
-
-private extension Color {
-    static let pillSegmentSelectedBackground = Color.stxDynamic(
-        light: (1, 1, 1),
-        dark: (0.085, 0.085, 0.092)
-    )
-
-    static let pillSegmentSelectedBorder = Color(nsColor: NSColor(name: nil) { appearance in
-        let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        if isDark {
-            return NSColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.14)
-        }
-        return .clear
-    })
 }
 
 private extension View {

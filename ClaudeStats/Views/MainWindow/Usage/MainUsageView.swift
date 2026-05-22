@@ -108,9 +108,10 @@ struct MainUsageView: View {
 
     private func controls(period: Binding<StatsPeriod>) -> some View {
         HStack(alignment: .center, spacing: 12) {
-            UsagePeriodChips(period: period)
             Spacer(minLength: 0)
+            UsagePeriodChips(period: period)
         }
+        .frame(maxWidth: .infinity)
     }
 
     private func usageLimitPanel(provider: ProviderKind) -> some View {
