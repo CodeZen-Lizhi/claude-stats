@@ -10,6 +10,7 @@
 
 <p align="center">
   <a href="#features">Features</a> ·
+  <a href="#screens">Screens</a> ·
   <a href="#install">Install</a> ·
   <a href="#build-from-source">Build From Source</a> ·
   <a href="#open-source--third-party-modules">Open Source</a> ·
@@ -30,6 +31,86 @@ The app began as a focused macOS take on the open-source [Claude Statistics](htt
 - An Atoll-backed Notch Island surface for optional media, timer, stats, clipboard, terminal, and related modules.
 - A Rockxy-backed network debugger with proxy, rule, certificate, and helper-tool integration.
 - Sparkle-based automatic updates for packaged releases.
+
+## Screens
+
+Screenshots live in [`docs/assets/screens`](docs/assets/screens), grouped here by product area.
+
+<details open>
+<summary><strong>Stats and activity</strong></summary>
+
+<p><strong>Dashboard overview</strong></p>
+<img src="docs/assets/screens/dashboard-overview.png" alt="Claude Stats dashboard overview">
+
+<p><strong>Sessions overview</strong></p>
+<img src="docs/assets/screens/sessions-overview.png" alt="Claude session statistics overview">
+
+<p><strong>Token usage and limits</strong></p>
+<img src="docs/assets/screens/usage-token-limits.png" alt="Token usage and usage limits">
+
+<p><strong>AI-assisted focus timeline</strong></p>
+<img src="docs/assets/screens/activity-focus-timeline.png" alt="AI-assisted focus timeline">
+
+<p><strong>Weekly leaderboards</strong></p>
+<img src="docs/assets/screens/leaderboards-weekly.png" alt="Weekly usage leaderboard">
+
+</details>
+
+<details>
+<summary><strong>Community and local knowledge</strong></summary>
+
+<p><strong>LinuxDo native reader</strong></p>
+<img src="docs/assets/screens/linuxdo-reader.png" alt="LinuxDo native topic reader">
+
+<p><strong>Plans and config browser</strong></p>
+<img src="docs/assets/screens/configs-plans-browser.png" alt="Plans and config browser">
+
+<p><strong>Skills library</strong></p>
+<img src="docs/assets/screens/skills-library.png" alt="Local and plugin skills library">
+
+</details>
+
+<details>
+<summary><strong>Developer tools</strong></summary>
+
+<p><strong>API provider switcher</strong></p>
+<img src="docs/assets/screens/provider-switcher.png" alt="API provider switcher">
+
+<p><strong>Repository workspace</strong></p>
+<img src="docs/assets/screens/git-repository-workspace.png" alt="Git repository workspace">
+
+</details>
+
+<details>
+<summary><strong>Ops, network, and terminal</strong></summary>
+
+<p><strong>Listening ports</strong></p>
+<img src="docs/assets/screens/ops-listening-ports.png" alt="Listening ports inspector">
+
+<p><strong>Homebrew packages</strong></p>
+<img src="docs/assets/screens/ops-homebrew-packages.png" alt="Homebrew package inspector">
+
+<p><strong>Developer environment check</strong></p>
+<img src="docs/assets/screens/ops-environment-check.png" alt="Developer environment check">
+
+<p><strong>Network traffic</strong></p>
+<img src="docs/assets/screens/network-traffic.png" alt="Network traffic debugger">
+
+<p><strong>Embedded terminal</strong></p>
+<img src="docs/assets/screens/terminal-session.png" alt="Embedded terminal session">
+
+</details>
+
+<details>
+<summary><strong>Settings</strong></summary>
+
+<p><strong>Feature toggles</strong></p>
+<img src="docs/assets/screens/settings-features.png" alt="Feature settings">
+
+<p><strong>Terminal appearance</strong></p>
+<img src="docs/assets/screens/settings-terminal-appearance.png" alt="Terminal appearance settings">
+
+</details>
 
 ## Install
 
