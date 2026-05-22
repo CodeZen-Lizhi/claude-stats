@@ -88,15 +88,7 @@ private struct SystemMonitorRefreshRatePicker: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
-                .appSurface(
-                    AppSurfaceChrome(
-                        stroke: selection == rate ? Color.stxAccent : AppSurface.stroke,
-                        cornerRadius: 10,
-                        strokeWidth: selection == rate ? 1.5 : 1,
-                        maxWidth: nil
-                    ),
-                    padding: nil
-                )
+                .appSurface(.compactCard(radius: 10, maxWidth: nil), padding: nil)
             }
             .buttonStyle(.plain)
         }

@@ -674,10 +674,7 @@ private struct CLIEnvironmentStatusCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, minHeight: 138, alignment: .topLeading)
-        .appSurface(
-            AppSurfaceChrome(stroke: borderColor, cornerRadius: 8, cornerStyle: .circular, maxWidth: nil),
-            padding: nil
-        )
+        .appSurface(.compactCard(radius: 8, cornerStyle: .circular, maxWidth: nil), padding: nil)
     }
 
     @ViewBuilder
@@ -709,12 +706,6 @@ private struct CLIEnvironmentStatusCard: View {
         return !status.isInstalled || status.isOutdated
     }
 
-    private var borderColor: Color {
-        if status?.isInstalled == true {
-            return status?.isOutdated == true ? Color.orange.opacity(0.35) : Color.stxAccent.opacity(0.25)
-        }
-        return Color.stxStroke
-    }
 }
 
 private struct CLIEnvironmentConflictPanel: View {

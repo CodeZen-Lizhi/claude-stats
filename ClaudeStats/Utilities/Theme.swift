@@ -87,8 +87,8 @@ extension Color {
     /// Opaque popover backdrop (used directly only in previews — the live
     /// popover keeps the system's translucent vibrancy background).
     static let stxBackground = AppSurface.backgroundFill
-    /// Opaque panel fill — a card sitting on the popover background: a warm
-    /// off-white in the light theme, a recessed near-black "screen" in the dark.
+    /// Opaque panel fill — a borderless near-white card sitting on the popover
+    /// background.
     static let stxPanel = AppSurface.panelFill
     /// Hairline for panel borders, dividers, chart grid lines.
     static let stxStroke = AppSurface.stroke

@@ -64,16 +64,7 @@ struct SettingSegmentCard<Value: Hashable>: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .appSurface(
-                AppSurfaceChrome(
-                    stroke: isSelected ? Color.stxAccent : AppSurface.stroke,
-                    cornerRadius: 10,
-                    cornerStyle: .circular,
-                    strokeWidth: isSelected ? 1.5 : 1,
-                    maxWidth: nil
-                ),
-                padding: nil
-            )
+            .appSurface(.compactCard(radius: 10, cornerStyle: .circular, maxWidth: nil), padding: nil)
             .contentShape(RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(.plain)

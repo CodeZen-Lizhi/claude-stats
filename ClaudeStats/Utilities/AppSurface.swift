@@ -6,9 +6,10 @@ enum AppSurface {
         dark: (0.05, 0.05, 0.055)
     )
 
-    static let panelFill = Color.stxDynamic(
-        light: (0.965, 0.949, 0.910),
-        dark: (0.085, 0.085, 0.092)
+    static let panelFill = Color(
+        red: 253.0 / 255.0,
+        green: 253.0 / 255.0,
+        blue: 254.0 / 255.0
     )
 
     static let stroke = Color.primary.opacity(0.14)
@@ -26,7 +27,7 @@ struct AppSurfaceChrome {
 
     init(
         fill: Color = AppSurface.panelFill,
-        stroke: Color? = AppSurface.stroke,
+        stroke: Color? = nil,
         cornerRadius: CGFloat,
         cornerStyle: RoundedCornerStyle = .continuous,
         strokeWidth: CGFloat = 1,
