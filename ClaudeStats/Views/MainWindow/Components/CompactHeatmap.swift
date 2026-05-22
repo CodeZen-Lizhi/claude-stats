@@ -101,11 +101,9 @@ struct CompactHeatmap: View {
     }
     return HStack(spacing: 16) {
         CompactHeatmap(cells: cells, range: range)
-            .padding(14)
-            .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 10))
+            .appSurface(.mainWindowCard)
         CompactHeatmap(cells: cells, range: range, valueLabel: { "\($0) contributions" })
-            .padding(14)
-            .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 10))
+            .appSurface(.mainWindowCard)
     }
     .padding(24)
     .frame(width: 760)

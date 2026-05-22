@@ -49,8 +49,7 @@ struct ConfigurationEditorPane: View {
             }
         }
         .frame(minWidth: 360, maxWidth: .infinity, minHeight: 440, alignment: .topLeading)
-        .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.stxStroke, lineWidth: 1))
+        .appSurface(.compactCard(radius: 8, cornerStyle: .circular, maxWidth: nil))
     }
 
     @ViewBuilder

@@ -86,12 +86,12 @@ extension Color {
 
     /// Opaque popover backdrop (used directly only in previews — the live
     /// popover keeps the system's translucent vibrancy background).
-    static let stxBackground = stxDynamic(light: (0.93, 0.93, 0.94), dark: (0.05, 0.05, 0.055))
+    static let stxBackground = AppSurface.backgroundFill
     /// Opaque panel fill — a card sitting on the popover background: a warm
     /// off-white in the light theme, a recessed near-black "screen" in the dark.
-    static let stxPanel = stxDynamic(light: (0.965, 0.949, 0.910), dark: (0.085, 0.085, 0.092))
+    static let stxPanel = AppSurface.panelFill
     /// Hairline for panel borders, dividers, chart grid lines.
-    static let stxStroke = Color.primary.opacity(0.14)
+    static let stxStroke = AppSurface.stroke
     /// Bracket glyphs (`[ ]`, scanline ends) — a touch brighter than `stxStroke`.
     static let stxBracket = Color.primary.opacity(0.30)
     /// Muted secondary text (labels, captions).
@@ -166,11 +166,7 @@ extension View {
     /// Wraps the view as a bordered "instrument panel": opaque fill, a 1px
     /// hairline border, near-sharp corners, and inset padding.
     func stxPanel(_ padding: CGFloat = 12) -> some View {
-        self
-            .padding(padding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 3))
-            .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(Color.stxStroke, lineWidth: 1))
+        appSurface(.instrumentPanel, padding: padding)
     }
 }
 

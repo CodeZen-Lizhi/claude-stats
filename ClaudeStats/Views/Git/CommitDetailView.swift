@@ -249,8 +249,7 @@ struct CommitDetailView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 2)
-        .background(Color.stxPanel.opacity(0.5), in: RoundedRectangle(cornerRadius: 3))
-        .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(Color.stxStroke, lineWidth: 1))
+        .appSurface(.compactCard(radius: 3, fillOpacity: 0.5, cornerStyle: .circular), padding: nil)
     }
 }
 

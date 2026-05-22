@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Claude-style summary card: muted uppercase label above a large bold value.
+/// Claude-style summary metric: muted uppercase label above a large bold value.
 /// Pure value-driven view (no internal state) so SwiftUI can diff it cheaply
-/// when the underlying `DashboardStats` changes.
+/// when the underlying stats change.
 struct StatCard: View {
     let label: String
     let value: String
@@ -27,8 +27,6 @@ struct StatCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.stxStroke, lineWidth: 1))
     }
 }
 

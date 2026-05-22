@@ -165,7 +165,7 @@ extension View {
         background {
             if isSelected {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color.stxPanel)
+                    .fill(AppSurface.panelFill)
                     .overlay(
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
                             .strokeBorder(Color.stxStroke, lineWidth: 1)

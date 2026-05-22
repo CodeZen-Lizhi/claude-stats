@@ -1700,9 +1700,7 @@ private struct NetworkInlineEmptyState: View {
 
 private extension View {
     func networkInspectorCard() -> some View {
-        self
-            .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.stxStroke, lineWidth: 1))
+        appSurface(.compactCard(radius: 10, maxWidth: nil))
     }
 }
 

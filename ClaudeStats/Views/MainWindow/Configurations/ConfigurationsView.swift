@@ -120,8 +120,7 @@ struct ConfigurationsView: View {
         }
         .frame(width: railColumnWidth, alignment: .top)
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.stxStroke, lineWidth: 1))
+        .appSurface(.compactCard(radius: 8, cornerStyle: .circular, maxWidth: nil))
     }
 
     private func providersColumn(vm: APIProviderSwitcherViewModel) -> some View {
@@ -184,8 +183,7 @@ struct ConfigurationsView: View {
                             }
                         }
                     }
-                    .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.stxStroke, lineWidth: 1))
+                    .appSurface(.compactCard(radius: 8, cornerStyle: .circular))
 
                     if let result = vm.latestApplyResult {
                         VStack(alignment: .leading, spacing: 4) {
@@ -200,8 +198,7 @@ struct ConfigurationsView: View {
                         }
                         .padding(12)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.stxPanel.opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
-                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.stxStroke, lineWidth: 1))
+                        .appSurface(.compactCard(radius: 8, fillOpacity: 0.55, cornerStyle: .circular), padding: nil)
                     }
                 }
                 .padding(.trailing, 2)
@@ -229,8 +226,7 @@ struct ConfigurationsView: View {
             }
             .padding(18)
             .frame(maxWidth: .infinity, minHeight: railMinimumHeight, alignment: .topLeading)
-            .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.stxStroke, lineWidth: 1))
+            .appSurface(.compactCard(radius: 8, cornerStyle: .circular, maxWidth: nil))
         } else {
             VStack(alignment: .leading, spacing: 14) {
                 editorHeader(vm: vm)
@@ -255,8 +251,7 @@ struct ConfigurationsView: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, minHeight: railMinimumHeight, alignment: .topLeading)
-            .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.stxStroke, lineWidth: 1))
+            .appSurface(.compactCard(radius: 8, cornerStyle: .circular, maxWidth: nil))
         }
     }
 
@@ -679,8 +674,10 @@ private struct CLIEnvironmentStatusCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, minHeight: 138, alignment: .topLeading)
-        .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(borderColor, lineWidth: 1))
+        .appSurface(
+            AppSurfaceChrome(stroke: borderColor, cornerRadius: 8, cornerStyle: .circular, maxWidth: nil),
+            padding: nil
+        )
     }
 
     @ViewBuilder
@@ -798,8 +795,7 @@ private struct CLIEnvironmentConflictPanel: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.stxPanel.opacity(0.65), in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.stxStroke, lineWidth: 1))
+        .appSurface(.compactCard(radius: 8, fillOpacity: 0.65, cornerStyle: .circular), padding: nil)
     }
 
     private func cleanupResult(_ result: CLIEnvironmentCleanupResult) -> some View {
@@ -821,8 +817,7 @@ private struct CLIEnvironmentConflictPanel: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.stxPanel.opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.stxStroke, lineWidth: 1))
+        .appSurface(.compactCard(radius: 8, fillOpacity: 0.55, cornerStyle: .circular), padding: nil)
     }
 }
 
@@ -906,8 +901,7 @@ private struct CLIEnvironmentConflictRow: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.stxPanel.opacity(0.75), in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.stxStroke, lineWidth: 1))
+        .appSurface(.compactCard(radius: 8, fillOpacity: 0.75, cornerStyle: .circular), padding: nil)
     }
 }
 

@@ -25,7 +25,7 @@ struct AIConfigDocumentInspector: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color.stxPanel)
+        .appSurface(.plainFill)
     }
 
     private func previewToolbar(_ document: AIConfigDocument) -> some View {

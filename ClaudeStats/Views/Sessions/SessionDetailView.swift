@@ -152,8 +152,7 @@ struct SessionDetailView: View {
             .foregroundStyle(Color.stxMuted)
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.stxStroke, lineWidth: 1))
+            .appSurface(.compactCard(radius: 8), padding: nil)
     }
 
     private func loadTranscript() async {
@@ -171,10 +170,7 @@ struct SessionDetailView: View {
                          defaultValue: "Transcript stats haven't been parsed yet."))
             .font(.sora(12))
             .foregroundStyle(Color.stxMuted)
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.stxStroke, lineWidth: 1))
+            .appSurface(.mainWindowCard, padding: 16)
     }
 
     // MARK: - Actions
@@ -238,8 +234,7 @@ private struct TranscriptMessageRow: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.stxStroke, lineWidth: 1))
+        .appSurface(.compactCard(radius: 8), padding: nil)
     }
 }
 

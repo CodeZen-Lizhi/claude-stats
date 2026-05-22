@@ -64,11 +64,15 @@ struct SettingSegmentCard<Value: Hashable>: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(isSelected ? Color.stxAccent : Color.stxStroke,
-                                  lineWidth: isSelected ? 1.5 : 1)
+            .appSurface(
+                AppSurfaceChrome(
+                    stroke: isSelected ? Color.stxAccent : AppSurface.stroke,
+                    cornerRadius: 10,
+                    cornerStyle: .circular,
+                    strokeWidth: isSelected ? 1.5 : 1,
+                    maxWidth: nil
+                ),
+                padding: nil
             )
             .contentShape(RoundedRectangle(cornerRadius: 10))
         }

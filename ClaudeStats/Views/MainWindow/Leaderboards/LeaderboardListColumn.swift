@@ -232,13 +232,12 @@ private struct LeaderboardPodiumCompactRow: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.stxPanel.opacity(0.65), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.stxStroke, lineWidth: 1))
+        .appSurface(.compactCard(radius: 10, fillOpacity: 0.65), padding: nil)
     }
 
     private var rowBackground: Color {
         if isSelected || isCurrentUser { return Color.stxAccent.opacity(0.08) }
-        return fallbackRank == 1 ? Color.stxPanel : Color.stxPanel.opacity(0.78)
+        return fallbackRank == 1 ? AppSurface.panelFill : AppSurface.panelFill.opacity(0.78)
     }
 
     private var rowStroke: Color {
@@ -361,7 +360,6 @@ private struct LeaderboardNotice: View {
             .font(.sora(12))
             .foregroundStyle(Color.stxMuted)
             .frame(maxWidth: .infinity, minHeight: 96, alignment: .center)
-            .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.stxStroke, lineWidth: 1))
+            .appSurface(.compactCard(radius: 10))
     }
 }

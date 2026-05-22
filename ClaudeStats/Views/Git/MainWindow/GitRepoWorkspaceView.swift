@@ -957,10 +957,7 @@ private struct GitWorkspaceInlineEmptyState: View {
 
 private extension View {
     func gitWorkspaceCard() -> some View {
-        self
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.stxStroke, lineWidth: 1))
+        appSurface(.compactCard(radius: 10))
     }
 }
 

@@ -32,11 +32,7 @@ struct SystemMonitorPreview: View {
         }
         .padding(16)
         .frame(height: 210)
-        .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Color.stxStroke, lineWidth: 1)
-        }
+        .appSurface(.compactCard(radius: 10))
     }
 
     private func previewCard(title: String, value: String, colors: [Color]) -> some View {

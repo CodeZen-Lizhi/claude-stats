@@ -11,11 +11,6 @@ extension View {
 
 private struct SettingCardModifier: ViewModifier {
     func body(content: Content) -> some View {
-        content
-            .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(Color.stxStroke, lineWidth: 1)
-            )
+        content.appSurface(.settingCard)
     }
 }

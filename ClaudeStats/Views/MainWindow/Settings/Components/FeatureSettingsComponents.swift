@@ -81,13 +81,7 @@ struct FeatureControlCard<Preview: View, Controls: View>: View {
                 controls
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Color.stxStroke, lineWidth: 1)
-        }
+        .appSurface(.mainWindowCard, padding: 16)
     }
 }
 

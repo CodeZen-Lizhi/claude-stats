@@ -8,10 +8,7 @@ struct OpenAIStatusCard: View {
             header
             content
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.stxStroke, lineWidth: 1))
+        .appSurface(.mainWindowCard)
         .task { await status.refreshIfNeeded() }
     }
 
@@ -22,7 +19,10 @@ struct OpenAIStatusCard: View {
                 .tracking(0.4)
                 .foregroundStyle(Color.stxMuted)
             if let snapshot = status.snapshot {
-                severityBadge(snapshot.rollup.severity, label: snapshot.rollup.description)
+                StatusSeverityBadge(
+                    label: snapshot.rollup.description,
+                    indicatorTint: snapshot.rollup.severity.tint
+                )
             } else if status.isLoading {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.mini)
@@ -96,22 +96,6 @@ struct OpenAIStatusCard: View {
         let date = snapshot.pageUpdatedAt ?? snapshot.fetchedAt
         let stale = status.isStale ? L10n.string("status.stale_suffix", defaultValue: " · stale") : ""
         return L10n.format("status.updated_short", defaultValue: "UPD %@", Format.relativeDate(date)) + stale
-    }
-
-    private func severityBadge(_ severity: OpenAIStatusSeverity, label: String) -> some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(severity.tint)
-                .frame(width: 6, height: 6)
-            Text(label)
-                .font(.sora(9, weight: .semibold))
-                .lineLimit(1)
-        }
-        .foregroundStyle(severity.tint)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 3)
-        .background(severity.tint.opacity(0.12), in: Capsule())
-        .overlay(Capsule().strokeBorder(severity.tint.opacity(0.35), lineWidth: 1))
     }
 
     private func groupRow(_ group: OpenAIStatusGroup) -> some View {

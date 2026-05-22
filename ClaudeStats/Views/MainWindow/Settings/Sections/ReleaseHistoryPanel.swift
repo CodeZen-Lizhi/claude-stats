@@ -16,7 +16,7 @@ struct ReleaseHistoryPanel: View {
                     .padding(.vertical, 18)
             }
         }
-        .background(Color.stxPanel)
+        .appSurface(.plainFill)
         .overlay(alignment: .leading) {
             Rectangle()
                 .fill(Color.stxStroke)
@@ -90,7 +90,7 @@ private struct ReleaseHistoryTimelineItem: View {
                 .frame(width: 9, height: 9)
                 .overlay {
                     Circle()
-                        .strokeBorder(Color.stxPanel, lineWidth: 2)
+                        .strokeBorder(AppSurface.panelFill, lineWidth: 2)
                 }
                 .frame(width: 13, height: 13)
                 .padding(.top, 3)

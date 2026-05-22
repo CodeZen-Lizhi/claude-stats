@@ -88,12 +88,15 @@ private struct SystemMonitorRefreshRatePicker: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
-                .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(selection == rate ? Color.stxAccent : Color.stxStroke,
-                                      lineWidth: selection == rate ? 1.5 : 1)
-                }
+                .appSurface(
+                    AppSurfaceChrome(
+                        stroke: selection == rate ? Color.stxAccent : AppSurface.stroke,
+                        cornerRadius: 10,
+                        strokeWidth: selection == rate ? 1.5 : 1,
+                        maxWidth: nil
+                    ),
+                    padding: nil
+                )
             }
             .buttonStyle(.plain)
         }

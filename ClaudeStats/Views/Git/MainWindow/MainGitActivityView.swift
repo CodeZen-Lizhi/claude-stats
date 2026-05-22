@@ -284,7 +284,7 @@ private struct GitRepoSelectionRow: View {
     }
 
     private var rowBackground: Color {
-        if isSelected { return Color.stxPanel }
+        if isSelected { return AppSurface.panelFill }
         if hovering { return Color.primary.opacity(0.06) }
         return .clear
     }
@@ -449,10 +449,7 @@ private struct GitCorrelationPanel: View {
                 GitCommitOverviewChart(correlation: correlation)
             }
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.stxStroke, lineWidth: 1))
+        .appSurface(.mainWindowCard)
     }
 }
 
@@ -945,9 +942,7 @@ private struct GitInlineEmptyState: View {
 
 private extension View {
     func gitMainCard() -> some View {
-        self
-            .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.stxStroke, lineWidth: 1))
+        appSurface(.compactCard(radius: 10, maxWidth: nil))
     }
 }
 

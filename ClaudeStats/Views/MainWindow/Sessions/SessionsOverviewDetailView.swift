@@ -212,11 +212,7 @@ struct SessionsOverviewDetailView: View {
                             .padding(.vertical, 8)
                     }
                 }
-                .background(Color.stxPanel, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(Color.stxStroke, lineWidth: 1)
-                }
+                .appSurface(.compactCard(radius: 10))
             }
         }
     }
