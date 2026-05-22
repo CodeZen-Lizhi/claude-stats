@@ -3,7 +3,7 @@ import Darwin
 
 /// The main window's detail area. Sits flush with the window's top, right,
 /// and bottom edges; only its left side (where it meets the vibrancy sidebar)
-/// is rounded. The opaque `Color.stxBackground` fill against the translucent
+/// is rounded. The opaque `AppSurface.detailFill` fill against the translucent
 /// sidebar gives it the "above the sidebar in z-index" reading — the sidebar
 /// vibrancy peeks through the rounded corner cutouts on the left.
 struct DetailPanel<Content: View>: View {
@@ -34,7 +34,7 @@ struct DetailPanel<Content: View>: View {
 
             content()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.stxBackground, in: shape)
+                .background(AppSurface.detailFill, in: shape)
                 .clipShape(shape)
                 .overlay {
                     if roundedLeading && boundaryFalloffEnabled {

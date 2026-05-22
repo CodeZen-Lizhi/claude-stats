@@ -6,13 +6,27 @@ enum AppSurface {
         dark: (0.05, 0.05, 0.055)
     )
 
-    static let panelFill = Color(
-        red: 253.0 / 255.0,
-        green: 253.0 / 255.0,
-        blue: 254.0 / 255.0
+    static let detailFill = Color.stxDynamic(
+        light: (253.0 / 255.0, 253.0 / 255.0, 254.0 / 255.0),
+        dark: (0.05, 0.05, 0.055)
+    )
+
+    static let panelFill = Color.stxDynamic(
+        light: (242.0 / 255.0, 243.0 / 255.0, 244.0 / 255.0),
+        dark: (0.085, 0.085, 0.092)
     )
 
     static let stroke = Color.primary.opacity(0.14)
+
+    static let pillFill = Color.stxDynamic(
+        light: (225.0 / 255.0, 225.0 / 255.0, 227.0 / 255.0),
+        dark: (0.17, 0.17, 0.185)
+    )
+
+    static let pillForeground = Color.stxDynamic(
+        light: (0.40, 0.40, 0.42),
+        dark: (0.78, 0.78, 0.82)
+    )
 }
 
 struct AppSurfaceChrome {
