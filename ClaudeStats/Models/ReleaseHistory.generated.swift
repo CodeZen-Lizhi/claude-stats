@@ -3,6 +3,18 @@
 extension ReleaseHistoryCatalog {
     static let generatedEntries: [ReleaseHistoryEntry] = [
         ReleaseHistoryEntry(
+            version: "1.7.0",
+            date: "May 23, 2026",
+            headline: "新增DashboardModelTable组件，实现多提供商模型使用数据表格展示",
+            changes: [
+                "新增DashboardModelKey和DashboardModelUsage类型，支持多模型身份标识与使用统计",
+                "重构DashboardView，支持切换显示Claude/OpenAI状态卡片，统一模型展示逻辑",
+                "重构DashboardViewModel，实现全提供商会话聚合统计，新增多模型维度分析",
+                "新增单元测试验证仪表盘聚合逻辑",
+                "更新文档与文本适配多提供商场景",
+            ]
+        ),
+        ReleaseHistoryEntry(
             version: "1.6.9",
             date: "May 22, 2026",
             headline: "新增了文档站点使用的社交预览图片资源",
