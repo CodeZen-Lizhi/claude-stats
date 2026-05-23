@@ -24,10 +24,13 @@ struct DashboardView: View {
 
     private var vm: DashboardViewModel { env.dashboard }
 
-    private struct ReloadKey: Equatable {
+    private struct DashboardReloadKey: Equatable {
         let period: StatsPeriod
         let lastRefresh: Date?
         let token: UInt64
+    }
+
+    private struct GitHubReloadKey: Equatable {
         let githubEnabled: Bool
         let githubLogin: String
     }
@@ -52,7 +55,6 @@ struct DashboardView: View {
 
     var body: some View {
         let heatmapRange = vm.heatmapInterval()
-        let trendSeriesID = dashboardTrendSeriesID
 
         AppScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -61,7 +63,7 @@ struct DashboardView: View {
                 Group {
                     switch vm.section {
                     case .overview: overviewBody(heatmapRange: heatmapRange)
-                    case .models: modelsBody(trendSeriesID: trendSeriesID)
+                    case .models: modelsBody()
                     }
                 }
                 Spacer(minLength: 0)
@@ -84,8 +86,10 @@ struct DashboardView: View {
         .onChange(of: env.preferences.selectedProvider) { _, new in syncStatusProviderFromSelection(new) }
         .onChange(of: vm.heatmapCells) { _, _ in refreshDerived() }
         .onChange(of: env.github.cells) { _, _ in refreshDerived() }
-        .task(id: reloadKey) {
+        .task(id: dashboardReloadKey) {
             await vm.reload(sessions: env.store.sessions)
+        }
+        .task(id: githubReloadKey) {
             await env.github.reload(
                 expectedLogin: env.preferences.githubLogin,
                 enabled: env.preferences.githubEnabled
@@ -110,11 +114,16 @@ struct DashboardView: View {
         )
     }
 
-    private var reloadKey: ReloadKey {
-        ReloadKey(
+    private var dashboardReloadKey: DashboardReloadKey {
+        DashboardReloadKey(
             period: vm.period,
             lastRefresh: env.store.lastRefreshedAt,
-            token: vm.reloadToken,
+            token: vm.reloadToken
+        )
+    }
+
+    private var githubReloadKey: GitHubReloadKey {
+        GitHubReloadKey(
             githubEnabled: env.preferences.githubEnabled,
             githubLogin: env.preferences.githubLogin
         )
@@ -207,32 +216,26 @@ struct DashboardView: View {
         }
     }
 
+    @ViewBuilder
     private var statusCard: some View {
-        ZStack(alignment: .bottomTrailing) {
-            switch statusProvider {
-            case .claude:
-                ClaudeStatusCard(status: env.claudeStatus)
-            case .codex:
-                OpenAIStatusCard(status: env.openAIStatus)
-            }
-            Button {
-                statusProviderRaw = statusProvider.alternate.rawValue
-            } label: {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(size: 11, weight: .semibold))
-                    .frame(width: 22, height: 22)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(Color.stxMuted)
-            .background(Color.stxBackground.opacity(0.94), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .stroke(Color.stxStroke.opacity(0.8), lineWidth: 0.5)
-            }
-            .padding(.trailing, 10)
-            .padding(.bottom, 10)
-            .help(statusProvider.switchHelp)
+        switch statusProvider {
+        case .claude:
+            ClaudeStatusCard(
+                status: env.claudeStatus,
+                onSwitchStatusProvider: switchStatusProvider,
+                switchStatusHelp: statusProvider.switchHelp
+            )
+        case .codex:
+            OpenAIStatusCard(
+                status: env.openAIStatus,
+                onSwitchStatusProvider: switchStatusProvider,
+                switchStatusHelp: statusProvider.switchHelp
+            )
         }
+    }
+
+    private func switchStatusProvider() {
+        statusProviderRaw = statusProvider.alternate.rawValue
     }
 
     // MARK: - Heatmap row (Claude + GitHub side-by-side, no card chrome)
@@ -339,11 +342,11 @@ struct DashboardView: View {
 
     // MARK: - Models body
 
-    private func modelsBody(trendSeriesID: String) -> some View {
+    private func modelsBody() -> some View {
         VStack(alignment: .leading, spacing: 12) {
             ModelsTrendChart(
                 series: vm.modelTrend,
-                seriesID: trendSeriesID,
+                seriesID: vm.modelTrend.dataRevisionID,
                 includeCacheInTotals: env.preferences.includeCacheInTokens,
                 displayName: modelDisplayName
             )
@@ -353,13 +356,6 @@ struct DashboardView: View {
                 displayName: dashboardModelDisplayName
             )
         }
-    }
-
-    private var dashboardTrendSeriesID: String {
-        let refreshID = env.store.lastRefreshedAt
-            .map { String(Int(($0.timeIntervalSinceReferenceDate * 1_000).rounded())) }
-            ?? "never"
-        return "all-providers|\(vm.period.rawValue)|\(refreshID)|\(vm.reloadToken)"
     }
 
     /// Pretty label for a provider-qualified Dashboard model id.

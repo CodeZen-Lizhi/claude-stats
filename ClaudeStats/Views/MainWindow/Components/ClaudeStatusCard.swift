@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ClaudeStatusCard: View {
     let status: ClaudeStatusViewModel
+    var onSwitchStatusProvider: (() -> Void)? = nil
+    var switchStatusHelp: String = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -45,6 +47,15 @@ struct ClaudeStatusCard: View {
             .buttonStyle(.plain)
             .foregroundStyle(Color.stxMuted)
             .help(L10n.string("status.claude.refresh", defaultValue: "Refresh Claude Status"))
+            if let onSwitchStatusProvider {
+                Button(action: onSwitchStatusProvider) {
+                    Image(systemName: "switch.2")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.stxMuted)
+                .help(switchStatusHelp)
+            }
             Link(destination: status.statusPageURL) {
                 Image(systemName: "arrow.up.right.square")
                     .font(.system(size: 11, weight: .semibold))
@@ -62,6 +73,7 @@ struct ClaudeStatusCard: View {
                 ForEach(status.visibleUptimeRows) { row in
                     if let history = row.history {
                         ClaudeStatusUptimeChart(component: row.component, history: history)
+                            .equatable()
                     } else {
                         componentRow(row.component)
                     }
@@ -151,7 +163,7 @@ struct ClaudeStatusCard: View {
     }
 }
 
-private struct ClaudeStatusUptimeChart: View {
+private struct ClaudeStatusUptimeChart: View, Equatable {
     let component: ClaudeStatusComponent
     let history: ClaudeStatusUptimeHistory
 
@@ -180,16 +192,7 @@ private struct ClaudeStatusUptimeChart: View {
                     .lineLimit(1)
             }
 
-            HStack(spacing: 2) {
-                ForEach(days) { day in
-                    StatusUptimeDayBar(
-                        color: day.chartColor(startDate: history.startDate),
-                        tooltip: dayHelp(day)
-                    )
-                }
-            }
-            .frame(height: 34)
-            .accessibilityHidden(true)
+            StatusUptimeStrip(bars: bars)
 
             footer
         }
@@ -200,6 +203,16 @@ private struct ClaudeStatusUptimeChart: View {
                                         component.name,
                                         component.status.displayName,
                                         uptimeText))
+    }
+
+    private var bars: [StatusUptimeBar] {
+        days.map { day in
+            StatusUptimeBar(
+                id: day.id,
+                color: day.chartColor(startDate: history.startDate),
+                tooltip: dayHelp(day)
+            )
+        }
     }
 
     private var footer: some View {
