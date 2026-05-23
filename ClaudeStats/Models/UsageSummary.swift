@@ -30,7 +30,9 @@ struct UsageSummary: Sendable, Hashable {
     /// A session is attributed to the period by its last activity (an
     /// approximation: a session straddling the boundary is counted whole).
     /// The timeline buckets come from the sessions that count, clipped to the
-    /// period's lower bound.
+    /// period's lower bound. Sessions that carry ``SessionStats/billableMessages``
+    /// (Claude transcripts) are deduped across files by message hash — see
+    /// ``BillableMessage``.
     static func make(
         period: StatsPeriod,
         sessions: [Session],
@@ -42,12 +44,11 @@ struct UsageSummary: Sendable, Hashable {
             let when = session.stats?.lastActivity ?? session.lastModified
             return period.contains(when, now: now, calendar: calendar)
         }
-        let allModels = inPeriod.flatMap { $0.stats?.models ?? [] }.merged(pricing: pricing)
+        let (allModels, allTimeline) = dedupedAggregate(sessions: inPeriod, pricing: pricing, calendar: calendar)
         let messageCount = inPeriod.reduce(0) { $0 + ($1.stats?.messageCount ?? 0) }
-        let allTimeline = timelineBuckets(for: inPeriod, calendar: calendar)
+        let filteredTimeline = allTimeline
             .filter { period.contains($0.start, now: now, calendar: calendar) }
-            .mergedByModelBucket()
-        return UsageSummary(period: period, sessionCount: inPeriod.count, models: allModels, messageCount: messageCount, timeline: allTimeline)
+        return UsageSummary(period: period, sessionCount: inPeriod.count, models: allModels, messageCount: messageCount, timeline: filteredTimeline)
     }
 
     /// Build a summary scoped to an explicit `[start, end]` range of calendar
@@ -64,12 +65,87 @@ struct UsageSummary: Sendable, Hashable {
             let when = session.stats?.lastActivity ?? session.lastModified
             return when >= lo && when < hiExclusive
         }
-        let allModels = inRange.flatMap { $0.stats?.models ?? [] }.merged(pricing: pricing)
+        let (allModels, allTimeline) = dedupedAggregate(sessions: inRange, pricing: pricing, calendar: calendar)
         let messageCount = inRange.reduce(0) { $0 + ($1.stats?.messageCount ?? 0) }
-        let allTimeline = timelineBuckets(for: inRange, calendar: calendar)
+        let filteredTimeline = allTimeline
             .filter { $0.start >= lo && $0.start < hiExclusive }
-            .mergedByModelBucket()
-        return UsageSummary(period: .allTime, sessionCount: inRange.count, models: allModels, messageCount: messageCount, timeline: allTimeline)
+        return UsageSummary(period: .allTime, sessionCount: inRange.count, models: allModels, messageCount: messageCount, timeline: filteredTimeline)
+    }
+
+    /// Walk `sessions` and aggregate per-model token totals, cost, and the
+    /// hourly timeline. When a session carries ``SessionStats/billableMessages``
+    /// (a Claude transcript), dedup turns by `(message.id, requestId)` across
+    /// every session in this call — Claude Code's Task tool writes each
+    /// subagent turn into both the parent and child JSONL, and naive summation
+    /// would count it twice. Sessions without billableMessages (e.g. Codex)
+    /// fall through to their pre-aggregated ``SessionStats/models`` and
+    /// ``SessionStats/timeline``.
+    private static func dedupedAggregate(
+        sessions: [Session],
+        pricing _: ModelPricing,
+        calendar: Calendar
+    ) -> (models: [ModelUsage], timeline: [ModelBucket]) {
+        var perModel: [String: (count: Int, usage: TokenUsage, cost: CostEstimate)] = [:]
+        var perModelHourly: [String: [Date: TokenUsage]] = [:]
+        var seen: Set<String> = []
+
+        for session in sessions {
+            guard let stats = session.stats else { continue }
+            if stats.billableMessages.isEmpty {
+                // Legacy / provider-without-hashes path: trust the
+                // already-aggregated per-session totals as-is.
+                for model in stats.models {
+                    var acc = perModel[model.model] ?? (0, .zero, .zero)
+                    acc.count += model.messageCount
+                    acc.usage += model.usage
+                    acc.cost += model.costEstimate
+                    perModel[model.model] = acc
+                }
+                // If the session lost its hourly timeline (older transcript
+                // parsers didn't persist one), synthesize a single bucket per
+                // model anchored at the session's last activity so trend
+                // charts and Usage rows still have something to render.
+                let buckets: [ModelBucket]
+                if !stats.timeline.isEmpty {
+                    buckets = stats.timeline
+                } else {
+                    let activity = stats.lastActivity ?? session.lastModified
+                    let bucketStart = calendar.dateInterval(of: .hour, for: activity)?.start ?? activity
+                    buckets = stats.models.compactMap { model in
+                        guard model.usage.total > 0 else { return nil }
+                        return ModelBucket(model: model.model, start: bucketStart, usage: model.usage)
+                    }
+                }
+                for bucket in buckets {
+                    perModelHourly[bucket.model, default: [:]][bucket.start, default: .zero] += bucket.usage
+                }
+                continue
+            }
+            for bill in stats.billableMessages {
+                if let hash = bill.hash {
+                    if seen.contains(hash) { continue }
+                    seen.insert(hash)
+                }
+                var acc = perModel[bill.model] ?? (0, .zero, .zero)
+                acc.count += 1
+                acc.usage += bill.usage
+                acc.cost += bill.cost
+                perModel[bill.model] = acc
+                if let date = bill.timestamp, bill.usage.total > 0 {
+                    let hour = calendar.dateInterval(of: .hour, for: date)?.start
+                        ?? calendar.startOfDay(for: date)
+                    perModelHourly[bill.model, default: [:]][hour, default: .zero] += bill.usage
+                }
+            }
+        }
+
+        let models = perModel
+            .map { ModelUsage(model: $0.key, messageCount: $0.value.count, usage: $0.value.usage, costEstimate: $0.value.cost) }
+            .sorted { $0.usage.total > $1.usage.total }
+        let timeline = perModelHourly
+            .flatMap { model, byHour in byHour.map { ModelBucket(model: model, start: $0.key, usage: $0.value) } }
+            .sorted { $0.start < $1.start }
+        return (models, timeline)
     }
 
     private static func timelineBuckets(for sessions: [Session], calendar: Calendar) -> [ModelBucket] {

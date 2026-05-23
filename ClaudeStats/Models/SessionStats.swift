@@ -15,6 +15,13 @@ struct SessionStats: Sendable, Hashable {
     /// within a gap threshold collapse into one interval. Used by the AI
     /// activity analysis to overlap against coding-surface and CLI-host time.
     var activityIntervals: [DateInterval] = []
+    /// Per-assistant-message billable units, one entry per turn we counted in
+    /// ``models`` / ``timeline``. Carried so cross-session aggregation in
+    /// ``UsageSummary/make(period:sessions:pricing:now:calendar:)`` can dedup
+    /// the subagent-turn duplication described in ``BillableMessage``.
+    /// Empty when the provider doesn't populate it (e.g. Codex transcripts);
+    /// the aggregator falls back to ``models`` in that case.
+    var billableMessages: [BillableMessage] = []
 
     var totalUsage: TokenUsage { models.reduce(.zero) { $0 + $1.usage } }
     var totalTokens: Int { totalUsage.total }

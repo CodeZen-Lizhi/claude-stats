@@ -181,6 +181,59 @@ struct UsageSummaryTests {
         #expect(summary.trendSeries().isEmpty == false)
     }
 
+    @Test("Subagent turns that appear in both parent and child sessions are deduped by message hash")
+    func dedupesSubagentTurnsByHash() {
+        // Simulate Claude Code's Task tool: the same assistant turn (same
+        // message.id + requestId) shows up in both the parent session's
+        // JSONL and the subagent's. Without dedup, aggregate cost would be
+        // counted twice.
+        let when = cal.date(byAdding: .hour, value: -1, to: .now)!
+        let cost = CostEstimate(standardAPI: 0.50)
+        let sharedTurn = BillableMessage(
+            hash: "msg_subagent:req_abc",
+            model: "model-a",
+            usage: tokens(1_000),
+            cost: cost,
+            timestamp: when
+        )
+        let parentOnly = BillableMessage(
+            hash: "msg_parent:req_xyz",
+            model: "model-a",
+            usage: tokens(500),
+            cost: CostEstimate(standardAPI: 0.25),
+            timestamp: when
+        )
+
+        func sessionWith(_ id: String, _ msgs: [BillableMessage]) -> Session {
+            let modelUsage = ModelUsage(
+                model: "model-a",
+                messageCount: msgs.count,
+                usage: msgs.reduce(.zero) { $0 + $1.usage },
+                costEstimate: msgs.reduce(.zero) { $0 + $1.cost }
+            )
+            let stats = SessionStats(
+                title: id, messageCount: msgs.count,
+                firstActivity: when, lastActivity: when,
+                models: [modelUsage], timeline: [],
+                billableMessages: msgs
+            )
+            return Session(id: id, externalID: id, provider: .claude,
+                           projectDirectoryName: "-p", filePath: "/\(id).jsonl",
+                           cwd: nil, lastModified: when, fileSize: 1, stats: stats)
+        }
+
+        let summary = UsageSummary.make(period: .allTime, sessions: [
+            sessionWith("parent", [parentOnly, sharedTurn]),
+            sessionWith("subagent", [sharedTurn]),
+        ], pricing: TestPricing.table)
+
+        // 1500 = parentOnly(500) + sharedTurn(1000) counted ONCE
+        #expect(summary.totalTokens == 1_500)
+        #expect(abs(summary.totalCost(for: .standardAPI) - 0.75) < 1e-9)
+        // Models row reflects the deduped message count (2, not 3).
+        #expect(summary.models.first?.messageCount == 2)
+    }
+
     @Test("Existing timeline is not double counted by model fallback")
     func existingTimelineIsNotDoubleCounted() {
         let bucketStart = cal.date(byAdding: .hour, value: 9, to: cal.startOfDay(for: .now))!
