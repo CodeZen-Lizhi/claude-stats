@@ -8,40 +8,44 @@ struct StatusUptimeDayBar: View {
 
     private static let height: CGFloat = 34
     private static let hoverScale: CGFloat = 1.18
-    private static let tooltipGap: CGFloat = 12
+    private static let tooltipGap: CGFloat = 24
     private static let hoverAnimation = Animation.timingCurve(0.22, 1.0, 0.36, 1.0, duration: 0.18)
 
-    private static var tooltipOffset: CGFloat {
-        height * (hoverScale - 1) + tooltipGap
+    private static var hoverOutset: CGFloat {
+        height * (hoverScale - 1) / 2
     }
 
     var body: some View {
-        Rectangle()
-            .fill(color)
-            .frame(maxWidth: .infinity)
-            .frame(height: Self.height)
-            .scaleEffect(y: isHovering ? Self.hoverScale : 1, anchor: .center)
-            .contentShape(Rectangle())
-            .overlay(alignment: .top) {
-                if isHovering {
-                    StatusUptimeTooltip(text: tooltip)
-                        .alignmentGuide(.top) { dimensions in
-                            dimensions[.bottom]
-                        }
-                        .offset(y: -Self.tooltipOffset)
-                        .transition(
-                            .opacity
-                                .combined(with: .scale(scale: 0.96, anchor: .bottom))
-                        )
-                        .allowsHitTesting(false)
-                }
+        ZStack {
+            Rectangle()
+                .fill(color)
+                .frame(maxWidth: .infinity)
+                .frame(height: Self.height)
+                .scaleEffect(y: isHovering ? Self.hoverScale : 1, anchor: .center)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: Self.height)
+        .overlay(alignment: .top) {
+            if isHovering {
+                StatusUptimeTooltip(text: tooltip)
+                    .alignmentGuide(.top) { dimensions in
+                        dimensions[.bottom]
+                    }
+                    .offset(y: -(Self.hoverOutset + Self.tooltipGap))
+                    .transition(
+                        .opacity
+                            .combined(with: .scale(scale: 0.96, anchor: .bottom))
+                    )
+                    .allowsHitTesting(false)
             }
-            .zIndex(isHovering ? 1 : 0)
-            .onHover { hovering in
-                withAnimation(Self.hoverAnimation) {
-                    isHovering = hovering
-                }
+        }
+        .contentShape(Rectangle())
+        .zIndex(isHovering ? 1 : 0)
+        .onHover { hovering in
+            withAnimation(Self.hoverAnimation) {
+                isHovering = hovering
             }
+        }
     }
 }
 
