@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// Claude-style overview Dashboard: 8 stat cards (4×2) scoped by an
-/// "All / 30d / 7d" range, then a side-by-side row with the 3-month Claude
+/// Overview Dashboard: 8 all-provider stat cards (4×2) scoped by an
+/// "All / 30d / 7d" range, then a side-by-side row with the 3-month AI
 /// heatmap on the left and the 3-month GitHub contributions heatmap on the
-/// right, followed by the 3-month Claude↔GitHub overlap, and a humorous
+/// right, followed by the 3-month AI/GitHub overlap, and a humorous
 /// comparison footer. The "Models" tab swaps the stat grid for a per-model
 /// breakdown table.
 struct DashboardView: View {
@@ -11,6 +11,7 @@ struct DashboardView: View {
 
     @SceneStorage("dashboard.section") private var sectionRaw: String = DashboardViewModel.Section.overview.rawValue
     @SceneStorage("dashboard.period") private var periodRaw: String = StatsPeriod.last30Days.rawValue
+    @SceneStorage("dashboard.statusProvider") private var statusProviderRaw: String = ""
 
     /// GitHub cells filtered to the current heatmap window, cached so both
     /// `githubHeatmapSection` and `overlapCard` don't independently re-filter
@@ -25,11 +26,28 @@ struct DashboardView: View {
 
     private struct ReloadKey: Equatable {
         let period: StatsPeriod
-        let provider: ProviderKind
         let lastRefresh: Date?
         let token: UInt64
         let githubEnabled: Bool
         let githubLogin: String
+    }
+
+    private enum StatusProvider: String, Equatable {
+        case claude, codex
+
+        var alternate: StatusProvider {
+            switch self {
+            case .claude: .codex
+            case .codex: .claude
+            }
+        }
+
+        var switchHelp: String {
+            switch alternate {
+            case .claude: L10n.string("status.claude.show", defaultValue: "Show Claude Status")
+            case .codex: L10n.string("status.openai.show", defaultValue: "Show OpenAI Status")
+            }
+        }
     }
 
     var body: some View {
@@ -58,15 +76,16 @@ struct DashboardView: View {
         }
         .onAppear {
             syncFromSceneStorage()
+            syncStatusProviderFromSelection(env.preferences.selectedProvider)
             refreshDerived()
         }
         .onChange(of: vm.section) { _, new in sectionRaw = new.rawValue }
         .onChange(of: vm.period) { _, new in periodRaw = new.rawValue }
+        .onChange(of: env.preferences.selectedProvider) { _, new in syncStatusProviderFromSelection(new) }
         .onChange(of: vm.heatmapCells) { _, _ in refreshDerived() }
         .onChange(of: env.github.cells) { _, _ in refreshDerived() }
         .task(id: reloadKey) {
-            let sessions = env.store.sessions(for: env.preferences.selectedProvider)
-            await vm.reload(sessions: sessions)
+            await vm.reload(sessions: env.store.sessions)
             await env.github.reload(
                 expectedLogin: env.preferences.githubLogin,
                 enabled: env.preferences.githubEnabled
@@ -76,11 +95,6 @@ struct DashboardView: View {
             if case let .connected(login, _, _) = env.github.status,
                login != env.preferences.githubLogin {
                 env.preferences.githubLogin = login
-            }
-            if env.preferences.selectedProvider == .claude {
-                await env.claudeStatus.refreshIfNeeded()
-            } else if env.preferences.selectedProvider == .codex {
-                await env.openAIStatus.refreshIfNeeded()
             }
         }
     }
@@ -99,7 +113,6 @@ struct DashboardView: View {
     private var reloadKey: ReloadKey {
         ReloadKey(
             period: vm.period,
-            provider: env.preferences.selectedProvider,
             lastRefresh: env.store.lastRefreshedAt,
             token: vm.reloadToken,
             githubEnabled: env.preferences.githubEnabled,
@@ -115,6 +128,27 @@ struct DashboardView: View {
         }
     }
 
+    private var statusProvider: StatusProvider {
+        StatusProvider(rawValue: statusProviderRaw) ?? defaultStatusProvider
+    }
+
+    private var defaultStatusProvider: StatusProvider {
+        env.preferences.selectedProvider == .codex ? .codex : .claude
+    }
+
+    private func syncStatusProviderFromSelection(_ provider: ProviderKind) {
+        switch provider {
+        case .claude:
+            statusProviderRaw = StatusProvider.claude.rawValue
+        case .codex:
+            statusProviderRaw = StatusProvider.codex.rawValue
+        case .gemini, .kimi, .minimax:
+            if StatusProvider(rawValue: statusProviderRaw) == nil {
+                statusProviderRaw = defaultStatusProvider.rawValue
+            }
+        }
+    }
+
     // MARK: - Header & controls
 
     private var header: some View {
@@ -125,7 +159,7 @@ struct DashboardView: View {
                 .foregroundStyle(Color.stxMuted)
             Text("Coding activity")
                 .font(.sora(24, weight: .semibold))
-            Text("Your Claude sessions, day by day.")
+            Text("Your AI coding sessions, day by day.")
                 .font(.sora(12))
                 .foregroundStyle(Color.stxMuted)
         }
@@ -145,11 +179,7 @@ struct DashboardView: View {
     private func overviewBody(heatmapRange: DateInterval) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             statsGrid
-            if env.preferences.selectedProvider == .claude {
-                ClaudeStatusCard(status: env.claudeStatus)
-            } else if env.preferences.selectedProvider == .codex {
-                OpenAIStatusCard(status: env.openAIStatus)
-            }
+            statusCard
             heatmapsRow(range: heatmapRange)
             overlapSection(range: heatmapRange)
             ComparisonFooter(totalTokens: vm.stats.totalTokens)
@@ -177,20 +207,48 @@ struct DashboardView: View {
         }
     }
 
+    private var statusCard: some View {
+        ZStack(alignment: .bottomTrailing) {
+            switch statusProvider {
+            case .claude:
+                ClaudeStatusCard(status: env.claudeStatus)
+            case .codex:
+                OpenAIStatusCard(status: env.openAIStatus)
+            }
+            Button {
+                statusProviderRaw = statusProvider.alternate.rawValue
+            } label: {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 22, height: 22)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.stxMuted)
+            .background(Color.stxBackground.opacity(0.94), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .stroke(Color.stxStroke.opacity(0.8), lineWidth: 0.5)
+            }
+            .padding(.trailing, 10)
+            .padding(.bottom, 10)
+            .help(statusProvider.switchHelp)
+        }
+    }
+
     // MARK: - Heatmap row (Claude + GitHub side-by-side, no card chrome)
 
     private func heatmapsRow(range: DateInterval) -> some View {
         HStack(alignment: .top, spacing: 32) {
-            claudeHeatmapSection(range: range)
+            aiHeatmapSection(range: range)
             githubHeatmapSection(range: range)
         }
         .padding(.top, 4)
     }
 
-    private func claudeHeatmapSection(range: DateInterval) -> some View {
+    private func aiHeatmapSection(range: DateInterval) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             heatmapHeader(
-                title: L10n.string("dashboard.heatmap.claude_activity", defaultValue: "CLAUDE ACTIVITY"),
+                title: L10n.string("dashboard.heatmap.ai_activity", defaultValue: "AI ACTIVITY"),
                 subtitle: L10n.format("dashboard.heatmap.active_days_last_3_months",
                                       defaultValue: "%@ · last 3 months",
                                       L10n.activeDays(vm.heatmapActiveDays))
@@ -289,10 +347,10 @@ struct DashboardView: View {
                 includeCacheInTotals: env.preferences.includeCacheInTokens,
                 displayName: modelDisplayName
             )
-            ModelTable(
+            DashboardModelTable(
                 models: vm.modelBreakdown,
                 includeCacheInTotals: env.preferences.includeCacheInTokens,
-                displayName: modelDisplayName
+                displayName: dashboardModelDisplayName
             )
         }
     }
@@ -301,12 +359,17 @@ struct DashboardView: View {
         let refreshID = env.store.lastRefreshedAt
             .map { String(Int(($0.timeIntervalSinceReferenceDate * 1_000).rounded())) }
             ?? "never"
-        return "\(env.preferences.selectedProvider.rawValue)|\(vm.period.rawValue)|\(refreshID)|\(vm.reloadToken)"
+        return "all-providers|\(vm.period.rawValue)|\(refreshID)|\(vm.reloadToken)"
     }
 
-    /// Pretty label for a canonical model id, scoped to the active provider.
+    /// Pretty label for a provider-qualified Dashboard model id.
     private func modelDisplayName(_ id: String) -> String {
-        env.store.displayName(forModel: id, provider: env.preferences.selectedProvider)
+        guard let key = DashboardModelKey(id: id) else { return id }
+        return dashboardModelDisplayName(key)
+    }
+
+    private func dashboardModelDisplayName(_ key: DashboardModelKey) -> String {
+        "\(key.provider.shortName) - \(env.store.displayName(forModel: key.model, provider: key.provider))"
     }
 
     // MARK: - GitHub display state
@@ -379,7 +442,7 @@ struct DashboardView: View {
 
     private func overlapBreakdown(_ s: OverlapStats) -> String {
         L10n.format("dashboard.overlap.breakdown",
-                    defaultValue: "%d both · %d Claude · %d GitHub · %d neither",
+                    defaultValue: "%d both · %d AI · %d GitHub · %d neither",
                     s.bothCount,
                     s.localOnlyCount,
                     s.githubOnlyCount,
@@ -396,8 +459,8 @@ struct DashboardView: View {
 
     private func overlapStateLabel(_ state: OverlapStats.DayState) -> String {
         switch state {
-        case .both: L10n.string("dashboard.overlap.state.both", defaultValue: "Both Claude and GitHub activity")
-        case .localOnly: L10n.string("dashboard.overlap.state.local_only", defaultValue: "Claude activity only")
+        case .both: L10n.string("dashboard.overlap.state.both", defaultValue: "Both AI and GitHub activity")
+        case .localOnly: L10n.string("dashboard.overlap.state.local_only", defaultValue: "AI activity only")
         case .githubOnly: L10n.string("dashboard.overlap.state.github_only", defaultValue: "GitHub activity only")
         case .neither: L10n.string("dashboard.overlap.state.neither", defaultValue: "No activity")
         }
@@ -418,12 +481,10 @@ struct DashboardView: View {
         return date.formatted(.dateTime.hour(.defaultDigits(amPM: .abbreviated)))
     }
 
-    /// Pretty display name for the favorite-model stat card. Goes through the
-    /// provider so the format matches the Models tab (`Opus 4.7`, not
-    /// `claude-opus-4-7` or `Opus-4-7`).
-    private func favoriteModelLabel(_ model: String?) -> String {
-        guard let model, !model.isEmpty else { return "—" }
-        return modelDisplayName(model)
+    /// Pretty display name for the favorite-model stat card.
+    private func favoriteModelLabel(_ model: DashboardModelKey?) -> String {
+        guard let model, !model.model.isEmpty else { return "—" }
+        return dashboardModelDisplayName(model)
     }
 }
 
