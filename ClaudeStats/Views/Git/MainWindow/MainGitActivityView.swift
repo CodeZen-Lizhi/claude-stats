@@ -213,7 +213,11 @@ private struct GitRepoSelectionColumn: View {
                 .padding(10)
             }
         }
-        .background(AppSurface.panelFill)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background {
+            Rectangle()
+                .fill(AppSurface.panelFill)
+        }
     }
 
     private var columnHeader: some View {
