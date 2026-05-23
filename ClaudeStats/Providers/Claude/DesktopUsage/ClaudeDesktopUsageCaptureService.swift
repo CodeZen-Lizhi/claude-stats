@@ -8,6 +8,7 @@ protocol ClaudeDesktopUsageCapturing: AnyObject {
 @MainActor
 final class ClaudeDesktopUsageCaptureService: ClaudeDesktopUsageCapturing {
     private let appLocator: any ClaudeDesktopUsageAppLocating
+    private let computerUseReader: any ClaudeDesktopUsageTextReading
     private let accessibilityReader: any ClaudeDesktopUsageTextReading
     private let ocrReader: any ClaudeDesktopUsageTextReading
     private let parser: ClaudeDesktopUsageTextParser
@@ -15,12 +16,14 @@ final class ClaudeDesktopUsageCaptureService: ClaudeDesktopUsageCapturing {
 
     init(
         appLocator: any ClaudeDesktopUsageAppLocating = ClaudeDesktopAppLocator(),
+        computerUseReader: any ClaudeDesktopUsageTextReading = ClaudeDesktopComputerUseReader(),
         accessibilityReader: any ClaudeDesktopUsageTextReading = ClaudeDesktopAccessibilityReader(),
         ocrReader: any ClaudeDesktopUsageTextReading = ClaudeDesktopOCRReader(),
         parser: ClaudeDesktopUsageTextParser = ClaudeDesktopUsageTextParser(),
         cacheWriter: any ClaudeDesktopUsageCacheWriting = ClaudeDesktopUsageCacheWriter()
     ) {
         self.appLocator = appLocator
+        self.computerUseReader = computerUseReader
         self.accessibilityReader = accessibilityReader
         self.ocrReader = ocrReader
         self.parser = parser
@@ -45,21 +48,17 @@ final class ClaudeDesktopUsageCaptureService: ClaudeDesktopUsageCapturing {
         }
 
         let capturedAt = Date()
-        switch await snapshotFromAccessibility(app: app, trigger: trigger, capturedAt: capturedAt) {
-        case .success(let snapshot):
-            return write(snapshot)
-        case .failure(let error) where error == .accessibilityPermissionRequired:
-            return .failed(error)
-        case .failure:
-            break
+        var failures: [ClaudeDesktopUsageCaptureError] = []
+        for reader in [computerUseReader, accessibilityReader, ocrReader] {
+            switch await snapshot(from: reader, app: app, trigger: trigger, capturedAt: capturedAt) {
+            case .success(let snapshot):
+                return write(snapshot)
+            case .failure(let error):
+                failures.append(error)
+            }
         }
 
-        switch await snapshotFromOCR(app: app, trigger: trigger, capturedAt: capturedAt) {
-        case .success(let snapshot):
-            return write(snapshot)
-        case .failure(let error):
-            return .failed(error)
-        }
+        return .failed(preferredFailure(from: failures))
     }
 
     private func shouldSkipNonStealingCapture(app: ClaudeDesktopAppState, trigger: ClaudeDesktopUsageCaptureTrigger) -> Bool {
@@ -73,13 +72,14 @@ final class ClaudeDesktopUsageCaptureService: ClaudeDesktopUsageCapturing {
         }
     }
 
-    private func snapshotFromAccessibility(
+    private func snapshot(
+        from reader: any ClaudeDesktopUsageTextReading,
         app: ClaudeDesktopAppState,
         trigger: ClaudeDesktopUsageCaptureTrigger,
         capturedAt: Date
     ) async -> Result<UsageLimitSnapshot, ClaudeDesktopUsageCaptureError> {
         do {
-            let text = try await accessibilityReader.readUsageText(app: app, trigger: trigger)
+            let text = try await reader.readUsageText(app: app, trigger: trigger)
             guard let snapshot = parser.snapshot(from: text, capturedAt: capturedAt) else {
                 return .failure(.parseFailed)
             }
@@ -91,22 +91,18 @@ final class ClaudeDesktopUsageCaptureService: ClaudeDesktopUsageCapturing {
         }
     }
 
-    private func snapshotFromOCR(
-        app: ClaudeDesktopAppState,
-        trigger: ClaudeDesktopUsageCaptureTrigger,
-        capturedAt: Date
-    ) async -> Result<UsageLimitSnapshot, ClaudeDesktopUsageCaptureError> {
-        do {
-            let text = try await ocrReader.readUsageText(app: app, trigger: trigger)
-            guard let snapshot = parser.snapshot(from: text, capturedAt: capturedAt) else {
-                return .failure(.parseFailed)
+    private func preferredFailure(from failures: [ClaudeDesktopUsageCaptureError]) -> ClaudeDesktopUsageCaptureError {
+        for permissionFailure in [ClaudeDesktopUsageCaptureError.accessibilityPermissionRequired, .screenRecordingPermissionRequired] {
+            if failures.contains(permissionFailure) {
+                return permissionFailure
             }
-            return .success(snapshot)
-        } catch let error as ClaudeDesktopUsageCaptureError {
-            return .failure(error)
-        } catch {
-            return .failure(.captureFailed(error.localizedDescription))
         }
+
+        if failures.contains(.parseFailed) {
+            return .parseFailed
+        }
+
+        return failures.last ?? .noUsageText
     }
 
     private func write(_ snapshot: UsageLimitSnapshot) -> ClaudeDesktopUsageCaptureOutcome {

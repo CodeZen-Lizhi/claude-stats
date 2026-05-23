@@ -2,10 +2,9 @@ import Foundation
 
 struct ClaudeDesktopUsageTextParser: Sendable {
     func snapshot(from text: String, capturedAt: Date = .now) -> UsageLimitSnapshot? {
-        let windows = [
-            usageWindow(id: "five_hour", label: "5h", minutes: 300, markers: Self.fiveHourMarkers, in: text, capturedAt: capturedAt),
-            usageWindow(id: "seven_day", label: "7d", minutes: 10_080, markers: Self.sevenDayMarkers, in: text, capturedAt: capturedAt),
-        ].compactMap { $0 }
+        let windows = Self.windowDefinitions.compactMap { definition in
+            usageWindow(definition: definition, in: text, capturedAt: capturedAt)
+        }
 
         guard !windows.isEmpty else { return nil }
         return UsageLimitSnapshot(
@@ -20,36 +19,34 @@ struct ClaudeDesktopUsageTextParser: Sendable {
     }
 
     private func usageWindow(
-        id: String,
-        label: String,
-        minutes: Int,
-        markers: [String],
+        definition: UsageWindowDefinition,
         in text: String,
         capturedAt: Date
     ) -> UsageLimitWindow? {
-        guard let segment = segment(for: markers, in: text) else { return nil }
+        guard let segment = segment(for: definition, in: text) else { return nil }
         guard let usedPercent = usedPercent(in: segment) else { return nil }
         return UsageLimitWindow(
-            id: id,
-            label: label,
+            id: definition.id,
+            label: definition.label,
             usedPercent: min(100, max(0, usedPercent)),
             resetAt: resetDate(in: segment, capturedAt: capturedAt),
-            windowMinutes: minutes
+            windowMinutes: definition.minutes
         )
     }
 
-    private func segment(for markers: [String], in text: String) -> String? {
+    private func segment(for definition: UsageWindowDefinition, in text: String) -> String? {
         let prepared = text
             .replacingOccurrences(of: "\u{ff05}", with: "%")
             .replacingOccurrences(of: "\u{00a0}", with: " ")
         let lowercase = prepared.lowercased()
 
-        guard let markerRange = markers.compactMap({ lowercase.range(of: $0, options: .regularExpression) }).min(by: { $0.lowerBound < $1.lowerBound }) else {
+        guard let markerRange = definition.markers.compactMap({ lowercase.range(of: $0, options: .regularExpression) }).min(by: { $0.lowerBound < $1.lowerBound }) else {
             return nil
         }
 
-        let otherMarkers = (Self.fiveHourMarkers + Self.sevenDayMarkers)
-            .filter { !markers.contains($0) }
+        let otherMarkers = Self.windowDefinitions
+            .filter { $0.id != definition.id }
+            .flatMap(\.markers)
         let rest = lowercase[markerRange.upperBound...]
         let nextMarker = otherMarkers
             .compactMap { rest.range(of: $0, options: .regularExpression)?.lowerBound }
@@ -79,7 +76,16 @@ struct ClaudeDesktopUsageTextParser: Sendable {
             return 100 - remaining
         }
 
-        return nil
+        return bareUsedPercent(in: text)
+    }
+
+    private func bareUsedPercent(in text: String) -> Double? {
+        firstNumber(
+            in: text,
+            patterns: [
+                #"(?i)(\d+(?:\.\d+)?)\s*%"#,
+            ]
+        )
     }
 
     private func resetDate(in text: String, capturedAt: Date) -> Date? {
@@ -132,25 +138,61 @@ struct ClaudeDesktopUsageTextParser: Sendable {
         return nil
     }
 
-    private static let fiveHourMarkers = [
-        #"(?i)\b5\s*h\b"#,
-        #"(?i)\b5\s*hour"#,
-        #"5\s*小时"#,
-        #"5\s*小時"#,
-        #"五\s*小时"#,
-        #"五\s*小時"#,
+    private static let windowDefinitions = [
+        UsageWindowDefinition(
+            id: "five_hour",
+            label: "5h",
+            minutes: 300,
+            markers: [
+                #"(?i)\b5\s*h\b"#,
+                #"(?i)\b5\s*(?:-|–|—)?\s*hours?\b"#,
+                #"5\s*小时"#,
+                #"5\s*小時"#,
+                #"五\s*小时"#,
+                #"五\s*小時"#,
+            ]
+        ),
+        UsageWindowDefinition(
+            id: "seven_day",
+            label: "7d",
+            minutes: 10_080,
+            markers: [
+                #"(?i)\bweekly\b\s*(?:·|-|–|—)\s*all\s+models\b"#,
+                #"(?i)\b7\s*d\b"#,
+                #"(?i)\b7\s*days?\b"#,
+                #"(?i)\bweekly\b(?!\s*(?:·|-|–|—)\s*(?:all\s+models|claude\s+design))"#,
+                #"(?i)\bweek\b"#,
+                #"7\s*天"#,
+                #"七\s*天"#,
+                #"每周"#,
+                #"每週"#,
+                #"周"#,
+                #"週"#,
+            ]
+        ),
+        UsageWindowDefinition(
+            id: "weekly_claude_design",
+            label: "Claude Design",
+            minutes: 10_080,
+            markers: [
+                #"(?i)\bweekly\b\s*(?:·|-|–|—)\s*claude\s+design\b"#,
+                #"(?i)\bclaude\s+design\b"#,
+            ]
+        ),
+        UsageWindowDefinition(
+            id: "sonnet_only",
+            label: "Sonnet",
+            minutes: 10_080,
+            markers: [
+                #"(?i)\bsonnet\s+only\b"#,
+            ]
+        ),
     ]
+}
 
-    private static let sevenDayMarkers = [
-        #"(?i)\b7\s*d\b"#,
-        #"(?i)\b7\s*day"#,
-        #"(?i)\bweekly\b"#,
-        #"(?i)\bweek\b"#,
-        #"7\s*天"#,
-        #"七\s*天"#,
-        #"每周"#,
-        #"每週"#,
-        #"周"#,
-        #"週"#,
-    ]
+private struct UsageWindowDefinition: Sendable {
+    let id: String
+    let label: String
+    let minutes: Int
+    let markers: [String]
 }

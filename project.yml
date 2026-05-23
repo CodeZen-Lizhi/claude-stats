@@ -339,6 +339,7 @@ targets:
         buildPhase: resources
     dependencies:
       - package: Sparkle
+      - target: OpenComputerUseKit
       - target: RockxyBackendEmbed
       - target: RockxyHelperTool
         link: false
@@ -480,6 +481,51 @@ targets:
           OTHER_CODE_SIGN_FLAGS: "--timestamp"
           PROVISIONING_PROFILE: "$(CLAUDE_STATS_PROVISIONING_PROFILE)"
           PROVISIONING_PROFILE_SPECIFIER: "$(CLAUDE_STATS_PROVISIONING_PROFILE_SPECIFIER)"
+
+  OpenComputerUseKit:
+    type: framework
+    platform: macOS
+    sources:
+      - path: ThirdParty/OpenComputerUseKit/Sources/OpenComputerUseKit
+        excludes:
+          - MCPServer.swift
+    dependencies:
+      - sdk: AppKit.framework
+      - sdk: ApplicationServices.framework
+      - sdk: Carbon.framework
+      - sdk: CoreGraphics.framework
+      - sdk: CoreServices.framework
+      - sdk: ImageIO.framework
+      - sdk: QuartzCore.framework
+      - sdk: ScreenCaptureKit.framework
+      - sdk: libsqlite3.tbd
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.claudestats.OpenComputerUseKit
+        PRODUCT_NAME: OpenComputerUseKit
+        PRODUCT_MODULE_NAME: OpenComputerUseKit
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: minimal
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks @loader_path/Frameworks @loader_path/../Frameworks"
+      configs:
+        Debug:
+          CODE_SIGN_IDENTITY: "-"
+          CODE_SIGN_STYLE: Automatic
+        DebugCloudKit:
+          CODE_SIGN_IDENTITY: Apple Development
+          CODE_SIGN_STYLE: Automatic
+          DEVELOPMENT_TEAM: 24XGLNT76L
+        Release:
+          CODE_SIGN_IDENTITY: "-"
+          CODE_SIGN_STYLE: Automatic
+        ReleaseSigned:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "$(SIGN_IDENTITY)"
+          DEVELOPMENT_TEAM: "$(APPLE_TEAM_ID)"
+          ENABLE_HARDENED_RUNTIME: YES
+          OTHER_CODE_SIGN_FLAGS: "--timestamp"
+
   ClaudeStatsTests:
     type: bundle.unit-test
     platform: macOS

@@ -4,11 +4,17 @@ import Vision
 
 @MainActor
 final class ClaudeDesktopOCRReader: ClaudeDesktopUsageTextReading {
+    private let permissionChecker: any ClaudeDesktopScreenRecordingPermissionChecking
+
+    init(permissionChecker: any ClaudeDesktopScreenRecordingPermissionChecking = SystemClaudeDesktopScreenRecordingPermissionChecker()) {
+        self.permissionChecker = permissionChecker
+    }
+
     func readUsageText(app: ClaudeDesktopAppState, trigger: ClaudeDesktopUsageCaptureTrigger) async throws -> String {
         guard app.isRunning else {
             throw ClaudeDesktopUsageCaptureError.appNotRunning
         }
-        guard hasScreenCaptureAccess(prompt: trigger.promptsForPermissions) else {
+        guard permissionChecker.hasAccess(prompt: trigger.promptsForPermissions) else {
             throw ClaudeDesktopUsageCaptureError.screenRecordingPermissionRequired
         }
 
@@ -24,14 +30,6 @@ final class ClaudeDesktopOCRReader: ClaudeDesktopUsageTextReading {
         } catch {
             throw ClaudeDesktopUsageCaptureError.captureFailed(error.localizedDescription)
         }
-    }
-
-    private func hasScreenCaptureAccess(prompt: Bool) -> Bool {
-        if CGPreflightScreenCaptureAccess() {
-            return true
-        }
-        guard prompt else { return false }
-        return CGRequestScreenCaptureAccess()
     }
 
     private func captureClaudeWindow() async throws -> CGImage {

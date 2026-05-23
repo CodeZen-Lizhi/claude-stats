@@ -59,10 +59,9 @@ struct ClaudeUsageLimitLoader: Sendable {
         let object = try JSONSerialization.jsonObject(with: data)
         guard let dictionary = object as? [String: Any] else { return nil }
         let payload = (dictionary["rate_limits"] as? [String: Any]) ?? dictionary
-        let windows = [
-            usageWindow(id: "five_hour", label: "5h", minutes: 300, in: payload),
-            usageWindow(id: "seven_day", label: "7d", minutes: 10_080, in: payload),
-        ].compactMap { $0 }
+        let windows = Self.windowDefinitions.compactMap { definition in
+            usageWindow(definition: definition, in: payload)
+        }
         guard !windows.isEmpty else { return nil }
         return UsageLimitSnapshot(
             provider: .claude,
@@ -75,18 +74,18 @@ struct ClaudeUsageLimitLoader: Sendable {
         )
     }
 
-    private func usageWindow(id: String, label: String, minutes: Int, in payload: [String: Any]) -> UsageLimitWindow? {
-        guard let raw = payload[id] as? [String: Any],
+    private func usageWindow(definition: UsageWindowDefinition, in payload: [String: Any]) -> UsageLimitWindow? {
+        guard let raw = payload[definition.id] as? [String: Any],
               let usedPercent = UsageLimitDecoding.number(from: raw["used_percentage"])
                 ?? UsageLimitDecoding.number(from: raw["utilization"]) else {
             return nil
         }
         return UsageLimitWindow(
-            id: id,
-            label: label,
+            id: definition.id,
+            label: definition.label,
             usedPercent: usedPercent,
             resetAt: UsageLimitDecoding.date(from: raw["resets_at"]),
-            windowMinutes: minutes
+            windowMinutes: definition.minutes
         )
     }
 
@@ -105,4 +104,17 @@ struct ClaudeUsageLimitLoader: Sendable {
             "Claude usage cache"
         }
     }
+
+    private static let windowDefinitions = [
+        UsageWindowDefinition(id: "five_hour", label: "5h", minutes: 300),
+        UsageWindowDefinition(id: "seven_day", label: "7d", minutes: 10_080),
+        UsageWindowDefinition(id: "weekly_claude_design", label: "Claude Design", minutes: 10_080),
+        UsageWindowDefinition(id: "sonnet_only", label: "Sonnet", minutes: 10_080),
+    ]
+}
+
+private struct UsageWindowDefinition: Sendable {
+    let id: String
+    let label: String
+    let minutes: Int
 }

@@ -80,12 +80,14 @@ struct UsageLimitStoreTests {
 
         await store.captureClaudeDesktopUsage(trigger: .manual)
         #expect(store.claudeDesktopPermissionIssue == .accessibility)
+        #expect(store.claudeDesktopAccessibilityRecheckPending == true)
         #expect(store.actionMessage(for: .claude) == ClaudeDesktopUsageCaptureError.accessibilityPermissionRequired.localizedDescription)
 
         capture.result = .captured(Self.snapshot(provider: .claude, used: 12))
         await store.captureClaudeDesktopUsage(trigger: .visibleAutomatic)
 
         #expect(store.claudeDesktopPermissionIssue == nil)
+        #expect(store.claudeDesktopAccessibilityRecheckPending == false)
         #expect(store.actionMessage(for: .claude) == nil)
     }
 
@@ -109,6 +111,25 @@ struct UsageLimitStoreTests {
     }
 
     @MainActor
+    @Test("Post-settings screen recording recheck retries Claude Desktop capture after access is granted")
+    func postSettingsScreenRecordingRecheckRetriesCaptureAfterAccess() async {
+        let capture = FakeClaudeDesktopUsageCapture(result: .captured(Self.snapshot(provider: .claude, used: 19)))
+        let permission = FakeScreenRecordingPermissionChecker(results: [false, true])
+        let store = UsageLimitStore(
+            registry: ProviderRegistry(providers: []),
+            claudeDesktopCaptureService: capture,
+            claudeDesktopScreenRecordingPermissionChecker: permission
+        )
+
+        store.beginClaudeDesktopScreenRecordingPermissionRecheck()
+        await store.runPendingClaudeDesktopScreenRecordingPermissionRecheck(maxAttempts: 2, intervalNanoseconds: 0)
+
+        #expect(store.claudeDesktopScreenRecordingRecheckPending == false)
+        #expect(capture.triggers == [.permissionRecheck])
+        #expect(store.claudeDesktopPermissionIssue == nil)
+    }
+
+    @MainActor
     @Test("Claude Desktop capture maps only permission errors to permission issues")
     func claudeDesktopCaptureMapsOnlyPermissionErrorsToPermissionIssues() async {
         let capture = FakeClaudeDesktopUsageCapture(result: .failed(.noUsageText))
@@ -123,6 +144,7 @@ struct UsageLimitStoreTests {
         capture.result = .failed(.screenRecordingPermissionRequired)
         await store.captureClaudeDesktopUsage(trigger: .manual)
         #expect(store.claudeDesktopPermissionIssue == .screenRecording)
+        #expect(store.claudeDesktopScreenRecordingRecheckPending == true)
     }
 
     private static func report(provider: ProviderKind = .codex, used: Double) -> UsageLimitReport {
@@ -191,6 +213,20 @@ private final class FakeAccessibilityPermissionChecker: ClaudeDesktopAccessibili
     }
 
     func isTrusted(prompt: Bool) -> Bool {
+        guard !results.isEmpty else { return false }
+        return results.removeFirst()
+    }
+}
+
+@MainActor
+private final class FakeScreenRecordingPermissionChecker: ClaudeDesktopScreenRecordingPermissionChecking {
+    private var results: [Bool]
+
+    init(results: [Bool]) {
+        self.results = results
+    }
+
+    func hasAccess(prompt: Bool) -> Bool {
         guard !results.isEmpty else { return false }
         return results.removeFirst()
     }

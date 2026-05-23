@@ -5,15 +5,44 @@ import Testing
 @Suite("Claude Desktop usage capture service")
 @MainActor
 struct ClaudeDesktopUsageCaptureServiceTests {
+    @Test("Computer Use success writes snapshot before other readers")
+    func computerUseSuccessWritesSnapshotBeforeOtherReaders() async throws {
+        let locator = FakeClaudeDesktopLocator()
+        locator.state = Self.runningState(isVisible: true, isFrontmost: true)
+        let computerUse = FakeClaudeDesktopTextReader(text: "App=com.anthropic.claudefordesktop\n12 button Usage limits\n5h\n6% used")
+        let accessibility = FakeClaudeDesktopTextReader(text: "unused")
+        let writer = FakeClaudeDesktopUsageCacheWriter()
+        let service = ClaudeDesktopUsageCaptureService(
+            appLocator: locator,
+            computerUseReader: computerUse,
+            accessibilityReader: accessibility,
+            ocrReader: FakeClaudeDesktopTextReader(text: "unused"),
+            cacheWriter: writer
+        )
+
+        let outcome = await service.capture(trigger: .manual)
+
+        guard case .captured(let snapshot) = outcome else {
+            Issue.record("Expected captured outcome, got \(String(describing: outcome))")
+            return
+        }
+        #expect(computerUse.callCount == 1)
+        #expect(accessibility.callCount == 0)
+        #expect(snapshot.windows.first?.usedPercent == 6)
+        #expect(writer.snapshots.count == 1)
+    }
+
     @Test("Accessibility success writes snapshot")
     func accessibilitySuccessWritesSnapshot() async throws {
         let locator = FakeClaudeDesktopLocator()
         locator.state = Self.runningState(isVisible: true, isFrontmost: false)
+        let computerUse = FakeClaudeDesktopTextReader(error: ClaudeDesktopUsageCaptureError.noUsageText)
         let accessibility = FakeClaudeDesktopTextReader(text: "5h\n94% left\n6% used\n7d\n3% used")
         let ocr = FakeClaudeDesktopTextReader(text: "unused")
         let writer = FakeClaudeDesktopUsageCacheWriter()
         let service = ClaudeDesktopUsageCaptureService(
             appLocator: locator,
+            computerUseReader: computerUse,
             accessibilityReader: accessibility,
             ocrReader: ocr,
             cacheWriter: writer
@@ -26,42 +55,24 @@ struct ClaudeDesktopUsageCaptureServiceTests {
             return
         }
         #expect(locator.activateCallCount == 1)
+        #expect(computerUse.callCount == 1)
         #expect(accessibility.callCount == 1)
         #expect(ocr.callCount == 0)
         #expect(snapshot.windows.first?.usedPercent == 6)
         #expect(writer.snapshots.count == 1)
     }
 
-    @Test("Accessibility permission stops before OCR")
-    func accessibilityPermissionStopsBeforeOCR() async {
+    @Test("Accessibility permission still allows OCR fallback")
+    func accessibilityPermissionStillAllowsOCRFallback() async {
         let locator = FakeClaudeDesktopLocator()
         locator.state = Self.runningState(isVisible: true, isFrontmost: true)
+        let computerUse = FakeClaudeDesktopTextReader(error: ClaudeDesktopUsageCaptureError.noUsageText)
         let accessibility = FakeClaudeDesktopTextReader(error: ClaudeDesktopUsageCaptureError.accessibilityPermissionRequired)
         let ocr = FakeClaudeDesktopTextReader(text: "5h\n6% used")
         let writer = FakeClaudeDesktopUsageCacheWriter()
         let service = ClaudeDesktopUsageCaptureService(
             appLocator: locator,
-            accessibilityReader: accessibility,
-            ocrReader: ocr,
-            cacheWriter: writer
-        )
-
-        let outcome = await service.capture(trigger: .manual)
-
-        #expect(outcome == .failed(.accessibilityPermissionRequired))
-        #expect(ocr.callCount == 0)
-        #expect(writer.snapshots.isEmpty)
-    }
-
-    @Test("OCR fallback writes snapshot")
-    func ocrFallbackWritesSnapshot() async throws {
-        let locator = FakeClaudeDesktopLocator()
-        locator.state = Self.runningState(isVisible: true, isFrontmost: true)
-        let accessibility = FakeClaudeDesktopTextReader(error: ClaudeDesktopUsageCaptureError.noUsageText)
-        let ocr = FakeClaudeDesktopTextReader(text: "5h\n94% left\n7d\n3% used")
-        let writer = FakeClaudeDesktopUsageCacheWriter()
-        let service = ClaudeDesktopUsageCaptureService(
-            appLocator: locator,
+            computerUseReader: computerUse,
             accessibilityReader: accessibility,
             ocrReader: ocr,
             cacheWriter: writer
@@ -73,6 +84,34 @@ struct ClaudeDesktopUsageCaptureServiceTests {
             Issue.record("Expected captured outcome, got \(String(describing: outcome))")
             return
         }
+        #expect(ocr.callCount == 1)
+        #expect(snapshot.windows.first?.usedPercent == 6)
+        #expect(writer.snapshots.count == 1)
+    }
+
+    @Test("OCR fallback writes snapshot")
+    func ocrFallbackWritesSnapshot() async throws {
+        let locator = FakeClaudeDesktopLocator()
+        locator.state = Self.runningState(isVisible: true, isFrontmost: true)
+        let computerUse = FakeClaudeDesktopTextReader(error: ClaudeDesktopUsageCaptureError.noUsageText)
+        let accessibility = FakeClaudeDesktopTextReader(error: ClaudeDesktopUsageCaptureError.noUsageText)
+        let ocr = FakeClaudeDesktopTextReader(text: "5h\n94% left\n7d\n3% used")
+        let writer = FakeClaudeDesktopUsageCacheWriter()
+        let service = ClaudeDesktopUsageCaptureService(
+            appLocator: locator,
+            computerUseReader: computerUse,
+            accessibilityReader: accessibility,
+            ocrReader: ocr,
+            cacheWriter: writer
+        )
+
+        let outcome = await service.capture(trigger: .manual)
+
+        guard case .captured(let snapshot) = outcome else {
+            Issue.record("Expected captured outcome, got \(String(describing: outcome))")
+            return
+        }
+        #expect(computerUse.callCount == 1)
         #expect(accessibility.callCount == 1)
         #expect(ocr.callCount == 1)
         #expect(snapshot.windows.map(\.usedPercent) == [6, 3])
@@ -87,6 +126,7 @@ struct ClaudeDesktopUsageCaptureServiceTests {
         let writer = FakeClaudeDesktopUsageCacheWriter()
         let service = ClaudeDesktopUsageCaptureService(
             appLocator: locator,
+            computerUseReader: FakeClaudeDesktopTextReader(text: "5h\n6% used"),
             accessibilityReader: accessibility,
             ocrReader: FakeClaudeDesktopTextReader(text: "5h\n6% used"),
             cacheWriter: writer
@@ -107,6 +147,7 @@ struct ClaudeDesktopUsageCaptureServiceTests {
         let writer = FakeClaudeDesktopUsageCacheWriter()
         let service = ClaudeDesktopUsageCaptureService(
             appLocator: locator,
+            computerUseReader: FakeClaudeDesktopTextReader(text: "Projects\nSettings"),
             accessibilityReader: FakeClaudeDesktopTextReader(text: "Projects\nSettings"),
             ocrReader: FakeClaudeDesktopTextReader(text: "Still no quota text"),
             cacheWriter: writer

@@ -9,22 +9,26 @@ final class UsageLimitStore {
     private(set) var actionMessages: [ProviderKind: String] = [:]
     private(set) var claudeDesktopPermissionIssue: ClaudeDesktopUsagePermissionIssue?
     private(set) var claudeDesktopAccessibilityRecheckPending = false
+    private(set) var claudeDesktopScreenRecordingRecheckPending = false
 
     @ObservationIgnored private let registry: ProviderRegistry
     @ObservationIgnored private let claudeBridgeInstaller: any ClaudeUsageLimitBridgeInstalling
     @ObservationIgnored private let claudeDesktopCaptureService: any ClaudeDesktopUsageCapturing
     @ObservationIgnored private let claudeDesktopAccessibilityPermissionChecker: any ClaudeDesktopAccessibilityPermissionChecking
+    @ObservationIgnored private let claudeDesktopScreenRecordingPermissionChecker: any ClaudeDesktopScreenRecordingPermissionChecking
 
     init(
         registry: ProviderRegistry,
         claudeBridgeInstaller: any ClaudeUsageLimitBridgeInstalling = ClaudeUsageLimitBridgeInstaller(),
         claudeDesktopCaptureService: any ClaudeDesktopUsageCapturing = ClaudeDesktopUsageCaptureService(),
-        claudeDesktopAccessibilityPermissionChecker: any ClaudeDesktopAccessibilityPermissionChecking = SystemClaudeDesktopAccessibilityPermissionChecker()
+        claudeDesktopAccessibilityPermissionChecker: any ClaudeDesktopAccessibilityPermissionChecking = SystemClaudeDesktopAccessibilityPermissionChecker(),
+        claudeDesktopScreenRecordingPermissionChecker: any ClaudeDesktopScreenRecordingPermissionChecking = SystemClaudeDesktopScreenRecordingPermissionChecker()
     ) {
         self.registry = registry
         self.claudeBridgeInstaller = claudeBridgeInstaller
         self.claudeDesktopCaptureService = claudeDesktopCaptureService
         self.claudeDesktopAccessibilityPermissionChecker = claudeDesktopAccessibilityPermissionChecker
+        self.claudeDesktopScreenRecordingPermissionChecker = claudeDesktopScreenRecordingPermissionChecker
     }
 
     func report(for provider: ProviderKind) -> UsageLimitReport? {
@@ -87,6 +91,9 @@ final class UsageLimitStore {
             }
         case .failed(let error):
             claudeDesktopPermissionIssue = error.permissionIssue
+            if trigger.shouldShowUserMessage, let permissionIssue = error.permissionIssue {
+                beginClaudeDesktopPermissionRecheck(for: permissionIssue)
+            }
             if trigger.shouldShowUserMessage {
                 actionMessages[.claude] = error.localizedDescription
             }
@@ -95,6 +102,24 @@ final class UsageLimitStore {
 
     func beginClaudeDesktopAccessibilityPermissionRecheck() {
         claudeDesktopAccessibilityRecheckPending = true
+    }
+
+    func beginClaudeDesktopScreenRecordingPermissionRecheck() {
+        claudeDesktopScreenRecordingRecheckPending = true
+    }
+
+    func runPendingClaudeDesktopPermissionRechecks(
+        maxAttempts: Int = 8,
+        intervalNanoseconds: UInt64 = 500_000_000
+    ) async {
+        await runPendingClaudeDesktopAccessibilityPermissionRecheck(
+            maxAttempts: maxAttempts,
+            intervalNanoseconds: intervalNanoseconds
+        )
+        await runPendingClaudeDesktopScreenRecordingPermissionRecheck(
+            maxAttempts: maxAttempts,
+            intervalNanoseconds: intervalNanoseconds
+        )
     }
 
     func runPendingClaudeDesktopAccessibilityPermissionRecheck(
@@ -119,6 +144,26 @@ final class UsageLimitStore {
         ClaudeDesktopAccessibilityPermissionDiagnostics.logNotTrusted(context: "post-settings recheck")
     }
 
+    func runPendingClaudeDesktopScreenRecordingPermissionRecheck(
+        maxAttempts: Int = 8,
+        intervalNanoseconds: UInt64 = 500_000_000
+    ) async {
+        guard claudeDesktopScreenRecordingRecheckPending else { return }
+
+        for attempt in 0..<max(1, maxAttempts) {
+            guard !Task.isCancelled else { return }
+            if claudeDesktopScreenRecordingPermissionChecker.hasAccess(prompt: false) {
+                claudeDesktopScreenRecordingRecheckPending = false
+                clearClaudeDesktopPermissionState()
+                await captureClaudeDesktopUsage(trigger: .permissionRecheck)
+                return
+            }
+
+            guard attempt < maxAttempts - 1 else { break }
+            try? await Task.sleep(nanoseconds: intervalNanoseconds)
+        }
+    }
+
     func claudeSettingsSnippet() -> String {
         claudeBridgeInstaller.settingsSnippet()
     }
@@ -133,8 +178,19 @@ final class UsageLimitStore {
 
     private func clearClaudeDesktopPermissionState() {
         claudeDesktopPermissionIssue = nil
+        claudeDesktopAccessibilityRecheckPending = false
+        claudeDesktopScreenRecordingRecheckPending = false
         if isClaudeDesktopPermissionActionMessage(actionMessages[.claude]) {
             actionMessages[.claude] = nil
+        }
+    }
+
+    private func beginClaudeDesktopPermissionRecheck(for issue: ClaudeDesktopUsagePermissionIssue) {
+        switch issue {
+        case .accessibility:
+            beginClaudeDesktopAccessibilityPermissionRecheck()
+        case .screenRecording:
+            beginClaudeDesktopScreenRecordingPermissionRecheck()
         }
     }
 

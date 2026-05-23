@@ -47,6 +47,40 @@ struct ClaudeUsageLimitLoaderTests {
         #expect(windows[1].usedPercent == 12)
     }
 
+    @Test("Parses extended Claude Desktop UI windows")
+    func parsesExtendedClaudeDesktopUIWindows() throws {
+        let root = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cache = root.appendingPathComponent("claude-rate-limits.json")
+        let now = try Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse("2026-01-10T09:05:00.000Z")
+        try TempDir.write(
+            """
+            {
+              "source": "claude_desktop_ui",
+              "rate_limits": {
+                "five_hour": {"used_percentage": 1},
+                "seven_day": {"used_percentage": 2},
+                "weekly_claude_design": {"used_percentage": 3},
+                "sonnet_only": {"used_percentage": 4}
+              }
+            }
+            """,
+            to: cache
+        )
+        try Self.setModified(cache, now.addingTimeInterval(-60))
+
+        let report = ClaudeUsageLimitLoader(
+            paths: ClaudePaths(configDirectory: root),
+            cacheURLs: [cache]
+        ).report(now: now)
+
+        #expect(report.status == .fresh)
+        let windows = try #require(report.snapshot?.windows)
+        #expect(windows.map(\.id) == ["five_hour", "seven_day", "weekly_claude_design", "sonnet_only"])
+        #expect(windows.map(\.label) == ["5h", "7d", "Claude Design", "Sonnet"])
+        #expect(windows.map(\.usedPercent) == [1, 2, 3, 4])
+    }
+
     @Test("Missing cache reports setup required")
     func missingCacheRequiresSetup() throws {
         let root = try TempDir.make()

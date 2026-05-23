@@ -81,10 +81,10 @@ struct MainUsageView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
-            Task { await env.usageLimits.runPendingClaudeDesktopAccessibilityPermissionRecheck() }
+            Task { await env.usageLimits.runPendingClaudeDesktopPermissionRechecks() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            Task { await env.usageLimits.runPendingClaudeDesktopAccessibilityPermissionRecheck() }
+            Task { await env.usageLimits.runPendingClaudeDesktopPermissionRechecks() }
         }
     }
 
@@ -148,7 +148,7 @@ struct MainUsageView: View {
                 openClaudeAccessibilitySettings()
             } : nil,
             onOpenScreenRecordingSettings: provider == .claude ? {
-                openPrivacySettings(anchor: "Privacy_ScreenCapture")
+                openClaudeScreenRecordingSettings()
             } : nil
         )
         .task(id: provider) {
@@ -240,6 +240,11 @@ struct MainUsageView: View {
     private func openClaudeAccessibilitySettings() {
         env.usageLimits.beginClaudeDesktopAccessibilityPermissionRecheck()
         openPrivacySettings(anchor: "Privacy_Accessibility")
+    }
+
+    private func openClaudeScreenRecordingSettings() {
+        env.usageLimits.beginClaudeDesktopScreenRecordingPermissionRecheck()
+        openPrivacySettings(anchor: "Privacy_ScreenCapture")
     }
 
     private func runVisibleClaudeDesktopCaptureIfNeeded(provider: ProviderKind) async {

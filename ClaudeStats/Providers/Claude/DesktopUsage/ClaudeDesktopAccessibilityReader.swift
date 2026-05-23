@@ -33,7 +33,7 @@ final class ClaudeDesktopAccessibilityReader: ClaudeDesktopUsageTextReading {
             return text
         }
 
-        if pressUsageCandidate(in: appElement) {
+        if trigger.allowsActivation, pressUsageCandidate(in: appElement) {
             try? await Task.sleep(nanoseconds: 350_000_000)
             text = collectText(from: appElement)
             if !text.isEmpty {
