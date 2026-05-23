@@ -1,5 +1,11 @@
 import SwiftUI
 
+enum LeaderboardOverviewContent {
+    case full
+    case controls
+    case summary
+}
+
 struct LeaderboardTitleHeader: View {
     let isLoadingScores: Bool
     let isSyncBusy: Bool
@@ -52,6 +58,8 @@ struct LeaderboardTitleHeader: View {
 }
 
 struct LeaderboardOverviewPanel: View {
+    var content: LeaderboardOverviewContent = .full
+
     @Binding var metric: LeaderboardMetric
     @Binding var period: LeaderboardPeriod
     @Binding var selectedDailyDate: Date
@@ -62,7 +70,18 @@ struct LeaderboardOverviewPanel: View {
     let liveStatusText: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        switch content {
+        case .full:
+            fullPanel
+        case .controls:
+            controls
+        case .summary:
+            summaryStrip
+        }
+    }
+
+    private var fullPanel: some View {
+        VStack(alignment: .leading, spacing: LeaderboardLayout.overviewControlSummarySpacing) {
             controls
             summaryStrip
         }
@@ -81,7 +100,7 @@ struct LeaderboardOverviewPanel: View {
 
     private func controlsRows(compactMetric: Bool, compactPeriod: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .center, spacing: 10) {
+            HStack(alignment: .center, spacing: 8) {
                 LeaderboardMetricChips(metric: $metric, compact: compactMetric)
                 Spacer(minLength: 12)
                 LeaderboardDailyPeriodControl(
@@ -101,7 +120,8 @@ struct LeaderboardOverviewPanel: View {
     private func stackedControls(compactMetric: Bool, compactPeriod: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             LeaderboardMetricChips(metric: $metric, compact: compactMetric)
-            HStack(alignment: .center, spacing: 10) {
+            HStack(alignment: .center, spacing: 8) {
+                Spacer(minLength: 0)
                 LeaderboardDailyPeriodControl(
                     period: $period,
                     selectedDate: $selectedDailyDate
@@ -111,7 +131,6 @@ struct LeaderboardOverviewPanel: View {
                     compact: compactPeriod,
                     values: [.week, .month, .allTime]
                 )
-                Spacer(minLength: 0)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

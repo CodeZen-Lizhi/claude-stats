@@ -7,6 +7,7 @@ enum LeaderboardLayout {
     static let bottomPadding: CGFloat = 22
     static let columnSpacing: CGFloat = 14
     static let headerContentSpacing: CGFloat = 20
+    static let overviewControlSummarySpacing: CGFloat = 12
     static let leftColumnWidth: CGFloat = 390
     static let detailMinWidth: CGFloat = 500
     static let wideMinimumWidth: CGFloat = leftColumnWidth + columnSpacing + detailMinWidth
@@ -21,23 +22,30 @@ struct LeaderboardWideWorkspaceLayout: Layout {
     let detailMinWidth: CGFloat
     let columnSpacing: CGFloat
     let headerSpacing: CGFloat
+    let controlSummarySpacing: CGFloat
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        guard subviews.count == 3 else { return .zero }
+        guard subviews.count == 4 else { return .zero }
         let availableWidth = proposal.width ?? leftWidth + columnSpacing + detailMinWidth
         let detailWidth = max(detailMinWidth, availableWidth - leftWidth - columnSpacing)
         let sizes = measuredSizes(subviews: subviews, availableWidth: availableWidth, detailWidth: detailWidth)
         return CGSize(
             width: leftWidth + columnSpacing + detailWidth,
-            height: sizes.headerHeight + headerSpacing + sizes.lowerHeight
+            height: sizes.headerHeight
+                + headerSpacing
+                + sizes.controlsHeight
+                + sizes.controlSummaryGap
+                + sizes.lowerHeight
         )
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        guard subviews.count == 3 else { return }
+        guard subviews.count == 4 else { return }
         let detailWidth = max(detailMinWidth, bounds.width - leftWidth - columnSpacing)
         let sizes = measuredSizes(subviews: subviews, availableWidth: bounds.width, detailWidth: detailWidth)
-        let lowerY = bounds.minY + sizes.headerHeight + headerSpacing
+        let controlsX = bounds.minX + leftWidth + columnSpacing
+        let controlsY = bounds.minY + sizes.headerHeight + headerSpacing
+        let lowerY = controlsY + sizes.controlsHeight + sizes.controlSummaryGap
 
         subviews[0].place(
             at: bounds.origin,
@@ -45,12 +53,17 @@ struct LeaderboardWideWorkspaceLayout: Layout {
             proposal: ProposedViewSize(width: bounds.width, height: sizes.headerHeight)
         )
         subviews[1].place(
+            at: CGPoint(x: bounds.minX, y: controlsY),
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: bounds.width, height: sizes.controlsHeight)
+        )
+        subviews[2].place(
             at: CGPoint(x: bounds.minX, y: lowerY),
             anchor: .topLeading,
             proposal: ProposedViewSize(width: leftWidth, height: sizes.lowerHeight)
         )
-        subviews[2].place(
-            at: CGPoint(x: bounds.minX + leftWidth + columnSpacing, y: lowerY),
+        subviews[3].place(
+            at: CGPoint(x: controlsX, y: lowerY),
             anchor: .topLeading,
             proposal: ProposedViewSize(width: detailWidth, height: sizes.lowerHeight)
         )
@@ -60,10 +73,12 @@ struct LeaderboardWideWorkspaceLayout: Layout {
         subviews: Subviews,
         availableWidth: CGFloat,
         detailWidth: CGFloat
-    ) -> (headerHeight: CGFloat, lowerHeight: CGFloat) {
+    ) -> (headerHeight: CGFloat, controlsHeight: CGFloat, controlSummaryGap: CGFloat, lowerHeight: CGFloat) {
         let headerHeight = subviews[0].sizeThatFits(ProposedViewSize(width: availableWidth, height: nil)).height
-        let rightHeight = subviews[2].sizeThatFits(ProposedViewSize(width: detailWidth, height: nil)).height
-        return (headerHeight, rightHeight)
+        let controlsHeight = subviews[1].sizeThatFits(ProposedViewSize(width: availableWidth, height: nil)).height
+        let controlSummaryGap = controlsHeight > 0 ? controlSummarySpacing : 0
+        let rightHeight = subviews[3].sizeThatFits(ProposedViewSize(width: detailWidth, height: nil)).height
+        return (headerHeight, controlsHeight, controlSummaryGap, rightHeight)
     }
 }
 

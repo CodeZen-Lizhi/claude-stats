@@ -137,16 +137,23 @@ struct LeaderboardsView: View {
                 leftWidth: LeaderboardLayout.leftColumnWidth,
                 detailMinWidth: LeaderboardLayout.detailMinWidth,
                 columnSpacing: LeaderboardLayout.columnSpacing,
-                headerSpacing: LeaderboardLayout.headerContentSpacing
+                headerSpacing: LeaderboardLayout.headerContentSpacing,
+                controlSummarySpacing: LeaderboardLayout.overviewControlSummarySpacing
             ) {
                 titleHeader
                     .frame(width: contentWidth, alignment: .topLeading)
+
+                if env.preferences.leaderboardsEnabled {
+                    overviewControls
+                } else {
+                    Color.clear.frame(height: 0)
+                }
 
                 listColumn(usesFixedScoreListHeight: true)
                     .frame(width: LeaderboardLayout.leftColumnWidth, alignment: .top)
                     .frame(maxHeight: .infinity, alignment: .top)
 
-                detailColumn
+                detailSummaryColumn
                     .frame(minWidth: LeaderboardLayout.detailMinWidth, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
             .frame(width: contentWidth, alignment: .topLeading)
@@ -181,6 +188,7 @@ struct LeaderboardsView: View {
 
     private var overviewPanel: some View {
         LeaderboardOverviewPanel(
+            content: .full,
             metric: $metric,
             period: $period,
             selectedDailyDate: $selectedDailyDate,
@@ -191,10 +199,36 @@ struct LeaderboardsView: View {
         )
     }
 
-    private var detailColumn: some View {
+    private var overviewControls: some View {
+        LeaderboardOverviewPanel(
+            content: .controls,
+            metric: $metric,
+            period: $period,
+            selectedDailyDate: $selectedDailyDate,
+            scores: scores,
+            topScore: topScore,
+            currentUserHash: env.leaderboards.currentUserHash,
+            liveStatusText: env.leaderboards.leaderboardRealtimeStatusText
+        )
+    }
+
+    private var overviewSummary: some View {
+        LeaderboardOverviewPanel(
+            content: .summary,
+            metric: $metric,
+            period: $period,
+            selectedDailyDate: $selectedDailyDate,
+            scores: scores,
+            topScore: topScore,
+            currentUserHash: env.leaderboards.currentUserHash,
+            liveStatusText: env.leaderboards.leaderboardRealtimeStatusText
+        )
+    }
+
+    private var detailSummaryColumn: some View {
         VStack(alignment: .leading, spacing: 14) {
             if env.preferences.leaderboardsEnabled {
-                overviewPanel
+                overviewSummary
             }
             LeaderboardDetailPanel(
                 score: selectedScore,

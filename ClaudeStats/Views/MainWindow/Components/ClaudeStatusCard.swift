@@ -182,11 +182,10 @@ private struct ClaudeStatusUptimeChart: View {
 
             HStack(spacing: 2) {
                 ForEach(days) { day in
-                    Rectangle()
-                        .fill(day.chartColor(startDate: history.startDate))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 34)
-                        .help(dayHelp(day))
+                    StatusUptimeDayBar(
+                        color: day.chartColor(startDate: history.startDate),
+                        tooltip: dayHelp(day)
+                    )
                 }
             }
             .frame(height: 34)

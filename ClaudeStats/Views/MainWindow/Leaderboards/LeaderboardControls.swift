@@ -9,7 +9,6 @@ struct LeaderboardMetricChips: View {
             values: LeaderboardMetric.allCases,
             selection: $metric,
             label: \.shortLabel,
-            icon: \.symbolName,
             accessibilityLabel: \.displayName,
             compact: compact
         )
@@ -26,7 +25,6 @@ struct LeaderboardPeriodChips: View {
             values: values,
             selection: $period,
             label: \.chipLabel,
-            icon: \.symbolName,
             accessibilityLabel: \.displayName,
             compact: compact
         )
@@ -83,7 +81,6 @@ private struct LeaderboardSegmentedChips<Value: Identifiable & Hashable>: View {
     let values: [Value]
     @Binding var selection: Value
     let label: KeyPath<Value, String>
-    let icon: KeyPath<Value, String>
     let accessibilityLabel: KeyPath<Value, String>
     let compact: Bool
 
@@ -91,12 +88,11 @@ private struct LeaderboardSegmentedChips<Value: Identifiable & Hashable>: View {
         PillSegmentedBar(
             values,
             selection: $selection,
+            style: .leaderboard(compact: compact),
             accessibilityLabel: { $0[keyPath: accessibilityLabel] }
-        ) { value, isSelected in
+        ) { value, _ in
             LeaderboardChipLabel(
-                title: value[keyPath: label],
-                symbolName: value[keyPath: icon],
-                compact: compact
+                title: value[keyPath: label]
             )
         }
     }
@@ -104,18 +100,18 @@ private struct LeaderboardSegmentedChips<Value: Identifiable & Hashable>: View {
 
 private struct LeaderboardChipLabel: View {
     let title: String
-    let symbolName: String
-    let compact: Bool
 
     var body: some View {
-        ZStack {
-            Text(title)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-                .opacity(compact ? 0 : 1)
-            Image(systemName: symbolName)
-                .opacity(compact ? 1 : 0)
-        }
-        .frame(width: compact ? 26 : nil)
+        Text(title)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+    }
+}
+
+private extension PillSegmentedBarStyle {
+    static func leaderboard(compact: Bool) -> PillSegmentedBarStyle {
+        var style = PillSegmentedBarStyle.standard
+        style.itemHorizontalPadding = compact ? 8 : 12
+        return style
     }
 }

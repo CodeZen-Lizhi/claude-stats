@@ -182,11 +182,10 @@ private struct OpenAIStatusUptimeChart: View {
 
             HStack(spacing: 2) {
                 ForEach(days) { day in
-                    Rectangle()
-                        .fill(day.chartColor(startDate: history.startDate))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 34)
-                        .help(dayHelp(day))
+                    StatusUptimeDayBar(
+                        color: day.chartColor(startDate: history.startDate),
+                        tooltip: dayHelp(day)
+                    )
                 }
             }
             .frame(height: 34)
@@ -248,9 +247,6 @@ private struct OpenAIStatusUptimeChart: View {
             parts.append(L10n.format("status.uptime.full_outage_duration",
                                      defaultValue: "full outage %@",
                                      Format.duration(TimeInterval(day.fullOutageSeconds))))
-        }
-        if let event = day.relatedEvents.first {
-            parts.append(event.name)
         }
         return "\(date): \(parts.joined(separator: ", "))"
     }
