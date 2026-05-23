@@ -47,10 +47,10 @@ struct FeatureControlCard<Preview: View, Controls: View>: View {
                     .frame(width: 24, height: 24)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
+                    Text(LocalizedStringKey(title))
                         .font(.sora(15, weight: .semibold))
                         .foregroundStyle(.primary)
-                    Text(description)
+                    Text(LocalizedStringKey(description))
                         .font(.sora(11))
                         .foregroundStyle(Color.stxMuted)
                         .fixedSize(horizontal: false, vertical: true)
@@ -124,7 +124,7 @@ struct FeatureDisabledNotice: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("\(featureName) is off")
                     .font(.sora(13, weight: .semibold))
-                Text(message)
+                Text(LocalizedStringKey(message))
                     .font(.sora(11))
                     .foregroundStyle(Color.stxMuted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -165,7 +165,7 @@ private struct FeatureStatusPill: View {
             Circle()
                 .fill(isEnabled ? Color.green : Color.stxMuted)
                 .frame(width: 6, height: 6)
-            Text(text)
+            Text(LocalizedStringKey(text))
                 .font(.sora(10, weight: .medium))
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
