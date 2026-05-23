@@ -50,7 +50,7 @@ struct TrackingSettingsView: View {
         SettingRow(title: "Full Disk Access",
                    description: "Required so Claude Stats can read the local Screen Time database.") {
             HStack(spacing: 8) {
-                Text(fullDiskAccessOK ? "Granted" : "Not granted")
+                Text(LocalizedStringKey(fullDiskAccessOK ? "Granted" : "Not granted"))
                     .font(.sora(12))
                     .foregroundStyle(fullDiskAccessOK ? Color.stxMuted : Color.stxAccent)
                 if !fullDiskAccessOK {

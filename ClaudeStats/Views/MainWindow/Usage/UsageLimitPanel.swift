@@ -272,11 +272,11 @@ struct UsageLimitPanel: View {
                 .frame(width: 18)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(.sora(12, weight: .semibold))
                     .foregroundStyle(.primary)
                 if let message {
-                    Text(message)
+                    Text(LocalizedStringKey(message))
                         .font(.sora(11))
                         .foregroundStyle(Color.stxMuted)
                         .fixedSize(horizontal: false, vertical: true)
