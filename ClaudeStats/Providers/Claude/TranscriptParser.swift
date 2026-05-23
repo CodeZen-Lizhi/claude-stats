@@ -16,6 +16,7 @@ struct TranscriptParser: Sendable {
 
         var perModel: [String: (count: Int, usage: TokenUsage, cost: CostEstimate)] = [:]
         var perModelHourly: [String: [Date: TokenUsage]] = [:]
+        var billableMessages: [BillableMessage] = []
         var messageCount = 0
         var firstActivity: Date?
         var lastActivity: Date?
@@ -51,6 +52,24 @@ struct TranscriptParser: Sendable {
                 if model == Self.syntheticModelID, usage.total == 0, cost.detailedBilling == 0 {
                     continue
                 }
+
+                // Subagent (Task tool) turns get written to BOTH the subagent's
+                // own JSONL and the parent session's JSONL with identical
+                // `message.id` and `requestId`. Keep that pair so cross-session
+                // aggregation can dedup — see ``BillableMessage``.
+                let hash: String?
+                if let msgID = line.message?.id, let reqID = line.requestId {
+                    hash = "\(msgID):\(reqID)"
+                } else {
+                    hash = nil
+                }
+                billableMessages.append(BillableMessage(
+                    hash: hash,
+                    model: model,
+                    usage: usage,
+                    cost: cost,
+                    timestamp: date
+                ))
 
                 if usage.total > 0 {
                     var acc = perModel[model] ?? (0, .zero, .zero)
@@ -105,7 +124,8 @@ struct TranscriptParser: Sendable {
             lastActivity: lastActivity,
             models: models,
             timeline: timeline,
-            activityIntervals: Self.coalesceBursts(messageTimestamps)
+            activityIntervals: Self.coalesceBursts(messageTimestamps),
+            billableMessages: billableMessages
         )
     }
 
@@ -186,8 +206,12 @@ private struct TranscriptLine: Decodable {
     let timestamp: String?
     let aiTitle: String?
     let message: Message?
+    /// Top-level `requestId` — paired with `message.id` to dedup subagent
+    /// turns that appear in both the parent and child JSONL files.
+    let requestId: String?
 
     struct Message: Decodable {
+        let id: String?
         let model: String?
         let usage: Usage?
         let content: Content?
