@@ -226,7 +226,7 @@ struct MenuPanelView: View {
         .frame(width: Self.panelSize.width, height: Self.panelSize.height, alignment: .topLeading)
         .fixedSize(horizontal: true, vertical: true)
         .clipped()
-        .background(MenuBarSurface.backgroundFill)
+        .background(VisualEffectBackground(material: .popover))
         .background(MenuPanelWindowSizeLock(size: Self.panelSize))
         .stxFont(13)
         .tint(.stxAccent)

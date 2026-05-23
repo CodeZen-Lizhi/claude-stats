@@ -9,7 +9,11 @@ protocol ClaudeDesktopAccessibilityPermissionChecking: AnyObject {
 @MainActor
 final class SystemClaudeDesktopAccessibilityPermissionChecker: ClaudeDesktopAccessibilityPermissionChecking {
     func isTrusted(prompt: Bool) -> Bool {
-        let options = ["AXTrustedCheckOptionPrompt": prompt] as CFDictionary
+        guard prompt else {
+            return AXIsProcessTrusted()
+        }
+
+        let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
         return AXIsProcessTrustedWithOptions(options)
     }
 }
