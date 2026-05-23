@@ -2,13 +2,14 @@ import CryptoKit
 import Foundation
 
 struct GitRepoStatsCache: Sendable {
-    static let currentSchemaVersion = 2
+    static let currentSchemaVersion = 3
 
     struct Key: Codable, Hashable, Sendable {
         let schemaVersion: Int
         let repoRootHash: String
         let scope: GitStatsScope
         let headHash: String
+        let historySignature: String
         let runtimeSignature: String
 
         var digest: String {
@@ -17,6 +18,7 @@ struct GitRepoStatsCache: Sendable {
                 repoRootHash,
                 scope.rawValue,
                 headHash,
+                historySignature,
                 runtimeSignature,
             ].joined(separator: "|"))
         }
@@ -60,6 +62,7 @@ struct GitRepoStatsCache: Sendable {
         repoRoot: String,
         scope: GitStatsScope,
         headHash: String,
+        historySignature: String,
         runtimeSignature: GitStatsRuntimeSignature
     ) -> Key {
         Key(
@@ -67,6 +70,7 @@ struct GitRepoStatsCache: Sendable {
             repoRootHash: Self.sha256(repoRoot),
             scope: scope,
             headHash: headHash,
+            historySignature: historySignature,
             runtimeSignature: runtimeSignature.value
         )
     }

@@ -45,11 +45,13 @@ struct FileDiffView: View {
             StxRule()
             content
         }
-        .task(id: path) {
+        .task(id: "\(repo.id)|\(hash)|\(path)") {
             if isPreview { return }
             isLoading = true
             let r = repo, h = hash, p = path
-            diff = await GitRepositoryService.shared.fileDiff(for: h, path: p, in: r)
+            let loaded = await GitRepositoryService.shared.fileDiff(for: h, path: p, in: r)
+            guard !Task.isCancelled, repo.id == r.id, hash == h, path == p else { return }
+            diff = loaded
             isLoading = false
         }
     }

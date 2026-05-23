@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct GitGraphMinimapView: View {
@@ -5,6 +6,7 @@ struct GitGraphMinimapView: View {
     let isLoading: Bool
     let onTargetMaxBucketsChange: (Int) -> Void
     let onSelectBucket: (GitGraphMinimapData.Bucket) -> Void
+    @State private var hoveredBucketStart: Date?
 
     init(
         data: GitGraphMinimapData,
@@ -47,21 +49,29 @@ struct GitGraphMinimapView: View {
             }
             GeometryReader { proxy in
                 let targetMaxBuckets = Self.targetMaxBuckets(for: proxy.size.width)
-                Canvas { context, size in
-                    draw(context: &context, size: size)
+                ZStack {
+                    Canvas { context, size in
+                        draw(context: &context, size: size)
+                    }
+                    .allowsHitTesting(false)
+
+                    GitGraphMinimapInteractionLayer { location in
+                        if let location {
+                            updateHoverBucket(at: location.x, width: proxy.size.width)
+                        } else if hoveredBucketStart != nil {
+                            hoveredBucketStart = nil
+                        }
+                    } onClick: { location in
+                        if let bucket = bucket(at: location.x, width: proxy.size.width) {
+                            onSelectBucket(bucket)
+                        }
+                    }
+                    .accessibilityHidden(true)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .contentShape(Rectangle())
                 .task(id: targetMaxBuckets) {
                     onTargetMaxBucketsChange(targetMaxBuckets)
                 }
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onEnded { value in
-                            if let bucket = bucket(at: value.location.x, width: proxy.size.width) {
-                                onSelectBucket(bucket)
-                            }
-                        }
-                )
             }
             .frame(height: 48)
         }
@@ -70,7 +80,7 @@ struct GitGraphMinimapView: View {
         .background(Color.primary.opacity(0.025))
     }
 
-    static func targetMaxBuckets(for width: CGFloat) -> Int {
+    nonisolated static func targetMaxBuckets(for width: CGFloat) -> Int {
         if width < 420 { return 80 }
         if width < 760 { return 120 }
         return 160
@@ -85,6 +95,7 @@ struct GitGraphMinimapView: View {
         drawDensity(context: &context, layout: layout)
         drawChurn(context: &context, layout: layout)
         drawMarkers(context: &context, layout: layout)
+        drawHoverIndicator(context: &context, layout: layout)
         drawSelection(context: &context, layout: layout)
     }
 
@@ -148,6 +159,17 @@ struct GitGraphMinimapView: View {
         }
     }
 
+    private func drawHoverIndicator(context: inout GraphicsContext, layout: GitGraphMinimapPlotLayout) {
+        guard let hovered = hoveredBucketStart,
+              let index = data.buckets.firstIndex(where: { $0.start == hovered }) else { return }
+        let x = layout.xPosition(index: index, count: data.buckets.count)
+        var path = Path()
+        path.move(to: CGPoint(x: x, y: layout.selectionLineStartY))
+        path.addLine(to: CGPoint(x: x, y: layout.selectionLineEndY))
+        context.stroke(path, with: .color(Color.stxAccent.opacity(0.42)), style: StrokeStyle(lineWidth: 1.1, lineCap: .round))
+        context.fill(Path(ellipseIn: layout.hoverDotRect(index: index, count: data.buckets.count)), with: .color(Color.stxAccent.opacity(0.62)))
+    }
+
     private func drawSelection(context: inout GraphicsContext, layout: GitGraphMinimapPlotLayout) {
         guard let selected = data.selectedBucketStart,
               let index = data.buckets.firstIndex(where: { $0.start == selected }) else { return }
@@ -185,6 +207,13 @@ struct GitGraphMinimapView: View {
         guard let index = GitGraphMinimapPlotLayout(size: CGSize(width: width, height: 48))
             .bucketIndex(at: x, count: data.buckets.count) else { return nil }
         return data.buckets[min(max(index, 0), data.buckets.count - 1)]
+    }
+
+    private func updateHoverBucket(at x: CGFloat, width: CGFloat) {
+        let nextBucketStart = bucket(at: x, width: width)?.start
+        if hoveredBucketStart != nextBucketStart {
+            hoveredBucketStart = nextBucketStart
+        }
     }
 
     private func appendMonotoneCurve(_ points: [CGPoint], to path: inout Path, moveToFirst: Bool = true) {
@@ -252,10 +281,126 @@ struct GitGraphMinimapView: View {
     }
 }
 
+private struct GitGraphMinimapInteractionLayer: NSViewRepresentable {
+    var onHover: (CGPoint?) -> Void
+    var onClick: (CGPoint) -> Void
+
+    func makeNSView(context: Context) -> TrackingView {
+        let view = TrackingView()
+        view.onHover = onHover
+        view.onClick = onClick
+        return view
+    }
+
+    func updateNSView(_ nsView: TrackingView, context: Context) {
+        nsView.onHover = onHover
+        nsView.onClick = onClick
+        nsView.refreshHoverFromCurrentMouseLocation()
+    }
+
+    @MainActor
+    final class TrackingView: NSView {
+        var onHover: (CGPoint?) -> Void = { _ in }
+        var onClick: (CGPoint) -> Void = { _ in }
+
+        private var trackingArea: NSTrackingArea?
+        private var localMouseMovedMonitor: Any?
+
+        override var isFlipped: Bool { true }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            configureMouseMovedEvents()
+            installLocalMouseMovedMonitor()
+            refreshHoverFromCurrentMouseLocation()
+        }
+
+        override func viewWillMove(toWindow newWindow: NSWindow?) {
+            if newWindow == nil {
+                removeLocalMouseMovedMonitor()
+                onHover(nil)
+            }
+            super.viewWillMove(toWindow: newWindow)
+        }
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            if let trackingArea {
+                removeTrackingArea(trackingArea)
+            }
+            let area = NSTrackingArea(
+                rect: .zero,
+                options: [.activeAlways, .enabledDuringMouseDrag, .inVisibleRect, .mouseEnteredAndExited, .mouseMoved],
+                owner: self,
+                userInfo: nil
+            )
+            addTrackingArea(area)
+            trackingArea = area
+            refreshHoverFromCurrentMouseLocation()
+        }
+
+        override func mouseEntered(with event: NSEvent) {
+            sendHover(for: event)
+        }
+
+        override func mouseMoved(with event: NSEvent) {
+            sendHover(for: event)
+        }
+
+        override func mouseExited(with event: NSEvent) {
+            onHover(nil)
+        }
+
+        override func mouseDown(with event: NSEvent) {
+            let location = convert(event.locationInWindow, from: nil)
+            guard bounds.contains(location) else { return }
+            onClick(location)
+        }
+
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+            true
+        }
+
+        func refreshHoverFromCurrentMouseLocation() {
+            guard let window else { return }
+            let location = convert(window.mouseLocationOutsideOfEventStream, from: nil)
+            onHover(bounds.contains(location) ? location : nil)
+        }
+
+        private func configureMouseMovedEvents() {
+            window?.acceptsMouseMovedEvents = true
+        }
+
+        private func installLocalMouseMovedMonitor() {
+            removeLocalMouseMovedMonitor()
+            localMouseMovedMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved]) { [weak self] event in
+                MainActor.assumeIsolated {
+                    guard let self, event.window === self.window else { return }
+                    self.sendHover(for: event)
+                }
+                return event
+            }
+        }
+
+        private func removeLocalMouseMovedMonitor() {
+            if let localMouseMovedMonitor {
+                NSEvent.removeMonitor(localMouseMovedMonitor)
+                self.localMouseMovedMonitor = nil
+            }
+        }
+
+        private func sendHover(for event: NSEvent) {
+            let location = convert(event.locationInWindow, from: nil)
+            onHover(bounds.contains(location) ? location : nil)
+        }
+    }
+}
+
 struct GitGraphMinimapPlotLayout {
     static let horizontalInset: CGFloat = 4
     static let verticalInset: CGFloat = 1
     static let selectedDotRadius: CGFloat = 3
+    static let hoverDotRadius: CGFloat = 2.5
 
     let size: CGSize
 
@@ -305,7 +450,14 @@ struct GitGraphMinimapPlotLayout {
     }
 
     func selectedDotRect(index: Int, count: Int) -> CGRect {
-        let radius = Self.selectedDotRadius
+        indicatorDotRect(index: index, count: count, radius: Self.selectedDotRadius)
+    }
+
+    func hoverDotRect(index: Int, count: Int) -> CGRect {
+        indicatorDotRect(index: index, count: count, radius: Self.hoverDotRadius)
+    }
+
+    private func indicatorDotRect(index: Int, count: Int, radius: CGFloat) -> CGRect {
         let centerX = clampedX(xPosition(index: index, count: count), radius: radius)
         let centerY = min(max(densityRect.maxY, radius), max(radius, size.height - radius))
         return CGRect(x: centerX - radius, y: centerY - radius, width: radius * 2, height: radius * 2)

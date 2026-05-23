@@ -143,11 +143,18 @@ struct GitAnalyzer: Sendable {
     }
 
     func contributorStats(for repo: GitRepo) -> [GitContributorStat] {
-        guard isAvailable else { return [] }
-        let format = "format:\(Self.recordSep)%an\(Self.fieldSep)%ae"
-        let args = ["-C", repo.rootPath, "log", "--branches", "--remotes", "--tags", "--pretty=\(format)"]
-        guard let output = runGit(args) else { return [] }
-        return Self.parseContributorStats(output)
+        contributorStatsResult(for: repo).rows
+    }
+
+    func contributorStatsResult(for repo: GitRepo) -> GitContributorStatsResult {
+        guard isAvailable else { return .failed("Git executable is unavailable.") }
+        let args = ["-C", repo.rootPath, "shortlog", "-sne"] + historyRevArgs
+        let result = runGitResult(args, timeout: 45)
+        guard result.succeeded else {
+            return .failed(failureMessage(for: result, fallback: "Git committer statistics failed."))
+        }
+        let rows = Self.parseContributorShortlog(result.stdout)
+        return rows.isEmpty ? .empty : .loaded(rows)
     }
 
     static func parseContributorStats(_ output: String) -> [GitContributorStat] {
@@ -187,10 +194,60 @@ struct GitAnalyzer: Sendable {
         }
     }
 
+    static func parseContributorShortlog(_ output: String) -> [GitContributorStat] {
+        struct Counter {
+            var name: String
+            var email: String
+            var count: Int
+        }
+
+        var counters: [String: Counter] = [:]
+        for rawLine in output.split(separator: "\n", omittingEmptySubsequences: true) {
+            let parts = rawLine.split(separator: "\t", maxSplits: 1, omittingEmptySubsequences: false)
+            guard parts.count == 2,
+                  let count = Int(parts[0].trimmingCharacters(in: .whitespaces)) else {
+                continue
+            }
+            let identity = String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let parsed = parseShortlogIdentity(identity)
+            guard !parsed.name.isEmpty || !parsed.email.isEmpty else { continue }
+            let key = "\(parsed.name.lowercased())|\(parsed.email.lowercased())"
+            var counter = counters[key] ?? Counter(name: parsed.name, email: parsed.email, count: 0)
+            counter.count += count
+            counters[key] = counter
+        }
+
+        let total = counters.values.reduce(0) { $0 + $1.count }
+        guard total > 0 else { return [] }
+        return counters.values.map { counter in
+            GitContributorStat(
+                name: counter.name,
+                email: counter.email,
+                commitCount: counter.count,
+                share: Double(counter.count) / Double(total)
+            )
+        }
+        .sorted {
+            if $0.commitCount != $1.commitCount { return $0.commitCount > $1.commitCount }
+            return $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
+        }
+    }
+
+    private static func parseShortlogIdentity(_ identity: String) -> (name: String, email: String) {
+        guard identity.hasSuffix(">"),
+              let emailStart = identity.range(of: " <", options: .backwards) else {
+            return (identity, "")
+        }
+        let name = String(identity[..<emailStart.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let email = String(identity[emailStart.upperBound..<identity.index(before: identity.endIndex)])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (name, email)
+    }
+
     func minimapCommits(for repo: GitRepo, limit: Int) -> [GitCommit] {
         guard isAvailable else { return [] }
         let format = "format:\(Self.recordSep)%H\(Self.fieldSep)%at\(Self.fieldSep)%an\(Self.fieldSep)%ae\(Self.fieldSep)%s"
-        let args = ["-C", repo.rootPath, "log", "--branches", "--remotes", "--tags", "--date-order",
+        let args = ["-C", repo.rootPath, "log"] + historyRevArgs + ["--date-order",
                     "-n", "\(max(limit, 1))", "--numstat", "--pretty=\(format)"]
         guard let output = runGit(args, timeout: 45) else { return [] }
         return Self.parseLog(output, repoID: repo.id)
@@ -198,8 +255,8 @@ struct GitAnalyzer: Sendable {
 
     // MARK: - Commit graph
 
-    /// The commit DAG for a repo: up to `limit` commits reachable from local
-    /// branches and tags, in `--date-order` (newest first). `nil` if `git`
+    /// The commit DAG for a repo: up to `limit` commits reachable from HEAD,
+    /// branches, remotes, and tags, in `--date-order` (newest first). `nil` if `git`
     /// couldn't be run.
     func graph(for repo: GitRepo, limit: Int) -> GitGraph? {
         guard let page = graphPage(for: repo, offset: 0, limit: limit) else { return nil }
@@ -215,7 +272,7 @@ struct GitAnalyzer: Sendable {
         guard isAvailable else { return nil }
         let f = Self.fieldSep
         let format = "format:\(Self.recordSep)%H\(f)%P\(f)%D\(f)%an\(f)%ae\(f)%at\(f)%s"
-        let args = ["-C", repo.rootPath, "log", "--branches", "--remotes", "--tags", "--date-order",
+        let args = ["-C", repo.rootPath, "log"] + historyRevArgs + ["--date-order",
                     "--skip", "\(max(offset, 0))", "-n", "\(max(limit, 1))", "--pretty=\(format)"]
         guard let output = runGit(args) else { return nil }
         let refsByHash = refsByHash(for: repo)
@@ -483,7 +540,7 @@ struct GitAnalyzer: Sendable {
     func refsByHash(for repo: GitRepo) -> [String: [GitRef]] {
         guard isAvailable else { return [:] }
         let f = Self.fieldSep
-        let format = "%(objectname)\(f)%(refname)"
+        let format = "%(objectname)\(f)%(refname)\(f)%(*objectname)"
         let args = ["-C", repo.rootPath, "for-each-ref", "--format=\(format)", "refs/heads", "refs/remotes", "refs/tags"]
         let lines = runGit(args)?
             .split(separator: "\n", omittingEmptySubsequences: true)
@@ -493,8 +550,10 @@ struct GitAnalyzer: Sendable {
         for line in lines {
             let fields = line.components(separatedBy: f)
             guard fields.count >= 2 else { continue }
-            let hash = fields[0].trimmingCharacters(in: .whitespacesAndNewlines)
+            let objectHash = fields[0].trimmingCharacters(in: .whitespacesAndNewlines)
             let refname = fields[1].trimmingCharacters(in: .whitespacesAndNewlines)
+            let peeledHash = fields.count >= 3 ? fields[2].trimmingCharacters(in: .whitespacesAndNewlines) : ""
+            let hash = peeledHash.nilIfEmpty ?? objectHash
             guard !hash.isEmpty, let ref = Self.ref(fromFullName: refname) else { continue }
             refsByHash[hash, default: []].append(ref)
         }
@@ -529,20 +588,36 @@ struct GitAnalyzer: Sendable {
 
     // MARK: - Process plumbing
 
+    private var historyRevArgs: [String] {
+        ["HEAD", "--branches", "--remotes", "--tags"]
+    }
+
     private func runGit(_ arguments: [String], timeout: TimeInterval = 30) -> String? {
-        let result = runner.run(arguments, timeout: timeout)
+        let result = runGitResult(arguments, timeout: timeout)
         guard result.succeeded else {
-            let command = arguments.prefix(4).joined(separator: " ")
-            if result.timedOut {
-                Log.git.error("git \(command, privacy: .public) timed out")
-            } else if result.cancelled {
-                Log.git.debug("git \(command, privacy: .public) cancelled")
-            } else {
-                Log.git.debug("git \(command, privacy: .public) exited \(result.exitCode, privacy: .public): \(result.stderr, privacy: .public)")
-            }
             return nil
         }
         return result.stdout
+    }
+
+    private func runGitResult(_ arguments: [String], timeout: TimeInterval = 30) -> GitCommandResult {
+        let result = runner.run(arguments, timeout: timeout)
+        guard !result.succeeded else { return result }
+        let command = arguments.prefix(4).joined(separator: " ")
+        if result.timedOut {
+            Log.git.error("git \(command, privacy: .public) timed out")
+        } else if result.cancelled {
+            Log.git.debug("git \(command, privacy: .public) cancelled")
+        } else {
+            Log.git.debug("git \(command, privacy: .public) exited \(result.exitCode, privacy: .public): \(result.stderr, privacy: .public)")
+        }
+        return result
+    }
+
+    private func failureMessage(for result: GitCommandResult, fallback: String) -> String {
+        if result.timedOut { return "Git committer statistics timed out." }
+        if result.cancelled { return "Git committer statistics were cancelled." }
+        return result.stderr.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? fallback
     }
 }
 

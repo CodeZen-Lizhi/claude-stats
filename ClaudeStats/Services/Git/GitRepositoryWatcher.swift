@@ -2,6 +2,7 @@ import Foundation
 @preconcurrency import CoreServices
 
 final class GitRepositoryWatcher: @unchecked Sendable {
+    private let repo: GitRepo
     private let paths: [String]
     private let debounceInterval: TimeInterval
     private let onChange: @Sendable () -> Void
@@ -11,6 +12,7 @@ final class GitRepositoryWatcher: @unchecked Sendable {
     private var pendingChange: DispatchWorkItem?
 
     init(repo: GitRepo, debounceInterval: TimeInterval = 0.75, onChange: @escaping @Sendable () -> Void) {
+        self.repo = repo
         self.paths = Self.watchPaths(for: repo)
         self.debounceInterval = debounceInterval
         self.onChange = onChange
@@ -29,14 +31,9 @@ final class GitRepositoryWatcher: @unchecked Sendable {
             release: nil,
             copyDescription: nil
         )
-        let callback: FSEventStreamCallback = { _, info, _, _, _, _ in
-            guard let info else { return }
-            let watcher = Unmanaged<GitRepositoryWatcher>.fromOpaque(info).takeUnretainedValue()
-            watcher.scheduleChange()
-        }
         guard let created = FSEventStreamCreate(
             nil,
-            callback,
+            gitRepositoryWatcherCallback,
             &context,
             paths as CFArray,
             FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
@@ -65,6 +62,12 @@ final class GitRepositoryWatcher: @unchecked Sendable {
         let item = DispatchWorkItem { [onChange] in onChange() }
         pendingChange = item
         queue.asyncAfter(deadline: .now() + debounceInterval, execute: item)
+    }
+
+    fileprivate func handleEvent(rawPaths: UnsafeMutableRawPointer, count: Int) {
+        let paths = Self.eventPaths(from: rawPaths, count: count)
+        guard Self.shouldRefresh(eventPaths: paths, repo: repo) else { return }
+        scheduleChange()
     }
 
     static func watchPaths(for repo: GitRepo) -> [String] {
@@ -100,9 +103,13 @@ final class GitRepositoryWatcher: @unchecked Sendable {
             return isRefreshRelevantGitPath(eventPath, gitDirPath: gitDirPath, commonDirPath: commonDirPath)
         }
         if contains(path: eventPath, in: rootPath) {
-            return true
+            return isRefreshRelevantWorktreePath(eventPath, rootPath: rootPath)
         }
         return false
+    }
+
+    static func shouldRefresh(eventPaths paths: [String], repo: GitRepo) -> Bool {
+        paths.isEmpty || paths.contains { shouldRefresh(eventPath: $0, repo: repo) }
     }
 
     private static func isRefreshRelevantGitPath(_ path: String, gitDirPath: String?, commonDirPath: String?) -> Bool {
@@ -124,6 +131,16 @@ final class GitRepositoryWatcher: @unchecked Sendable {
         return false
     }
 
+    private static func isRefreshRelevantWorktreePath(_ path: String, rootPath: String) -> Bool {
+        let ignoredDirectories = [".git", ".build", "DerivedData", "node_modules"]
+        for directory in ignoredDirectories {
+            if contains(path: path, in: rootPath.appendingPathComponent(directory)) {
+                return false
+            }
+        }
+        return true
+    }
+
     private static func contains(path: String, in parent: String) -> Bool {
         path == parent || path.hasPrefix(parent.appendingPathComponent(""))
     }
@@ -131,6 +148,25 @@ final class GitRepositoryWatcher: @unchecked Sendable {
     private static func standardized(_ path: String) -> String {
         URL(fileURLWithPath: path).standardizedFileURL.path
     }
+
+    fileprivate static func eventPaths(from rawPaths: UnsafeMutableRawPointer, count: Int) -> [String] {
+        guard count > 0 else { return [] }
+        let paths = rawPaths.bindMemory(to: UnsafePointer<CChar>.self, capacity: count)
+        return (0..<count).compactMap { String(validatingUTF8: paths[$0]) }
+    }
+}
+
+private func gitRepositoryWatcherCallback(
+    _: ConstFSEventStreamRef,
+    info: UnsafeMutableRawPointer?,
+    count: Int,
+    eventPaths: UnsafeMutableRawPointer,
+    _: UnsafePointer<FSEventStreamEventFlags>,
+    _: UnsafePointer<FSEventStreamEventId>
+) {
+    guard let info else { return }
+    let watcher = Unmanaged<GitRepositoryWatcher>.fromOpaque(info).takeUnretainedValue()
+    watcher.handleEvent(rawPaths: eventPaths, count: count)
 }
 
 private extension String {

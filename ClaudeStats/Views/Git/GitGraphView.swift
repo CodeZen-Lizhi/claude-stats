@@ -83,6 +83,7 @@ struct GitGraphView: View {
             let r = repo
             let n = limit
             let page = await GitRepositoryService.shared.graphPage(for: r, offset: 0, limit: n)
+            guard !Task.isCancelled, repo.id == r.id, limit == n else { return }
             let g = page.map {
                 GitGraph(repo: $0.repo, commits: $0.commits, truncated: $0.hasMore, workingTree: $0.workingTree)
             }

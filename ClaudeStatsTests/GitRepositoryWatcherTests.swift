@@ -56,5 +56,10 @@ struct GitRepositoryWatcherTests {
 
         #expect(!GitRepositoryWatcher.shouldRefresh(eventPath: gitDir.appendingPathComponent("index.lock").path, repo: repo))
         #expect(!GitRepositoryWatcher.shouldRefresh(eventPath: gitDir.appendingPathComponent("objects/ab/cdef").path, repo: repo))
+        #expect(!GitRepositoryWatcher.shouldRefresh(eventPath: root.appendingPathComponent(".build/debug/App.o").path, repo: repo))
+        #expect(GitRepositoryWatcher.shouldRefresh(eventPaths: [
+            gitDir.appendingPathComponent("objects/ab/cdef").path,
+            root.appendingPathComponent("Sources/App.swift").path,
+        ], repo: repo))
     }
 }

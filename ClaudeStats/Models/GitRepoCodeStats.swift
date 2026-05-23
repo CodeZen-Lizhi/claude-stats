@@ -97,6 +97,29 @@ struct GitContributorStat: Identifiable, Codable, Sendable, Equatable {
     }
 }
 
+enum GitContributorStatsResult: Sendable, Equatable {
+    case loaded([GitContributorStat])
+    case empty
+    case failed(String)
+
+    var rows: [GitContributorStat] {
+        switch self {
+        case .loaded(let rows): return rows
+        case .empty, .failed: return []
+        }
+    }
+
+    var warning: String? {
+        guard case .failed(let message) = self else { return nil }
+        return message
+    }
+
+    var isCacheable: Bool {
+        if case .failed = self { return false }
+        return true
+    }
+}
+
 struct GitCodeContributionStat: Identifiable, Codable, Sendable, Equatable {
     let name: String
     let email: String
@@ -112,6 +135,17 @@ struct GitCodeContributionStat: Identifiable, Codable, Sendable, Equatable {
 struct GitRepoInspectorBaseStats: Codable, Sendable, Equatable {
     let code: GitRepoCodeStats
     let contributors: [GitContributorStat]
+    let contributorsWarning: String?
+
+    init(
+        code: GitRepoCodeStats,
+        contributors: [GitContributorStat],
+        contributorsWarning: String? = nil
+    ) {
+        self.code = code
+        self.contributors = contributors
+        self.contributorsWarning = contributorsWarning
+    }
 }
 
 struct GitRepoCodeOwnershipStats: Codable, Sendable, Equatable {

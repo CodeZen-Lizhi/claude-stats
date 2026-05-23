@@ -462,6 +462,16 @@ struct GitAnalyzerTests {
         #expect(GitRepositoryService.minimapCacheKey(for: repo, limit: 800, targetMaxBuckets: 0).hasSuffix("|1"))
     }
 
+    @Test("graph and minimap cache keys are worktree-specific")
+    func graphAndMinimapCacheKeysAreWorktreeSpecific() {
+        let common = "/repo/.git"
+        let first = GitRepo(rootPath: "/repo/main", gitDirPath: "/repo/.git/worktrees/main", commonDirPath: common)
+        let second = GitRepo(rootPath: "/repo/feature", gitDirPath: "/repo/.git/worktrees/feature", commonDirPath: common)
+
+        #expect(GitRepositoryService.graphPageCacheKey(for: first, offset: 0, limit: 200) != GitRepositoryService.graphPageCacheKey(for: second, offset: 0, limit: 200))
+        #expect(GitRepositoryService.minimapCacheKey(for: first, limit: 800, targetMaxBuckets: 120) != GitRepositoryService.minimapCacheKey(for: second, limit: 800, targetMaxBuckets: 120))
+    }
+
     @Test("contributor stats include commits reachable only from remote refs", .enabled(if: GitAnalyzer().isAvailable))
     func contributorStatsIncludeRemoteRefs() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("git-contributors-\(UUID().uuidString)")
@@ -485,6 +495,67 @@ struct GitAnalyzerTests {
         let contributors = analyzer.contributorStats(for: repo)
 
         #expect(contributors.first == GitContributorStat(name: "Me", email: "me@example.com", commitCount: 1, share: 1))
+    }
+
+    @Test("contributor shortlog parser groups committers")
+    func contributorShortlogParserGroupsCommitters() {
+        let rows = GitAnalyzer.parseContributorShortlog("""
+             12\tAda Lovelace <ada@example.com>
+              3\tGrace <grace@example.com>
+              1\tAda Lovelace <ada@example.com>
+        """)
+
+        #expect(rows == [
+            GitContributorStat(name: "Ada Lovelace", email: "ada@example.com", commitCount: 13, share: 13.0 / 16.0),
+            GitContributorStat(name: "Grace", email: "grace@example.com", commitCount: 3, share: 3.0 / 16.0),
+        ])
+    }
+
+    @Test("graph and contributors include detached HEAD without refs", .enabled(if: GitAnalyzer().isAvailable))
+    func graphAndContributorsIncludeDetachedHeadWithoutRefs() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("git-detached-head-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try run(["init", "-q", "-b", "main"], in: dir)
+        try run(["config", "user.email", "me@example.com"], in: dir)
+        try run(["config", "user.name", "Me"], in: dir)
+        try run(["config", "commit.gpgsign", "false"], in: dir)
+        try "hello\n".write(to: dir.appendingPathComponent("readme.md"), atomically: true, encoding: .utf8)
+        try run(["add", "readme.md"], in: dir)
+        try run(["commit", "-q", "-m", "Initial"], in: dir)
+        let hash = try run(["rev-parse", "HEAD"], in: dir).trimmingCharacters(in: .whitespacesAndNewlines)
+        try run(["checkout", "--detach", "-q", hash], in: dir)
+        try run(["branch", "-D", "main"], in: dir)
+
+        let analyzer = GitAnalyzer()
+        let repo = GitRepo(rootPath: dir.path)
+        let page = try #require(analyzer.graphPage(for: repo, offset: 0, limit: 10))
+        let contributors = analyzer.contributorStats(for: repo)
+
+        #expect(page.commits.map(\.hash) == [hash])
+        #expect(contributors.first == GitContributorStat(name: "Me", email: "me@example.com", commitCount: 1, share: 1))
+    }
+
+    @Test("annotated tags map to peeled commit hash", .enabled(if: GitAnalyzer().isAvailable))
+    func annotatedTagsMapToCommitHash() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("git-annotated-tag-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try run(["init", "-q", "-b", "main"], in: dir)
+        try run(["config", "user.email", "me@example.com"], in: dir)
+        try run(["config", "user.name", "Me"], in: dir)
+        try run(["config", "commit.gpgsign", "false"], in: dir)
+        try "hello\n".write(to: dir.appendingPathComponent("readme.md"), atomically: true, encoding: .utf8)
+        try run(["add", "readme.md"], in: dir)
+        try run(["commit", "-q", "-m", "Initial"], in: dir)
+        try run(["tag", "-a", "v-annotated", "-m", "v-annotated"], in: dir)
+        let hash = try run(["rev-parse", "HEAD"], in: dir).trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let refs = GitAnalyzer().refsByHash(for: GitRepo(rootPath: dir.path))
+
+        #expect(refs[hash]?.contains(GitRef(kind: .tag, name: "v-annotated")) == true)
     }
 
     // MARK: helpers

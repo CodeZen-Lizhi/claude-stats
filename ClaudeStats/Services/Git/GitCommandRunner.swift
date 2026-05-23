@@ -58,9 +58,15 @@ struct GitCommandRunner: Sendable {
         environment["LC_ALL"] = "C"
         process.environment = environment
 
+        let finished = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in
+            finished.signal()
+        }
+
         do {
             try process.run()
         } catch {
+            process.terminationHandler = nil
             stdout.fileHandleForReading.readabilityHandler = nil
             stderr.fileHandleForReading.readabilityHandler = nil
             return GitCommandResult(
@@ -71,12 +77,6 @@ struct GitCommandRunner: Sendable {
                 timedOut: false,
                 cancelled: false
             )
-        }
-
-        let finished = DispatchSemaphore(value: 0)
-        DispatchQueue.global(qos: .utility).async {
-            process.waitUntilExit()
-            finished.signal()
         }
 
         let deadline = Date().addingTimeInterval(timeout)
@@ -95,6 +95,7 @@ struct GitCommandRunner: Sendable {
             }
         }
 
+        process.terminationHandler = nil
         stdout.fileHandleForReading.readabilityHandler = nil
         stderr.fileHandleForReading.readabilityHandler = nil
         stdoutBuffer.append(stdout.fileHandleForReading.readDataToEndOfFile())

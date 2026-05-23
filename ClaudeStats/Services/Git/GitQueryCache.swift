@@ -10,11 +10,11 @@ actor GitQueryCache {
     private var fileChanges: [String: CacheEntry<[CommitFileChange]>] = [:]
     private var minimaps: [String: CacheEntry<GitGraphMinimapData>] = [:]
 
-    private var graphPageTasks: [String: Task<GitGraphPage?, Never>] = [:]
-    private var commitDetailTasks: [String: Task<CommitDetail?, Never>] = [:]
-    private var fileDiffTasks: [String: Task<FileDiff?, Never>] = [:]
-    private var fileChangeTasks: [String: Task<[CommitFileChange], Never>] = [:]
-    private var minimapTasks: [String: Task<GitGraphMinimapData?, Never>] = [:]
+    private var graphPageTasks: [String: InflightTask<GitGraphPage?>] = [:]
+    private var commitDetailTasks: [String: InflightTask<CommitDetail?>] = [:]
+    private var fileDiffTasks: [String: InflightTask<FileDiff?>] = [:]
+    private var fileChangeTasks: [String: InflightTask<[CommitFileChange]>] = [:]
+    private var minimapTasks: [String: InflightTask<GitGraphMinimapData?>] = [:]
 
     init(ttl: TimeInterval = 8) {
         self.ttl = ttl
@@ -22,10 +22,12 @@ actor GitQueryCache {
 
     func graphPage(key: String, load: @escaping @Sendable () -> GitGraphPage?) async -> GitGraphPage? {
         if let cached = fresh(graphPages[key]) { return cached }
-        if let task = graphPageTasks[key] { return await task.value }
+        if let inflight = graphPageTasks[key] { return await inflight.task.value }
         let task = Task.detached(priority: .userInitiated) { load() }
-        graphPageTasks[key] = task
+        let inflight = InflightTask(task: task)
+        graphPageTasks[key] = inflight
         let value = await task.value
+        guard graphPageTasks[key]?.token == inflight.token else { return nil }
         graphPageTasks[key] = nil
         if let value { graphPages[key] = CacheEntry(value: value) }
         return value
@@ -33,10 +35,12 @@ actor GitQueryCache {
 
     func commitDetail(key: String, load: @escaping @Sendable () -> CommitDetail?) async -> CommitDetail? {
         if let cached = fresh(commitDetails[key]) { return cached }
-        if let task = commitDetailTasks[key] { return await task.value }
+        if let inflight = commitDetailTasks[key] { return await inflight.task.value }
         let task = Task.detached(priority: .userInitiated) { load() }
-        commitDetailTasks[key] = task
+        let inflight = InflightTask(task: task)
+        commitDetailTasks[key] = inflight
         let value = await task.value
+        guard commitDetailTasks[key]?.token == inflight.token else { return nil }
         commitDetailTasks[key] = nil
         if let value { commitDetails[key] = CacheEntry(value: value) }
         return value
@@ -44,10 +48,12 @@ actor GitQueryCache {
 
     func fileDiff(key: String, load: @escaping @Sendable () -> FileDiff?) async -> FileDiff? {
         if let cached = fresh(fileDiffs[key]) { return cached }
-        if let task = fileDiffTasks[key] { return await task.value }
+        if let inflight = fileDiffTasks[key] { return await inflight.task.value }
         let task = Task.detached(priority: .userInitiated) { load() }
-        fileDiffTasks[key] = task
+        let inflight = InflightTask(task: task)
+        fileDiffTasks[key] = inflight
         let value = await task.value
+        guard fileDiffTasks[key]?.token == inflight.token else { return nil }
         fileDiffTasks[key] = nil
         if let value { fileDiffs[key] = CacheEntry(value: value) }
         return value
@@ -55,10 +61,12 @@ actor GitQueryCache {
 
     func fileChanges(key: String, load: @escaping @Sendable () -> [CommitFileChange]) async -> [CommitFileChange] {
         if let cached = fresh(fileChanges[key]) { return cached }
-        if let task = fileChangeTasks[key] { return await task.value }
+        if let inflight = fileChangeTasks[key] { return await inflight.task.value }
         let task = Task.detached(priority: .userInitiated) { load() }
-        fileChangeTasks[key] = task
+        let inflight = InflightTask(task: task)
+        fileChangeTasks[key] = inflight
         let value = await task.value
+        guard fileChangeTasks[key]?.token == inflight.token else { return [] }
         fileChangeTasks[key] = nil
         fileChanges[key] = CacheEntry(value: value)
         return value
@@ -66,10 +74,12 @@ actor GitQueryCache {
 
     func minimap(key: String, load: @escaping @Sendable () -> GitGraphMinimapData?) async -> GitGraphMinimapData? {
         if let cached = fresh(minimaps[key]) { return cached }
-        if let task = minimapTasks[key] { return await task.value }
+        if let inflight = minimapTasks[key] { return await inflight.task.value }
         let task = Task.detached(priority: .utility) { load() }
-        minimapTasks[key] = task
+        let inflight = InflightTask(task: task)
+        minimapTasks[key] = inflight
         let value = await task.value
+        guard minimapTasks[key]?.token == inflight.token else { return nil }
         minimapTasks[key] = nil
         if let value { minimaps[key] = CacheEntry(value: value) }
         return value
@@ -77,27 +87,44 @@ actor GitQueryCache {
 
     func invalidate(repo: GitRepo) {
         let prefixes = [repo.cacheKey, repo.worktreeKey, repo.rootPath]
-        graphPages = graphPages.filter { key, _ in !prefixes.contains { key.hasPrefix($0) } }
-        commitDetails = commitDetails.filter { key, _ in !prefixes.contains { key.hasPrefix($0) } }
-        fileDiffs = fileDiffs.filter { key, _ in !prefixes.contains { key.hasPrefix($0) } }
-        fileChanges = fileChanges.filter { key, _ in !prefixes.contains { key.hasPrefix($0) } }
-        minimaps = minimaps.filter { key, _ in !prefixes.contains { key.hasPrefix($0) } }
-        graphPageTasks.values.forEach { $0.cancel() }
-        commitDetailTasks.values.forEach { $0.cancel() }
-        fileDiffTasks.values.forEach { $0.cancel() }
-        fileChangeTasks.values.forEach { $0.cancel() }
-        minimapTasks.values.forEach { $0.cancel() }
-        graphPageTasks.removeAll()
-        commitDetailTasks.removeAll()
-        fileDiffTasks.removeAll()
-        fileChangeTasks.removeAll()
-        minimapTasks.removeAll()
+        graphPages = graphPages.filter { key, _ in !matches(key, prefixes: prefixes) }
+        commitDetails = commitDetails.filter { key, _ in !matches(key, prefixes: prefixes) }
+        fileDiffs = fileDiffs.filter { key, _ in !matches(key, prefixes: prefixes) }
+        fileChanges = fileChanges.filter { key, _ in !matches(key, prefixes: prefixes) }
+        minimaps = minimaps.filter { key, _ in !matches(key, prefixes: prefixes) }
+        cancelMatching(&graphPageTasks, prefixes: prefixes)
+        cancelMatching(&commitDetailTasks, prefixes: prefixes)
+        cancelMatching(&fileDiffTasks, prefixes: prefixes)
+        cancelMatching(&fileChangeTasks, prefixes: prefixes)
+        cancelMatching(&minimapTasks, prefixes: prefixes)
     }
 
     private func fresh<Value: Sendable>(_ entry: CacheEntry<Value>?) -> Value? {
         guard let entry, Date().timeIntervalSince(entry.createdAt) <= ttl else { return nil }
         return entry.value
     }
+
+    private func matches(_ key: String, prefixes: [String]) -> Bool {
+        prefixes.contains { prefix in
+            key == prefix || key.hasPrefix("\(prefix)|")
+        }
+    }
+
+    private func cancelMatching<Value: Sendable>(
+        _ tasks: inout [String: InflightTask<Value>],
+        prefixes: [String]
+    ) {
+        let keys = tasks.keys.filter { matches($0, prefixes: prefixes) }
+        for key in keys {
+            tasks[key]?.task.cancel()
+            tasks[key] = nil
+        }
+    }
+}
+
+private struct InflightTask<Value: Sendable>: Sendable {
+    let token = UUID()
+    let task: Task<Value, Never>
 }
 
 private struct CacheEntry<Value: Sendable>: Sendable {

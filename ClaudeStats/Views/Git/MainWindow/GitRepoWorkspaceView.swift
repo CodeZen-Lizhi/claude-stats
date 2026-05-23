@@ -239,7 +239,7 @@ private struct GitCommitInspector: View {
             }
         }
         .background(Color.primary.opacity(0.025))
-        .task(id: "\(repo.id)|\(mode.rawValue)|\(vm.statsLoadID)") {
+        .task(id: "\(repo.id)|\(mode.rawValue)|\(vm.statsScope.rawValue)|\(vm.statsRefreshGeneration)") {
             guard mode == .repo else { return }
             await vm.loadRepoStats(repo: repo)
         }
@@ -541,6 +541,7 @@ private struct GitCommitInspector: View {
                     GitRepoContributorsPanel(
                         title: "TOP COMMITTERS",
                         rows: stats.contributors,
+                        warning: stats.contributorsWarning,
                         value: { "\($0.commitCount)" }
                     )
                 }
@@ -695,6 +696,7 @@ private struct GitRepoLanguagePanel: View {
 private struct GitRepoContributorsPanel: View {
     let title: String
     let rows: [GitContributorStat]
+    let warning: String?
     let value: (GitContributorStat) -> String
 
     private var totalCommits: Int {
@@ -726,7 +728,10 @@ private struct GitRepoContributorsPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             panelHeader(title: title, detail: nil)
-            if models.isEmpty {
+            if let warning {
+                GitWorkspaceInlineEmptyState("Committer stats failed. \(warning)")
+                    .gitWorkspaceCard()
+            } else if models.isEmpty {
                 GitWorkspaceInlineEmptyState("No commits to count.")
                     .gitWorkspaceCard()
             } else {

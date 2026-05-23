@@ -12,7 +12,7 @@ struct GitRepositoryService: Sendable {
     }
 
     func graphPage(for repo: GitRepo, offset: Int, limit: Int) async -> GitGraphPage? {
-        let key = "\(repo.cacheKey)|graph-page|\(offset)|\(limit)"
+        let key = Self.graphPageCacheKey(for: repo, offset: offset, limit: limit)
         return await cache.graphPage(key: key) {
             analyzer.graphPage(for: repo, offset: offset, limit: limit)
         }
@@ -68,7 +68,11 @@ struct GitRepositoryService: Sendable {
     }
 
     static func minimapCacheKey(for repo: GitRepo, limit: Int, targetMaxBuckets: Int) -> String {
-        "\(repo.cacheKey)|minimap|\(limit)|\(max(targetMaxBuckets, 1))"
+        "\(repo.worktreeKey)|minimap|\(limit)|\(max(targetMaxBuckets, 1))"
+    }
+
+    static func graphPageCacheKey(for repo: GitRepo, offset: Int, limit: Int) -> String {
+        "\(repo.worktreeKey)|graph-page|\(offset)|\(limit)"
     }
 
     func invalidate(repo: GitRepo) async {

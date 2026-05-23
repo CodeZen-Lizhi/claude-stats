@@ -57,11 +57,13 @@ struct CommitDetailView: View {
             StxRule()
             content
         }
-        .task(id: hash) {
+        .task(id: "\(repo.id)|\(hash)") {
             if isPreview { return }
             isLoading = true
             let r = repo, h = hash
-            detail = await GitRepositoryService.shared.commitDetail(for: h, in: r)
+            let loaded = await GitRepositoryService.shared.commitDetail(for: h, in: r)
+            guard !Task.isCancelled, repo.id == r.id, hash == h else { return }
+            detail = loaded
             isLoading = false
         }
     }
