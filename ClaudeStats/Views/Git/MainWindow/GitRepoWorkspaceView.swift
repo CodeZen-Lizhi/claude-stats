@@ -181,7 +181,15 @@ struct GitRepoWorkspaceView: View {
                 }
                 if let minimapData = vm.minimapData, !minimapData.buckets.isEmpty {
                     StxRule()
-                    GitGraphMinimapView(data: minimapData, isLoading: vm.isMinimapLoading) { bucket in
+                    GitGraphMinimapView(
+                        data: minimapData,
+                        isLoading: vm.isMinimapLoading,
+                        onTargetMaxBucketsChange: { targetMaxBuckets in
+                            Task {
+                                await vm.updateMinimapTargetMaxBuckets(targetMaxBuckets, repo: repo)
+                            }
+                        }
+                    ) { bucket in
                         Task {
                             await vm.selectMinimapBucket(bucket, repo: repo)
                             if bucket.representativeHash != nil {

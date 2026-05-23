@@ -3,7 +3,20 @@ import SwiftUI
 struct GitGraphMinimapView: View {
     let data: GitGraphMinimapData
     let isLoading: Bool
+    let onTargetMaxBucketsChange: (Int) -> Void
     let onSelectBucket: (GitGraphMinimapData.Bucket) -> Void
+
+    init(
+        data: GitGraphMinimapData,
+        isLoading: Bool,
+        onTargetMaxBucketsChange: @escaping (Int) -> Void = { _ in },
+        onSelectBucket: @escaping (GitGraphMinimapData.Bucket) -> Void
+    ) {
+        self.data = data
+        self.isLoading = isLoading
+        self.onTargetMaxBucketsChange = onTargetMaxBucketsChange
+        self.onSelectBucket = onSelectBucket
+    }
 
     private var totalCommits: Int {
         data.buckets.reduce(0) { $0 + $1.commitCount }
@@ -33,10 +46,14 @@ struct GitGraphMinimapView: View {
                     .foregroundStyle(Color.stxMuted)
             }
             GeometryReader { proxy in
+                let targetMaxBuckets = Self.targetMaxBuckets(for: proxy.size.width)
                 Canvas { context, size in
                     draw(context: &context, size: size)
                 }
                 .contentShape(Rectangle())
+                .task(id: targetMaxBuckets) {
+                    onTargetMaxBucketsChange(targetMaxBuckets)
+                }
                 .gesture(
                     DragGesture(minimumDistance: 0)
                         .onEnded { value in
@@ -53,16 +70,22 @@ struct GitGraphMinimapView: View {
         .background(Color.primary.opacity(0.025))
     }
 
+    static func targetMaxBuckets(for width: CGFloat) -> Int {
+        if width < 420 { return 80 }
+        if width < 760 { return 120 }
+        return 160
+    }
+
     private func draw(context: inout GraphicsContext, size: CGSize) {
         guard !data.buckets.isEmpty, size.width > 1, size.height > 1 else { return }
-        let densityRect = CGRect(x: 0, y: 0, width: size.width, height: 30)
-        let churnRect = CGRect(x: 0, y: 34, width: size.width, height: 14)
+        let layout = GitGraphMinimapPlotLayout(size: size)
+        guard layout.plotWidth > 1 else { return }
 
-        drawGrid(context: &context, rect: densityRect)
-        drawDensity(context: &context, rect: densityRect)
-        drawChurn(context: &context, rect: churnRect)
-        drawMarkers(context: &context, size: size)
-        drawSelection(context: &context, size: size)
+        drawGrid(context: &context, rect: layout.densityRect)
+        drawDensity(context: &context, layout: layout)
+        drawChurn(context: &context, layout: layout)
+        drawMarkers(context: &context, layout: layout)
+        drawSelection(context: &context, layout: layout)
     }
 
     private func drawGrid(context: inout GraphicsContext, rect: CGRect) {
@@ -74,9 +97,10 @@ struct GitGraphMinimapView: View {
         }
     }
 
-    private func drawDensity(context: inout GraphicsContext, rect: CGRect) {
+    private func drawDensity(context: inout GraphicsContext, layout: GitGraphMinimapPlotLayout) {
+        let rect = layout.densityRect
         let points = data.buckets.enumerated().map { index, bucket in
-            point(index: index, value: bucket.commitCount, maxValue: data.maxCommitCount, rect: rect)
+            point(index: index, value: bucket.commitCount, maxValue: data.maxCommitCount, rect: rect, layout: layout)
         }
         guard let first = points.first, let last = points.last else { return }
 
@@ -93,76 +117,73 @@ struct GitGraphMinimapView: View {
         context.stroke(line, with: .color(Color.stxAccent), style: StrokeStyle(lineWidth: 1.6, lineJoin: .round))
     }
 
-    private func drawChurn(context: inout GraphicsContext, rect: CGRect) {
+    private func drawChurn(context: inout GraphicsContext, layout: GitGraphMinimapPlotLayout) {
+        let rect = layout.churnRect
         let count = data.buckets.count
         guard count > 0 else { return }
-        let slotWidth = rect.width / CGFloat(count)
-        let barWidth = max(1, min(10, slotWidth * 0.55))
+        let slotWidth = count <= 1 ? rect.width : rect.width / CGFloat(count - 1)
+        let barWidth = max(1, min(10, slotWidth * 0.45))
         for (index, bucket) in data.buckets.enumerated() where bucket.churn > 0 {
             let normalized = CGFloat(bucket.churn) / CGFloat(max(data.maxChurn, 1))
             let height = max(1, rect.height * min(max(normalized, 0), 1))
-            let x = rect.minX + CGFloat(index) * slotWidth + (slotWidth - barWidth) / 2
-            let barRect = CGRect(x: x, y: rect.maxY - height, width: barWidth, height: height)
+            let centerX = layout.clampedX(layout.xPosition(index: index, count: count), radius: barWidth / 2)
+            let barRect = CGRect(x: centerX - barWidth / 2, y: rect.maxY - height, width: barWidth, height: height)
             var path = Path()
             path.addRoundedRect(in: barRect, cornerSize: CGSize(width: 1, height: 1))
             context.fill(path, with: .color(GitPalette.add.opacity(0.65)))
         }
     }
 
-    private func drawMarkers(context: inout GraphicsContext, size: CGSize) {
+    private func drawMarkers(context: inout GraphicsContext, layout: GitGraphMinimapPlotLayout) {
         let starts = Dictionary(uniqueKeysWithValues: data.buckets.enumerated().map { ($0.element.start, $0.offset) })
         var drawn: Set<String> = []
         for marker in data.markers {
             guard let index = starts[marker.bucketStart] else { continue }
-            let x = xPosition(index: index, width: size.width)
-            let color = markerColor(marker.kind)
-            let y = marker.kind == .workingTree ? CGFloat(0) : CGFloat(39)
-            let rect = CGRect(x: x - 1.5, y: y, width: 3, height: marker.kind == .workingTree ? size.height : 7)
-            guard drawn.insert("\(Int(x))|\(Int(y))|\(marker.kind)").inserted else { continue }
+            let rect = layout.markerRect(index: index, count: data.buckets.count, marker: marker)
+            let color = markerColor(marker)
+            guard drawn.insert("\(Int(rect.midX))|\(Int(rect.minY))|\(marker.priority)|\(marker.kind)").inserted else { continue }
             var path = Path()
             path.addRoundedRect(in: rect, cornerSize: CGSize(width: 1, height: 1))
             context.fill(path, with: .color(color))
         }
     }
 
-    private func drawSelection(context: inout GraphicsContext, size: CGSize) {
+    private func drawSelection(context: inout GraphicsContext, layout: GitGraphMinimapPlotLayout) {
         guard let selected = data.selectedBucketStart,
               let index = data.buckets.firstIndex(where: { $0.start == selected }) else { return }
-        let x = xPosition(index: index, width: size.width)
+        let x = layout.xPosition(index: index, count: data.buckets.count)
         var path = Path()
-        path.move(to: CGPoint(x: x, y: 0))
-        path.addLine(to: CGPoint(x: x, y: size.height))
+        path.move(to: CGPoint(x: x, y: layout.selectionLineStartY))
+        path.addLine(to: CGPoint(x: x, y: layout.selectionLineEndY))
         context.stroke(path, with: .color(Color.stxAccent.opacity(0.85)), style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
-        let dot = CGRect(x: x - 3, y: 27, width: 6, height: 6)
-        context.fill(Path(ellipseIn: dot), with: .color(Color.stxAccent))
+        context.fill(Path(ellipseIn: layout.selectedDotRect(index: index, count: data.buckets.count)), with: .color(Color.stxAccent))
     }
 
-    private func markerColor(_ kind: GitGraphMinimapData.Marker.Kind) -> Color {
-        switch kind {
-        case .head: return GitPalette.head
-        case .branch: return Color.primary.opacity(0.55)
-        case .remoteBranch: return Color.stxMuted
-        case .tag: return GitPalette.tag
-        case .workingTree: return GitPalette.add
+    private func markerColor(_ marker: GitGraphMinimapData.Marker) -> Color {
+        switch marker.kind {
+        case .head:
+            return GitPalette.head
+        case .branch:
+            return marker.priority == .primary ? Color.primary.opacity(0.85) : Color.primary.opacity(0.48)
+        case .remoteBranch:
+            return Color.stxMuted.opacity(marker.priority == .secondary ? 0.58 : 1)
+        case .tag:
+            return GitPalette.tag.opacity(marker.priority == .secondary ? 0.62 : 1)
+        case .workingTree:
+            return GitPalette.add
         }
     }
 
-    private func point(index: Int, value: Int, maxValue: Int, rect: CGRect) -> CGPoint {
-        let x = xPosition(index: index, width: rect.width) + rect.minX
+    private func point(index: Int, value: Int, maxValue: Int, rect: CGRect, layout: GitGraphMinimapPlotLayout) -> CGPoint {
+        let x = layout.xPosition(index: index, count: data.buckets.count)
         let normalized = CGFloat(value) / CGFloat(max(maxValue, 1))
         let y = rect.maxY - rect.height * min(max(normalized, 0), 1)
         return CGPoint(x: x, y: y)
     }
 
-    private func xPosition(index: Int, width: CGFloat) -> CGFloat {
-        data.buckets.count <= 1 ? width / 2 : width * CGFloat(index) / CGFloat(data.buckets.count - 1)
-    }
-
     private func bucket(at x: CGFloat, width: CGFloat) -> GitGraphMinimapData.Bucket? {
-        guard !data.buckets.isEmpty, width > 0 else { return nil }
-        if data.buckets.count == 1 { return data.buckets[0] }
-        let ratio = min(max(x / width, 0), 1)
-        let index = Int((ratio * CGFloat(data.buckets.count - 1)).rounded())
+        guard let index = GitGraphMinimapPlotLayout(size: CGSize(width: width, height: 48))
+            .bucketIndex(at: x, count: data.buckets.count) else { return nil }
         return data.buckets[min(max(index, 0), data.buckets.count - 1)]
     }
 
@@ -228,5 +249,85 @@ struct GitGraphMinimapView: View {
             }
         }
         return tangents
+    }
+}
+
+struct GitGraphMinimapPlotLayout {
+    static let horizontalInset: CGFloat = 4
+    static let verticalInset: CGFloat = 1
+    static let selectedDotRadius: CGFloat = 3
+
+    let size: CGSize
+
+    var plotWidth: CGFloat {
+        max(0, size.width - Self.horizontalInset * 2)
+    }
+
+    var densityRect: CGRect {
+        CGRect(
+            x: Self.horizontalInset,
+            y: Self.verticalInset,
+            width: plotWidth,
+            height: min(29, max(1, size.height - 19))
+        )
+    }
+
+    var churnRect: CGRect {
+        let y = min(max(densityRect.maxY + 5, Self.verticalInset), max(Self.verticalInset, size.height - 2))
+        return CGRect(
+            x: Self.horizontalInset,
+            y: y,
+            width: plotWidth,
+            height: max(1, size.height - y - Self.verticalInset)
+        )
+    }
+
+    var selectionLineStartY: CGFloat {
+        Self.verticalInset
+    }
+
+    var selectionLineEndY: CGFloat {
+        max(selectionLineStartY, size.height - Self.verticalInset)
+    }
+
+    func xPosition(index: Int, count: Int) -> CGFloat {
+        guard count > 1 else { return size.width / 2 }
+        let ratio = CGFloat(min(max(index, 0), count - 1)) / CGFloat(count - 1)
+        return Self.horizontalInset + plotWidth * ratio
+    }
+
+    func bucketIndex(at x: CGFloat, count: Int) -> Int? {
+        guard count > 0, size.width > 0 else { return nil }
+        guard count > 1, plotWidth > 0 else { return 0 }
+        let clamped = min(max(x, Self.horizontalInset), Self.horizontalInset + plotWidth)
+        let ratio = (clamped - Self.horizontalInset) / plotWidth
+        return min(max(Int((ratio * CGFloat(count - 1)).rounded()), 0), count - 1)
+    }
+
+    func selectedDotRect(index: Int, count: Int) -> CGRect {
+        let radius = Self.selectedDotRadius
+        let centerX = clampedX(xPosition(index: index, count: count), radius: radius)
+        let centerY = min(max(densityRect.maxY, radius), max(radius, size.height - radius))
+        return CGRect(x: centerX - radius, y: centerY - radius, width: radius * 2, height: radius * 2)
+    }
+
+    func markerRect(index: Int, count: Int, marker: GitGraphMinimapData.Marker) -> CGRect {
+        let width: CGFloat = marker.priority == .primary ? 3 : 2
+        let centerX = clampedX(xPosition(index: index, count: count), radius: width / 2)
+        if marker.kind == .workingTree {
+            return CGRect(
+                x: centerX - width / 2,
+                y: Self.verticalInset,
+                width: width,
+                height: max(1, size.height - Self.verticalInset * 2)
+            )
+        }
+        let height: CGFloat = marker.priority == .primary ? 8 : 6
+        let y = max(Self.verticalInset, size.height - Self.verticalInset - height)
+        return CGRect(x: centerX - width / 2, y: y, width: width, height: height)
+    }
+
+    func clampedX(_ x: CGFloat, radius: CGFloat) -> CGFloat {
+        min(max(x, radius), max(radius, size.width - radius))
     }
 }

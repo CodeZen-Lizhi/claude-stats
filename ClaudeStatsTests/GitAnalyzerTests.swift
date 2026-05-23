@@ -228,16 +228,156 @@ struct GitAnalyzerTests {
             now: date("2024-01-16T10:00:00Z")
         )
 
+        #expect(data.granularity == .day)
         #expect(data.buckets.count == 2)
         #expect(data.buckets[0].commitCount == 2)
         #expect(data.buckets[0].churn == 9)
         #expect(data.buckets[0].representativeHash == "b")
         #expect(data.buckets[1].commitCount == 1)
-        #expect(data.markers.contains { $0.kind == .head && $0.label == "main" })
-        #expect(data.markers.contains { $0.kind == .remoteBranch && $0.label == "origin/main" })
+        #expect(data.markers.contains { $0.kind == .head && $0.label == "main" && $0.priority == .primary })
+        #expect(data.markers.contains { $0.kind == .remoteBranch && $0.label == "origin/main" && $0.priority == .secondary })
         #expect(data.selectedBucketStart == data.buckets[0].start)
         let selectedBucket = try #require(data.bucket(containing: "a"))
         #expect(selectedBucket.start == data.buckets[0].start)
+    }
+
+    @Test("minimap chooses coarser granularity as commit density grows")
+    func minimapAdaptiveGranularity() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let base = try #require(cal.date(from: DateComponents(year: 2025, month: 12, day: 31, hour: 12)))
+
+        func commit(_ index: Int) -> GitCommit {
+            GitCommit(
+                hash: "c\(index)",
+                date: cal.date(byAdding: .day, value: -index, to: base)!,
+                author: "A",
+                authorEmail: "a@x",
+                subject: "Commit \(index)",
+                insertions: 1,
+                deletions: 0,
+                filesChanged: 1,
+                repoID: "r"
+            )
+        }
+
+        let seventyDays = (0..<70).map(commit)
+        let weekly = GitGraphMinimapData.build(
+            commits: seventyDays,
+            refsByHash: [:],
+            workingTree: .clean,
+            selectedHash: "c0",
+            targetMaxBuckets: 20,
+            calendar: cal,
+            now: base
+        )
+        #expect(weekly.granularity == .week)
+        #expect(weekly.buckets.count <= 20)
+        #expect(weekly.bucket(containing: "c0")?.representativeHash == "c0")
+
+        let monthly = GitGraphMinimapData.build(
+            commits: seventyDays,
+            refsByHash: [:],
+            workingTree: .clean,
+            selectedHash: nil,
+            targetMaxBuckets: 4,
+            calendar: cal,
+            now: base
+        )
+        #expect(monthly.granularity == .month)
+
+        let longHistory = (0..<700).map(commit)
+        let yearly = GitGraphMinimapData.build(
+            commits: longHistory,
+            refsByHash: [:],
+            workingTree: .clean,
+            selectedHash: nil,
+            targetMaxBuckets: 4,
+            calendar: cal,
+            now: base
+        )
+        #expect(yearly.granularity == .year)
+    }
+
+    @Test("minimap marker reduction prioritizes current branch and folds secondary refs")
+    func minimapMarkerReduction() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let date = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 15, hour: 12)))
+        let commit = GitCommit(
+            hash: "h",
+            date: date,
+            author: "A",
+            authorEmail: "a@x",
+            subject: "H",
+            insertions: 1,
+            deletions: 1,
+            filesChanged: 1,
+            repoID: "r"
+        )
+
+        let data = GitGraphMinimapData.build(
+            commits: [commit],
+            refsByHash: [
+                "h": [
+                    GitRef(kind: .head, name: "HEAD"),
+                    GitRef(kind: .branch, name: "main"),
+                    GitRef(kind: .branch, name: "feature/a"),
+                    GitRef(kind: .branch, name: "feature/b"),
+                    GitRef(kind: .remoteBranch, name: "origin/main"),
+                    GitRef(kind: .tag, name: "v1.0"),
+                    GitRef(kind: .tag, name: "v2.0"),
+                ],
+            ],
+            workingTree: .clean,
+            selectedHash: nil,
+            currentBranch: "main",
+            calendar: cal,
+            now: date
+        )
+
+        #expect(data.markers.contains { $0.kind == .head && $0.priority == .primary })
+        #expect(data.markers.contains { $0.kind == .branch && $0.label == "main" && $0.priority == .primary })
+        #expect(data.markers.filter { $0.kind == .branch && $0.priority == .normal }.map(\.label) == ["feature/a"])
+        let secondary = data.markers.filter { $0.priority == .secondary }
+        #expect(secondary.count == 1)
+        #expect(secondary.first?.kind == .remoteBranch)
+        #expect(secondary.first?.label == "3 refs")
+    }
+
+    @Test("dirty working tree marker uses the selected minimap granularity")
+    func minimapWorkingTreeMarkerUsesGranularity() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let oldDate = try #require(cal.date(from: DateComponents(year: 2020, month: 1, day: 1, hour: 12)))
+        let now = try #require(cal.date(from: DateComponents(year: 2024, month: 8, day: 20, hour: 12)))
+        let commit = GitCommit(
+            hash: "old",
+            date: oldDate,
+            author: "A",
+            authorEmail: "a@x",
+            subject: "Old",
+            insertions: 1,
+            deletions: 0,
+            filesChanged: 1,
+            repoID: "r"
+        )
+        let dirty = GitWorkingTreeSummary(changes: [
+            GitWorkingTreeChange(path: "App.swift", oldPath: nil, indexStatus: " ", worktreeStatus: "M", kind: .modified),
+        ])
+
+        let data = GitGraphMinimapData.build(
+            commits: [commit],
+            refsByHash: [:],
+            workingTree: dirty,
+            selectedHash: nil,
+            targetMaxBuckets: 1,
+            calendar: cal,
+            now: now
+        )
+        let expectedStart = GitGraphMinimapData.bucketStart(for: now, granularity: data.granularity, calendar: cal)
+        #expect(data.markers.contains { $0.kind == .workingTree && $0.bucketStart == expectedStart && $0.priority == .primary })
+        #expect(data.buckets.contains { $0.start == expectedStart })
     }
 
     // MARK: - against a real temp repo
@@ -311,6 +451,40 @@ struct GitAnalyzerTests {
         let refs = analyzer.refsByHash(for: repo)
         #expect(refs.values.flatMap { $0 }.contains(GitRef(kind: .branch, name: "feature/test")))
         #expect(refs.values.flatMap { $0 }.contains(GitRef(kind: .tag, name: "v-test")))
+    }
+
+    @Test("minimap cache key separates target bucket counts")
+    func minimapCacheKeySeparatesTargetBucketCounts() {
+        let repo = GitRepo(rootPath: "/repo", gitDirPath: "/repo/.git", commonDirPath: "/repo/.git")
+        let wide = GitRepositoryService.minimapCacheKey(for: repo, limit: 800, targetMaxBuckets: 160)
+        let narrow = GitRepositoryService.minimapCacheKey(for: repo, limit: 800, targetMaxBuckets: 80)
+        #expect(wide != narrow)
+        #expect(GitRepositoryService.minimapCacheKey(for: repo, limit: 800, targetMaxBuckets: 0).hasSuffix("|1"))
+    }
+
+    @Test("contributor stats include commits reachable only from remote refs", .enabled(if: GitAnalyzer().isAvailable))
+    func contributorStatsIncludeRemoteRefs() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("git-contributors-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try run(["init", "-q", "-b", "main"], in: dir)
+        try run(["config", "user.email", "me@example.com"], in: dir)
+        try run(["config", "user.name", "Me"], in: dir)
+        try run(["config", "commit.gpgsign", "false"], in: dir)
+        try "hello\n".write(to: dir.appendingPathComponent("readme.md"), atomically: true, encoding: .utf8)
+        try run(["add", "readme.md"], in: dir)
+        try run(["commit", "-q", "-m", "Initial"], in: dir)
+        let hash = try run(["rev-parse", "HEAD"], in: dir).trimmingCharacters(in: .whitespacesAndNewlines)
+        try run(["update-ref", "refs/remotes/origin/main", hash], in: dir)
+        try run(["checkout", "--detach", "-q", hash], in: dir)
+        try run(["branch", "-D", "main"], in: dir)
+
+        let analyzer = GitAnalyzer()
+        let repo = GitRepo(rootPath: dir.path)
+        let contributors = analyzer.contributorStats(for: repo)
+
+        #expect(contributors.first == GitContributorStat(name: "Me", email: "me@example.com", commitCount: 1, share: 1))
     }
 
     // MARK: helpers

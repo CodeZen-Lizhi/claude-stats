@@ -145,7 +145,7 @@ struct GitAnalyzer: Sendable {
     func contributorStats(for repo: GitRepo) -> [GitContributorStat] {
         guard isAvailable else { return [] }
         let format = "format:\(Self.recordSep)%an\(Self.fieldSep)%ae"
-        let args = ["-C", repo.rootPath, "log", "--branches", "--tags", "--pretty=\(format)"]
+        let args = ["-C", repo.rootPath, "log", "--branches", "--remotes", "--tags", "--pretty=\(format)"]
         guard let output = runGit(args) else { return [] }
         return Self.parseContributorStats(output)
     }

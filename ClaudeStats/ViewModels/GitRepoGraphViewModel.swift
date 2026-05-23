@@ -34,6 +34,7 @@ final class GitRepoGraphViewModel {
     var limit = 200
 
     private let pageSize = 200
+    @ObservationIgnored private var minimapTargetMaxBuckets = 120
     @ObservationIgnored private let repositoryService = GitRepositoryService.shared
     private let isPreview: Bool
     @ObservationIgnored private var watcher: GitRepositoryWatcher?
@@ -73,7 +74,8 @@ final class GitRepoGraphViewModel {
             },
             refsByHash: Dictionary(uniqueKeysWithValues: previewGraph.commits.map { ($0.hash, $0.refs) }),
             workingTree: previewGraph.workingTree,
-            selectedHash: initialSelectedHash
+            selectedHash: initialSelectedHash,
+            currentBranch: previewGraph.repo.currentBranch
         )
         if let commit = previewGraph.commits.first {
             commitDetail = .preview(
@@ -323,11 +325,25 @@ final class GitRepoGraphViewModel {
         let requestedRepoID = repo.id
         let requestedSelectedHash = selectedHash
         let requestedLimit = max(limit, loadedLimit, 800)
-        let data = await repositoryService.minimapData(for: repo, limit: requestedLimit, selectedHash: requestedSelectedHash)
+        let requestedTargetMaxBuckets = minimapTargetMaxBuckets
+        let data = await repositoryService.minimapData(
+            for: repo,
+            limit: requestedLimit,
+            targetMaxBuckets: requestedTargetMaxBuckets,
+            selectedHash: requestedSelectedHash
+        )
         guard minimapRequestID == requestID,
               currentRepoID == requestedRepoID,
+              minimapTargetMaxBuckets == requestedTargetMaxBuckets,
               selectedHash == requestedSelectedHash else { return }
         minimapData = data
+    }
+
+    func updateMinimapTargetMaxBuckets(_ targetMaxBuckets: Int, repo: GitRepo) async {
+        let normalized = max(targetMaxBuckets, 1)
+        guard minimapTargetMaxBuckets != normalized else { return }
+        minimapTargetMaxBuckets = normalized
+        await loadMinimap(repo: repo)
     }
 
     func selectMinimapBucket(_ bucket: GitGraphMinimapData.Bucket, repo: GitRepo) async {
@@ -361,6 +377,7 @@ final class GitRepoGraphViewModel {
         diffPath = nil
         loadedLimit = 0
         limit = pageSize
+        minimapTargetMaxBuckets = 120
     }
 
     private func reconcileSelection() {

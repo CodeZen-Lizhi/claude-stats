@@ -39,8 +39,8 @@ struct GitRepositoryService: Sendable {
         }
     }
 
-    func minimapData(for repo: GitRepo, limit: Int, selectedHash: String?) async -> GitGraphMinimapData? {
-        let key = "\(repo.cacheKey)|minimap|\(limit)"
+    func minimapData(for repo: GitRepo, limit: Int, targetMaxBuckets: Int, selectedHash: String?) async -> GitGraphMinimapData? {
+        let key = Self.minimapCacheKey(for: repo, limit: limit, targetMaxBuckets: targetMaxBuckets)
         let data = await cache.minimap(key: key) {
             let commits = analyzer.minimapCommits(for: repo, limit: limit)
             guard !commits.isEmpty else {
@@ -50,17 +50,25 @@ struct GitRepositoryService: Sendable {
                     commits: [],
                     refsByHash: [:],
                     workingTree: workingTree,
-                    selectedHash: nil
+                    selectedHash: nil,
+                    targetMaxBuckets: targetMaxBuckets,
+                    currentBranch: repo.currentBranch
                 )
             }
             return GitGraphMinimapData.build(
                 commits: commits,
                 refsByHash: analyzer.refsByHash(for: repo),
                 workingTree: analyzer.workingTreeSummary(for: repo),
-                selectedHash: nil
+                selectedHash: nil,
+                targetMaxBuckets: targetMaxBuckets,
+                currentBranch: repo.currentBranch
             )
         }
         return data?.selecting(hash: selectedHash)
+    }
+
+    static func minimapCacheKey(for repo: GitRepo, limit: Int, targetMaxBuckets: Int) -> String {
+        "\(repo.cacheKey)|minimap|\(limit)|\(max(targetMaxBuckets, 1))"
     }
 
     func invalidate(repo: GitRepo) async {

@@ -130,6 +130,14 @@ struct GitGraphPage: Sendable {
 }
 
 struct GitGraphMinimapData: Sendable, Hashable {
+    enum Granularity: String, Sendable, Hashable, CaseIterable {
+        case day
+        case week
+        case month
+        case quarter
+        case year
+    }
+
     struct Bucket: Sendable, Hashable, Identifiable {
         let start: Date
         let commitCount: Int
@@ -142,6 +150,12 @@ struct GitGraphMinimapData: Sendable, Hashable {
     }
 
     struct Marker: Sendable, Hashable, Identifiable {
+        enum Priority: Int, Sendable, Hashable {
+            case secondary
+            case normal
+            case primary
+        }
+
         enum Kind: Sendable, Hashable {
             case head
             case branch
@@ -154,12 +168,14 @@ struct GitGraphMinimapData: Sendable, Hashable {
         let label: String
         let hash: String?
         let bucketStart: Date
+        let priority: Priority
 
         var id: String {
-            "\(kind)|\(label)|\(hash ?? "")|\(bucketStart.timeIntervalSinceReferenceDate)"
+            "\(priority)|\(kind)|\(label)|\(hash ?? "")|\(bucketStart.timeIntervalSinceReferenceDate)"
         }
     }
 
+    let granularity: Granularity
     let buckets: [Bucket]
     let markers: [Marker]
     let hashBucketStarts: [String: Date]
@@ -174,6 +190,7 @@ struct GitGraphMinimapData: Sendable, Hashable {
 
     func selecting(hash: String?) -> GitGraphMinimapData {
         GitGraphMinimapData(
+            granularity: granularity,
             buckets: buckets,
             markers: markers,
             hashBucketStarts: hashBucketStarts,
@@ -191,28 +208,38 @@ struct GitGraphMinimapData: Sendable, Hashable {
         refsByHash: [String: [GitRef]],
         workingTree: GitWorkingTreeSummary,
         selectedHash: String?,
+        targetMaxBuckets: Int = 120,
+        currentBranch: String? = nil,
         calendar: Calendar = .current,
         now: Date = .now
     ) -> GitGraphMinimapData {
-        var cells: [Date: (count: Int, insertions: Int, deletions: Int, representativeHash: String?)] = [:]
+        let granularity = selectGranularity(
+            commits: commits,
+            workingTree: workingTree,
+            targetMaxBuckets: targetMaxBuckets,
+            calendar: calendar,
+            now: now
+        )
+        var cells: [Date: (count: Int, insertions: Int, deletions: Int, representativeHash: String?, representativeDate: Date?)] = [:]
         var hashBucketStarts: [String: Date] = [:]
 
         for commit in commits {
-            let start = calendar.dateInterval(of: .day, for: commit.date)?.start ?? commit.date
-            var cell = cells[start, default: (0, 0, 0, nil)]
+            let start = bucketStart(for: commit.date, granularity: granularity, calendar: calendar)
+            var cell = cells[start, default: (0, 0, 0, nil, nil)]
             cell.count += 1
             cell.insertions += max(commit.insertions, 0)
             cell.deletions += max(commit.deletions, 0)
-            if cell.representativeHash == nil {
+            if cell.representativeDate == nil || commit.date > (cell.representativeDate ?? .distantPast) {
                 cell.representativeHash = commit.hash
+                cell.representativeDate = commit.date
             }
             cells[start] = cell
             hashBucketStarts[commit.hash] = start
         }
 
-        let today = calendar.dateInterval(of: .day, for: now)?.start ?? now
+        let today = bucketStart(for: now, granularity: granularity, calendar: calendar)
         if workingTree.isDirty, cells[today] == nil {
-            cells[today] = (0, 0, 0, nil)
+            cells[today] = (0, 0, 0, nil, nil)
         }
 
         let buckets = cells
@@ -232,28 +259,131 @@ struct GitGraphMinimapData: Sendable, Hashable {
             guard let start = hashBucketStarts[hash] else { continue }
             for ref in refs {
                 let kind: Marker.Kind
+                let priority: Marker.Priority
                 switch ref.kind {
-                case .head: kind = .head
-                case .branch: kind = .branch
-                case .remoteBranch: kind = .remoteBranch
-                case .tag: kind = .tag
+                case .head:
+                    kind = .head
+                    priority = .primary
+                case .branch:
+                    kind = .branch
+                    priority = ref.name == currentBranch ? .primary : .normal
+                case .remoteBranch:
+                    kind = .remoteBranch
+                    priority = .secondary
+                case .tag:
+                    kind = .tag
+                    priority = .secondary
                 }
-                markers.append(Marker(kind: kind, label: ref.name, hash: hash, bucketStart: start))
+                markers.append(Marker(kind: kind, label: ref.name, hash: hash, bucketStart: start, priority: priority))
             }
         }
         if workingTree.isDirty {
-            markers.append(Marker(kind: .workingTree, label: "Working Tree", hash: nil, bucketStart: today))
+            markers.append(Marker(kind: .workingTree, label: "Working Tree", hash: nil, bucketStart: today, priority: .primary))
         }
 
         return GitGraphMinimapData(
+            granularity: granularity,
             buckets: buckets,
-            markers: markers.sorted { lhs, rhs in
+            markers: reducedMarkers(markers).sorted { lhs, rhs in
                 if lhs.bucketStart != rhs.bucketStart { return lhs.bucketStart < rhs.bucketStart }
+                if lhs.priority != rhs.priority { return lhs.priority.rawValue < rhs.priority.rawValue }
                 return lhs.label.localizedStandardCompare(rhs.label) == .orderedAscending
             },
             hashBucketStarts: hashBucketStarts,
             selectedHash: selectedHash
         )
+    }
+
+    static func selectGranularity(
+        commits: [GitCommit],
+        workingTree: GitWorkingTreeSummary,
+        targetMaxBuckets: Int,
+        calendar: Calendar = .current,
+        now: Date = .now
+    ) -> Granularity {
+        let target = max(targetMaxBuckets, 1)
+        for granularity in Granularity.allCases {
+            var starts = Set(commits.map { bucketStart(for: $0.date, granularity: granularity, calendar: calendar) })
+            if workingTree.isDirty {
+                starts.insert(bucketStart(for: now, granularity: granularity, calendar: calendar))
+            }
+            if starts.count <= target {
+                return granularity
+            }
+        }
+        return .year
+    }
+
+    static func bucketStart(for date: Date, granularity: Granularity, calendar: Calendar = .current) -> Date {
+        switch granularity {
+        case .day:
+            return calendar.dateInterval(of: .day, for: date)?.start ?? date
+        case .week:
+            return calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
+        case .month:
+            return calendar.dateInterval(of: .month, for: date)?.start ?? date
+        case .quarter:
+            let components = calendar.dateComponents([.year, .month], from: date)
+            guard let year = components.year, let month = components.month else { return date }
+            let firstMonth = ((month - 1) / 3) * 3 + 1
+            return calendar.date(from: DateComponents(year: year, month: firstMonth, day: 1)) ?? date
+        case .year:
+            return calendar.dateInterval(of: .year, for: date)?.start ?? date
+        }
+    }
+
+    private static func reducedMarkers(_ markers: [Marker]) -> [Marker] {
+        var output: [Marker] = []
+        let byBucket = Dictionary(grouping: markers, by: \.bucketStart)
+        for (bucketStart, markers) in byBucket {
+            let primary = markers.filter { $0.priority == .primary }
+            output.append(contentsOf: primary)
+
+            let normal = markers
+                .filter { $0.priority == .normal }
+                .reduce(into: [Marker.Kind: Marker]()) { result, marker in
+                    let existing = result[marker.kind]
+                    if existing == nil || marker.label.localizedStandardCompare(existing?.label ?? "") == .orderedAscending {
+                        result[marker.kind] = marker
+                    }
+                }
+                .values
+            output.append(contentsOf: normal)
+
+            let secondary = markers.filter { $0.priority == .secondary }
+            if secondary.count == 1, let marker = secondary.first {
+                output.append(marker)
+            } else if let first = secondary.sorted(by: markerSort).first {
+                let hasRemote = secondary.contains { $0.kind == .remoteBranch }
+                output.append(
+                    Marker(
+                        kind: hasRemote ? .remoteBranch : first.kind,
+                        label: "\(secondary.count) refs",
+                        hash: first.hash,
+                        bucketStart: bucketStart,
+                        priority: .secondary
+                    )
+                )
+            }
+        }
+        return output
+    }
+
+    private static func markerSort(_ lhs: Marker, _ rhs: Marker) -> Bool {
+        if lhs.kind != rhs.kind {
+            return markerKindRank(lhs.kind) < markerKindRank(rhs.kind)
+        }
+        return lhs.label.localizedStandardCompare(rhs.label) == .orderedAscending
+    }
+
+    private static func markerKindRank(_ kind: Marker.Kind) -> Int {
+        switch kind {
+        case .workingTree: return 0
+        case .head: return 1
+        case .branch: return 2
+        case .remoteBranch: return 3
+        case .tag: return 4
+        }
     }
 }
 

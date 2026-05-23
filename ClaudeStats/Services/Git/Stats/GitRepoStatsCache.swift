@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 
 struct GitRepoStatsCache: Sendable {
-    static let currentSchemaVersion = 1
+    static let currentSchemaVersion = 2
 
     struct Key: Codable, Hashable, Sendable {
         let schemaVersion: Int
