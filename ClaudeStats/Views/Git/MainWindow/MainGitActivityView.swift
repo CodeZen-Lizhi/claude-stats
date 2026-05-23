@@ -213,7 +213,7 @@ private struct GitRepoSelectionColumn: View {
                 .padding(10)
             }
         }
-        .background(Color.primary.opacity(0.025))
+        .background(AppSurface.panelFill)
     }
 
     private var columnHeader: some View {

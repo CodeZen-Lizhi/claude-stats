@@ -19,6 +19,10 @@ struct GitRepoWorkspaceView: View {
     private static let inspectorMinWidth: CGFloat = 290
     private static let inspectorIdealWidth: CGFloat = 300
     private static let inspectorMaxWidth: CGFloat = 360
+    private static let historySplitFraction: CGFloat = 0.14
+    private static let graphListMinHeight: CGFloat = 180
+    private static let historyMinHeight: CGFloat = 72
+    private static let historyMaxHeight: CGFloat = 150
 
     init(repo: GitRepo, repoSelectionToken: UInt64 = 0) {
         self.repo = repo
@@ -90,6 +94,7 @@ struct GitRepoWorkspaceView: View {
             graphHeader
             StxRule()
             graphContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
@@ -145,42 +150,16 @@ struct GitRepoWorkspaceView: View {
     private var graphContent: some View {
         if let graph = vm.graph, let layout = vm.layout, graph.workingTree.isDirty || !layout.rows.isEmpty {
             let hasWorkingTree = graph.workingTree.isDirty
-            VStack(spacing: 0) {
-                AppScrollView {
-                    LazyVStack(spacing: 0) {
-                        if hasWorkingTree {
-                            GitWorkingTreeRowView(
-                                summary: graph.workingTree,
-                                rowHeight: Self.workingTreeRowHeight,
-                                railPad: Self.railPad,
-                                nodeRadius: Self.nodeRadius,
-                                railWidth: railWidth,
-                                railColorIndex: layout.rows.first?.colorIndex ?? 0,
-                                isSelected: inspectorMode == .workingTree
-                            ) {
-                                inspectorMode = .workingTree
-                                vm.selectWorkingTree()
-                            }
-                        }
-                        ForEach(layout.rows) { row in
-                            GitGraphRowView(
-                                row: row,
-                                rowHeight: Self.rowHeight,
-                                laneSpacing: Self.laneSpacing,
-                                railPad: Self.railPad,
-                                nodeRadius: Self.nodeRadius,
-                                railWidth: railWidth,
-                                isSelected: inspectorMode == .commit && vm.selectedHash == row.commit.hash,
-                                connectsFromTop: hasWorkingTree && row.id == layout.rows.first?.id
-                            ) {
-                                inspectorMode = .commit
-                                vm.selectCommit(row.commit.hash)
-                            }
-                        }
-                    }
-                }
-                if let minimapData = vm.minimapData, !minimapData.buckets.isEmpty {
-                    StxRule()
+            if let minimapData = vm.minimapData, !minimapData.buckets.isEmpty {
+                HoverableSplitView(
+                    axis: .horizontal,
+                    primaryFraction: Self.historySplitFraction,
+                    configuration: HoverableSplitViewConfiguration(
+                        primaryMinimumPaneLength: Self.historyMinHeight,
+                        primaryMaximumPaneLength: Self.historyMaxHeight,
+                        secondaryMinimumPaneLength: Self.graphListMinHeight
+                    )
+                ) {
                     GitGraphMinimapView(
                         data: minimapData,
                         isLoading: vm.isMinimapLoading,
@@ -197,7 +176,13 @@ struct GitRepoWorkspaceView: View {
                             }
                         }
                     }
+                    .frame(minHeight: Self.historyMinHeight, maxHeight: .infinity)
+                } secondary: {
+                    graphRows(graph: graph, layout: layout, hasWorkingTree: hasWorkingTree)
+                        .frame(minHeight: 0, maxHeight: .infinity)
                 }
+            } else {
+                graphRows(graph: graph, layout: layout, hasWorkingTree: hasWorkingTree)
             }
         } else if vm.isGraphLoading {
             ProgressView()
@@ -206,6 +191,42 @@ struct GitRepoWorkspaceView: View {
         } else {
             GitWorkspaceInlineEmptyState("No commits to graph.")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private func graphRows(graph: GitGraph, layout: GraphLayout, hasWorkingTree: Bool) -> some View {
+        AppScrollView {
+            LazyVStack(spacing: 0) {
+                if hasWorkingTree {
+                    GitWorkingTreeRowView(
+                        summary: graph.workingTree,
+                        rowHeight: Self.workingTreeRowHeight,
+                        railPad: Self.railPad,
+                        nodeRadius: Self.nodeRadius,
+                        railWidth: railWidth,
+                        railColorIndex: layout.rows.first?.colorIndex ?? 0,
+                        isSelected: inspectorMode == .workingTree
+                    ) {
+                        inspectorMode = .workingTree
+                        vm.selectWorkingTree()
+                    }
+                }
+                ForEach(layout.rows) { row in
+                    GitGraphRowView(
+                        row: row,
+                        rowHeight: Self.rowHeight,
+                        laneSpacing: Self.laneSpacing,
+                        railPad: Self.railPad,
+                        nodeRadius: Self.nodeRadius,
+                        railWidth: railWidth,
+                        isSelected: inspectorMode == .commit && vm.selectedHash == row.commit.hash,
+                        connectsFromTop: hasWorkingTree && row.id == layout.rows.first?.id
+                    ) {
+                        inspectorMode = .commit
+                        vm.selectCommit(row.commit.hash)
+                    }
+                }
+            }
         }
     }
 
@@ -238,7 +259,7 @@ private struct GitCommitInspector: View {
                 }
             }
         }
-        .background(Color.primary.opacity(0.025))
+        .background(AppSurface.panelFill)
         .task(id: "\(repo.id)|\(mode.rawValue)|\(vm.statsScope.rawValue)|\(vm.statsRefreshGeneration)") {
             guard mode == .repo else { return }
             await vm.loadRepoStats(repo: repo)

@@ -57,12 +57,12 @@ struct GitGraphMinimapView: View {
 
                     GitGraphMinimapInteractionLayer { location in
                         if let location {
-                            updateHoverBucket(at: location.x, width: proxy.size.width)
+                            updateHoverBucket(at: location.x, size: proxy.size)
                         } else if hoveredBucketStart != nil {
                             hoveredBucketStart = nil
                         }
                     } onClick: { location in
-                        if let bucket = bucket(at: location.x, width: proxy.size.width) {
+                        if let bucket = bucket(at: location.x, size: proxy.size) {
                             onSelectBucket(bucket)
                         }
                     }
@@ -73,11 +73,12 @@ struct GitGraphMinimapView: View {
                     onTargetMaxBucketsChange(targetMaxBuckets)
                 }
             }
-            .frame(height: 48)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(Color.primary.opacity(0.025))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(AppSurface.panelFill)
     }
 
     nonisolated static func targetMaxBuckets(for width: CGFloat) -> Int {
@@ -203,14 +204,14 @@ struct GitGraphMinimapView: View {
         return CGPoint(x: x, y: y)
     }
 
-    private func bucket(at x: CGFloat, width: CGFloat) -> GitGraphMinimapData.Bucket? {
-        guard let index = GitGraphMinimapPlotLayout(size: CGSize(width: width, height: 48))
+    private func bucket(at x: CGFloat, size: CGSize) -> GitGraphMinimapData.Bucket? {
+        guard let index = GitGraphMinimapPlotLayout(size: size)
             .bucketIndex(at: x, count: data.buckets.count) else { return nil }
         return data.buckets[min(max(index, 0), data.buckets.count - 1)]
     }
 
-    private func updateHoverBucket(at x: CGFloat, width: CGFloat) {
-        let nextBucketStart = bucket(at: x, width: width)?.start
+    private func updateHoverBucket(at x: CGFloat, size: CGSize) {
+        let nextBucketStart = bucket(at: x, size: size)?.start
         if hoveredBucketStart != nextBucketStart {
             hoveredBucketStart = nextBucketStart
         }
