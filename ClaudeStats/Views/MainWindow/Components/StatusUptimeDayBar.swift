@@ -8,7 +8,7 @@ struct StatusUptimeDayBar: View {
 
     private static let height: CGFloat = 34
     private static let hoverScale: CGFloat = 1.18
-    private static let tooltipGap: CGFloat = 24
+    private static let tooltipGap: CGFloat = 36
     private static let hoverAnimation = Animation.timingCurve(0.22, 1.0, 0.36, 1.0, duration: 0.18)
 
     private static var hoverOutset: CGFloat {
