@@ -4,7 +4,30 @@ import Foundation
 struct GitRepo: Sendable, Identifiable, Hashable {
     /// Absolute path of the repository's top level (`git rev-parse --show-toplevel`).
     let rootPath: String
+    /// Absolute path to this worktree's `.git` directory.
+    let gitDirPath: String?
+    /// Absolute path to the common git directory shared by linked worktrees.
+    let commonDirPath: String?
+    let isWorktree: Bool
+    let currentBranch: String?
+
+    init(
+        rootPath: String,
+        gitDirPath: String? = nil,
+        commonDirPath: String? = nil,
+        isWorktree: Bool = false,
+        currentBranch: String? = nil
+    ) {
+        self.rootPath = rootPath
+        self.gitDirPath = gitDirPath
+        self.commonDirPath = commonDirPath
+        self.isWorktree = isWorktree
+        self.currentBranch = currentBranch
+    }
+
     var id: String { rootPath }
+    var cacheKey: String { commonDirPath ?? gitDirPath ?? rootPath }
+    var worktreeKey: String { gitDirPath ?? rootPath }
     var displayName: String {
         let name = (rootPath as NSString).lastPathComponent
         return name.isEmpty ? rootPath : name

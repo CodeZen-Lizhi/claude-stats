@@ -3,7 +3,7 @@ import Foundation
 /// A ref (branch / tag / HEAD) pointing at a commit, parsed from `git log`'s
 /// `%D` decoration field.
 struct GitRef: Sendable, Hashable {
-    enum Kind: Sendable { case head, branch, tag }
+    enum Kind: Sendable { case head, branch, remoteBranch, tag }
     let kind: Kind
     /// `"main"`, `"v1.0"`, `"claude/fix-drawer-card-bugs"`, …
     let name: String
@@ -117,6 +117,143 @@ struct GitGraph: Sendable {
         self.commits = commits
         self.truncated = truncated
         self.workingTree = workingTree
+    }
+}
+
+struct GitGraphPage: Sendable {
+    let repo: GitRepo
+    let commits: [GraphCommit]
+    let offset: Int
+    let limit: Int
+    let hasMore: Bool
+    let workingTree: GitWorkingTreeSummary
+}
+
+struct GitGraphMinimapData: Sendable, Hashable {
+    struct Bucket: Sendable, Hashable, Identifiable {
+        let start: Date
+        let commitCount: Int
+        let insertions: Int
+        let deletions: Int
+        let representativeHash: String?
+
+        var id: TimeInterval { start.timeIntervalSinceReferenceDate }
+        var churn: Int { insertions + deletions }
+    }
+
+    struct Marker: Sendable, Hashable, Identifiable {
+        enum Kind: Sendable, Hashable {
+            case head
+            case branch
+            case remoteBranch
+            case tag
+            case workingTree
+        }
+
+        let kind: Kind
+        let label: String
+        let hash: String?
+        let bucketStart: Date
+
+        var id: String {
+            "\(kind)|\(label)|\(hash ?? "")|\(bucketStart.timeIntervalSinceReferenceDate)"
+        }
+    }
+
+    let buckets: [Bucket]
+    let markers: [Marker]
+    let hashBucketStarts: [String: Date]
+    let selectedHash: String?
+
+    var maxCommitCount: Int { max(buckets.map(\.commitCount).max() ?? 0, 1) }
+    var maxChurn: Int { max(buckets.map(\.churn).max() ?? 0, 1) }
+    var selectedBucketStart: Date? {
+        guard let selectedHash else { return nil }
+        return hashBucketStarts[selectedHash]
+    }
+
+    func selecting(hash: String?) -> GitGraphMinimapData {
+        GitGraphMinimapData(
+            buckets: buckets,
+            markers: markers,
+            hashBucketStarts: hashBucketStarts,
+            selectedHash: hash
+        )
+    }
+
+    func bucket(containing hash: String) -> Bucket? {
+        guard let start = hashBucketStarts[hash] else { return nil }
+        return buckets.first { $0.start == start }
+    }
+
+    static func build(
+        commits: [GitCommit],
+        refsByHash: [String: [GitRef]],
+        workingTree: GitWorkingTreeSummary,
+        selectedHash: String?,
+        calendar: Calendar = .current,
+        now: Date = .now
+    ) -> GitGraphMinimapData {
+        var cells: [Date: (count: Int, insertions: Int, deletions: Int, representativeHash: String?)] = [:]
+        var hashBucketStarts: [String: Date] = [:]
+
+        for commit in commits {
+            let start = calendar.dateInterval(of: .day, for: commit.date)?.start ?? commit.date
+            var cell = cells[start, default: (0, 0, 0, nil)]
+            cell.count += 1
+            cell.insertions += max(commit.insertions, 0)
+            cell.deletions += max(commit.deletions, 0)
+            if cell.representativeHash == nil {
+                cell.representativeHash = commit.hash
+            }
+            cells[start] = cell
+            hashBucketStarts[commit.hash] = start
+        }
+
+        let today = calendar.dateInterval(of: .day, for: now)?.start ?? now
+        if workingTree.isDirty, cells[today] == nil {
+            cells[today] = (0, 0, 0, nil)
+        }
+
+        let buckets = cells
+            .map { start, cell in
+                Bucket(
+                    start: start,
+                    commitCount: cell.count,
+                    insertions: cell.insertions,
+                    deletions: cell.deletions,
+                    representativeHash: cell.representativeHash
+                )
+            }
+            .sorted { $0.start < $1.start }
+
+        var markers: [Marker] = []
+        for (hash, refs) in refsByHash {
+            guard let start = hashBucketStarts[hash] else { continue }
+            for ref in refs {
+                let kind: Marker.Kind
+                switch ref.kind {
+                case .head: kind = .head
+                case .branch: kind = .branch
+                case .remoteBranch: kind = .remoteBranch
+                case .tag: kind = .tag
+                }
+                markers.append(Marker(kind: kind, label: ref.name, hash: hash, bucketStart: start))
+            }
+        }
+        if workingTree.isDirty {
+            markers.append(Marker(kind: .workingTree, label: "Working Tree", hash: nil, bucketStart: today))
+        }
+
+        return GitGraphMinimapData(
+            buckets: buckets,
+            markers: markers.sorted { lhs, rhs in
+                if lhs.bucketStart != rhs.bucketStart { return lhs.bucketStart < rhs.bucketStart }
+                return lhs.label.localizedStandardCompare(rhs.label) == .orderedAscending
+            },
+            hashBucketStarts: hashBucketStarts,
+            selectedHash: selectedHash
+        )
     }
 }
 

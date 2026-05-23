@@ -145,35 +145,48 @@ struct GitRepoWorkspaceView: View {
     private var graphContent: some View {
         if let graph = vm.graph, let layout = vm.layout, graph.workingTree.isDirty || !layout.rows.isEmpty {
             let hasWorkingTree = graph.workingTree.isDirty
-            AppScrollView {
-                LazyVStack(spacing: 0) {
-                    if hasWorkingTree {
-                        GitWorkingTreeRowView(
-                            summary: graph.workingTree,
-                            rowHeight: Self.workingTreeRowHeight,
-                            railPad: Self.railPad,
-                            nodeRadius: Self.nodeRadius,
-                            railWidth: railWidth,
-                            railColorIndex: layout.rows.first?.colorIndex ?? 0,
-                            isSelected: inspectorMode == .workingTree
-                        ) {
-                            inspectorMode = .workingTree
-                            vm.selectWorkingTree()
+            VStack(spacing: 0) {
+                AppScrollView {
+                    LazyVStack(spacing: 0) {
+                        if hasWorkingTree {
+                            GitWorkingTreeRowView(
+                                summary: graph.workingTree,
+                                rowHeight: Self.workingTreeRowHeight,
+                                railPad: Self.railPad,
+                                nodeRadius: Self.nodeRadius,
+                                railWidth: railWidth,
+                                railColorIndex: layout.rows.first?.colorIndex ?? 0,
+                                isSelected: inspectorMode == .workingTree
+                            ) {
+                                inspectorMode = .workingTree
+                                vm.selectWorkingTree()
+                            }
+                        }
+                        ForEach(layout.rows) { row in
+                            GitGraphRowView(
+                                row: row,
+                                rowHeight: Self.rowHeight,
+                                laneSpacing: Self.laneSpacing,
+                                railPad: Self.railPad,
+                                nodeRadius: Self.nodeRadius,
+                                railWidth: railWidth,
+                                isSelected: inspectorMode == .commit && vm.selectedHash == row.commit.hash,
+                                connectsFromTop: hasWorkingTree && row.id == layout.rows.first?.id
+                            ) {
+                                inspectorMode = .commit
+                                vm.selectCommit(row.commit.hash)
+                            }
                         }
                     }
-                    ForEach(layout.rows) { row in
-                        GitGraphRowView(
-                            row: row,
-                            rowHeight: Self.rowHeight,
-                            laneSpacing: Self.laneSpacing,
-                            railPad: Self.railPad,
-                            nodeRadius: Self.nodeRadius,
-                            railWidth: railWidth,
-                            isSelected: inspectorMode == .commit && vm.selectedHash == row.commit.hash,
-                            connectsFromTop: hasWorkingTree && row.id == layout.rows.first?.id
-                        ) {
-                            inspectorMode = .commit
-                            vm.selectCommit(row.commit.hash)
+                }
+                if let minimapData = vm.minimapData, !minimapData.buckets.isEmpty {
+                    StxRule()
+                    GitGraphMinimapView(data: minimapData, isLoading: vm.isMinimapLoading) { bucket in
+                        Task {
+                            await vm.selectMinimapBucket(bucket, repo: repo)
+                            if bucket.representativeHash != nil {
+                                inspectorMode = .commit
+                            }
                         }
                     }
                 }

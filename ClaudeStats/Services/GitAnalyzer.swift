@@ -14,7 +14,13 @@ struct GitAnalyzer: Sendable {
     private static let recordSep = "\u{1e}"
     private static let fieldSep = "\u{1f}"
 
-    var isAvailable: Bool { FileManager.default.isExecutableFile(atPath: Self.gitPath) }
+    private let runner: GitCommandRunner
+
+    init(runner: GitCommandRunner = GitCommandRunner()) {
+        self.runner = runner
+    }
+
+    var isAvailable: Bool { runner.isAvailable }
 
     /// The `user.email` from the (global) git config, if any.
     func currentUserEmail() -> String? {
@@ -31,11 +37,38 @@ struct GitAnalyzer: Sendable {
         var out: [GitRepo] = []
         for cwd in cwds {
             guard !cwd.isEmpty, FileManager.default.fileExists(atPath: cwd) else { continue }
-            guard let root = runGit(["-C", cwd, "rev-parse", "--show-toplevel"])?
-                .trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty else { continue }
-            if seen.insert(root).inserted { out.append(GitRepo(rootPath: root)) }
+            guard let repo = repo(forCwd: cwd) else { continue }
+            if seen.insert(repo.rootPath).inserted { out.append(repo) }
         }
         return out.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+    }
+
+    func repo(forCwd cwd: String) -> GitRepo? {
+        guard let root = runGit(["-C", cwd, "rev-parse", "--show-toplevel"])?
+            .trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty else { return nil }
+        let gitDir = runGit(["-C", root, "rev-parse", "--absolute-git-dir"])?
+            .trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        let commonDirRaw = runGit(["-C", root, "rev-parse", "--git-common-dir"])?
+            .trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        let commonDir = commonDirRaw.map { absolutizedGitPath($0, root: root) }
+        let currentBranch = runGit(["-C", root, "branch", "--show-current"])?
+            .trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        let standardizedGitDir = gitDir.map { URL(fileURLWithPath: $0).standardizedFileURL.path }
+        let standardizedCommonDir = commonDir.map { URL(fileURLWithPath: $0).standardizedFileURL.path }
+        return GitRepo(
+            rootPath: root,
+            gitDirPath: standardizedGitDir,
+            commonDirPath: standardizedCommonDir,
+            isWorktree: standardizedGitDir != nil && standardizedCommonDir != nil && standardizedGitDir != standardizedCommonDir,
+            currentBranch: currentBranch
+        )
+    }
+
+    private func absolutizedGitPath(_ path: String, root: String) -> String {
+        if path.hasPrefix("/") {
+            return URL(fileURLWithPath: path).standardizedFileURL.path
+        }
+        return URL(fileURLWithPath: root).appendingPathComponent(path).standardizedFileURL.path
     }
 
     /// Commit activity for each repo since `date`. Repos with no matching
@@ -154,23 +187,56 @@ struct GitAnalyzer: Sendable {
         }
     }
 
+    func minimapCommits(for repo: GitRepo, limit: Int) -> [GitCommit] {
+        guard isAvailable else { return [] }
+        let format = "format:\(Self.recordSep)%H\(Self.fieldSep)%at\(Self.fieldSep)%an\(Self.fieldSep)%ae\(Self.fieldSep)%s"
+        let args = ["-C", repo.rootPath, "log", "--branches", "--remotes", "--tags", "--date-order",
+                    "-n", "\(max(limit, 1))", "--numstat", "--pretty=\(format)"]
+        guard let output = runGit(args, timeout: 45) else { return [] }
+        return Self.parseLog(output, repoID: repo.id)
+    }
+
     // MARK: - Commit graph
 
     /// The commit DAG for a repo: up to `limit` commits reachable from local
     /// branches and tags, in `--date-order` (newest first). `nil` if `git`
     /// couldn't be run.
     func graph(for repo: GitRepo, limit: Int) -> GitGraph? {
+        guard let page = graphPage(for: repo, offset: 0, limit: limit) else { return nil }
+        return GitGraph(
+            repo: repo,
+            commits: page.commits,
+            truncated: page.hasMore,
+            workingTree: page.workingTree
+        )
+    }
+
+    func graphPage(for repo: GitRepo, offset: Int, limit: Int) -> GitGraphPage? {
         guard isAvailable else { return nil }
         let f = Self.fieldSep
         let format = "format:\(Self.recordSep)%H\(f)%P\(f)%D\(f)%an\(f)%ae\(f)%at\(f)%s"
-        let args = ["-C", repo.rootPath, "log", "--branches", "--tags", "--date-order",
-                    "--decorate-refs-exclude=refs/remotes", "-n", "\(limit)", "--pretty=\(format)"]
+        let args = ["-C", repo.rootPath, "log", "--branches", "--remotes", "--tags", "--date-order",
+                    "--skip", "\(max(offset, 0))", "-n", "\(max(limit, 1))", "--pretty=\(format)"]
         guard let output = runGit(args) else { return nil }
-        let commits = Self.parseGraphLog(output)
-        return GitGraph(
+        let refsByHash = refsByHash(for: repo)
+        let commits = Self.parseGraphLog(output).map { commit in
+            guard let refs = refsByHash[commit.hash], !refs.isEmpty else { return commit }
+            return GraphCommit(
+                hash: commit.hash,
+                parentHashes: commit.parentHashes,
+                refs: refs,
+                author: commit.author,
+                authorEmail: commit.authorEmail,
+                date: commit.date,
+                subject: commit.subject
+            )
+        }
+        return GitGraphPage(
             repo: repo,
             commits: commits,
-            truncated: commits.count >= limit,
+            offset: max(offset, 0),
+            limit: max(limit, 1),
+            hasMore: commits.count >= max(limit, 1),
             workingTree: workingTreeSummary(for: repo)
         )
     }
@@ -179,8 +245,8 @@ struct GitAnalyzer: Sendable {
     /// staged, unstaged, conflicted, and untracked files.
     func workingTreeSummary(for repo: GitRepo) -> GitWorkingTreeSummary {
         guard isAvailable else { return .clean }
-        guard let output = runGit(["-C", repo.rootPath, "status", "--porcelain=v1"]) else { return .clean }
-        return Self.parseWorkingTreeStatus(output)
+        guard let output = runGit(["-C", repo.rootPath, "status", "--porcelain=v1", "-z"]) else { return .clean }
+        return Self.parseWorkingTreeStatusZ(output)
     }
 
     static func parseWorkingTreeStatus(_ output: String) -> GitWorkingTreeSummary {
@@ -194,6 +260,48 @@ struct GitAnalyzer: Sendable {
                 return $0.displayPath.localizedStandardCompare($1.displayPath) == .orderedAscending
             }
         return GitWorkingTreeSummary(changes: changes)
+    }
+
+    static func parseWorkingTreeStatusZ(_ output: String) -> GitWorkingTreeSummary {
+        let records = output.split(separator: "\0", omittingEmptySubsequences: true).map(String.init)
+        var changes: [GitWorkingTreeChange] = []
+        var index = 0
+        while index < records.count {
+            let record = records[index]
+            guard record.count >= 4 else {
+                index += 1
+                continue
+            }
+            let indexStatus = String(record.prefix(1))
+            let worktreeStatus = String(record.dropFirst().prefix(1))
+            let kind = workingTreeKind(indexStatus: indexStatus, worktreeStatus: worktreeStatus)
+            let path = String(record.dropFirst(3))
+            var oldPath: String?
+            var finalPath = path
+            if indexStatus == "R" || indexStatus == "C" || worktreeStatus == "R" || worktreeStatus == "C" {
+                if index + 1 < records.count {
+                    oldPath = records[index + 1]
+                    index += 1
+                }
+            }
+            if let oldPath, !oldPath.isEmpty {
+                finalPath = path
+            }
+            changes.append(GitWorkingTreeChange(
+                path: finalPath,
+                oldPath: oldPath,
+                indexStatus: indexStatus,
+                worktreeStatus: worktreeStatus,
+                kind: kind
+            ))
+            index += 1
+        }
+        return GitWorkingTreeSummary(changes: changes.sorted {
+            if $0.kind.shortLabel != $1.kind.shortLabel {
+                return $0.kind.shortLabel < $1.kind.shortLabel
+            }
+            return $0.displayPath.localizedStandardCompare($1.displayPath) == .orderedAscending
+        })
     }
 
     private static func parseWorkingTreeStatusLine(_ rawLine: Substring) -> GitWorkingTreeChange? {
@@ -372,31 +480,69 @@ struct GitAnalyzer: Sendable {
         }
     }
 
+    func refsByHash(for repo: GitRepo) -> [String: [GitRef]] {
+        guard isAvailable else { return [:] }
+        let f = Self.fieldSep
+        let format = "%(objectname)\(f)%(refname)"
+        let args = ["-C", repo.rootPath, "for-each-ref", "--format=\(format)", "refs/heads", "refs/remotes", "refs/tags"]
+        let lines = runGit(args)?
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .map(String.init) ?? []
+        var refsByHash: [String: [GitRef]] = [:]
+
+        for line in lines {
+            let fields = line.components(separatedBy: f)
+            guard fields.count >= 2 else { continue }
+            let hash = fields[0].trimmingCharacters(in: .whitespacesAndNewlines)
+            let refname = fields[1].trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !hash.isEmpty, let ref = Self.ref(fromFullName: refname) else { continue }
+            refsByHash[hash, default: []].append(ref)
+        }
+
+        if let headHash = runGit(["-C", repo.rootPath, "rev-parse", "--verify", "HEAD"])?
+            .trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty {
+            refsByHash[headHash, default: []].insert(GitRef(kind: .head, name: repo.currentBranch ?? "HEAD"), at: 0)
+        }
+
+        return refsByHash.mapValues { refs in
+            var seen = Set<String>()
+            return refs.filter { ref in
+                seen.insert("\(ref.kind)|\(ref.name)").inserted
+            }
+        }
+    }
+
+    static func ref(fromFullName refname: String) -> GitRef? {
+        if refname.hasPrefix("refs/heads/") {
+            return GitRef(kind: .branch, name: String(refname.dropFirst("refs/heads/".count)))
+        }
+        if refname.hasPrefix("refs/remotes/") {
+            let name = String(refname.dropFirst("refs/remotes/".count))
+            guard !name.hasSuffix("/HEAD") else { return nil }
+            return GitRef(kind: .remoteBranch, name: name)
+        }
+        if refname.hasPrefix("refs/tags/") {
+            return GitRef(kind: .tag, name: String(refname.dropFirst("refs/tags/".count)))
+        }
+        return nil
+    }
+
     // MARK: - Process plumbing
 
-    private func runGit(_ arguments: [String]) -> String? {
-        guard isAvailable else { return nil }
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: Self.gitPath)
-        process.arguments = arguments
-        let stdout = Pipe()
-        process.standardOutput = stdout
-        process.standardError = FileHandle.nullDevice
-        // Keep git from touching the calling tty / pager.
-        var env = ProcessInfo.processInfo.environment
-        env["GIT_PAGER"] = "cat"
-        env["GIT_TERMINAL_PROMPT"] = "0"
-        process.environment = env
-        do {
-            try process.run()
-        } catch {
-            Log.git.error("git \(arguments.first ?? "?", privacy: .public) failed to launch: \(error.localizedDescription, privacy: .public)")
+    private func runGit(_ arguments: [String], timeout: TimeInterval = 30) -> String? {
+        let result = runner.run(arguments, timeout: timeout)
+        guard result.succeeded else {
+            let command = arguments.prefix(4).joined(separator: " ")
+            if result.timedOut {
+                Log.git.error("git \(command, privacy: .public) timed out")
+            } else if result.cancelled {
+                Log.git.debug("git \(command, privacy: .public) cancelled")
+            } else {
+                Log.git.debug("git \(command, privacy: .public) exited \(result.exitCode, privacy: .public): \(result.stderr, privacy: .public)")
+            }
             return nil
         }
-        let data = stdout.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else { return nil }
-        return String(data: data, encoding: .utf8)
+        return result.stdout
     }
 }
 

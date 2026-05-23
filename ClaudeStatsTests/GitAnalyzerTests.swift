@@ -146,6 +146,26 @@ struct GitAnalyzerTests {
         #expect(summary.changes.contains { $0.path == "Scratch Notes.md" && $0.kind == .untracked })
     }
 
+    @Test("parseWorkingTreeStatusZ reads NUL separated paths and rename pairs")
+    func parseWorkingTreeStatusZ() throws {
+        let output = [
+            " M Sources/App With Spaces.swift",
+            "R  Sources/New Name.swift",
+            "Sources/Old Name.swift",
+            "?? Scratch Notes.md",
+            "UU Sources/Conflict.swift",
+        ].joined(separator: "\0") + "\0"
+        let summary = GitAnalyzer.parseWorkingTreeStatusZ(output)
+
+        #expect(summary.fileCount == 4)
+        #expect(summary.changes.contains { $0.path == "Sources/App With Spaces.swift" && $0.kind == .modified })
+        let renamed = try #require(summary.changes.first { $0.kind == .renamed })
+        #expect(renamed.path == "Sources/New Name.swift")
+        #expect(renamed.oldPath == "Sources/Old Name.swift")
+        #expect(summary.changes.contains { $0.path == "Scratch Notes.md" && $0.kind == .untracked })
+        #expect(summary.changes.contains { $0.path == "Sources/Conflict.swift" && $0.kind == .conflicted })
+    }
+
     // MARK: - bucketing
 
     @Test("RepoActivity.buckets groups commits per repo per calendar unit")
@@ -177,6 +197,47 @@ struct GitAnalyzerTests {
         #expect(aDay15?.commitCount == 2)
         #expect(aDay15?.insertions == 7 && aDay15?.deletions == 1)
         #expect(activity.allCommitsNewestFirst.map(\.hash) == ["3", "2", "4", "1"])
+    }
+
+    @Test("full ref names classify local branches, remote branches and tags")
+    func fullRefNames() {
+        #expect(GitAnalyzer.ref(fromFullName: "refs/heads/main") == GitRef(kind: .branch, name: "main"))
+        #expect(GitAnalyzer.ref(fromFullName: "refs/remotes/origin/main") == GitRef(kind: .remoteBranch, name: "origin/main"))
+        #expect(GitAnalyzer.ref(fromFullName: "refs/remotes/origin/HEAD") == nil)
+        #expect(GitAnalyzer.ref(fromFullName: "refs/tags/v1.0") == GitRef(kind: .tag, name: "v1.0"))
+    }
+
+    @Test("minimap aggregation keeps density, churn, refs and selected bucket")
+    func minimapAggregation() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let iso = ISO8601DateFormatter()
+        iso.timeZone = TimeZone(identifier: "UTC")!
+        func date(_ value: String) -> Date { iso.date(from: value)! }
+        let commits = [
+            GitCommit(hash: "b", date: date("2024-01-15T18:00:00Z"), author: "A", authorEmail: "a@x", subject: "B", insertions: 5, deletions: 2, filesChanged: 1, repoID: "r"),
+            GitCommit(hash: "a", date: date("2024-01-15T09:00:00Z"), author: "A", authorEmail: "a@x", subject: "A", insertions: 1, deletions: 1, filesChanged: 1, repoID: "r"),
+            GitCommit(hash: "c", date: date("2024-01-16T10:00:00Z"), author: "A", authorEmail: "a@x", subject: "C", insertions: 3, deletions: 0, filesChanged: 1, repoID: "r"),
+        ]
+        let data = GitGraphMinimapData.build(
+            commits: commits,
+            refsByHash: ["b": [GitRef(kind: .head, name: "main")], "c": [GitRef(kind: .remoteBranch, name: "origin/main")]],
+            workingTree: .clean,
+            selectedHash: "a",
+            calendar: cal,
+            now: date("2024-01-16T10:00:00Z")
+        )
+
+        #expect(data.buckets.count == 2)
+        #expect(data.buckets[0].commitCount == 2)
+        #expect(data.buckets[0].churn == 9)
+        #expect(data.buckets[0].representativeHash == "b")
+        #expect(data.buckets[1].commitCount == 1)
+        #expect(data.markers.contains { $0.kind == .head && $0.label == "main" })
+        #expect(data.markers.contains { $0.kind == .remoteBranch && $0.label == "origin/main" })
+        #expect(data.selectedBucketStart == data.buckets[0].start)
+        let selectedBucket = try #require(data.bucket(containing: "a"))
+        #expect(selectedBucket.start == data.buckets[0].start)
     }
 
     // MARK: - against a real temp repo
@@ -214,7 +275,12 @@ struct GitAnalyzerTests {
         try FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
         let repos = analyzer.repos(forCwds: [dir.path, sub.path, "/nonexistent/path/xyz"])
         #expect(repos.count == 1)
-        #expect(repos.first?.rootPath == resolvedRoot)
+        let repo = try #require(repos.first)
+        #expect(repo.rootPath == resolvedRoot)
+        #expect(repo.gitDirPath?.hasSuffix(".git") == true)
+        #expect(repo.commonDirPath?.hasSuffix(".git") == true)
+        #expect(repo.cacheKey == repo.commonDirPath)
+        #expect(!repo.isWorktree)
 
         // All commits (no author filter).
         let all = analyzer.activity(for: repos, since: .distantPast, authorEmail: nil)
@@ -236,6 +302,15 @@ struct GitAnalyzerTests {
         // `since` in the future → nothing.
         let none = analyzer.activity(for: repos, since: Date(timeIntervalSinceNow: 86_400), authorEmail: nil)
         #expect(none.isEmpty)
+
+        try run(["branch", "feature/test"], in: dir)
+        try run(["tag", "v-test"], in: dir)
+        let page = try #require(analyzer.graphPage(for: repo, offset: 0, limit: 2))
+        #expect(page.commits.count == 2)
+        #expect(page.hasMore)
+        let refs = analyzer.refsByHash(for: repo)
+        #expect(refs.values.flatMap { $0 }.contains(GitRef(kind: .branch, name: "feature/test")))
+        #expect(refs.values.flatMap { $0 }.contains(GitRef(kind: .tag, name: "v-test")))
     }
 
     // MARK: helpers

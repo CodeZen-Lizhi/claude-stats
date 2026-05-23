@@ -49,7 +49,7 @@ struct FileDiffView: View {
             if isPreview { return }
             isLoading = true
             let r = repo, h = hash, p = path
-            diff = await Task.detached(priority: .userInitiated) { GitAnalyzer().fileDiff(for: h, path: p, in: r) }.value
+            diff = await GitRepositoryService.shared.fileDiff(for: h, path: p, in: r)
             isLoading = false
         }
     }

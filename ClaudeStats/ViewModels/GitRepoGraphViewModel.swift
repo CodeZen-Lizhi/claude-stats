@@ -15,6 +15,8 @@ final class GitRepoGraphViewModel {
     private(set) var fileDiff: FileDiff?
     private(set) var repoBaseStats: GitRepoInspectorBaseStats?
     private(set) var codeOwnershipState: GitCodeOwnershipLoadState = .idle
+    private(set) var minimapData: GitGraphMinimapData?
+    private(set) var isMinimapLoading = false
     private(set) var currentRepoID: String?
     private(set) var loadedLimit = 0
 
@@ -31,12 +33,16 @@ final class GitRepoGraphViewModel {
     var diffPath: String?
     var limit = 200
 
+    private let pageSize = 200
+    @ObservationIgnored private let repositoryService = GitRepositoryService.shared
     private let isPreview: Bool
+    @ObservationIgnored private var watcher: GitRepositoryWatcher?
     @ObservationIgnored private var graphRequestID: UInt64 = 0
     @ObservationIgnored private var detailRequestID: UInt64 = 0
     @ObservationIgnored private var diffRequestID: UInt64 = 0
     @ObservationIgnored private var baseStatsRequestID: UInt64 = 0
     @ObservationIgnored private var codeOwnershipRequestID: UInt64 = 0
+    @ObservationIgnored private var minimapRequestID: UInt64 = 0
 
     init() {
         isPreview = false
@@ -44,11 +50,31 @@ final class GitRepoGraphViewModel {
 
     #if DEBUG
     init(previewGraph: GitGraph) {
+        isPreview = true
+        let initialSelectedHash = previewGraph.commits.first?.hash
         graph = previewGraph
         layout = GraphLayout.build(previewGraph.commits)
         currentRepoID = previewGraph.repo.id
         loadedLimit = previewGraph.commits.count
-        selectedHash = previewGraph.commits.first?.hash
+        selectedHash = initialSelectedHash
+        minimapData = GitGraphMinimapData.build(
+            commits: previewGraph.commits.map {
+                GitCommit(
+                    hash: $0.hash,
+                    date: $0.date,
+                    author: $0.author,
+                    authorEmail: $0.authorEmail,
+                    subject: $0.subject,
+                    insertions: 0,
+                    deletions: 0,
+                    filesChanged: 0,
+                    repoID: previewGraph.repo.id
+                )
+            },
+            refsByHash: Dictionary(uniqueKeysWithValues: previewGraph.commits.map { ($0.hash, $0.refs) }),
+            workingTree: previewGraph.workingTree,
+            selectedHash: initialSelectedHash
+        )
         if let commit = previewGraph.commits.first {
             commitDetail = .preview(
                 from: commit,
@@ -57,7 +83,6 @@ final class GitRepoGraphViewModel {
         }
         repoBaseStats = .preview
         codeOwnershipState = .loaded(GitRepoCodeOwnershipStats.preview.codeContributors)
-        isPreview = true
     }
     #endif
 
@@ -86,12 +111,15 @@ final class GitRepoGraphViewModel {
         "\(currentRepoID ?? "")|\(statsScope.rawValue)"
     }
 
-    func loadGraph(repo: GitRepo) async {
+    func loadGraph(repo: GitRepo, forceReload: Bool = false) async {
         if currentRepoID != repo.id {
             reset(for: repo)
         }
         if isPreview { return }
-        if graph != nil, loadedLimit == limit { return }
+        if !forceReload {
+            if graph != nil, loadedLimit >= limit { return }
+            if graph?.truncated == false { return }
+        }
 
         graphRequestID &+= 1
         let requestID = graphRequestID
@@ -99,18 +127,32 @@ final class GitRepoGraphViewModel {
         defer { finishGraphRequest(requestID) }
 
         let requestedRepoID = repo.id
-        let requestedLimit = limit
-        let loadedGraph = await Task.detached(priority: .userInitiated) {
-            GitAnalyzer().graph(for: repo, limit: requestedLimit)
-        }.value
+        let requestedOffset = forceReload ? 0 : loadedLimit
+        let requestedLimit = forceReload ? max(limit, pageSize) : max(limit - loadedLimit, pageSize)
+        let page = await repositoryService.graphPage(for: repo, offset: requestedOffset, limit: requestedLimit)
 
         guard graphRequestID == requestID,
               currentRepoID == requestedRepoID,
-              limit == requestedLimit else { return }
-        graph = loadedGraph
-        layout = loadedGraph.map { GraphLayout.build($0.commits) }
-        loadedLimit = requestedLimit
+              (forceReload || loadedLimit == requestedOffset) else { return }
+        guard let page else {
+            if graph == nil {
+                loadedLimit = 0
+            }
+            return
+        }
+        let existing = requestedOffset == 0 ? [] : (graph?.commits ?? [])
+        let existingHashes = Set(existing.map(\.hash))
+        let commits = existing + page.commits.filter { !existingHashes.contains($0.hash) }
+        graph = GitGraph(
+            repo: page.repo,
+            commits: commits,
+            truncated: page.hasMore,
+            workingTree: page.workingTree
+        )
+        layout = GraphLayout.build(commits)
+        loadedLimit = requestedOffset + page.commits.count
         reconcileSelection()
+        await loadMinimap(repo: repo)
     }
 
     func loadDetail(repo: GitRepo) async {
@@ -128,9 +170,7 @@ final class GitRepoGraphViewModel {
 
         let requestedRepoID = repo.id
         let requestedHash = hash
-        let detail = await Task.detached(priority: .userInitiated) {
-            GitAnalyzer().commitDetail(for: requestedHash, in: repo)
-        }.value
+        let detail = await repositoryService.commitDetail(for: requestedHash, in: repo)
 
         guard detailRequestID == requestID,
               currentRepoID == requestedRepoID,
@@ -159,9 +199,7 @@ final class GitRepoGraphViewModel {
         let requestedRepoID = repo.id
         let requestedHash = hash
         let requestedPath = path
-        let diff = await Task.detached(priority: .userInitiated) {
-            GitAnalyzer().fileDiff(for: requestedHash, path: requestedPath, in: repo)
-        }.value
+        let diff = await repositoryService.fileDiff(for: requestedHash, path: requestedPath, in: repo)
 
         guard diffRequestID == requestID,
               currentRepoID == requestedRepoID,
@@ -238,6 +276,7 @@ final class GitRepoGraphViewModel {
         invalidateDetailRequest()
         invalidateDiffRequest()
         selectedHash = hash
+        updateMinimapSelection()
         commitDetail = nil
         diffPath = nil
         fileDiff = nil
@@ -247,6 +286,7 @@ final class GitRepoGraphViewModel {
         invalidateDetailRequest()
         invalidateDiffRequest()
         selectedHash = nil
+        updateMinimapSelection()
         commitDetail = nil
         diffPath = nil
         fileDiff = nil
@@ -266,7 +306,39 @@ final class GitRepoGraphViewModel {
     }
 
     func loadMore() {
-        limit += 200
+        limit = max(limit, loadedLimit) + pageSize
+    }
+
+    func loadMinimap(repo: GitRepo) async {
+        if currentRepoID != repo.id {
+            reset(for: repo)
+        }
+        if isPreview { return }
+
+        minimapRequestID &+= 1
+        let requestID = minimapRequestID
+        isMinimapLoading = true
+        defer { finishMinimapRequest(requestID) }
+
+        let requestedRepoID = repo.id
+        let requestedSelectedHash = selectedHash
+        let requestedLimit = max(limit, loadedLimit, 800)
+        let data = await repositoryService.minimapData(for: repo, limit: requestedLimit, selectedHash: requestedSelectedHash)
+        guard minimapRequestID == requestID,
+              currentRepoID == requestedRepoID,
+              selectedHash == requestedSelectedHash else { return }
+        minimapData = data
+    }
+
+    func selectMinimapBucket(_ bucket: GitGraphMinimapData.Bucket, repo: GitRepo) async {
+        guard let hash = bucket.representativeHash else { return }
+        while graph?.commits.contains(where: { $0.hash == hash }) != true,
+              graph?.truncated == true {
+            loadMore()
+            await loadGraph(repo: repo)
+        }
+        guard graph?.commits.contains(where: { $0.hash == hash }) == true else { return }
+        selectCommit(hash)
     }
 
     private func reset(for repo: GitRepo) {
@@ -275,6 +347,8 @@ final class GitRepoGraphViewModel {
         invalidateDiffRequest()
         invalidateBaseStatsRequest()
         invalidateCodeOwnershipRequest()
+        invalidateMinimapRequest()
+        configureWatcher(for: repo)
         currentRepoID = repo.id
         graph = nil
         layout = nil
@@ -282,10 +356,11 @@ final class GitRepoGraphViewModel {
         fileDiff = nil
         repoBaseStats = nil
         codeOwnershipState = .idle
+        minimapData = nil
         selectedHash = nil
         diffPath = nil
         loadedLimit = 0
-        limit = 200
+        limit = pageSize
     }
 
     private func reconcileSelection() {
@@ -304,9 +379,37 @@ final class GitRepoGraphViewModel {
         invalidateDetailRequest()
         invalidateDiffRequest()
         selectedHash = nil
+        updateMinimapSelection()
         commitDetail = nil
         diffPath = nil
         fileDiff = nil
+    }
+
+    private func updateMinimapSelection() {
+        minimapData = minimapData?.selecting(hash: selectedHash)
+    }
+
+    private func configureWatcher(for repo: GitRepo) {
+        watcher?.stop()
+        watcher = nil
+        guard !isPreview else { return }
+        let watcher = GitRepositoryWatcher(repo: repo) { [weak self] in
+            Task { @MainActor in
+                await self?.repositoryDidChange(repo: repo)
+            }
+        }
+        watcher.start()
+        self.watcher = watcher
+    }
+
+    private func repositoryDidChange(repo: GitRepo) async {
+        guard currentRepoID == repo.id else { return }
+        await repositoryService.invalidate(repo: repo)
+        invalidateGraphRequest()
+        invalidateMinimapRequest()
+        loadedLimit = 0
+        limit = max(limit, pageSize)
+        await loadGraph(repo: repo, forceReload: true)
     }
 
     private func invalidateGraphRequest() {
@@ -337,6 +440,11 @@ final class GitRepoGraphViewModel {
         }
     }
 
+    private func invalidateMinimapRequest() {
+        minimapRequestID &+= 1
+        isMinimapLoading = false
+    }
+
     private func finishGraphRequest(_ requestID: UInt64) {
         if graphRequestID == requestID {
             isGraphLoading = false
@@ -364,6 +472,12 @@ final class GitRepoGraphViewModel {
     private func finishCodeOwnershipRequest(_ requestID: UInt64) {
         if codeOwnershipRequestID == requestID {
             isCodeOwnershipLoading = false
+        }
+    }
+
+    private func finishMinimapRequest(_ requestID: UInt64) {
+        if minimapRequestID == requestID {
+            isMinimapLoading = false
         }
     }
 }

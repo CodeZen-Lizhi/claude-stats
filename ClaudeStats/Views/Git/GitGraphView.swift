@@ -82,7 +82,10 @@ struct GitGraphView: View {
             isLoading = true
             let r = repo
             let n = limit
-            let g = await Task.detached(priority: .userInitiated) { GitAnalyzer().graph(for: r, limit: n) }.value
+            let page = await GitRepositoryService.shared.graphPage(for: r, offset: 0, limit: n)
+            let g = page.map {
+                GitGraph(repo: $0.repo, commits: $0.commits, truncated: $0.hasMore, workingTree: $0.workingTree)
+            }
             graph = g
             layout = g.map { GraphLayout.build($0.commits) }
             loadedLimit = n
@@ -264,7 +267,7 @@ struct GitGraphView: View {
         }
         let r = repo
         Task {
-            let fc = await Task.detached(priority: .userInitiated) { GitAnalyzer().fileChanges(for: hash, in: r) }.value
+            let fc = await GitRepositoryService.shared.fileChanges(for: hash, in: r)
             withAnimation(.easeInOut(duration: 0.15)) { fileChanges[hash] = fc }
         }
     }

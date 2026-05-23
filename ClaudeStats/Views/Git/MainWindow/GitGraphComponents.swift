@@ -292,8 +292,13 @@ struct GitRefPill: View {
         switch ref.kind {
         case .head: GitPalette.head
         case .tag: GitPalette.tag
+        case .remoteBranch: Color.stxMuted
         case .branch: Color.primary.opacity(0.45)
         }
+    }
+
+    private var isOutline: Bool {
+        ref.kind == .branch || ref.kind == .remoteBranch
     }
 
     var body: some View {
@@ -302,9 +307,9 @@ struct GitRefPill: View {
             .lineLimit(1)
             .padding(.horizontal, 5)
             .padding(.vertical, 2)
-            .background(tint.opacity(ref.kind == .branch ? 0.16 : 0.85), in: Capsule())
-            .foregroundStyle(ref.kind == .branch ? Color.primary : Color.white)
-            .overlay(Capsule().strokeBorder(tint.opacity(0.35), lineWidth: ref.kind == .branch ? 1 : 0))
+            .background(tint.opacity(isOutline ? 0.16 : 0.85), in: Capsule())
+            .foregroundStyle(isOutline ? Color.primary : Color.white)
+            .overlay(Capsule().strokeBorder(tint.opacity(0.35), lineWidth: isOutline ? 1 : 0))
             .fixedSize()
     }
 }

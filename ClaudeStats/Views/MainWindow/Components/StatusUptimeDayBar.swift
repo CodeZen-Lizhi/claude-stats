@@ -14,38 +14,38 @@ struct StatusUptimeStrip: View {
     private static let height: CGFloat = 34
     private static let spacing: CGFloat = 2
     private static let hoverScale: CGFloat = 1.18
-    private static let tooltipGap: CGFloat = 34
+    private static let tooltipArrowGap: CGFloat = 6
     private static let hoverAnimation = Animation.timingCurve(0.22, 1.0, 0.36, 1.0, duration: 0.18)
 
     var body: some View {
         GeometryReader { proxy in
-            ZStack(alignment: .topLeading) {
-                Canvas { context, size in
-                    drawBars(in: size, context: &context)
+            Canvas { context, size in
+                drawBars(in: size, context: &context)
+            }
+            .frame(height: Self.height)
+            .contentShape(Rectangle())
+            .onContinuousHover(coordinateSpace: .local) { phase in
+                switch phase {
+                case .active(let location):
+                    updateHover(at: location, in: proxy.size)
+                case .ended:
+                    setHoveredIndex(nil)
                 }
-                .frame(height: Self.height)
-                .contentShape(Rectangle())
-                .onContinuousHover(coordinateSpace: .local) { phase in
-                    switch phase {
-                    case .active(let location):
-                        updateHover(at: location, in: proxy.size)
-                    case .ended:
-                        setHoveredIndex(nil)
-                    }
-                }
-
+            }
+            .overlay(alignment: .topLeading) {
                 if let hoveredIndex,
                    bars.indices.contains(hoveredIndex) {
-                    StatusUptimeTooltip(text: bars[hoveredIndex].tooltip)
-                        .position(
-                            x: tooltipX(for: hoveredIndex, width: proxy.size.width),
-                            y: -Self.tooltipGap
-                        )
-                        .transition(
-                            .opacity
-                                .combined(with: .scale(scale: 0.96, anchor: .bottom))
-                        )
-                        .allowsHitTesting(false)
+                    let tooltipCenterX = tooltipX(for: hoveredIndex, width: proxy.size.width)
+                    let tooltipArrowGap = Self.tooltipArrowGap
+                    StatusUptimeTooltipLayout(centerX: tooltipCenterX, arrowGap: tooltipArrowGap) {
+                        StatusUptimeTooltip(text: bars[hoveredIndex].tooltip)
+                            .transition(
+                                .opacity
+                                    .combined(with: .scale(scale: 0.96, anchor: .bottom))
+                            )
+                            .allowsHitTesting(false)
+                    }
+                    .frame(width: proxy.size.width, height: Self.height, alignment: .topLeading)
                 }
             }
         }
@@ -106,8 +106,7 @@ struct StatusUptimeStrip: View {
 
     private func tooltipX(for index: Int, width: CGFloat) -> CGFloat {
         let metrics = barMetrics(width: width)
-        let center = CGFloat(index) * metrics.stride + metrics.width / 2
-        return min(max(center, 42), max(42, width - 42))
+        return CGFloat(index) * metrics.stride + metrics.width / 2
     }
 
     private func barMetrics(width: CGFloat) -> (width: CGFloat, stride: CGFloat) {
@@ -116,6 +115,36 @@ struct StatusUptimeStrip: View {
         let totalSpacing = Self.spacing * max(0, count - 1)
         let barWidth = max(1, (width - totalSpacing) / count)
         return (barWidth, barWidth + Self.spacing)
+    }
+}
+
+private struct StatusUptimeTooltipLayout: Layout {
+    let centerX: CGFloat
+    let arrowGap: CGFloat
+
+    func sizeThatFits(
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) -> CGSize {
+        CGSize(width: proposal.width ?? 0, height: proposal.height ?? 0)
+    }
+
+    func placeSubviews(
+        in bounds: CGRect,
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) {
+        guard let tooltip = subviews.first else { return }
+        let tooltipSize = tooltip.sizeThatFits(.unspecified)
+        tooltip.place(
+            at: CGPoint(
+                x: bounds.minX + centerX - tooltipSize.width / 2,
+                y: bounds.minY - tooltipSize.height - arrowGap
+            ),
+            proposal: ProposedViewSize(width: tooltipSize.width, height: tooltipSize.height)
+        )
     }
 }
 

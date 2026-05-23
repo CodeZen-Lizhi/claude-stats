@@ -61,7 +61,7 @@ struct CommitDetailView: View {
             if isPreview { return }
             isLoading = true
             let r = repo, h = hash
-            detail = await Task.detached(priority: .userInitiated) { GitAnalyzer().commitDetail(for: h, in: r) }.value
+            detail = await GitRepositoryService.shared.commitDetail(for: h, in: r)
             isLoading = false
         }
     }
