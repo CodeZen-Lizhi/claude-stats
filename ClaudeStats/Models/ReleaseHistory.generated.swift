@@ -3,6 +3,18 @@
 extension ReleaseHistoryCatalog {
     static let generatedEntries: [ReleaseHistoryEntry] = [
         ReleaseHistoryEntry(
+            version: "1.7.1",
+            date: "May 23, 2026",
+            headline: "本次提交新增了OpenComputerUseKit第三方库作为桌面自动化依赖，重构了Claude桌面使用采集流程：",
+            changes: [
+                "新增屏幕录制权限检查器，统一管理屏幕录制权限请求逻辑",
+                "新增OpenComputerUse原生文本阅读器，优先使用自动化接口采集数据",
+                "重构使用解析逻辑，支持新的Claude桌面UI用量格式",
+                "新增自动化测试用例覆盖新功能",
+                "修复权限重检查逻辑，支持屏幕录制权限的重新校验",
+            ]
+        ),
+        ReleaseHistoryEntry(
             version: "1.7.0",
             date: "May 23, 2026",
             headline: "新增DashboardModelTable组件，实现多提供商模型使用数据表格展示",
