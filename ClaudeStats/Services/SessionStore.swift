@@ -73,6 +73,13 @@ final class SessionStore {
         return await provider.transcriptMessages(for: session)
     }
 
+    func transcriptMessageLoader(for provider: ProviderKind) -> TranscriptMessageLoader? {
+        guard let provider = registry.provider(for: provider) else { return nil }
+        return { session in
+            await provider.transcriptMessages(for: session)
+        }
+    }
+
     func summary(for period: StatsPeriod, provider: ProviderKind? = nil, now: Date = .now) -> UsageSummary {
         UsageSummary.make(period: period, sessions: sessions(matching: provider), pricing: pricing, now: now)
     }

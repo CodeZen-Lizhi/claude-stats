@@ -363,6 +363,7 @@ targets:
       - sdk: SystemConfiguration.framework
       - sdk: CoreWLAN.framework
       - sdk: WebKit.framework
+      - sdk: libsqlite3.tbd
     postBuildScripts:
       - name: Copy Atoll MediaRemote Runtime Resources
         inputFiles:
@@ -398,10 +399,33 @@ targets:
               *" --timestamp "*) CODESIGN_TIMESTAMP="--timestamp" ;;
             esac
 
-            /usr/bin/codesign --force $CODESIGN_OPTIONS $CODESIGN_TIMESTAMP \
-              --sign "${EXPANDED_CODE_SIGN_IDENTITY}" \
-              "${HELPERS_DIR}/NowPlayingTestClient"
+          /usr/bin/codesign --force $CODESIGN_OPTIONS $CODESIGN_TIMESTAMP \
+            --sign "${EXPANDED_CODE_SIGN_IDENTITY}" \
+            "${HELPERS_DIR}/NowPlayingTestClient"
           fi
+      - name: Copy CppJieba Dictionaries
+        inputFiles:
+          - "$(SRCROOT)/ThirdParty/CppJieba/dict/jieba.dict.utf8"
+          - "$(SRCROOT)/ThirdParty/CppJieba/dict/hmm_model.utf8"
+          - "$(SRCROOT)/ThirdParty/CppJieba/dict/user.dict.utf8"
+          - "$(SRCROOT)/ThirdParty/CppJieba/dict/idf.utf8"
+          - "$(SRCROOT)/ThirdParty/CppJieba/dict/stop_words.utf8"
+        outputFiles:
+          - "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/CppJieba/jieba.dict.utf8"
+          - "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/CppJieba/hmm_model.utf8"
+          - "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/CppJieba/user.dict.utf8"
+          - "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/CppJieba/idf.utf8"
+          - "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/CppJieba/stop_words.utf8"
+        script: |
+          set -euo pipefail
+
+          JIEBA_RESOURCES_DIR="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/CppJieba"
+          /bin/mkdir -p "$JIEBA_RESOURCES_DIR"
+          /usr/bin/install -m 644 "${SRCROOT}/ThirdParty/CppJieba/dict/jieba.dict.utf8" "$JIEBA_RESOURCES_DIR/jieba.dict.utf8"
+          /usr/bin/install -m 644 "${SRCROOT}/ThirdParty/CppJieba/dict/hmm_model.utf8" "$JIEBA_RESOURCES_DIR/hmm_model.utf8"
+          /usr/bin/install -m 644 "${SRCROOT}/ThirdParty/CppJieba/dict/user.dict.utf8" "$JIEBA_RESOURCES_DIR/user.dict.utf8"
+          /usr/bin/install -m 644 "${SRCROOT}/ThirdParty/CppJieba/dict/idf.utf8" "$JIEBA_RESOURCES_DIR/idf.utf8"
+          /usr/bin/install -m 644 "${SRCROOT}/ThirdParty/CppJieba/dict/stop_words.utf8" "$JIEBA_RESOURCES_DIR/stop_words.utf8"
       - name: Generate Rockxy Helper LaunchDaemon Plist
         outputFiles:
           - "$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchDaemons/$(ROCKXY_HELPER_PLIST_NAME)"
@@ -455,6 +479,10 @@ targets:
         COMBINE_HIDPI_IMAGES: YES
         GENERATE_INFOPLIST_FILE: NO
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+        SWIFT_OBJC_BRIDGING_HEADER: ClaudeStats/Bridging/ClaudeStats-Bridging-Header.h
+        HEADER_SEARCH_PATHS: "$(inherited) ThirdParty/CppJieba/include ThirdParty/CppJieba/deps/limonp/include"
+        CLANG_CXX_LANGUAGE_STANDARD: gnu++17
+        CLANG_CXX_LIBRARY: libc++
       configs:
         Debug:
           CODE_SIGN_ENTITLEMENTS: ClaudeStats/App/ClaudeStats.entitlements

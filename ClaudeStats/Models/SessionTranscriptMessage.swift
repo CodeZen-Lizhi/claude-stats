@@ -3,7 +3,7 @@ import Foundation
 /// A displayable entry from a provider transcript. Providers keep their JSONL
 /// quirks private and expose only this small shape to the shared UI.
 struct SessionTranscriptMessage: Sendable, Identifiable, Hashable {
-    enum Role: String, Sendable, Hashable {
+    enum Role: String, Codable, Sendable, Hashable {
         case user
         case assistant
         case tool

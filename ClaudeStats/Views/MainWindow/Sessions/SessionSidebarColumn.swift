@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Secondary main-window sidebar for browsing provider-scoped sessions.
 struct SessionSidebarColumn: View {
-    @Binding var selectedSessionID: String?
+    @Binding var destination: SessionsDestination
     var onExit: () -> Void
 
     @Environment(AppEnvironment.self) private var env
@@ -43,9 +43,17 @@ struct SessionSidebarColumn: View {
             SidebarRow(
                 title: "Overview",
                 symbol: "chart.bar.xaxis",
-                isSelected: selectedSessionID == nil
+                isSelected: destination == .overview
             ) {
                 showOverview()
+            }
+
+            SidebarRow(
+                title: "Analysis",
+                symbol: "text.magnifyingglass",
+                isSelected: destination == .analysis
+            ) {
+                showAnalysis()
             }
             .padding(.bottom, 4)
 
@@ -181,7 +189,7 @@ struct SessionSidebarColumn: View {
                             ForEach(group.sessions) { session in
                                 SessionSidebarRow(
                                     session: session,
-                                    isSelected: selectedSessionID == session.id
+                                    isSelected: destination == .session(session.id)
                                 ) {
                                     selectSession(session)
                                 }
@@ -216,12 +224,17 @@ struct SessionSidebarColumn: View {
 
     private func selectSession(_ session: Session) {
         clearSearchFocus()
-        selectedSessionID = session.id
+        destination = .session(session.id)
     }
 
     private func showOverview() {
         clearSearchFocus()
-        selectedSessionID = nil
+        destination = .overview
+    }
+
+    private func showAnalysis() {
+        clearSearchFocus()
+        destination = .analysis
     }
 
     private func refreshSessionGroups() {
@@ -370,9 +383,9 @@ private struct HeaderIconButton: View {
 
 #if DEBUG
 #Preview("Sessions sidebar") {
-    @Previewable @State var selectedSessionID: String? = nil
+    @Previewable @State var destination: SessionsDestination = .overview
 
-    return SessionSidebarColumn(selectedSessionID: $selectedSessionID, onExit: {})
+    return SessionSidebarColumn(destination: $destination, onExit: {})
         .environment(AppEnvironment.preview())
         .frame(width: 240, height: 640)
         .background(VisualEffectBackground())

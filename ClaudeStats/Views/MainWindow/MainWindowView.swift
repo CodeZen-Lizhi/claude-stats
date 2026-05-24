@@ -70,10 +70,8 @@ struct MainWindowView: View {
     @SceneStorage("mainWindow.configsDocumentID") private var configsDocumentIDRaw: String = ""
     @SceneStorage("mainWindow.networkSection") private var networkSectionRaw: String = NetworkSection.traffic.rawValue
     @SceneStorage("mainWindow.opsSection") private var opsSectionRaw: String = OpsSection.ports.rawValue
+    @SceneStorage("mainWindow.sessionsDestination") private var sessionsDestinationRaw: String = SessionsDestination.overviewRawValue
     @State private var page: MainPage = .dashboard
-    /// Held at the window level so the Sessions mode can preserve selection
-    /// while the user moves in and out of the secondary sidebar.
-    @State private var selectedSessionID: String?
     @State private var toggleHovering = false
     @State private var trafficLights = TrafficLightPositioner()
     @State private var linuxDoWebLoginPresented = false
@@ -92,8 +90,12 @@ struct MainWindowView: View {
     /// Resolves the currently selected session against the store. Returns nil
     /// if the id was set but the session has since been removed.
     private var selectedSession: Session? {
-        guard let id = selectedSessionID else { return nil }
+        guard case .session(let id) = sessionsDestination else { return nil }
         return env.store.sessions(for: env.preferences.selectedProvider).first { $0.id == id }
+    }
+
+    private var sessionsDestination: SessionsDestination {
+        SessionsDestination(rawValue: sessionsDestinationRaw)
     }
 
     private var mode: MainWindowMode {
@@ -165,6 +167,13 @@ struct MainWindowView: View {
         )
     }
 
+    private var sessionsDestinationBinding: Binding<SessionsDestination> {
+        Binding(
+            get: { sessionsDestination },
+            set: { sessionsDestinationRaw = $0.rawValue }
+        )
+    }
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             VisualEffectBackground(material: .sidebar, blendingMode: .behindWindow)
@@ -194,7 +203,7 @@ struct MainWindowView: View {
                 )
             } sessionsSidebar: {
                 SessionSidebarColumn(
-                    selectedSessionID: $selectedSessionID,
+                    destination: sessionsDestinationBinding,
                     onExit: closeSessions
                 )
             } configsSidebar: {
@@ -271,7 +280,9 @@ struct MainWindowView: View {
             if mode == .sessions { clearInvalidSessionSelection() }
         }
         .onChange(of: env.preferences.selectedProvider) { _, _ in
-            if mode == .sessions { selectedSessionID = nil }
+            if mode == .sessions, case .session = sessionsDestination {
+                sessionsDestinationRaw = SessionsDestination.overviewRawValue
+            }
         }
         .onChange(of: env.preferences.aiActivityAnalysisEnabled) { _, on in
             if !on && page == .activity { page = .dashboard }
@@ -344,10 +355,17 @@ struct MainWindowView: View {
 
     @ViewBuilder
     private var sessionsDetail: some View {
-        if let session = selectedSession {
-            CenteredPaneContainer { SessionDetailView(session: session) }
-        } else {
+        switch sessionsDestination {
+        case .overview:
             SessionsOverviewDetailView()
+        case .analysis:
+            SessionsAnalysisDetailView()
+        case .session:
+            if let session = selectedSession {
+                CenteredPaneContainer { SessionDetailView(session: session) }
+            } else {
+                SessionsOverviewDetailView()
+            }
         }
     }
 
@@ -371,7 +389,7 @@ struct MainWindowView: View {
     }
 
     private func openSessions() {
-        selectedSessionID = nil
+        sessionsDestinationRaw = SessionsDestination.overviewRawValue
         transition(to: .sessions)
     }
 
@@ -450,10 +468,10 @@ struct MainWindowView: View {
     }
 
     private func clearInvalidSessionSelection() {
-        guard let id = selectedSessionID else { return }
+        guard case .session(let id) = sessionsDestination else { return }
         let sessions = env.store.sessions(for: env.preferences.selectedProvider)
         if !sessions.contains(where: { $0.id == id }) {
-            selectedSessionID = nil
+            sessionsDestinationRaw = SessionsDestination.overviewRawValue
         }
     }
 

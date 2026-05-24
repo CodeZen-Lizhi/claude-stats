@@ -26,12 +26,18 @@ struct SessionDetailView: View {
                 missingStatsPlaceholder
             }
 
+            analysisInsightsSection
             transcriptSection
             actionRow
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .task(id: session.id) {
             await loadTranscript()
+            env.transcriptAnalysis.loadIfNeeded(
+                provider: session.provider,
+                sessions: env.store.sessions(for: session.provider),
+                messageLoader: env.store.transcriptMessageLoader(for: session.provider)
+            )
         }
     }
 
@@ -163,6 +169,64 @@ struct SessionDetailView: View {
         transcriptIsLoading = false
     }
 
+    // MARK: - Analysis
+
+    @ViewBuilder
+    private var analysisInsightsSection: some View {
+        if let analysis = env.transcriptAnalysis.sessionAnalysis(for: session.id, provider: session.provider),
+           !analysis.topTerms.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("INSIGHTS")
+                    .font(.sora(10, weight: .semibold))
+                    .tracking(0.6)
+                    .foregroundStyle(Color.stxMuted)
+
+                VStack(alignment: .leading, spacing: 12) {
+                    insightGroup("Top terms", terms: Array(analysis.topTerms.prefix(8)))
+                    if !analysis.fileTerms.isEmpty {
+                        insightGroup("Files", terms: analysis.fileTerms)
+                    }
+                    if !analysis.commandTerms.isEmpty {
+                        insightGroup("Commands", terms: analysis.commandTerms)
+                    }
+                    if !analysis.errorTerms.isEmpty {
+                        insightGroup("Errors", terms: analysis.errorTerms)
+                    }
+                }
+                .padding(12)
+                .appSurface(.compactCard(radius: 8), padding: nil)
+            }
+        } else if env.transcriptAnalysis.isLoading(for: session.provider) {
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                    .scaleEffect(0.72)
+                Text("Analyzing terms...")
+                    .font(.sora(11))
+                    .foregroundStyle(Color.stxMuted)
+            }
+        }
+    }
+
+    private func insightGroup(_ title: String, terms: [TranscriptSessionTerm]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title.uppercased())
+                .font(.sora(9, weight: .semibold))
+                .tracking(0.6)
+                .foregroundStyle(Color.stxMuted)
+            TranscriptInsightFlowLayout(spacing: 6, rowSpacing: 6) {
+                ForEach(terms, id: \.chipID) { term in
+                    Text(term.displayName)
+                        .font(.sora(10, weight: .medium))
+                        .lineLimit(1)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
+                }
+            }
+        }
+    }
+
     // MARK: - Missing stats placeholder
 
     private var missingStatsPlaceholder: some View {
@@ -256,6 +320,50 @@ private extension SessionTranscriptMessage.Role {
         case .system: .stxMuted
         }
     }
+}
+
+private struct TranscriptInsightFlowLayout: Layout {
+    var spacing: CGFloat = 6
+    var rowSpacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? 400
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x + size.width > width, x > 0 {
+                x = 0
+                y += rowHeight + rowSpacing
+                rowHeight = 0
+            }
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        return CGSize(width: width, height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x + size.width > bounds.maxX, x > bounds.minX {
+                x = bounds.minX
+                y += rowHeight + rowSpacing
+                rowHeight = 0
+            }
+            view.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+    }
+}
+
+private extension TranscriptSessionTerm {
+    var chipID: String { "\(kind.rawValue)-\(canonical)" }
 }
 
 private extension String {

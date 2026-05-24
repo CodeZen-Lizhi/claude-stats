@@ -10,3 +10,6 @@
 	path = ThirdParty/Rockxy
 	url = https://github.com/1pitaph/Rockxy.git
 	branch = integration/claude-stats
+[submodule "ThirdParty/CppJieba"]
+	path = ThirdParty/CppJieba
+	url = https://github.com/yanyiwu/cppjieba.git
