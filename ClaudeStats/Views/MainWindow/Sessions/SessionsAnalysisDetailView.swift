@@ -85,6 +85,10 @@ struct SessionsAnalysisDetailView: View {
                         .foregroundStyle(Color.stxMuted)
                 }
             }
+            if progress.total > 0 {
+                ProgressView(value: Double(progress.completed), total: Double(progress.total))
+                    .progressViewStyle(.linear)
+            }
             if let title = progress.currentSessionTitle {
                 Text(title)
                     .font(.sora(10))
@@ -109,6 +113,7 @@ struct SessionsAnalysisDetailView: View {
                     messageLoader: env.store.transcriptMessageLoader(for: provider)
                 )
             }
+            .disabled(env.transcriptAnalysis.isLoading(for: provider))
         }
         .font(.sora(12))
         .frame(maxWidth: .infinity, minHeight: 320)
@@ -179,6 +184,7 @@ struct SessionsAnalysisDetailView: View {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }
             .buttonStyle(.bordered)
+            .disabled(env.transcriptAnalysis.isLoading(for: provider))
             .font(.sora(11))
         }
         .padding(12)

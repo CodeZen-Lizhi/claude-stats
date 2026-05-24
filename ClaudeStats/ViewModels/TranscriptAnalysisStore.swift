@@ -1,22 +1,22 @@
 import Foundation
 import Observation
 
+struct TranscriptAnalysisProviderState: Equatable, Sendable {
+    var snapshot: TranscriptAnalysisSnapshot?
+    var progress = TranscriptAnalysisProgress.idle
+    var isLoading = false
+    var errorMessage: String?
+    var loadedSignature: String?
+}
+
 @MainActor
 @Observable
 final class TranscriptAnalysisStore {
-    private(set) var snapshot: TranscriptAnalysisSnapshot?
-    private(set) var progress = TranscriptAnalysisProgress.idle
-    private(set) var isLoading = false
-    private(set) var errorMessage: String?
+    private(set) var statesByProvider: [ProviderKind: TranscriptAnalysisProviderState] = [:]
 
     @ObservationIgnored private let service: TranscriptAnalysisService
     @ObservationIgnored private var loadTasks: [ProviderKind: Task<Void, Never>] = [:]
     @ObservationIgnored private var runIDs: [ProviderKind: UUID] = [:]
-    @ObservationIgnored private var loadedSignatures: [ProviderKind: String] = [:]
-    @ObservationIgnored private var snapshotsByProvider: [ProviderKind: TranscriptAnalysisSnapshot] = [:]
-    @ObservationIgnored private var progressByProvider: [ProviderKind: TranscriptAnalysisProgress] = [:]
-    @ObservationIgnored private var loadingProviders: Set<ProviderKind> = []
-    @ObservationIgnored private var activeProvider: ProviderKind?
 
     init(service: TranscriptAnalysisService = TranscriptAnalysisService()) {
         self.service = service
@@ -27,14 +27,10 @@ final class TranscriptAnalysisStore {
         sessions: [Session],
         messageLoader: TranscriptMessageLoader?
     ) {
-        activeProvider = provider
-        snapshot = snapshotsByProvider[provider]
-        progress = progressByProvider[provider] ?? .idle
-
         let signature = TranscriptAnalysisService.corpusSignature(for: sessions)
-        if loadedSignatures[provider] == signature,
-           snapshotsByProvider[provider] != nil || loadingProviders.contains(provider) {
-            updateLoadingState()
+        let state = state(for: provider)
+        if state.loadedSignature == signature,
+           state.snapshot != nil || state.isLoading {
             return
         }
         load(
@@ -51,7 +47,6 @@ final class TranscriptAnalysisStore {
         sessions: [Session],
         messageLoader: TranscriptMessageLoader?
     ) {
-        activeProvider = provider
         load(
             provider: provider,
             sessions: sessions,
@@ -62,22 +57,29 @@ final class TranscriptAnalysisStore {
     }
 
     func snapshot(for provider: ProviderKind) -> TranscriptAnalysisSnapshot? {
-        snapshot?.provider == provider ? snapshot : snapshotsByProvider[provider]
+        statesByProvider[provider]?.snapshot
     }
 
     func progress(for provider: ProviderKind) -> TranscriptAnalysisProgress {
-        progressByProvider[provider] ?? .idle
+        statesByProvider[provider]?.progress ?? .idle
     }
 
     func isLoading(for provider: ProviderKind) -> Bool {
-        loadingProviders.contains(provider)
+        statesByProvider[provider]?.isLoading ?? false
+    }
+
+    func errorMessage(for provider: ProviderKind) -> String? {
+        statesByProvider[provider]?.errorMessage
     }
 
     func sessionAnalysis(for sessionID: String, provider: ProviderKind? = nil) -> TranscriptSessionAnalysis? {
         if let provider {
             return snapshot(for: provider)?.sessionAnalysis(for: sessionID)
         }
-        return snapshot?.sessionAnalysis(for: sessionID)
+        return statesByProvider.values
+            .compactMap(\.snapshot)
+            .first { $0.sessionAnalysis(for: sessionID) != nil }?
+            .sessionAnalysis(for: sessionID)
     }
 
     private func load(
@@ -88,16 +90,17 @@ final class TranscriptAnalysisStore {
         forceRefresh: Bool
     ) {
         guard let messageLoader else {
-            errorMessage = "No transcript loader is available for \(provider.shortName)."
+            updateState(for: provider) { state in
+                state.errorMessage = "No transcript loader is available for \(provider.shortName)."
+                state.isLoading = false
+                state.progress = .idle
+            }
             return
         }
 
         let runID = UUID()
         runIDs[provider] = runID
         loadTasks[provider]?.cancel()
-        loadingProviders.insert(provider)
-        isLoading = true
-        errorMessage = nil
 
         let initialProgress = TranscriptAnalysisProgress(
             phase: .loadingIndex,
@@ -110,9 +113,10 @@ final class TranscriptAnalysisStore {
             deleted: 0,
             currentSessionTitle: nil
         )
-        progressByProvider[provider] = initialProgress
-        if activeProvider == provider {
-            progress = initialProgress
+        updateState(for: provider) { state in
+            state.isLoading = true
+            state.progress = initialProgress
+            state.errorMessage = nil
         }
 
         loadTasks[provider] = Task { [service, messageLoader] in
@@ -126,9 +130,8 @@ final class TranscriptAnalysisStore {
                     onProgress: { progress in
                         await MainActor.run {
                             guard self.runIDs[provider] == runID else { return }
-                            self.progressByProvider[provider] = progress
-                            if self.activeProvider == provider {
-                                self.progress = progress
+                            self.updateState(for: provider) { state in
+                                state.progress = progress
                             }
                         }
                     }
@@ -136,45 +139,58 @@ final class TranscriptAnalysisStore {
                 try Task.checkCancellation()
                 await MainActor.run {
                     guard self.runIDs[provider] == runID else { return }
-                    self.snapshotsByProvider[provider] = result
-                    self.loadedSignatures[provider] = signature
-                    self.progressByProvider[provider] = .idle
-                    if self.activeProvider == provider {
-                        self.snapshot = result
-                        self.progress = .idle
+                    self.finishLoading(provider: provider, runID: runID) { state in
+                        state.snapshot = result
+                        state.loadedSignature = signature
+                        state.progress = .idle
+                        state.errorMessage = nil
                     }
-                    self.finishLoading(provider: provider, runID: runID)
                     Log.analysis.info(
                         "Transcript analysis refreshed for \(provider.rawValue, privacy: .public): \(result.analyzedSessionCount, privacy: .public) analyzed sessions in \(Date().timeIntervalSince(started), privacy: .public)s"
                     )
                 }
             } catch is CancellationError {
                 await MainActor.run {
-                    self.finishLoading(provider: provider, runID: runID)
+                    self.finishLoading(provider: provider, runID: runID) { state in
+                        state.progress = .idle
+                    }
                 }
             } catch {
                 await MainActor.run {
                     guard self.runIDs[provider] == runID else { return }
-                    self.errorMessage = error.localizedDescription
-                    if self.activeProvider == provider {
-                        self.progress = .idle
+                    self.finishLoading(provider: provider, runID: runID) { state in
+                        state.errorMessage = error.localizedDescription
+                        state.progress = .idle
                     }
-                    self.progressByProvider[provider] = .idle
-                    self.finishLoading(provider: provider, runID: runID)
                     Log.analysis.error("Transcript analysis failed for \(provider.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
                 }
             }
         }
     }
 
-    private func finishLoading(provider: ProviderKind, runID: UUID) {
+    private func finishLoading(
+        provider: ProviderKind,
+        runID: UUID,
+        update: ((inout TranscriptAnalysisProviderState) -> Void)? = nil
+    ) {
         guard runIDs[provider] == runID else { return }
         loadTasks[provider] = nil
-        loadingProviders.remove(provider)
-        updateLoadingState()
+        updateState(for: provider) { state in
+            update?(&state)
+            state.isLoading = false
+        }
     }
 
-    private func updateLoadingState() {
-        isLoading = !loadingProviders.isEmpty
+    private func state(for provider: ProviderKind) -> TranscriptAnalysisProviderState {
+        statesByProvider[provider] ?? TranscriptAnalysisProviderState()
+    }
+
+    private func updateState(
+        for provider: ProviderKind,
+        _ update: (inout TranscriptAnalysisProviderState) -> Void
+    ) {
+        var state = state(for: provider)
+        update(&state)
+        statesByProvider[provider] = state
     }
 }

@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import Testing
 @testable import ClaudeStats
 
@@ -385,7 +386,7 @@ struct TranscriptAnalysisServiceTests {
         )
     }
 
-    private static func message(role: SessionTranscriptMessage.Role, text: String) -> SessionTranscriptMessage {
+    static func message(role: SessionTranscriptMessage.Role, text: String) -> SessionTranscriptMessage {
         SessionTranscriptMessage(
             id: UUID().uuidString,
             role: role,
@@ -396,12 +397,113 @@ struct TranscriptAnalysisServiceTests {
     }
 }
 
+@Suite("Transcript analysis store")
+struct TranscriptAnalysisStoreTests {
+    @Test("Provider scoped loading and progress are observable")
+    @MainActor
+    func providerScopedProgressIsObservable() async throws {
+        let root = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let index = TranscriptAnalysisIndex(url: root.appendingPathComponent("index.sqlite3"))
+        let service = TranscriptAnalysisService(index: index, maxConcurrentSessions: 1)
+        let store = TranscriptAnalysisStore(service: service)
+        let sessions = (1 ... 3).map {
+            TranscriptAnalysisServiceTests.session(id: "codex::\($0)", provider: .codex, fileSize: Int64(512 + $0))
+        }
+        let loader = MessageLoaderSpy(
+            messages: Dictionary(uniqueKeysWithValues: sessions.map { session in
+                (
+                    session.id,
+                    [TranscriptAnalysisServiceTests.message(
+                        role: .user,
+                        text: "Analyze SwiftUI progress updates for TranscriptAnalysisStore \(session.id)."
+                    )]
+                )
+            }),
+            delay: .milliseconds(40)
+        )
+        let observation = ObservationChangeFlag()
+
+        withObservationTracking {
+            _ = store.isLoading(for: .codex)
+            _ = store.progress(for: .codex)
+        } onChange: {
+            Task { await observation.markChanged() }
+        }
+
+        store.reload(
+            provider: .codex,
+            sessions: sessions,
+            messageLoader: loader.loader()
+        )
+
+        #expect(store.isLoading(for: .codex))
+        #expect(!store.isLoading(for: .claude))
+        #expect(store.progress(for: .codex).phase == .loadingIndex)
+
+        try await waitFor { await observation.didChange() }
+        try await waitFor {
+            let progress = store.progress(for: .codex)
+            return progress.total == sessions.count && progress.completed > 0
+        }
+
+        let inFlightProgress = store.progress(for: .codex)
+        #expect(inFlightProgress.currentSessionTitle != nil)
+        #expect(store.snapshot(for: .claude) == nil)
+
+        try await waitFor {
+            store.snapshot(for: .codex) != nil && !store.isLoading(for: .codex)
+        }
+
+        let snapshot = try #require(store.snapshot(for: .codex))
+        #expect(snapshot.analyzedSessionCount == sessions.count)
+        #expect(store.progress(for: .codex) == .idle)
+        #expect(await loader.callCount(for: sessions[0].id) == 1)
+    }
+
+    @Test("Superseded provider run does not leave loading stuck")
+    @MainActor
+    func supersededRunDoesNotLeaveLoadingStuck() async throws {
+        let root = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let index = TranscriptAnalysisIndex(url: root.appendingPathComponent("index.sqlite3"))
+        let service = TranscriptAnalysisService(index: index, maxConcurrentSessions: 1)
+        let store = TranscriptAnalysisStore(service: service)
+        let session = TranscriptAnalysisServiceTests.session(id: "codex::cancel", provider: .codex, fileSize: 900)
+        let slowLoader = MessageLoaderSpy(
+            messages: [
+                session.id: [TranscriptAnalysisServiceTests.message(role: .user, text: "Slow SwiftUI analysis run.")],
+            ],
+            delay: .milliseconds(200)
+        )
+        let fastLoader = MessageLoaderSpy(messages: [
+            session.id: [TranscriptAnalysisServiceTests.message(role: .user, text: "Fast NaturalLanguage analysis run.")],
+        ])
+
+        store.reload(provider: .codex, sessions: [session], messageLoader: slowLoader.loader())
+        #expect(store.isLoading(for: .codex))
+
+        store.reload(provider: .codex, sessions: [session], messageLoader: fastLoader.loader())
+
+        try await waitFor {
+            store.snapshot(for: .codex) != nil && !store.isLoading(for: .codex)
+        }
+
+        #expect(store.progress(for: .codex) == .idle)
+        #expect(await fastLoader.callCount(for: session.id) == 1)
+    }
+}
+
 private actor MessageLoaderSpy {
     private var messages: [String: [SessionTranscriptMessage]]
     private var calls: [String: Int] = [:]
+    private let delay: Duration?
 
-    init(messages: [String: [SessionTranscriptMessage]]) {
+    init(messages: [String: [SessionTranscriptMessage]], delay: Duration? = nil) {
         self.messages = messages
+        self.delay = delay
     }
 
     nonisolated func loader() -> TranscriptMessageLoader {
@@ -418,8 +520,31 @@ private actor MessageLoaderSpy {
         calls[sessionID, default: 0]
     }
 
-    private func load(_ session: Session) -> [SessionTranscriptMessage] {
+    private func load(_ session: Session) async -> [SessionTranscriptMessage] {
+        if let delay {
+            try? await Task.sleep(for: delay)
+        }
         calls[session.id, default: 0] += 1
         return messages[session.id] ?? []
     }
+}
+
+private actor ObservationChangeFlag {
+    private var changed = false
+
+    func markChanged() {
+        changed = true
+    }
+
+    func didChange() -> Bool {
+        changed
+    }
+}
+
+private func waitFor(_ predicate: @escaping @MainActor () async -> Bool) async throws {
+    for _ in 0 ..< 200 {
+        if await predicate() { return }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(await predicate())
 }
