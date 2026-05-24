@@ -239,20 +239,18 @@ struct SessionsAnalysisDetailView: View {
         let kinds = TranscriptTermKind.allCases.filter { kind in
             snapshot.terms.contains { $0.kind == kind }
         }
-        return ScrollView(.horizontal) {
-            HStack(spacing: 8) {
-                termFilterButton(title: "All", symbol: "tag", isSelected: selectedKind == nil) {
-                    selectedKind = nil
-                }
-                ForEach(kinds) { kind in
-                    termFilterButton(title: kind.displayName, symbol: kind.symbol, isSelected: selectedKind == kind) {
-                        selectedKind = kind
-                    }
+        return TermKindFilterFlowLayout(spacing: 8, rowSpacing: 8) {
+            termFilterButton(title: "All", symbol: "tag", isSelected: selectedKind == nil) {
+                selectedKind = nil
+            }
+            ForEach(kinds) { kind in
+                termFilterButton(title: kind.displayName, symbol: kind.symbol, isSelected: selectedKind == kind) {
+                    selectedKind = kind
                 }
             }
-            .padding(.vertical, 2)
         }
-        .scrollIndicators(.hidden)
+        .padding(.vertical, 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func termFilterButton(title: String, symbol: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
@@ -301,6 +299,49 @@ struct SessionsAnalysisDetailView: View {
                 }
                 .appSurface(.compactCard(radius: 10), padding: nil)
             }
+        }
+    }
+}
+
+private struct TermKindFilterFlowLayout: Layout {
+    var spacing: CGFloat = 8
+    var rowSpacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? 400
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x + size.width > width, x > 0 {
+                x = 0
+                y += rowHeight + rowSpacing
+                rowHeight = 0
+            }
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+
+        return CGSize(width: width, height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x + size.width > bounds.maxX, x > bounds.minX {
+                x = bounds.minX
+                y += rowHeight + rowSpacing
+                rowHeight = 0
+            }
+            view.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
         }
     }
 }

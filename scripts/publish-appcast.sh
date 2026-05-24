@@ -64,6 +64,8 @@ python3 scripts/update-appcast.py \
     --url "https://github.com/$REPO/releases/download/$TAG/$ARCHIVE_NAME" \
     --enclosure-attrs "$ENCLOSURE_ATTRS" \
     --release-notes-file "$NOTES_FILE" \
+    --min-system-version "14.0.0" \
+    --hardware-requirements "arm64" \
     --in "$WORK/appcast.xml" \
     --out "_site/appcast.xml"
 

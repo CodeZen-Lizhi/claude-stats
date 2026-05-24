@@ -14,6 +14,13 @@ APP="$DERIVED/Build/Products/Debug/Claude Stats.app"
 APP_PROCESS_PATTERN="Claude Stats.app/Contents/MacOS/Claude Stats"
 LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
+require_apple_silicon() {
+    if [[ "$(uname -m)" != "arm64" ]]; then
+        echo "error: Claude Stats now supports Apple Silicon Macs only." >&2
+        exit 1
+    fi
+}
+
 running_app_pids() {
     pgrep -f "$APP_PROCESS_PATTERN" 2>/dev/null || true
 }
@@ -70,8 +77,10 @@ cleanup_stale_registrations() {
     unregister_bundle_if_present "/tmp/Codex-stats-build-tests/Build/Products/Debug/Claude Stats.app"
 }
 
+require_apple_silicon
 bash scripts/build-ghosttykit.sh
 bash scripts/build-linguist-runtime.sh
+bash scripts/build-llama-runtime.sh
 bash scripts/generate.sh
 
 # Kill any running instance so the rebuild can replace it.
@@ -83,7 +92,18 @@ xcodebuild \
     -scheme ClaudeStats \
     -configuration Debug \
     -derivedDataPath "$DERIVED" \
+    ARCHS=arm64 \
     build
+
+ENTITLEMENTS="$(mktemp "${TMPDIR:-/tmp}/claude-stats-entitlements.XXXXXX")"
+if ! codesign -d --entitlements :- "$APP" > "$ENTITLEMENTS" 2>/dev/null; then
+    rm -f "$ENTITLEMENTS"
+    ENTITLEMENTS=""
+fi
+bash scripts/thin-arm64-bundle.sh "$APP"
+bash scripts/codesign-ad-hoc-bundle.sh "$APP" "$ENTITLEMENTS"
+[[ -n "$ENTITLEMENTS" ]] && rm -f "$ENTITLEMENTS"
+bash scripts/verify-arm64-bundle.sh "$APP"
 
 # Refresh Launch Services so the just-built bundle is the registered one.
 "$LSREGISTER" -f "$APP" 2>/dev/null || true

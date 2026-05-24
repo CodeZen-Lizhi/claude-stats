@@ -4,6 +4,7 @@ import Foundation
 typealias TranscriptMessageLoader = @Sendable (Session) async -> [SessionTranscriptMessage]
 typealias TranscriptAnalysisProgressHandler = @Sendable (TranscriptAnalysisProgress) async -> Void
 typealias TranscriptDictionaryResolver = @Sendable (Session) async -> TechnicalTermDictionarySnapshot
+typealias TranscriptEmbeddingStatusResolver = @Sendable () async -> EmbeddingModelStatus
 
 struct TranscriptAnalysisService: Sendable {
     static let extractorVersion = "transcript-analysis-v3"
@@ -12,17 +13,20 @@ struct TranscriptAnalysisService: Sendable {
     private let index: TranscriptAnalysisIndex
     private let maxConcurrentSessions: Int
     private let dictionaryResolver: TranscriptDictionaryResolver
+    private let embeddingStatusResolver: TranscriptEmbeddingStatusResolver
 
     init(
         extractor: TranscriptTermExtractor = TranscriptTermExtractor(),
         index: TranscriptAnalysisIndex = TranscriptAnalysisIndex(),
         maxConcurrentSessions: Int = 4,
-        dictionaryResolver: @escaping TranscriptDictionaryResolver = { _ in TechnicalTermDictionarySnapshot.fallback }
+        dictionaryResolver: @escaping TranscriptDictionaryResolver = { _ in TechnicalTermDictionarySnapshot.fallback },
+        embeddingStatusResolver: @escaping TranscriptEmbeddingStatusResolver = { .notConfigured }
     ) {
         self.extractor = extractor
         self.index = index
         self.maxConcurrentSessions = max(1, maxConcurrentSessions)
         self.dictionaryResolver = dictionaryResolver
+        self.embeddingStatusResolver = embeddingStatusResolver
     }
 
     func analyze(
@@ -41,7 +45,11 @@ struct TranscriptAnalysisService: Sendable {
             for: sessions,
             snapshotsBySessionID: dictionarySnapshots
         )
-        let engine = await extractor.engineInfo(dictionaryVersion: dictionarySignature)
+        let embeddingStatus = await embeddingStatusResolver()
+        let engine = await extractor.engineInfo(
+            dictionaryVersion: dictionarySignature,
+            embeddingStatus: embeddingStatus
+        )
 
         await publish(
             TranscriptAnalysisProgress(

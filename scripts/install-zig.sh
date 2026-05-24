@@ -16,7 +16,10 @@ fi
 
 case "$(uname -m)" in
     arm64) ZIG_ARCH="aarch64" ;;
-    x86_64) ZIG_ARCH="x86_64" ;;
+    x86_64)
+        echo "error: Claude Stats now supports Apple Silicon Macs only; install Zig on an arm64 Mac." >&2
+        exit 1
+        ;;
     *)
         echo "error: unsupported macOS architecture: $(uname -m)" >&2
         exit 1

@@ -13,3 +13,6 @@
 [submodule "ThirdParty/CppJieba"]
 	path = ThirdParty/CppJieba
 	url = https://github.com/yanyiwu/cppjieba.git
+[submodule "ThirdParty/llama.cpp"]
+	path = ThirdParty/llama.cpp
+	url = https://github.com/ggml-org/llama.cpp.git

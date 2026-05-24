@@ -40,6 +40,7 @@ DERIVED=/tmp/claude-stats-release
 DIST="$PWD/dist"
 CLOUDKIT_ENTITLEMENTS="ClaudeStats/App/ClaudeStatsCloudKit.entitlements"
 SIGNED_ENTITLEMENTS="$DIST/signed-entitlements.plist"
+UNSIGNED_ENTITLEMENTS="$DIST/unsigned-entitlements.plist"
 
 VERSION="${1:-$(grep -E '^[[:space:]]*MARKETING_VERSION:' project.yml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')}"
 [[ -n "$VERSION" ]] || { echo "error: could not determine version" >&2; exit 1; }
@@ -49,6 +50,12 @@ ZIP="$DIST/ClaudeStats-$VERSION.zip"
 SIGNED=0
 [[ -n "${SIGN_IDENTITY:-}" ]] && SIGNED=1
 GHOSTTY_RELEASE_OPTIMIZE="${GHOSTTY_RELEASE_OPTIMIZE:-ReleaseFast}"
+
+if [[ "$(uname -m)" != "arm64" ]]; then
+    echo "error: Claude Stats release builds must run on Apple Silicon." >&2
+    exit 1
+fi
+
 case "$GHOSTTY_RELEASE_OPTIMIZE" in
     ReleaseFast|ReleaseSmall) ;;
     *)
@@ -65,6 +72,7 @@ GHOSTTY_XCFRAMEWORK_TARGET="${GHOSTTY_XCFRAMEWORK_TARGET:-native}" \
 REQUIRE_LINGUIST_RUNTIME="${REQUIRE_LINGUIST_RUNTIME:-1}" \
 REQUIRE_RELOCATABLE_LINGUIST_RUNTIME="${REQUIRE_RELOCATABLE_LINGUIST_RUNTIME:-1}" \
     bash scripts/build-linguist-runtime.sh
+LLAMA_ARCHS=arm64 bash scripts/build-llama-runtime.sh
 python3 scripts/generate-release-history.py --tag "v$VERSION"
 bash scripts/generate.sh
 
@@ -72,7 +80,11 @@ rm -rf "$DERIVED" "$DIST"
 mkdir -p "$DIST"
 
 CONFIGURATION=Release
-RELEASE_ARCHS="${RELEASE_ARCHS:-$(uname -m)}"
+RELEASE_ARCHS="${RELEASE_ARCHS:-arm64}"
+if [[ "$RELEASE_ARCHS" != "arm64" ]]; then
+    echo "error: RELEASE_ARCHS must be arm64 for Apple Silicon-only releases (got '$RELEASE_ARCHS')" >&2
+    exit 1
+fi
 XCODE_BUILD_ARGS=(ARCHS="$RELEASE_ARCHS")
 if [[ $SIGNED -eq 1 ]]; then
     [[ -n "${APPLE_TEAM_ID:-}" ]] || {
@@ -118,6 +130,32 @@ codesign_release() {
     done
 }
 
+codesign_nested_release_code() {
+    local root="$1"
+    shift
+    local sign_args=("$@")
+
+    while IFS= read -r -d '' item; do
+        if file "$item" | grep -q 'Mach-O'; then
+            codesign_release --force "${sign_args[@]}" "$item"
+        fi
+    done < <(find "$root" -type d -name '*.dSYM' -prune -o -type f -print0)
+
+    while IFS= read -r bundle; do
+        [[ "$bundle" == "$root" ]] && continue
+        codesign_release --force "${sign_args[@]}" "$bundle"
+    done < <(
+        find "$root" -type d \( \
+            -name '*.app' -o \
+            -name '*.appex' -o \
+            -name '*.bundle' -o \
+            -name '*.framework' -o \
+            -name '*.plugin' -o \
+            -name '*.xpc' \
+        \) -print | awk '{ print length, $0 }' | sort -rn | cut -d' ' -f2-
+    )
+}
+
 xcodebuild \
     -project ClaudeStats.xcodeproj \
     -scheme ClaudeStats \
@@ -127,6 +165,9 @@ xcodebuild \
     build
 
 [[ -d "$APP" ]] || { echo "error: build did not produce $APP" >&2; exit 1; }
+
+bash scripts/thin-arm64-bundle.sh "$APP"
+bash scripts/verify-arm64-bundle.sh "$APP"
 
 GITTOOLS_DIR="$APP/Contents/Resources/GitTools"
 bash scripts/gittools/prune-debug-symbols.sh "$GITTOOLS_DIR"
@@ -144,37 +185,11 @@ if [[ $SIGNED -eq 1 ]]; then
     codesign -d --entitlements :- "$APP" > "$SIGNED_ENTITLEMENTS"
     /usr/libexec/PlistBuddy -c 'Delete :com.apple.security.get-task-allow' "$SIGNED_ENTITLEMENTS" 2>/dev/null || true
 
-    # xcodebuild signs the main app and the immediate framework bundle, but does
-    # NOT recurse into Sparkle.framework to re-sign its XPC services, helper app,
-    # or helper executable — they keep Sparkle's own distribution signature,
-    # which Apple's notary rejects ("not signed with a valid Developer ID
-    # certificate" + "signature does not include a secure timestamp"). Re-sign
-    # each nested binary bottom-up, then the framework, then the main app. The
-    # final re-sign of the main app, with our entitlements file passed
-    # explicitly, also strips Xcode's auto-injected `get-task-allow` entitlement
-    # (also rejected by notary).
-    echo "==> Deep re-signing Sparkle.framework contents + main app"
-    SPARKLE_FW="$APP/Contents/Frameworks/Sparkle.framework"
-    if [[ -d "$SPARKLE_FW" ]]; then
-        for item in \
-            "$SPARKLE_FW/Versions/B/XPCServices/Downloader.xpc" \
-            "$SPARKLE_FW/Versions/B/XPCServices/Installer.xpc" \
-            "$SPARKLE_FW/Versions/B/Updater.app" \
-            "$SPARKLE_FW/Versions/B/Autoupdate"; do
-            [[ -e "$item" ]] && codesign_release --force --options runtime --timestamp \
-                --sign "$SIGN_IDENTITY" "$item"
-        done
-        codesign_release --force --options runtime --timestamp \
-            --sign "$SIGN_IDENTITY" "$SPARKLE_FW"
-    fi
-    if [[ -d "$GITTOOLS_DIR" ]]; then
-        while IFS= read -r -d '' item; do
-            if file "$item" | grep -q 'Mach-O'; then
-                codesign_release --force --options runtime --timestamp \
-                    --sign "$SIGN_IDENTITY" "$item"
-            fi
-        done < <(find "$GITTOOLS_DIR" -type d -name '*.dSYM' -prune -o -type f -print0)
-    fi
+    # xcodebuild signs before our release pruning/thinning steps are complete,
+    # and Sparkle contains nested XPC/helper code. Re-sign all nested code
+    # bottom-up, then re-sign the main app with the resolved CloudKit entitlements.
+    echo "==> Deep re-signing nested code + main app"
+    codesign_nested_release_code "$APP" --options runtime --timestamp --sign "$SIGN_IDENTITY"
     if [[ ! -f "$ROCKXY_HELPER_TOOL" ]]; then
         echo "error: missing bundled Rockxy helper at $ROCKXY_HELPER_TOOL" >&2
         exit 1
@@ -281,6 +296,9 @@ assert_no_get_task_allow_entitlements() {
 
 if [[ $SIGNED -eq 0 ]]; then
     echo "==> Packaging DMG + zip (unsigned)"
+    codesign -d --entitlements :- "$APP" > "$UNSIGNED_ENTITLEMENTS" 2>/dev/null || rm -f "$UNSIGNED_ENTITLEMENTS"
+    bash scripts/codesign-ad-hoc-bundle.sh "$APP" "$UNSIGNED_ENTITLEMENTS"
+    codesign --verify --deep --strict --verbose=2 "$APP"
     make_dmg
     ditto -c -k --keepParent "$APP" "$ZIP"
     echo "==> Done (unsigned): $DMG, $ZIP"

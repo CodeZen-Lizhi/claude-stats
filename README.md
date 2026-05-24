@@ -192,7 +192,7 @@ bash scripts/run-tests.sh  # generate + build test dependencies + run unit tests
 
 ## Requirements
 
-- macOS 14+
+- Apple Silicon Mac with macOS 14+
 - Xcode 26+ with Swift 6 language mode
 - XcodeGen for project generation
 - Zig 0.15.2 for rebuilding `GhosttyKit.xcframework`

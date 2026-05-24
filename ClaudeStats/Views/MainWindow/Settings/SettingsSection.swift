@@ -10,6 +10,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
     case platforms
     case tracking
     case dictionary
+    case localAI
     case leaderboards
     case github
     case linuxDo
@@ -28,6 +29,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
         case .platforms: L10n.string("settings.section.platforms", defaultValue: "Platforms")
         case .tracking:  L10n.string("settings.section.tracking", defaultValue: "Tracking")
         case .dictionary: "Dictionary"
+        case .localAI: "Local AI"
         case .leaderboards: L10n.string("settings.section.leaderboards", defaultValue: "Leaderboards")
         case .github:    "GitHub"
         case .linuxDo:   "LinuxDo"
@@ -46,6 +48,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
         case .platforms: "square.stack.3d.up"
         case .tracking:  "waveform.path.ecg"
         case .dictionary: "text.book.closed"
+        case .localAI: "brain"
         case .leaderboards: "trophy"
         case .github:    "chevron.left.forwardslash.chevron.right"
         case .linuxDo:   "globe.asia.australia"

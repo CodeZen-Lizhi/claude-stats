@@ -21,13 +21,16 @@ struct TranscriptTermExtractor: Sendable {
         }
     }
 
-    func engineInfo(dictionaryVersion: String) async -> TranscriptAnalysisEngineInfo {
+    func engineInfo(
+        dictionaryVersion: String,
+        embeddingStatus: EmbeddingModelStatus = UnconfiguredEmbeddingEngine().status
+    ) async -> TranscriptAnalysisEngineInfo {
         let jiebaAvailable = await tokenizer.isAvailable
         return TranscriptAnalysisEngineInfo(
             tokenizerID: jiebaAvailable ? "cppjieba-natural-language-v1" : "fallback-natural-language-v1",
             dictionaryVersion: dictionaryVersion,
             displayName: jiebaAvailable ? "Jieba + NaturalLanguage" : "NaturalLanguage fallback",
-            embeddingStatus: UnconfiguredEmbeddingEngine().status
+            embeddingStatus: embeddingStatus
         )
     }
 

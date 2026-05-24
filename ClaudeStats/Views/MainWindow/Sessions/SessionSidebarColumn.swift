@@ -8,6 +8,10 @@ struct SessionSidebarColumn: View {
 
     @Environment(AppEnvironment.self) private var env
     @State private var sessionsVM = SessionListViewModel()
+    @State private var searchMode: SessionSearchMode = .text
+    @State private var semanticResults: [SemanticSessionSearchResult] = []
+    @State private var semanticIsLoading = false
+    @State private var semanticSearchTask: Task<Void, Never>?
     @FocusState private var searchFieldFocused: Bool
 
     private var provider: ProviderKind {
@@ -40,6 +44,10 @@ struct SessionSidebarColumn: View {
                 .padding(.horizontal, 12)
                 .padding(.bottom, 8)
 
+            searchModeControl
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
+
             SidebarRow(
                 title: "Overview",
                 symbol: "chart.bar.xaxis",
@@ -69,6 +77,29 @@ struct SessionSidebarColumn: View {
         .onChange(of: env.store.lastRefreshedAt) { _, _ in refreshSessionGroups() }
         .onChange(of: env.preferences.selectedProvider) { _, _ in refreshSessionGroups() }
         .onChange(of: env.preferences.costEstimationMode) { _, _ in refreshSessionGroups() }
+        .onChange(of: sessionsVM.searchText) { _, _ in scheduleSemanticSearch() }
+        .onChange(of: searchMode) { _, mode in
+            if mode == .semantic {
+                scheduleSemanticSearch()
+            } else {
+                semanticSearchTask?.cancel()
+                semanticIsLoading = false
+                semanticResults = []
+            }
+        }
+        .onChange(of: env.localAI.semanticSearchAvailable) { _, available in
+            if available {
+                scheduleSemanticSearch()
+            } else {
+                searchMode = .text
+                semanticSearchTask?.cancel()
+                semanticIsLoading = false
+                semanticResults = []
+            }
+        }
+        .onDisappear {
+            semanticSearchTask?.cancel()
+        }
     }
 
     private func statusCard(vm: SessionListViewModel) -> some View {
@@ -162,10 +193,24 @@ struct SessionSidebarColumn: View {
     }
 
     @ViewBuilder
+    private var searchModeControl: some View {
+        if env.localAI.semanticSearchAvailable {
+            Picker("", selection: $searchMode) {
+                Text("Text").tag(SessionSearchMode.text)
+                Text("Semantic").tag(SessionSearchMode.semantic)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+        }
+    }
+
+    @ViewBuilder
     private func sessionsTree(vm: SessionListViewModel) -> some View {
         let groups = vm.projectGroups
 
-        if groups.isEmpty {
+        if searchMode == .semantic && env.localAI.semanticSearchAvailable && !vm.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            semanticSessionsTree()
+        } else if groups.isEmpty {
             sessionsEmptyState(
                 hasQuery: !vm.searchText.isEmpty,
                 isLoading: env.store.isLoading,
@@ -202,10 +247,51 @@ struct SessionSidebarColumn: View {
     }
 
     @ViewBuilder
+    private func semanticSessionsTree() -> some View {
+        let sessionsByID = Dictionary(uniqueKeysWithValues: env.store.sessions(for: provider).map { ($0.id, $0) })
+        let rows = semanticResults.compactMap { result -> SemanticSidebarResult? in
+            guard let session = sessionsByID[result.sessionID] else { return nil }
+            return SemanticSidebarResult(session: session, result: result)
+        }
+
+        if rows.isEmpty {
+            sessionsEmptyState(
+                hasQuery: true,
+                isLoading: semanticIsLoading,
+                hasProviderSessions: sessionsVM.hasProviderSessions
+            )
+            .frame(maxHeight: .infinity, alignment: .top)
+        } else {
+            AppScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(rows) { row in
+                        SemanticSessionSidebarRow(
+                            session: row.session,
+                            result: row.result,
+                            isSelected: destination == .session(row.session.id)
+                        ) {
+                            selectSession(row.session)
+                        }
+                    }
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                if semanticIsLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                        .scaleEffect(0.7)
+                        .padding(.trailing, 12)
+                        .padding(.top, 8)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
     private func sessionsEmptyState(hasQuery: Bool, isLoading: Bool, hasProviderSessions: Bool) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            if isLoading && !hasProviderSessions {
-                Text("Scanning...")
+            if isLoading {
+                Text(hasQuery ? "Searching..." : "Scanning...")
                     .font(.sora(11))
                     .foregroundStyle(Color.stxMuted)
             } else if hasQuery {
@@ -243,6 +329,7 @@ struct SessionSidebarColumn: View {
             provider: provider,
             costMode: env.preferences.costEstimationMode
         )
+        scheduleSemanticSearch()
     }
 
     private func close() {
@@ -254,6 +341,43 @@ struct SessionSidebarColumn: View {
         searchFieldFocused = false
         NSApp.keyWindow?.makeFirstResponder(nil)
     }
+
+    private func scheduleSemanticSearch() {
+        semanticSearchTask?.cancel()
+        let query = sessionsVM.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard searchMode == .semantic,
+              env.localAI.semanticSearchAvailable,
+              query.count >= 2 else {
+            semanticIsLoading = false
+            semanticResults = []
+            return
+        }
+        semanticIsLoading = true
+        let selectedProvider = provider
+        semanticSearchTask = Task {
+            let results = await env.localAI.search(
+                query: query,
+                provider: selectedProvider,
+                sessions: env.store.sessions(for: selectedProvider),
+                messageLoader: env.store.transcriptMessageLoader(for: selectedProvider)
+            )
+            guard !Task.isCancelled else { return }
+            semanticResults = results
+            semanticIsLoading = false
+        }
+    }
+}
+
+private enum SessionSearchMode: String, Hashable {
+    case text
+    case semantic
+}
+
+private struct SemanticSidebarResult: Identifiable {
+    let session: Session
+    let result: SemanticSessionSearchResult
+
+    var id: String { session.id }
 }
 
 private struct ProjectSidebarRow: View {
@@ -297,6 +421,59 @@ private struct ProjectSidebarRow: View {
         .buttonStyle(.plain)
         .padding(.horizontal, 8)
         .onHover { hovering = $0 }
+    }
+}
+
+private struct SemanticSessionSidebarRow: View {
+    let session: Session
+    let result: SemanticSessionSearchResult
+    let isSelected: Bool
+    let select: () -> Void
+
+    @State private var hovering = false
+
+    private var title: String {
+        if let title = session.stats?.title, !title.isEmpty { return title }
+        return session.externalID
+    }
+
+    var body: some View {
+        Button(action: select) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(title)
+                        .font(.sora(11, weight: .medium))
+                        .foregroundStyle(isSelected ? .primary : Color.stxMuted.opacity(0.95))
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text(scoreText)
+                        .font(.sora(9).monospacedDigit())
+                        .foregroundStyle(Color.stxMuted.opacity(0.72))
+                }
+                Text(result.matchedExcerpt)
+                    .font(.sora(9))
+                    .foregroundStyle(Color.stxMuted.opacity(0.72))
+                    .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.10))
+                } else if hovering {
+                    RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.05))
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 8)
+        .onHover { hovering = $0 }
+    }
+
+    private var scoreText: String {
+        String(format: "%.2f", result.score)
     }
 }
 

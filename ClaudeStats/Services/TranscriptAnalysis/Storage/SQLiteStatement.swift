@@ -49,6 +49,18 @@ final class SQLiteStatement {
         guard result == SQLITE_OK else { throw SQLiteStorageError.bindFailed(connection.lastErrorMessage) }
     }
 
+    func bind(_ value: Data?, at index: Int32) throws {
+        let result: Int32
+        if let value {
+            result = value.withUnsafeBytes { bytes in
+                sqlite3_bind_blob(statement, index, bytes.baseAddress, Int32(value.count), SQLiteStatement.transient)
+            }
+        } else {
+            result = sqlite3_bind_null(statement, index)
+        }
+        guard result == SQLITE_OK else { throw SQLiteStorageError.bindFailed(connection.lastErrorMessage) }
+    }
+
     func step() throws -> Bool {
         let result = sqlite3_step(statement)
         switch result {
@@ -92,6 +104,12 @@ final class SQLiteStatement {
 
     func columnIsNull(_ index: Int32) -> Bool {
         sqlite3_column_type(statement, index) == SQLITE_NULL
+    }
+
+    func columnData(_ index: Int32) -> Data? {
+        guard let bytes = sqlite3_column_blob(statement, index) else { return nil }
+        let length = Int(sqlite3_column_bytes(statement, index))
+        return Data(bytes: bytes, count: length)
     }
 
     private static let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)

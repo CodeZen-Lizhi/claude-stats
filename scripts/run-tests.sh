@@ -8,6 +8,13 @@ TEST_APP="$DERIVED/Build/Products/Debug/Claude Stats.app"
 APP_PROCESS_PATTERN="Claude Stats.app/Contents/MacOS/Claude Stats"
 LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
+require_apple_silicon() {
+    if [[ "$(uname -m)" != "arm64" ]]; then
+        echo "error: Claude Stats now supports Apple Silicon Macs only." >&2
+        exit 1
+    fi
+}
+
 running_app_pids() {
     pgrep -f "$APP_PROCESS_PATTERN" 2>/dev/null || true
 }
@@ -60,8 +67,12 @@ cleanup_after_tests() {
 
 trap cleanup_after_tests EXIT
 
+require_apple_silicon
+python3 -B -m unittest discover scripts/tests
+
 bash scripts/build-ghosttykit.sh
 bash scripts/build-linguist-runtime.sh
+bash scripts/build-llama-runtime.sh
 bash scripts/generate.sh
 
 stop_running_app
@@ -73,4 +84,8 @@ xcodebuild \
     -configuration Debug \
     -derivedDataPath "$DERIVED" \
     -destination 'platform=macOS' \
+    ARCHS=arm64 \
     test
+
+bash scripts/thin-arm64-bundle.sh "$TEST_APP"
+bash scripts/verify-arm64-bundle.sh "$TEST_APP"

@@ -12,7 +12,8 @@ Usage:
       --url https://github.com/1pitaph/claude-stats-releases/releases/download/v1.2.0/ClaudeStats-1.2.0.zip \
       --enclosure-attrs 'sparkle:edSignature="..." length="12345"' \
       --release-notes-file release_notes.html \
-      --min-system-version 14.0 \
+      --min-system-version 14.0.0 \
+      --hardware-requirements arm64 \
       --in appcast.xml --out appcast.xml
 
 The release-notes file should contain inline HTML (e.g. `<ul><li>…</li></ul>`).
@@ -46,6 +47,7 @@ ITEM_TEMPLATE = """    <item>
       <sparkle:version>{build}</sparkle:version>
       <sparkle:shortVersionString>{version}</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>{min_sys}</sparkle:minimumSystemVersion>
+      <sparkle:hardwareRequirements>{hardware_requirements}</sparkle:hardwareRequirements>
       <description><![CDATA[
 {notes_html}
 ]]></description>
@@ -64,7 +66,8 @@ def main() -> int:
                    help='the `sparkle:edSignature="..." length="..."` string from sign_update')
     p.add_argument("--release-notes-file", required=True,
                    help="path to an HTML fragment with this release's notes; embedded in CDATA")
-    p.add_argument("--min-system-version", default="14.0")
+    p.add_argument("--min-system-version", default="14.0.0")
+    p.add_argument("--hardware-requirements", default="arm64")
     p.add_argument("--in", dest="infile", default="appcast.xml")
     p.add_argument("--out", dest="outfile", default="appcast.xml")
     args = p.parse_args()
@@ -92,6 +95,7 @@ def main() -> int:
         version=args.version,
         build=args.build,
         min_sys=args.min_system_version,
+        hardware_requirements=args.hardware_requirements,
         notes_html=notes_html,
         pub_date=email.utils.formatdate(time.time(), localtime=False, usegmt=True),
         url=args.url,

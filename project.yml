@@ -62,6 +62,7 @@ packages:
 settings:
   base:
     SWIFT_VERSION: "6.0"
+    ARCHS: arm64
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     DEVELOPMENT_LANGUAGE: en
     SWIFT_STRICT_CONCURRENCY: complete
@@ -356,13 +357,19 @@ targets:
       - framework: ThirdParty/Atoll/Frameworks/MediaRemoteAdapter.framework
         embed: true
         codeSign: true
+      - framework: ThirdParty/llama.cpp/build-macos/framework/llama.framework
+        embed: true
+        codeSign: true
       - sdk: ApplicationServices.framework
+      - sdk: Accelerate.framework
+      - sdk: Metal.framework
       - sdk: ScreenCaptureKit.framework
       - sdk: Vision.framework
       - sdk: IOKit.framework
       - sdk: SystemConfiguration.framework
       - sdk: CoreWLAN.framework
       - sdk: WebKit.framework
+      - sdk: libc++.tbd
       - sdk: libsqlite3.tbd
     postBuildScripts:
       - name: Copy Atoll MediaRemote Runtime Resources

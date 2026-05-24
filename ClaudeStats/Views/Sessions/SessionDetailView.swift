@@ -14,6 +14,8 @@ struct SessionDetailView: View {
     let session: Session
     @State private var transcriptMessages: [SessionTranscriptMessage] = []
     @State private var transcriptIsLoading = false
+    @State private var similarSessions: [SemanticSessionSearchResult] = []
+    @State private var similarSessionsLoading = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -27,6 +29,7 @@ struct SessionDetailView: View {
             }
 
             analysisInsightsSection
+            similarSessionsSection
             transcriptSection
             actionRow
         }
@@ -38,6 +41,7 @@ struct SessionDetailView: View {
                 sessions: env.store.sessions(for: session.provider),
                 messageLoader: env.store.transcriptMessageLoader(for: session.provider)
             )
+            await loadSimilarSessions()
         }
     }
 
@@ -169,6 +173,71 @@ struct SessionDetailView: View {
         transcriptIsLoading = false
     }
 
+    // MARK: - Similar sessions
+
+    @ViewBuilder
+    private var similarSessionsSection: some View {
+        if env.localAI.semanticSearchAvailable {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("SIMILAR SESSIONS")
+                        .font(.sora(10, weight: .semibold))
+                        .tracking(0.6)
+                        .foregroundStyle(Color.stxMuted)
+                    Spacer(minLength: 0)
+                    if similarSessionsLoading {
+                        ProgressView()
+                            .controlSize(.small)
+                            .scaleEffect(0.72)
+                    }
+                }
+
+                let sessionsByID = Dictionary(uniqueKeysWithValues: env.store.sessions(for: session.provider).map { ($0.id, $0) })
+                let rows = similarSessions.compactMap { result -> SimilarSessionRowData? in
+                    guard let related = sessionsByID[result.sessionID] else { return nil }
+                    return SimilarSessionRowData(session: related, result: result)
+                }
+
+                if rows.isEmpty && !similarSessionsLoading {
+                    Text("No close matches yet.")
+                        .font(.sora(11))
+                        .foregroundStyle(Color.stxMuted)
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .appSurface(.compactCard(radius: 8), padding: nil)
+                } else {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(rows) { row in
+                            SimilarSessionResultRow(row: row)
+                            if row.id != rows.last?.id {
+                                Divider().overlay(Color.stxStroke)
+                            }
+                        }
+                    }
+                    .padding(12)
+                    .appSurface(.compactCard(radius: 8), padding: nil)
+                }
+            }
+        }
+    }
+
+    private func loadSimilarSessions() async {
+        guard env.localAI.semanticSearchAvailable else {
+            similarSessions = []
+            similarSessionsLoading = false
+            return
+        }
+        similarSessionsLoading = true
+        let results = await env.localAI.similarSessions(
+            to: session,
+            providerSessions: env.store.sessions(for: session.provider),
+            messageLoader: env.store.transcriptMessageLoader(for: session.provider)
+        )
+        guard !Task.isCancelled else { return }
+        similarSessions = results
+        similarSessionsLoading = false
+    }
+
     // MARK: - Analysis
 
     @ViewBuilder
@@ -260,6 +329,41 @@ struct SessionDetailView: View {
             Spacer(minLength: 0)
         }
         .font(.sora(11))
+    }
+}
+
+private struct SimilarSessionRowData: Identifiable {
+    let session: Session
+    let result: SemanticSessionSearchResult
+
+    var id: String { session.id }
+}
+
+private struct SimilarSessionResultRow: View {
+    let row: SimilarSessionRowData
+
+    private var title: String {
+        row.session.stats?.title.nonEmpty ?? row.session.externalID
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.sora(11, weight: .medium))
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                Text(String(format: "%.2f", row.result.score))
+                    .font(.sora(10).monospacedDigit())
+                    .foregroundStyle(Color.stxMuted)
+            }
+            Text(row.result.matchedExcerpt)
+                .font(.sora(10))
+                .foregroundStyle(Color.stxMuted)
+                .lineLimit(2)
+        }
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

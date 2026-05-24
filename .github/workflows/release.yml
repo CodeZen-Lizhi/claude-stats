@@ -236,6 +236,10 @@ jobs:
           APP_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
           LINGUIST_RUNTIME_SOURCE: ${{ runner.temp }}/gittools-runtime
         run: |
+          if [[ "$(uname -m)" != "arm64" ]]; then
+            echo "::error::Claude Stats releases must run on Apple Silicon runners."
+            exit 1
+          fi
           # Defensive: actool talks to these XPC agents and they can be left in a
           # bad state after switching Xcode, which crashes asset-catalog compilation.
           sudo killall -9 com.apple.CoreSimulator.CoreSimulatorService 2>/dev/null || true
