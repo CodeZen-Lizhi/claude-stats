@@ -241,6 +241,7 @@ private struct GitCommitInspector: View {
     @Bindable var vm: GitRepoGraphViewModel
 
     @Binding var mode: GitInspectorMode
+    @State private var diffRequest: GitFileDiffRequest?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -260,6 +261,9 @@ private struct GitCommitInspector: View {
             }
         }
         .background(AppSurface.panelFill)
+        .sheet(item: $diffRequest) { request in
+            GitFileDiffViewer(request: request)
+        }
         .task(id: "\(repo.id)|\(mode.rawValue)|\(vm.statsScope.rawValue)|\(vm.statsRefreshGeneration)") {
             guard mode == .repo else { return }
             await vm.loadRepoStats(repo: repo)
@@ -419,7 +423,13 @@ private struct GitCommitInspector: View {
             } else {
                 ForEach(detail.files) { file in
                     Button {
-                        vm.openDiff(path: file.path)
+                        diffRequest = GitFileDiffRequest(
+                            repo: repo,
+                            hash: detail.hash,
+                            parentHash: detail.parentHashes.first,
+                            abbreviatedHash: detail.abbreviatedHash,
+                            path: file.path
+                        )
                     } label: {
                         HStack(spacing: 8) {
                             if file.isBinary {

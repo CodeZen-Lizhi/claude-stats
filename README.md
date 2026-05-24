@@ -152,6 +152,12 @@ Packaged builds are published through the public release mirror:
 
 Release packaging supports both signed/notarized builds and unsigned fallback builds. If you use an unsigned build, macOS Gatekeeper may require opening it with right-click, then **Open**.
 
+### Compatibility
+
+Current packaged releases support Apple Silicon Macs running macOS 15 or later. The app bundle still carries a macOS 14 deployment target for the main app shell, but packaged releases include runtime components whose practical floor is macOS 15.
+
+Intel Macs are not supported by current releases. The last public universal build with both `x86_64` and `arm64` slices was [v1.3.9](https://github.com/1pitaph/claude-stats-releases/releases/tag/v1.3.9); releases from v1.3.11 onward ship an `arm64` main executable.
+
 ## Privacy & Data
 
 Claude Stats is local-first. Core usage stats are read from local tool data such as `~/.claude/projects/` and `~/.codex/sessions/`; optional activity and desktop-limit features may request macOS permissions such as Full Disk Access, Accessibility, or Screen Recording.
@@ -192,7 +198,7 @@ bash scripts/run-tests.sh  # generate + build test dependencies + run unit tests
 
 ## Requirements
 
-- Apple Silicon Mac with macOS 14+
+- Apple Silicon Mac with macOS 15+
 - Xcode 26+ with Swift 6 language mode
 - XcodeGen for project generation
 - Zig 0.15.2 for rebuilding `GhosttyKit.xcframework`

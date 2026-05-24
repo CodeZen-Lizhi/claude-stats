@@ -42,6 +42,7 @@ struct SessionsAnalysisDetailView: View {
                     if dictionaryNeedsRefresh {
                         dictionaryRefreshBanner
                     }
+                    SemanticVisualizationShowcase(analysis: snapshot, sessions: sessions)
                     kindFilters(snapshot)
                     termsSection(snapshot)
                     examplesSection(snapshot)
