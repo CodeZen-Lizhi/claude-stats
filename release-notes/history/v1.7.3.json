@@ -1,0 +1,10 @@
+{
+  "headline": "添加llama.cpp子模块与相关桥接代码",
+  "changes": [
+    "新增本地AI设置页面与语义搜索功能",
+    "仅支持Apple Silicon Mac，更新构建与发布脚本",
+    "新增嵌入模型管理与会话相似性搜索",
+    "优化构建流程，添加代码签名与瘦身脚本",
+    "移除TranscriptAnalysisService内的本地TF-IDF分析器实例，改为通过索引获取持久化快照"
+  ]
+}

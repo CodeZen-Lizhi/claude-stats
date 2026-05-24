@@ -3,6 +3,18 @@
 extension ReleaseHistoryCatalog {
     static let generatedEntries: [ReleaseHistoryEntry] = [
         ReleaseHistoryEntry(
+            version: "1.7.3",
+            date: "May 24, 2026",
+            headline: "添加llama.cpp子模块与相关桥接代码",
+            changes: [
+                "新增本地AI设置页面与语义搜索功能",
+                "仅支持Apple Silicon Mac，更新构建与发布脚本",
+                "新增嵌入模型管理与会话相似性搜索",
+                "优化构建流程，添加代码签名与瘦身脚本",
+                "移除TranscriptAnalysisService内的本地TF-IDF分析器实例，改为通过索引获取持久化快照",
+            ]
+        ),
+        ReleaseHistoryEntry(
             version: "1.7.2",
             date: "May 24, 2026",
             headline: "新增了完整的技术术语词典系统，包括词典模型、标准化处理、设置页面，实现了基于词典的会话术语分析，并且当词典变更时会自动触发会话分析重新生成。",
