@@ -20,6 +20,27 @@ struct ClaudeDesktopComputerUseReaderTests {
         #expect(automation.clickElementIndices.isEmpty)
     }
 
+    @Test("Manual partial snapshot continues to click usage candidate for core limits")
+    func manualPartialSnapshotContinuesToClickUsageCandidate() async throws {
+        let automation = FakeComputerUseAutomation(
+            snapshots: [
+                .text(
+                    "App=com.anthropic.claudefordesktop\n7d\n0%\n12 button Usage limits",
+                    elements: [
+                        .element(index: "12", role: "AXButton", label: "12 button Usage limits"),
+                    ]
+                ),
+            ],
+            clickText: "Plan usage\n5-hour limit\n6%\nWeekly · all models\n3%"
+        )
+        let reader = ClaudeDesktopComputerUseReader(automation: automation)
+
+        let text = try await reader.readUsageText(app: Self.runningApp, trigger: .manual)
+
+        #expect(text.contains("5-hour limit"))
+        #expect(automation.clickElementIndices == ["12"])
+    }
+
     @Test("Manual capture clicks a usage candidate and rereads")
     func manualCaptureClicksUsageCandidate() async throws {
         let automation = FakeComputerUseAutomation(
@@ -31,7 +52,7 @@ struct ClaudeDesktopComputerUseReaderTests {
                     ]
                 ),
             ],
-            clickText: "App=com.anthropic.claudefordesktop\n5h\n6% used"
+            clickText: "App=com.anthropic.claudefordesktop\n5h\n6% used\n7d\n3% used"
         )
         let reader = ClaudeDesktopComputerUseReader(automation: automation)
 
@@ -59,7 +80,7 @@ struct ClaudeDesktopComputerUseReaderTests {
                     ]
                 ),
             ],
-            clickText: "Plan usage\n5-hour limit\n6%"
+            clickText: "Plan usage\n5-hour limit\n6%\nWeekly · all models\n3%"
         )
         let reader = ClaudeDesktopComputerUseReader(automation: automation)
 
@@ -80,7 +101,7 @@ struct ClaudeDesktopComputerUseReaderTests {
                     screenshotPixelSize: CGSize(width: 2_000, height: 1_600)
                 ),
             ],
-            coordinateClickText: "Plan usage\n5-hour limit\n6%"
+            coordinateClickText: "Plan usage\n5-hour limit\n6%\nWeekly · all models\n3%"
         )
         let reader = ClaudeDesktopComputerUseReader(automation: automation)
 
@@ -90,6 +111,27 @@ struct ClaudeDesktopComputerUseReaderTests {
         #expect(automation.clickElementIndices.isEmpty)
         #expect(automation.coordinateClicks == [CGPoint(x: 1_824, y: 1_484)])
         #expect(automation.coordinateClickForegroundFallbacks == [true])
+    }
+
+    @Test("Automatic parseable partial snapshot stays read-only")
+    func automaticParseablePartialSnapshotStaysReadOnly() async throws {
+        let automation = FakeComputerUseAutomation(
+            snapshots: [
+                .text(
+                    "App=com.anthropic.claudefordesktop\n12 button Usage limits\n7d\n0%",
+                    elements: [
+                        .element(index: "12", role: "AXButton", label: "12 button Usage limits"),
+                    ]
+                ),
+            ]
+        )
+        let reader = ClaudeDesktopComputerUseReader(automation: automation)
+
+        let text = try await reader.readUsageText(app: Self.runningApp, trigger: .visibleAutomatic)
+
+        #expect(text.contains("7d"))
+        #expect(automation.getAppSnapshotPolicies == [.readOnly])
+        #expect(automation.clickElementIndices.isEmpty)
     }
 
     @Test("Automatic capture stays read-only")

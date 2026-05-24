@@ -25,9 +25,12 @@ final class ClaudeDesktopComputerUseReader: ClaudeDesktopUsageTextReading {
         do {
             let appIdentifier = ClaudeDesktopAppLocator.bundleIdentifier
             let initialSnapshot = try automation.getAppSnapshot(app: appIdentifier, policy: policy)
-            if containsParseableUsage(in: initialSnapshot.text) {
-                logManual(trigger, "ComputerUse snapshot already contains parseable Claude usage.")
-                return initialSnapshot.text
+            var bestCandidate = usageCandidate(from: initialSnapshot.text)
+            if let candidate = bestCandidate {
+                logManual(trigger, "ComputerUse snapshot contains Claude usage ids=\(candidate.windowIDsDescription), coreComplete=\(candidate.isCoreComplete).")
+                if candidate.isCoreComplete || !policy.allowsActions {
+                    return candidate.text
+                }
             }
 
             guard policy.allowsActions else {
@@ -38,38 +41,52 @@ final class ClaudeDesktopComputerUseReader: ClaudeDesktopUsageTextReading {
             let textCandidates = usageCandidateElementIndices(in: initialSnapshot)
             logManual(trigger, "ComputerUse usage text candidates: \(textCandidates.count)")
             for elementIndex in textCandidates.prefix(maxTextCandidateClicks) {
-                if let text = await clickElementAndReadUsage(
+                if let candidate = await clickElementAndReadUsage(
                     appIdentifier: appIdentifier,
                     elementIndex: elementIndex,
                     policy: policy,
                     trigger: trigger,
                     label: "text candidate"
                 ) {
-                    return text
+                    bestCandidate = betterCandidate(candidate, than: bestCandidate)
+                    if candidate.isCoreComplete {
+                        return candidate.text
+                    }
                 }
             }
 
             let frameCandidates = bottomTrailingUsageCandidateElementIndices(in: initialSnapshot)
             logManual(trigger, "ComputerUse bottom-right frame candidates: \(frameCandidates.count)")
             for elementIndex in frameCandidates.prefix(maxFrameCandidateClicks) {
-                if let text = await clickElementAndReadUsage(
+                if let candidate = await clickElementAndReadUsage(
                     appIdentifier: appIdentifier,
                     elementIndex: elementIndex,
                     policy: policy,
                     trigger: trigger,
                     label: "frame candidate"
                 ) {
-                    return text
+                    bestCandidate = betterCandidate(candidate, than: bestCandidate)
+                    if candidate.isCoreComplete {
+                        return candidate.text
+                    }
                 }
             }
 
-            if let text = await clickFallbackCoordinateAndReadUsage(
+            if let candidate = await clickFallbackCoordinateAndReadUsage(
                 appIdentifier: appIdentifier,
                 snapshot: initialSnapshot,
                 policy: policy,
                 trigger: trigger
             ) {
-                return text
+                bestCandidate = betterCandidate(candidate, than: bestCandidate)
+                if candidate.isCoreComplete {
+                    return candidate.text
+                }
+            }
+
+            if let bestCandidate {
+                logManual(trigger, "ComputerUse returning best partial Claude usage ids=\(bestCandidate.windowIDsDescription).")
+                return bestCandidate.text
             }
 
             throw ClaudeDesktopUsageCaptureError.noUsageText
@@ -85,8 +102,20 @@ final class ClaudeDesktopComputerUseReader: ClaudeDesktopUsageTextReading {
         }
     }
 
-    private func containsParseableUsage(in text: String) -> Bool {
-        parser.snapshot(from: text) != nil
+    private func usageCandidate(from text: String) -> UsageTextCandidate? {
+        guard let snapshot = parser.snapshot(from: text) else { return nil }
+        return UsageTextCandidate(text: text, snapshot: snapshot)
+    }
+
+    private func betterCandidate(_ candidate: UsageTextCandidate, than current: UsageTextCandidate?) -> UsageTextCandidate {
+        guard let current else { return candidate }
+        if candidate.isCoreComplete != current.isCoreComplete {
+            return candidate.isCoreComplete ? candidate : current
+        }
+        if candidate.windowCount != current.windowCount {
+            return candidate.windowCount > current.windowCount ? candidate : current
+        }
+        return candidate
     }
 
     private func clickElementAndReadUsage(
@@ -95,12 +124,16 @@ final class ClaudeDesktopComputerUseReader: ClaudeDesktopUsageTextReading {
         policy: ComputerUseAutomationPolicy,
         trigger: ClaudeDesktopUsageCaptureTrigger,
         label: String
-    ) async -> String? {
+    ) async -> UsageTextCandidate? {
+        var bestCandidate: UsageTextCandidate?
         do {
             let actionText = try automation.click(app: appIdentifier, elementIndex: elementIndex, policy: policy)
-            if containsParseableUsage(in: actionText) {
-                logManual(trigger, "ComputerUse \(label) \(elementIndex) returned parseable usage.")
-                return actionText
+            if let candidate = usageCandidate(from: actionText) {
+                logManual(trigger, "ComputerUse \(label) \(elementIndex) returned usage ids=\(candidate.windowIDsDescription), coreComplete=\(candidate.isCoreComplete).")
+                if candidate.isCoreComplete {
+                    return candidate
+                }
+                bestCandidate = candidate
             }
         } catch {
             logManual(trigger, "ComputerUse \(label) \(elementIndex) click failed: \(error.localizedDescription)")
@@ -110,15 +143,15 @@ final class ClaudeDesktopComputerUseReader: ClaudeDesktopUsageTextReading {
 
         do {
             let refreshedSnapshot = try automation.getAppSnapshot(app: appIdentifier, policy: policy)
-            if containsParseableUsage(in: refreshedSnapshot.text) {
-                logManual(trigger, "ComputerUse \(label) \(elementIndex) opened usage after refresh.")
-                return refreshedSnapshot.text
+            if let candidate = usageCandidate(from: refreshedSnapshot.text) {
+                logManual(trigger, "ComputerUse \(label) \(elementIndex) opened usage after refresh ids=\(candidate.windowIDsDescription), coreComplete=\(candidate.isCoreComplete).")
+                return betterCandidate(candidate, than: bestCandidate)
             }
         } catch {
             logManual(trigger, "ComputerUse refresh after \(label) \(elementIndex) failed: \(error.localizedDescription)")
         }
 
-        return nil
+        return bestCandidate
     }
 
     private func clickFallbackCoordinateAndReadUsage(
@@ -126,12 +159,13 @@ final class ClaudeDesktopComputerUseReader: ClaudeDesktopUsageTextReading {
         snapshot: ComputerUseAutomationSnapshot,
         policy: ComputerUseAutomationPolicy,
         trigger: ClaudeDesktopUsageCaptureTrigger
-    ) async -> String? {
+    ) async -> UsageTextCandidate? {
         guard trigger.allowsForegroundPointerFallback,
               let point = usageFallbackScreenshotPoint(in: snapshot) else {
             return nil
         }
 
+        var bestCandidate: UsageTextCandidate?
         do {
             let actionText = try automation.click(
                 app: appIdentifier,
@@ -140,9 +174,12 @@ final class ClaudeDesktopComputerUseReader: ClaudeDesktopUsageTextReading {
                 policy: policy,
                 allowsForegroundPointerFallback: true
             )
-            if containsParseableUsage(in: actionText) {
-                logManual(trigger, "ComputerUse foreground coordinate fallback returned parseable usage.")
-                return actionText
+            if let candidate = usageCandidate(from: actionText) {
+                logManual(trigger, "ComputerUse foreground coordinate fallback returned usage ids=\(candidate.windowIDsDescription), coreComplete=\(candidate.isCoreComplete).")
+                if candidate.isCoreComplete {
+                    return candidate
+                }
+                bestCandidate = candidate
             }
         } catch {
             logManual(trigger, "ComputerUse foreground coordinate fallback failed: \(error.localizedDescription)")
@@ -152,15 +189,15 @@ final class ClaudeDesktopComputerUseReader: ClaudeDesktopUsageTextReading {
 
         do {
             let refreshedSnapshot = try automation.getAppSnapshot(app: appIdentifier, policy: policy)
-            if containsParseableUsage(in: refreshedSnapshot.text) {
-                logManual(trigger, "ComputerUse foreground coordinate fallback opened usage after refresh.")
-                return refreshedSnapshot.text
+            if let candidate = usageCandidate(from: refreshedSnapshot.text) {
+                logManual(trigger, "ComputerUse foreground coordinate fallback opened usage after refresh ids=\(candidate.windowIDsDescription), coreComplete=\(candidate.isCoreComplete).")
+                return betterCandidate(candidate, than: bestCandidate)
             }
         } catch {
             logManual(trigger, "ComputerUse refresh after foreground coordinate fallback failed: \(error.localizedDescription)")
         }
 
-        return nil
+        return bestCandidate
     }
 
     private func usageCandidateElementIndices(in snapshot: ComputerUseAutomationSnapshot) -> [String] {
@@ -272,5 +309,22 @@ private extension ClaudeDesktopUsageCaptureTrigger {
 private extension CGRect {
     var center: CGPoint {
         CGPoint(x: midX, y: midY)
+    }
+}
+
+private struct UsageTextCandidate {
+    let text: String
+    let snapshot: UsageLimitSnapshot
+
+    var isCoreComplete: Bool {
+        UsageLimitWindowCatalog.isClaudeCoreComplete(snapshot.windows)
+    }
+
+    var windowCount: Int {
+        snapshot.windows.count
+    }
+
+    var windowIDsDescription: String {
+        snapshot.windows.map(\.id).joined(separator: ",")
     }
 }

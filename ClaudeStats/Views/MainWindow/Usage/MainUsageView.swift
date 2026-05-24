@@ -120,6 +120,7 @@ struct MainUsageView: View {
             report: env.usageLimits.report(for: provider),
             isLoading: env.usageLimits.isLoading(provider),
             actionMessage: env.usageLimits.actionMessage(for: provider),
+            visibleWindowIDs: provider == .claude ? env.preferences.claudeUsageLimitVisibleWindowIDs : nil,
             onRefresh: {
                 Task { await env.usageLimits.refresh(provider: provider, force: true) }
             },

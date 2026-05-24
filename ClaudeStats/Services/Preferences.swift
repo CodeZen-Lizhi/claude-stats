@@ -337,6 +337,18 @@ final class Preferences {
             defaults.set(claudeDesktopUsageTimedIntervalMinutes, forKey: Keys.claudeDesktopUsageTimedIntervalMinutes)
         }
     }
+    /// Claude usage-limit windows shown in the Usage Limits panel. The 5h and
+    /// 7d windows are always visible; this set controls optional GUI-only rows.
+    var claudeUsageLimitVisibleWindowIDs: Set<String> {
+        didSet {
+            let normalized = UsageLimitWindowCatalog.normalizedClaudeVisibleWindowIDs(claudeUsageLimitVisibleWindowIDs)
+            guard normalized == claudeUsageLimitVisibleWindowIDs else {
+                claudeUsageLimitVisibleWindowIDs = normalized
+                return
+            }
+            defaults.set(normalized.sorted().joined(separator: ","), forKey: Keys.claudeUsageLimitVisibleWindowIDs)
+        }
+    }
     /// OpenAI Status product groups shown on the Dashboard and monitored for
     /// optional notifications. Defaults to ChatGPT and Codex.
     var openAIStatusVisibleGroupIDs: Set<String> {
@@ -529,6 +541,12 @@ final class Preferences {
         claudeDesktopUsageTimedCaptureEnabled = (defaults.object(forKey: Keys.claudeDesktopUsageTimedCaptureEnabled) as? Bool) ?? false
         let storedClaudeDesktopUsageTimedInterval = (defaults.object(forKey: Keys.claudeDesktopUsageTimedIntervalMinutes) as? Int) ?? 30
         claudeDesktopUsageTimedIntervalMinutes = min(240, max(5, storedClaudeDesktopUsageTimedInterval))
+        let storedClaudeUsageLimitWindowIDs = (defaults.string(forKey: Keys.claudeUsageLimitVisibleWindowIDs) ?? "")
+            .split(separator: ",")
+            .map { String($0) }
+        claudeUsageLimitVisibleWindowIDs = UsageLimitWindowCatalog.normalizedClaudeVisibleWindowIDs(
+            Set(storedClaudeUsageLimitWindowIDs)
+        )
         let storedOpenAIStatusGroupIDs = (defaults.string(forKey: Keys.openAIStatusVisibleGroupIDs) ?? "")
             .split(separator: ",")
             .map { String($0) }
@@ -699,6 +717,7 @@ final class Preferences {
         static let claudeDesktopUsageAutoMode = "claudeDesktopUsageAutoMode"
         static let claudeDesktopUsageTimedCaptureEnabled = "claudeDesktopUsageTimedCaptureEnabled"
         static let claudeDesktopUsageTimedIntervalMinutes = "claudeDesktopUsageTimedIntervalMinutes"
+        static let claudeUsageLimitVisibleWindowIDs = "claudeUsageLimitVisibleWindowIDs"
         static let openAIStatusVisibleGroupIDs = "openAIStatusVisibleGroupIDs"
         static let openAIStatusNotificationsEnabled = "openAIStatusNotificationsEnabled"
         static let openAIStatusLastNotificationFingerprint = "openAIStatusLastNotificationFingerprint"

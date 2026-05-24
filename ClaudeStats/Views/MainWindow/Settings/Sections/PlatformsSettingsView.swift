@@ -25,6 +25,7 @@ struct PlatformsSettingsView: View {
                 .settingCard()
             }
 
+            claudeUsageLimitsGroup(prefs: prefs)
             claudeStatusGroup(prefs: prefs)
             openAIStatusGroup(prefs: prefs)
         }
@@ -73,6 +74,45 @@ struct PlatformsSettingsView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
+    }
+
+    private func claudeUsageLimitsGroup(prefs: Preferences) -> some View {
+        SettingGroup(
+            title: "Claude Usage Limits",
+            caption: "5h and 7d limits are always shown. Extra Claude Desktop plan rows can be shown when the GUI capture finds them."
+        ) {
+            VStack(spacing: 0) {
+                let optionalRows = Array(UsageLimitWindowCatalog.claudeOptionalWindowIDs.enumerated())
+                ForEach(optionalRows, id: \.element) { index, windowID in
+                    if index > 0 { SettingRowDivider() }
+                    claudeUsageLimitWindowRow(windowID, prefs: prefs)
+                }
+            }
+            .settingCard()
+        }
+    }
+
+    private func claudeUsageLimitWindowRow(_ windowID: String, prefs: Preferences) -> some View {
+        let metadata = UsageLimitWindowCatalog.claudeMetadata(for: windowID)
+        return SettingRow(
+            title: metadata?.label ?? windowID,
+            description: "Show this extra Claude Desktop usage window in the Usage Limits panel."
+        ) {
+            Toggle("", isOn: Binding(
+                get: { prefs.claudeUsageLimitVisibleWindowIDs.contains(windowID) },
+                set: { isVisible in
+                    var ids = prefs.claudeUsageLimitVisibleWindowIDs
+                    if isVisible {
+                        ids.insert(windowID)
+                    } else {
+                        ids.remove(windowID)
+                    }
+                    prefs.claudeUsageLimitVisibleWindowIDs = ids
+                }
+            ))
+            .labelsHidden()
+            .toggleStyle(.switch)
+        }
     }
 
     private func claudeStatusGroup(prefs: Preferences) -> some View {

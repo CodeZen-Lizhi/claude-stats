@@ -145,7 +145,7 @@ struct ClaudeDesktopUsageTextParser: Sendable {
             minutes: 300,
             markers: [
                 #"(?i)\b5\s*h\b"#,
-                #"(?i)\b5\s*(?:-|–|—)?\s*hours?\b"#,
+                #"(?i)\b5\s*(?:-|–|—|‑)?\s*hours?\b"#,
                 #"5\s*小时"#,
                 #"5\s*小時"#,
                 #"五\s*小时"#,
@@ -157,10 +157,10 @@ struct ClaudeDesktopUsageTextParser: Sendable {
             label: "7d",
             minutes: 10_080,
             markers: [
-                #"(?i)\bweekly\b\s*(?:·|-|–|—)\s*all\s+models\b"#,
+                #"(?i)\bweekly\b\s*(?:·|-|–|—|‑)\s*all\s+models\b"#,
                 #"(?i)\b7\s*d\b"#,
                 #"(?i)\b7\s*days?\b"#,
-                #"(?i)\bweekly\b(?!\s*(?:·|-|–|—)\s*(?:all\s+models|claude\s+design))"#,
+                #"(?i)\bweekly\b(?!\s*(?:·|-|–|—|‑)\s*(?:all\s+models|claude\s+design))"#,
                 #"(?i)\bweek\b"#,
                 #"7\s*天"#,
                 #"七\s*天"#,
@@ -175,7 +175,7 @@ struct ClaudeDesktopUsageTextParser: Sendable {
             label: "Claude Design",
             minutes: 10_080,
             markers: [
-                #"(?i)\bweekly\b\s*(?:·|-|–|—)\s*claude\s+design\b"#,
+                #"(?i)\bweekly\b\s*(?:·|-|–|—|‑)\s*claude\s+design\b"#,
                 #"(?i)\bclaude\s+design\b"#,
             ]
         ),

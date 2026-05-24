@@ -5,6 +5,7 @@ struct UsageLimitPanel: View {
     let report: UsageLimitReport?
     let isLoading: Bool
     let actionMessage: String?
+    let visibleWindowIDs: Set<String>?
     let onRefresh: () -> Void
     let onInstallClaudeBridge: (() -> Void)?
     let onCopyClaudeSettingsSnippet: (() -> Void)?
@@ -83,7 +84,7 @@ struct UsageLimitPanel: View {
             switch report.status {
             case .fresh:
                 if let snapshot = report.snapshot {
-                    limitWindows(snapshot.windows)
+                    limitWindows(displayedWindows(snapshot.windows))
                     sourceFooter(snapshot: snapshot)
                     if provider == .claude {
                         claudeDesktopControls
@@ -129,6 +130,11 @@ struct UsageLimitPanel: View {
                 .foregroundStyle(Color.stxMuted)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    private func displayedWindows(_ windows: [UsageLimitWindow]) -> [UsageLimitWindow] {
+        guard provider == .claude, let visibleWindowIDs else { return windows }
+        return UsageLimitWindowCatalog.visibleClaudeWindows(windows, visibleWindowIDs: visibleWindowIDs)
     }
 
     private func limitWindows(_ windows: [UsageLimitWindow]) -> some View {
@@ -621,6 +627,7 @@ private struct UsageLimitHatchedSwatch: View {
         ),
         isLoading: false,
         actionMessage: nil,
+        visibleWindowIDs: nil,
         onRefresh: {},
         onInstallClaudeBridge: nil,
         onCopyClaudeSettingsSnippet: nil,

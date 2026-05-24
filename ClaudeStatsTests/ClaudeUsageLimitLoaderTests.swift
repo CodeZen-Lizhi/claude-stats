@@ -22,8 +22,8 @@ struct ClaudeUsageLimitLoaderTests {
         ).report(now: now)
 
         #expect(report.status == .fresh)
-        #expect(report.snapshot?.windows.map(\.label) == ["5h"])
-        #expect(report.snapshot?.windows.first?.remainingPercent == 86)
+        #expect(report.snapshot?.windows.map(\.label) == ["5h", "7d"])
+        #expect(report.snapshot?.windows.map(\.remainingPercent) == [86, 98])
     }
 
     @Test("Parses full status-line envelope and utilization aliases")
@@ -79,6 +79,51 @@ struct ClaudeUsageLimitLoaderTests {
         #expect(windows.map(\.id) == ["five_hour", "seven_day", "weekly_claude_design", "sonnet_only"])
         #expect(windows.map(\.label) == ["5h", "7d", "Claude Design", "Sonnet"])
         #expect(windows.map(\.usedPercent) == [1, 2, 3, 4])
+    }
+
+    @Test("Merges fresh windows across cache candidates by newest value")
+    func mergesFreshWindowsAcrossCandidates() throws {
+        let root = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let latest = root.appendingPathComponent("latest.json")
+        let older = root.appendingPathComponent("older.json")
+        let now = try Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse("2026-01-10T09:05:00.000Z")
+        try TempDir.write(#"{"seven_day":{"used_percentage":2}}"#, to: latest)
+        try TempDir.write(#"{"five_hour":{"used_percentage":14},"seven_day":{"used_percentage":99}}"#, to: older)
+        try Self.setModified(latest, now.addingTimeInterval(-60))
+        try Self.setModified(older, now.addingTimeInterval(-120))
+
+        let report = ClaudeUsageLimitLoader(
+            paths: ClaudePaths(configDirectory: root),
+            cacheURLs: [older, latest]
+        ).report(now: now)
+
+        let windows = try #require(report.snapshot?.windows)
+        #expect(report.status == .fresh)
+        #expect(windows.map(\.id) == ["five_hour", "seven_day"])
+        #expect(windows.map(\.usedPercent) == [14, 2])
+    }
+
+    @Test("Does not merge expired older windows")
+    func skipsExpiredOlderWindowsWhenMerging() throws {
+        let root = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let latest = root.appendingPathComponent("latest.json")
+        let older = root.appendingPathComponent("older.json")
+        let now = try Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse("2026-01-10T09:05:00.000Z")
+        try TempDir.write(#"{"seven_day":{"used_percentage":2}}"#, to: latest)
+        try TempDir.write(#"{"five_hour":{"used_percentage":14}}"#, to: older)
+        try Self.setModified(latest, now.addingTimeInterval(-60))
+        try Self.setModified(older, now.addingTimeInterval(-ClaudeUsageLimitLoader.snapshotTTL - 60))
+
+        let report = ClaudeUsageLimitLoader(
+            paths: ClaudePaths(configDirectory: root),
+            cacheURLs: [older, latest]
+        ).report(now: now)
+
+        let windows = try #require(report.snapshot?.windows)
+        #expect(report.status == .fresh)
+        #expect(windows.map(\.id) == ["seven_day"])
     }
 
     @Test("Missing cache reports setup required")

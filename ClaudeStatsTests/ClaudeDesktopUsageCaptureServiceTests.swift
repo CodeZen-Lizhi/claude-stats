@@ -5,11 +5,11 @@ import Testing
 @Suite("Claude Desktop usage capture service")
 @MainActor
 struct ClaudeDesktopUsageCaptureServiceTests {
-    @Test("Computer Use success writes snapshot before other readers")
-    func computerUseSuccessWritesSnapshotBeforeOtherReaders() async throws {
+    @Test("Complete Computer Use success writes snapshot before other readers")
+    func completeComputerUseSuccessWritesSnapshotBeforeOtherReaders() async throws {
         let locator = FakeClaudeDesktopLocator()
         locator.state = Self.runningState(isVisible: true, isFrontmost: true)
-        let computerUse = FakeClaudeDesktopTextReader(text: "App=com.anthropic.claudefordesktop\n12 button Usage limits\n5h\n6% used")
+        let computerUse = FakeClaudeDesktopTextReader(text: "App=com.anthropic.claudefordesktop\n5h\n6% used\n7d\n3% used")
         let accessibility = FakeClaudeDesktopTextReader(text: "unused")
         let writer = FakeClaudeDesktopUsageCacheWriter()
         let service = ClaudeDesktopUsageCaptureService(
@@ -28,7 +28,35 @@ struct ClaudeDesktopUsageCaptureServiceTests {
         }
         #expect(computerUse.callCount == 1)
         #expect(accessibility.callCount == 0)
-        #expect(snapshot.windows.first?.usedPercent == 6)
+        #expect(snapshot.windows.map(\.usedPercent) == [6, 3])
+        #expect(writer.snapshots.count == 1)
+    }
+
+    @Test("Partial Computer Use result continues and writes complete merged snapshot")
+    func partialComputerUseContinuesAndWritesCompleteMergedSnapshot() async throws {
+        let locator = FakeClaudeDesktopLocator()
+        locator.state = Self.runningState(isVisible: true, isFrontmost: true)
+        let computerUse = FakeClaudeDesktopTextReader(text: "7d\n3% used")
+        let accessibility = FakeClaudeDesktopTextReader(text: "5h\n6% used")
+        let writer = FakeClaudeDesktopUsageCacheWriter()
+        let service = ClaudeDesktopUsageCaptureService(
+            appLocator: locator,
+            computerUseReader: computerUse,
+            accessibilityReader: accessibility,
+            ocrReader: FakeClaudeDesktopTextReader(text: "unused"),
+            cacheWriter: writer
+        )
+
+        let outcome = await service.capture(trigger: .manual)
+
+        guard case .captured(let snapshot) = outcome else {
+            Issue.record("Expected captured outcome, got \(String(describing: outcome))")
+            return
+        }
+        #expect(computerUse.callCount == 1)
+        #expect(accessibility.callCount == 1)
+        #expect(snapshot.windows.map(\.id) == ["five_hour", "seven_day"])
+        #expect(snapshot.windows.map(\.usedPercent) == [6, 3])
         #expect(writer.snapshots.count == 1)
     }
 

@@ -406,6 +406,33 @@ struct PreferencesTests {
         #expect(invalid.claudeDesktopUsageTimedIntervalMinutes == 240)
     }
 
+    @Test("Claude usage-limit visible windows default to core limits")
+    func claudeUsageLimitVisibleWindowsDefaultToCoreLimits() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+
+        #expect(prefs.claudeUsageLimitVisibleWindowIDs == UsageLimitWindowCatalog.claudeDefaultVisibleWindowIDs)
+        #expect(!prefs.claudeUsageLimitVisibleWindowIDs.contains("weekly_claude_design"))
+        #expect(!prefs.claudeUsageLimitVisibleWindowIDs.contains("sonnet_only"))
+    }
+
+    @Test("Claude usage-limit visible windows persist optional rows and keep core limits")
+    func claudeUsageLimitVisibleWindowsPersistAndKeepCoreLimits() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+        prefs.claudeUsageLimitVisibleWindowIDs = ["weekly_claude_design", "unknown"]
+
+        let reloaded = Preferences(defaults: defaults)
+        #expect(reloaded.claudeUsageLimitVisibleWindowIDs == [
+            "five_hour",
+            "seven_day",
+            "weekly_claude_design",
+        ])
+
+        reloaded.claudeUsageLimitVisibleWindowIDs = []
+        #expect(reloaded.claudeUsageLimitVisibleWindowIDs == UsageLimitWindowCatalog.claudeDefaultVisibleWindowIDs)
+    }
+
     @Test("OpenAI Status preferences default to visible ChatGPT and Codex without alerts")
     func openAIStatusDefaults() {
         let defaults = makeDefaults()

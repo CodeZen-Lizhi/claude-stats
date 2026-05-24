@@ -102,6 +102,9 @@ struct ClaudeDesktopUsageTextParserTests {
 
         let compact = try #require(parser.snapshot(from: "5h limit\n55%\n7d\n66%"))
         #expect(compact.windows.map(\.usedPercent) == [55, 66])
+
+        let nonBreakingHyphen = try #require(parser.snapshot(from: "5‑hour limit\n12%\nWeekly ‑ all models\n34%"))
+        #expect(nonBreakingHyphen.windows.map(\.usedPercent) == [12, 34])
     }
 
     @Test("Clamps usage percentages and allows missing reset")

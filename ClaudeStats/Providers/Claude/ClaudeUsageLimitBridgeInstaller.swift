@@ -60,19 +60,70 @@ struct ClaudeUsageLimitBridgeInstaller: ClaudeUsageLimitBridgeInstalling {
 
         CACHE=\(cachePath)
         DIR=$(/usr/bin/dirname "$CACHE")
+        INCOMING="${CACHE}.$$.incoming"
         TMP="${CACHE}.$$"
         INPUT=$(/bin/cat)
 
         /bin/mkdir -p "$DIR"
-        if /usr/bin/printf "%s" "$INPUT" | /usr/bin/plutil -extract rate_limits json -o "$TMP" - 2>/dev/null; then
-          if [ -s "$TMP" ] && ! /usr/bin/grep -qx 'null' "$TMP"; then
+        if /usr/bin/printf "%s" "$INPUT" | /usr/bin/plutil -extract rate_limits json -o "$INCOMING" - 2>/dev/null; then
+          if [ -s "$INCOMING" ] && ! /usr/bin/grep -qx 'null' "$INCOMING"; then
+            if command -v python3 >/dev/null 2>&1; then
+              python3 -c '
+        import json
+        import sys
+
+        cache_path, incoming_path, output_path = sys.argv[1:4]
+        ordered_ids = ["five_hour", "seven_day", "weekly_claude_design", "sonnet_only"]
+
+        def load_json(path):
+            try:
+                with open(path, "r", encoding="utf-8") as handle:
+                    value = json.load(handle)
+                    return value if isinstance(value, dict) else {}
+            except Exception:
+                return {}
+
+        def rate_limits(payload):
+            nested = payload.get("rate_limits")
+            if isinstance(nested, dict):
+                return nested
+            return {
+                key: value
+                for key, value in payload.items()
+                if isinstance(value, dict)
+            }
+
+        existing = rate_limits(load_json(cache_path))
+        incoming = rate_limits(load_json(incoming_path))
+        merged = {}
+        for key in ordered_ids:
+            if key in existing:
+                merged[key] = existing[key]
+            if key in incoming:
+                merged[key] = incoming[key]
+
+        if not merged:
+            sys.exit(1)
+
+        payload = {
+            "source": "claude_statusline",
+            "rate_limits": merged,
+        }
+        with open(output_path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True)
+            handle.write("\\n")
+        ' "$CACHE" "$INCOMING" "$TMP"
+            else
+              /bin/cp "$INCOMING" "$TMP"
+            fi
             /bin/mv "$TMP" "$CACHE"
           else
-            /bin/rm -f "$TMP"
+            /bin/rm -f "$TMP" "$INCOMING"
           fi
         else
-          /bin/rm -f "$TMP"
+          /bin/rm -f "$TMP" "$INCOMING"
         fi
+        /bin/rm -f "$INCOMING"
 
         exit 0
         """
