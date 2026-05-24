@@ -136,6 +136,9 @@ codesign_nested_release_code() {
     local sign_args=("$@")
 
     while IFS= read -r -d '' item; do
+        case "$item" in
+            *.o|*/CMakeFiles/*|*/CMakeCache.txt) continue ;;
+        esac
         if file "$item" | grep -q 'Mach-O'; then
             codesign_release --force "${sign_args[@]}" "$item"
         fi

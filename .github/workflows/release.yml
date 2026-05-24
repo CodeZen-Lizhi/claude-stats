@@ -12,14 +12,18 @@ name: Release
 #          NOTARIZED + stapled DMG;
 #        • otherwise -> an ad-hoc-signed (un-notarized) DMG *and* a .zip. Gatekeeper
 #          warns on first launch; users open via right-click ▸ Open.
-#   3. Creates GitHub Releases for the tag in both this source repo and the
+#   3. If SPARKLE_PRIVATE_ED_KEY is set, EdDSA-signs the archive, creates delta
+#      updates from recent appcast releases when possible, and writes an updated
+#      appcast.xml for GitHub Pages.
+#   4. Creates GitHub Releases for the tag in both this source repo and the
 #      PUBLIC releases repo (1pitaph/claude-stats-releases), with the same
-#      artifact(s) attached. The source repo release is for internal/project
-#      history; the public repo release keeps the binaries downloadable by anyone.
-#   4. If SPARKLE_PRIVATE_ED_KEY is set, EdDSA-signs the archive and publishes an
-#      updated appcast.xml to the gh-pages branch of the public releases repo
-#      (served at SUFeedURL by GitHub Pages) so existing installs can auto-update.
-#   5. Commits the bumped project.yml and release history files back to master.
+#      artifact(s), including deltas, attached. The source repo release is for
+#      internal/project history; the public repo release keeps the binaries
+#      downloadable by anyone.
+#   5. Publishes the updated appcast.xml to the gh-pages branch of the public
+#      releases repo (served at SUFeedURL by GitHub Pages) so existing installs
+#      can auto-update.
+#   6. Commits the bumped project.yml and release history files back to master.
 #
 # Optional repository secrets (Settings ▸ Secrets and variables ▸ Actions) — set
 # ALL of these to get a notarized DMG; leave them unset for the zip/un-notarized DMG path:
@@ -268,6 +272,12 @@ jobs:
           echo "----- release_notes.html -----"
           cat release_notes.html
 
+      - name: Build Sparkle appcast
+        if: steps.sparkle.outputs.enabled == 'true'
+        env:
+          SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
+        run: bash scripts/publish-appcast.sh "${{ steps.version.outputs.version }}" "${{ steps.version.outputs.build }}" "${{ github.ref_name }}"
+
       - name: Create GitHub Release (in source repo)
         uses: softprops/action-gh-release@v3
         with:
@@ -283,12 +293,6 @@ jobs:
           tag_name: ${{ github.ref_name }}
           files: dist/*
           body_path: release_notes.md
-
-      - name: Build Sparkle appcast
-        if: steps.sparkle.outputs.enabled == 'true'
-        env:
-          SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
-        run: bash scripts/publish-appcast.sh "${{ steps.version.outputs.version }}" "${{ steps.version.outputs.build }}" "${{ github.ref_name }}"
 
       - name: Deploy appcast to GitHub Pages (public releases repo)
         if: steps.sparkle.outputs.enabled == 'true'

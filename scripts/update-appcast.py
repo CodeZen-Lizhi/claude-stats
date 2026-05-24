@@ -14,6 +14,7 @@ Usage:
       --release-notes-file release_notes.html \
       --min-system-version 14.0.0 \
       --hardware-requirements arm64 \
+      --deltas-file deltas.json \
       --in appcast.xml --out appcast.xml
 
 The release-notes file should contain inline HTML (e.g. `<ul><li>…</li></ul>`).
@@ -25,6 +26,7 @@ Re-running for a version that's already in the appcast is a no-op.
 """
 import argparse
 import email.utils
+import json
 import os
 import sys
 import time
@@ -53,8 +55,51 @@ ITEM_TEMPLATE = """    <item>
 ]]></description>
       <pubDate>{pub_date}</pubDate>
       <enclosure url="{url}" {enclosure_attrs} type="application/octet-stream"/>
+{deltas_xml}\
     </item>
 """
+
+DELTA_ENCLOSURE_TEMPLATE = """        <enclosure url="{url}" sparkle:deltaFrom="{delta_from}" {enclosure_attrs} type="application/octet-stream"/>
+"""
+
+
+def load_deltas(path: str | None) -> list[dict[str, str]]:
+    if not path:
+        return []
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+    if not isinstance(data, list):
+        raise ValueError("deltas file must contain a JSON array")
+
+    deltas: list[dict[str, str]] = []
+    for index, entry in enumerate(data):
+        if not isinstance(entry, dict):
+            raise ValueError(f"delta entry {index} must be an object")
+        normalized: dict[str, str] = {}
+        for key in ("deltaFrom", "url", "enclosureAttrs"):
+            value = entry.get(key)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"delta entry {index} is missing non-empty {key}")
+            normalized[key] = value.strip()
+        attrs = normalized["enclosureAttrs"]
+        if "sparkle:edSignature" not in attrs or "length=" not in attrs:
+            raise ValueError(f"delta entry {index} enclosureAttrs must include signature and length")
+        deltas.append(normalized)
+    return deltas
+
+
+def render_deltas(deltas: list[dict[str, str]]) -> str:
+    if not deltas:
+        return ""
+    enclosures = "".join(
+        DELTA_ENCLOSURE_TEMPLATE.format(
+            url=delta["url"],
+            delta_from=delta["deltaFrom"],
+            enclosure_attrs=delta["enclosureAttrs"],
+        )
+        for delta in deltas
+    )
+    return "      <sparkle:deltas>\n{}      </sparkle:deltas>\n".format(enclosures)
 
 
 def main() -> int:
@@ -68,6 +113,8 @@ def main() -> int:
                    help="path to an HTML fragment with this release's notes; embedded in CDATA")
     p.add_argument("--min-system-version", default="14.0.0")
     p.add_argument("--hardware-requirements", default="arm64")
+    p.add_argument("--deltas-file",
+                   help="optional JSON array of delta enclosure metadata to embed under sparkle:deltas")
     p.add_argument("--in", dest="infile", default="appcast.xml")
     p.add_argument("--out", dest="outfile", default="appcast.xml")
     args = p.parse_args()
@@ -90,6 +137,11 @@ def main() -> int:
     if "]]>" in notes_html:
         print("error: release notes contain ']]>' which would break CDATA", file=sys.stderr)
         return 1
+    try:
+        deltas = load_deltas(args.deltas_file)
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        print("error: invalid deltas file: {}".format(error), file=sys.stderr)
+        return 1
 
     item = ITEM_TEMPLATE.format(
         version=args.version,
@@ -100,6 +152,7 @@ def main() -> int:
         pub_date=email.utils.formatdate(time.time(), localtime=False, usegmt=True),
         url=args.url,
         enclosure_attrs=args.enclosure_attrs.strip(),
+        deltas_xml=render_deltas(deltas),
     )
 
     if "<item>" in xml:

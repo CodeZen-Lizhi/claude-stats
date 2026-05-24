@@ -8,6 +8,9 @@ ENTITLEMENTS="${2:-}"
 [[ -e "$ROOT" ]] || { echo "error: path does not exist: $ROOT" >&2; exit 1; }
 
 while IFS= read -r -d '' item; do
+    case "$item" in
+        *.o|*/CMakeFiles/*|*/CMakeCache.txt) continue ;;
+    esac
     if file "$item" | grep -q 'Mach-O'; then
         codesign --force --sign - "$item"
     fi

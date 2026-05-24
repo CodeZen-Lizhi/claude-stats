@@ -15,6 +15,20 @@ if find "$SOURCE" -type d -name '*.dSYM' -print -quit | grep -q .; then
     echo "error: GitTools runtime contains debug symbol bundles; prune them before packaging" >&2
     exit 1
 fi
+if find "$SOURCE" -type f -name '*.o' -print -quit | grep -q .; then
+    echo "error: GitTools runtime contains object files; prune them before packaging" >&2
+    exit 1
+fi
+
+XATTR_CMD="${GITTOOLS_VERIFY_XATTR_CMD:-xattr}"
+if command -v "$XATTR_CMD" >/dev/null 2>&1; then
+    while IFS= read -r -d '' item; do
+        if "$XATTR_CMD" "$item" 2>/dev/null | grep -Eq '^com\.apple\.cs\.'; then
+            echo "error: GitTools runtime contains code-signing extended attributes: $item" >&2
+            exit 1
+        fi
+    done < <(find "$SOURCE" -type d -name '*.dSYM' -prune -o -print0)
+fi
 
 TMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/gittools-verify.XXXXXX")"
 cleanup() {

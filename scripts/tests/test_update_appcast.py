@@ -1,3 +1,4 @@
+import json
 import subprocess
 import sys
 import tempfile
@@ -77,6 +78,156 @@ class UpdateAppcastTests(unittest.TestCase):
                 "<sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>",
                 out.read_text(encoding="utf-8"),
             )
+
+    def test_writes_delta_enclosures_when_present(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            notes = root / "notes.html"
+            deltas = root / "deltas.json"
+            out = root / "appcast.xml"
+            notes.write_text("<p>delta release</p>", encoding="utf-8")
+            deltas.write_text(
+                json.dumps(
+                    [
+                        {
+                            "deltaFrom": "78",
+                            "url": "https://example.com/ClaudeStats-82-from-78.delta",
+                            "enclosureAttrs": 'sparkle:edSignature="delta-a" length="456"',
+                        },
+                        {
+                            "deltaFrom": "79",
+                            "url": "https://example.com/ClaudeStats-82-from-79.delta",
+                            "enclosureAttrs": 'sparkle:edSignature="delta-b" length="789"',
+                        },
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--version",
+                    "1.8.2",
+                    "--build",
+                    "82",
+                    "--url",
+                    "https://example.com/ClaudeStats-1.8.2.zip",
+                    "--enclosure-attrs",
+                    'sparkle:edSignature="full" length="123"',
+                    "--release-notes-file",
+                    str(notes),
+                    "--deltas-file",
+                    str(deltas),
+                    "--out",
+                    str(out),
+                ],
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            xml = out.read_text(encoding="utf-8")
+            self.assertIn("<sparkle:deltas>", xml)
+            self.assertIn('sparkle:deltaFrom="78"', xml)
+            self.assertIn('sparkle:deltaFrom="79"', xml)
+            self.assertIn('sparkle:edSignature="delta-a" length="456"', xml)
+            self.assertIn('sparkle:edSignature="delta-b" length="789"', xml)
+            self.assertIn(
+                '<enclosure url="https://example.com/ClaudeStats-1.8.2.zip" sparkle:edSignature="full" length="123" type="application/octet-stream"/>',
+                xml,
+            )
+
+    def test_omits_delta_container_without_delta_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            notes = root / "notes.html"
+            out = root / "appcast.xml"
+            notes.write_text("<p>full only</p>", encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--version",
+                    "1.8.3",
+                    "--build",
+                    "83",
+                    "--url",
+                    "https://example.com/ClaudeStats-1.8.3.zip",
+                    "--enclosure-attrs",
+                    'sparkle:edSignature="full" length="123"',
+                    "--release-notes-file",
+                    str(notes),
+                    "--out",
+                    str(out),
+                ],
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn("<sparkle:deltas>", out.read_text(encoding="utf-8"))
+
+    def test_existing_version_is_left_unchanged_even_with_deltas(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            notes = root / "notes.html"
+            deltas = root / "deltas.json"
+            appcast = root / "appcast.xml"
+            notes.write_text("<p>new</p>", encoding="utf-8")
+            deltas.write_text(
+                json.dumps(
+                    [
+                        {
+                            "deltaFrom": "80",
+                            "url": "https://example.com/ClaudeStats-84-from-80.delta",
+                            "enclosureAttrs": 'sparkle:edSignature="delta" length="456"',
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            original = """<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <item>
+      <sparkle:shortVersionString>1.8.4</sparkle:shortVersionString>
+      <enclosure url="https://example.com/original.zip" sparkle:edSignature="original" length="1" type="application/octet-stream"/>
+    </item>
+  </channel>
+</rss>
+"""
+            appcast.write_text(original, encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--version",
+                    "1.8.4",
+                    "--build",
+                    "84",
+                    "--url",
+                    "https://example.com/ClaudeStats-1.8.4.zip",
+                    "--enclosure-attrs",
+                    'sparkle:edSignature="full" length="123"',
+                    "--release-notes-file",
+                    str(notes),
+                    "--deltas-file",
+                    str(deltas),
+                    "--in",
+                    str(appcast),
+                    "--out",
+                    str(appcast),
+                ],
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(appcast.read_text(encoding="utf-8"), original)
 
 
 if __name__ == "__main__":
