@@ -9,7 +9,6 @@ struct TranscriptAnalysisService: Sendable {
     static let extractorVersion = "transcript-analysis-v3"
 
     private let extractor: TranscriptTermExtractor
-    private let tfidf = TranscriptTFIDFAnalyzer()
     private let index: TranscriptAnalysisIndex
     private let maxConcurrentSessions: Int
     private let dictionaryResolver: TranscriptDictionaryResolver
@@ -70,11 +69,10 @@ struct TranscriptAnalysisService: Sendable {
         )
         let lookupDuration = Date().timeIntervalSince(lookupStarted)
 
-        var analyses: [TranscriptSessionAnalysis] = []
-        analyses.reserveCapacity(sessions.count)
         var pendingJobs: [(lookup: TranscriptAnalysisLookup, mode: AnalysisJob.Mode)] = []
         pendingJobs.reserveCapacity(sessions.count)
         var jobs: [AnalysisJob] = []
+        let keysBySessionID = Dictionary(uniqueKeysWithValues: lookups.map { ($0.session.id, $0.key) })
 
         var reused = 0
         var newCount = 0
@@ -83,8 +81,7 @@ struct TranscriptAnalysisService: Sendable {
 
         for lookup in lookups {
             switch lookup.state {
-            case .hit(let analysis):
-                analyses.append(analysis)
+            case .hit:
                 reused += 1
             case .empty:
                 empty += 1
@@ -175,7 +172,6 @@ struct TranscriptAnalysisService: Sendable {
                         let writeStarted = Date()
                         try await index.writeAnalyzed(analysis, for: job.key)
                         writeDuration += Date().timeIntervalSince(writeStarted)
-                        analyses.append(analysis)
                         messageLoadDuration += loadDuration
                         extractDuration += extractionDuration
                         completed += 1
@@ -227,9 +223,6 @@ struct TranscriptAnalysisService: Sendable {
             to: onProgress
         )
 
-        let order = Dictionary(uniqueKeysWithValues: sessions.enumerated().map { ($0.element.id, $0.offset) })
-        analyses.sort { (order[$0.sessionID] ?? Int.max) < (order[$1.sessionID] ?? Int.max) }
-
         let tfidfStarted = Date()
         let summary = TranscriptAnalysisRunSummary(
             reused: reused,
@@ -240,10 +233,10 @@ struct TranscriptAnalysisService: Sendable {
             analyzed: newCount + changed,
             indexUpdatedAt: .now
         )
-        let snapshot = tfidf.snapshot(
+        let snapshot = try await index.materializedSnapshot(
             provider: provider,
             sessions: sessions,
-            sessionAnalyses: analyses,
+            keysBySessionID: keysBySessionID,
             engine: engine,
             dictionarySignature: dictionarySignature,
             runSummary: summary

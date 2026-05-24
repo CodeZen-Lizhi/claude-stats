@@ -518,11 +518,7 @@ struct TranscriptAnalysisIndexTests {
             tokenizerID: "tokenizer-a",
             dictionaryVersion: "dictionary-a"
         )
-        if case .hit(let cached) = try #require(warm.first?.state) {
-            #expect(cached == analysis)
-        } else {
-            Issue.record("Expected analyzed cache hit")
-        }
+        #expect(warm.first?.state == .hit)
 
         let dictionaryChanged = try await index.lookup(
             provider: .claude,
@@ -564,9 +560,131 @@ struct TranscriptAnalysisIndexTests {
         #expect(deleted == 2)
     }
 
+    @Test("Migrates v1 cache schema without dropping existing session rows")
+    func v1MigrationKeepsSessionRows() async throws {
+        let root = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let url = root.appendingPathComponent("index.sqlite3")
+        let session = Self.session(id: "claude::v1", provider: .claude, fileSize: 128)
+        let key = await TranscriptAnalysisIndex(url: url).key(
+            for: session,
+            tokenizerID: "tokenizer-a",
+            dictionaryVersion: "dictionary-a"
+        )
+
+        try Self.createV1Database(at: url, key: key, session: session)
+
+        let index = TranscriptAnalysisIndex(url: url)
+        let migrated = try await index.lookup(
+            provider: .claude,
+            sessions: [session],
+            tokenizerID: "tokenizer-a",
+            dictionaryVersion: "dictionary-a"
+        )
+        #expect(migrated.first?.state == .hit)
+
+        let snapshot = try await index.materializedSnapshot(
+            provider: .claude,
+            sessions: [session],
+            keysBySessionID: [session.id: key],
+            engine: Self.engine,
+            dictionarySignature: "dictionary-a",
+            runSummary: .empty
+        )
+        #expect(snapshot.analyzedSessionCount == 1)
+        #expect(snapshot.terms.isEmpty)
+    }
+
+    @Test("Materialized corpus matches TF-IDF and updates by delta")
+    func materializedCorpusDeltaFlow() async throws {
+        let root = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let index = TranscriptAnalysisIndex(url: root.appendingPathComponent("index.sqlite3"))
+
+        let first = Self.session(id: "claude::one", provider: .claude, fileSize: 256)
+        let second = Self.session(id: "claude::two", provider: .claude, fileSize: 512)
+        let firstAnalysis = Self.analysis(sessionID: first.id, terms: [
+            Self.term("common", kind: .general, frequency: 1, weight: 1.0, excerpt: "first common"),
+            Self.term("ProjectTerm", kind: .typeName, frequency: 2, weight: 1.7, excerpt: "first project"),
+            Self.term("Shared API", displayName: "Shared API", kind: .api, frequency: 1, weight: 1.3, excerpt: "first shared"),
+        ])
+        let secondAnalysis = Self.analysis(sessionID: second.id, terms: [
+            Self.term("common", kind: .general, frequency: 1, weight: 1.0, excerpt: "second common"),
+            Self.term("Shared API", displayName: "shared api", kind: .api, frequency: 1, weight: 1.2, excerpt: "second shared"),
+        ])
+        let firstKey = await index.key(for: first, tokenizerID: "tokenizer-a", dictionaryVersion: "dictionary-a")
+        let secondKey = await index.key(for: second, tokenizerID: "tokenizer-a", dictionaryVersion: "dictionary-a")
+        try await index.writeAnalyzed(firstAnalysis, for: firstKey)
+        try await index.writeAnalyzed(secondAnalysis, for: secondKey)
+
+        try await Self.expectMaterialized(
+            index,
+            sessions: [first, second],
+            keys: [first.id: firstKey, second.id: secondKey],
+            analyses: [firstAnalysis, secondAnalysis]
+        )
+
+        try await Self.expectMaterialized(
+            index,
+            sessions: [first, second],
+            keys: [first.id: firstKey, second.id: secondKey],
+            analyses: [firstAnalysis, secondAnalysis]
+        )
+
+        let third = Self.session(id: "claude::three", provider: .claude, fileSize: 768)
+        let thirdAnalysis = Self.analysis(sessionID: third.id, terms: [
+            Self.term("NewTerm", kind: .framework, frequency: 3, weight: 1.6, excerpt: "third new"),
+            Self.term("common", kind: .general, frequency: 1, weight: 1.0, excerpt: "third common"),
+        ])
+        let thirdKey = await index.key(for: third, tokenizerID: "tokenizer-a", dictionaryVersion: "dictionary-a")
+        try await index.writeAnalyzed(thirdAnalysis, for: thirdKey)
+        try await Self.expectMaterialized(
+            index,
+            sessions: [first, second, third],
+            keys: [first.id: firstKey, second.id: secondKey, third.id: thirdKey],
+            analyses: [firstAnalysis, secondAnalysis, thirdAnalysis]
+        )
+
+        let changedFirst = Self.session(id: first.id, provider: .claude, fileSize: 1_024)
+        let changedFirstAnalysis = Self.analysis(sessionID: changedFirst.id, terms: [
+            Self.term("ChangedTerm", kind: .framework, frequency: 2, weight: 1.8, excerpt: "changed first"),
+            Self.term("common", kind: .general, frequency: 1, weight: 1.0, excerpt: "changed common"),
+        ])
+        let changedFirstKey = await index.key(for: changedFirst, tokenizerID: "tokenizer-a", dictionaryVersion: "dictionary-a")
+        try await index.writeAnalyzed(changedFirstAnalysis, for: changedFirstKey)
+        try await Self.expectMaterialized(
+            index,
+            sessions: [changedFirst, second, third],
+            keys: [changedFirst.id: changedFirstKey, second.id: secondKey, third.id: thirdKey],
+            analyses: [changedFirstAnalysis, secondAnalysis, thirdAnalysis],
+            absentTerms: ["ProjectTerm"]
+        )
+
+        let deleted = try await index.pruneDeleted(provider: .claude, liveSessionIDs: [second.id, third.id])
+        #expect(deleted == 1)
+        let afterDelete = try await Self.expectMaterialized(
+            index,
+            sessions: [second, third],
+            keys: [second.id: secondKey, third.id: thirdKey],
+            analyses: [secondAnalysis, thirdAnalysis],
+            absentTerms: ["ChangedTerm", "ProjectTerm"]
+        )
+        let shared = try #require(afterDelete.terms.first { $0.canonical == "Shared API" })
+        #expect(shared.displayName == "shared api")
+        #expect(shared.aliases.isEmpty)
+        #expect(shared.examples.first?.excerpt == "second shared")
+    }
+
     static func session(id: String, provider: ProviderKind, fileSize: Int64) -> Session {
         TranscriptAnalysisServiceTests.session(id: id, provider: provider, fileSize: fileSize)
     }
+
+    private static let engine = TranscriptAnalysisEngineInfo(
+        tokenizerID: "tokenizer-a",
+        dictionaryVersion: "dictionary-a",
+        displayName: "Test",
+        embeddingStatus: .notConfigured
+    )
 
     private static func analysis(sessionID: String, terms: [TranscriptSessionTerm]) -> TranscriptSessionAnalysis {
         TranscriptTFIDFAnalyzerTests.analysis(sessionID: sessionID, terms: terms)
@@ -578,7 +696,187 @@ struct TranscriptAnalysisIndexTests {
         frequency: Int,
         weight: Double
     ) -> TranscriptSessionTerm {
-        TranscriptTFIDFAnalyzerTests.term(canonical, kind: kind, frequency: frequency, weight: weight)
+        term(canonical, displayName: canonical, kind: kind, frequency: frequency, weight: weight)
+    }
+
+    private static func term(
+        _ canonical: String,
+        displayName: String? = nil,
+        kind: TranscriptTermKind,
+        frequency: Int,
+        weight: Double,
+        excerpt: String = ""
+    ) -> TranscriptSessionTerm {
+        var roleCounts = TranscriptRoleCounts()
+        roleCounts.add(.user, count: frequency)
+        var sourceCounts = TranscriptSourceCounts()
+        sourceCounts.add(.naturalLanguage, count: frequency)
+        return TranscriptSessionTerm(
+            canonical: canonical,
+            displayName: displayName ?? canonical,
+            kind: kind,
+            frequency: frequency,
+            weight: weight,
+            roleCounts: roleCounts,
+            sourceCounts: sourceCounts,
+            example: excerpt.isEmpty ? nil : TranscriptTermExample(
+                id: "\(canonical)-\(displayName ?? canonical)-example",
+                sessionID: "",
+                sessionTitle: "",
+                projectName: "",
+                role: .user,
+                excerpt: excerpt,
+                timestamp: Date(timeIntervalSince1970: 1_000)
+            )
+        )
+    }
+
+    @discardableResult
+    private static func expectMaterialized(
+        _ index: TranscriptAnalysisIndex,
+        sessions: [Session],
+        keys: [String: TranscriptAnalysisKey],
+        analyses: [TranscriptSessionAnalysis],
+        absentTerms: Set<String> = []
+    ) async throws -> TranscriptAnalysisSnapshot {
+        let materialized = try await index.materializedSnapshot(
+            provider: .claude,
+            sessions: sessions,
+            keysBySessionID: keys,
+            engine: engine,
+            dictionarySignature: "dictionary-a",
+            runSummary: .empty,
+            now: Date(timeIntervalSince1970: 2_000)
+        )
+        let expected = TranscriptTFIDFAnalyzer().snapshot(
+            provider: .claude,
+            sessions: sessions,
+            sessionAnalyses: analyses,
+            engine: engine,
+            dictionarySignature: "dictionary-a",
+            now: Date(timeIntervalSince1970: 2_000)
+        )
+
+        #expect(materialized.analyzedSessionCount == expected.analyzedSessionCount)
+        #expect(materialized.sessionAnalyses.map(\.sessionID) == expected.sessionAnalyses.map(\.sessionID))
+        #expect(materialized.terms.map(\.canonical) == expected.terms.map(\.canonical))
+        for expectedTerm in expected.terms {
+            let actual = try #require(materialized.terms.first { $0.canonical == expectedTerm.canonical && $0.kind == expectedTerm.kind })
+            #expect(actual.displayName == expectedTerm.displayName)
+            #expect(actual.aliases == expectedTerm.aliases)
+            #expect(actual.frequency == expectedTerm.frequency)
+            #expect(actual.documentFrequency == expectedTerm.documentFrequency)
+            #expect(abs(actual.tfidf - expectedTerm.tfidf) < 0.000_001)
+            #expect(actual.roleCounts == expectedTerm.roleCounts)
+            #expect(actual.sourceCounts == expectedTerm.sourceCounts)
+            #expect(actual.examples.map(\.excerpt) == expectedTerm.examples.map(\.excerpt))
+        }
+        for absent in absentTerms {
+            #expect(!materialized.terms.contains { $0.canonical == absent })
+        }
+        return materialized
+    }
+
+    private static func createV1Database(
+        at url: URL,
+        key: TranscriptAnalysisKey,
+        session: Session
+    ) throws {
+        let connection = try SQLiteConnection(url: url)
+        try TranscriptAnalysisIndexSchema.configure(connection)
+        try connection.execute(
+            """
+            CREATE TABLE session_analysis (
+                key_digest TEXT PRIMARY KEY NOT NULL,
+                cache_schema_version INTEGER NOT NULL,
+                extractor_version TEXT NOT NULL,
+                tokenizer_id TEXT NOT NULL,
+                dictionary_version TEXT NOT NULL,
+                options_digest TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                file_path_hash TEXT NOT NULL,
+                file_size INTEGER NOT NULL,
+                last_modified_ns INTEGER NOT NULL,
+                status TEXT NOT NULL CHECK(status IN ('analyzed', 'empty')),
+                session_title TEXT NOT NULL,
+                project_name TEXT NOT NULL,
+                term_count INTEGER NOT NULL,
+                saved_at REAL NOT NULL,
+                last_accessed_at REAL NOT NULL
+            );
+            """
+        )
+        try connection.execute(
+            """
+            CREATE TABLE session_terms (
+                key_digest TEXT NOT NULL,
+                ordinal INTEGER NOT NULL,
+                canonical TEXT NOT NULL,
+                canonical_normalized TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                frequency INTEGER NOT NULL,
+                weight REAL NOT NULL,
+                role_user INTEGER NOT NULL,
+                role_assistant INTEGER NOT NULL,
+                role_tool INTEGER NOT NULL,
+                role_system INTEGER NOT NULL,
+                source_dictionary INTEGER NOT NULL,
+                source_natural_language INTEGER NOT NULL,
+                source_jieba INTEGER NOT NULL,
+                source_code INTEGER NOT NULL,
+                source_path INTEGER NOT NULL,
+                source_command INTEGER NOT NULL,
+                source_error INTEGER NOT NULL,
+                source_project INTEGER NOT NULL,
+                PRIMARY KEY (key_digest, ordinal),
+                FOREIGN KEY (key_digest) REFERENCES session_analysis(key_digest) ON DELETE CASCADE
+            );
+            """
+        )
+        try connection.execute(
+            """
+            CREATE TABLE term_examples (
+                key_digest TEXT NOT NULL,
+                term_ordinal INTEGER NOT NULL,
+                id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                excerpt TEXT NOT NULL,
+                timestamp_seconds REAL,
+                PRIMARY KEY (key_digest, term_ordinal),
+                FOREIGN KEY (key_digest, term_ordinal) REFERENCES session_terms(key_digest, ordinal) ON DELETE CASCADE
+            );
+            """
+        )
+        let insert = try connection.prepare(
+            """
+            INSERT INTO session_analysis (
+                key_digest, cache_schema_version, extractor_version, tokenizer_id, dictionary_version,
+                options_digest, provider, session_id, file_path_hash, file_size, last_modified_ns,
+                status, session_title, project_name, term_count, saved_at, last_accessed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """
+        )
+        try insert.bind(key.digest, at: 1)
+        try insert.bind(key.schemaVersion, at: 2)
+        try insert.bind(key.extractorVersion, at: 3)
+        try insert.bind(key.tokenizerID, at: 4)
+        try insert.bind(key.dictionaryVersion, at: 5)
+        try insert.bind(key.optionsDigest, at: 6)
+        try insert.bind(key.provider.rawValue, at: 7)
+        try insert.bind(key.sessionID, at: 8)
+        try insert.bind(key.filePathHash, at: 9)
+        try insert.bind(key.fileSize, at: 10)
+        try insert.bind(key.lastModifiedNanoseconds, at: 11)
+        try insert.bind("analyzed", at: 12)
+        try insert.bind(session.stats?.title ?? session.externalID, at: 13)
+        try insert.bind(session.projectDisplayName, at: 14)
+        try insert.bind(0, at: 15)
+        try insert.bind(1_000.0, at: 16)
+        try insert.bind(1_000.0, at: 17)
+        try insert.finish()
+        try connection.execute("PRAGMA user_version = 1")
     }
 }
 
