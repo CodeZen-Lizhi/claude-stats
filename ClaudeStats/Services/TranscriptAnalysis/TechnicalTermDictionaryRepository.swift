@@ -20,6 +20,8 @@ actor TechnicalTermDictionaryRepository {
     private var builtInCache: TechnicalTermDocument?
     private var globalCache: TechnicalTermDocument?
     private var projectCache: [String: TechnicalTermDocument] = [:]
+    private var projectDictionaryURLCache: [String: [URL]] = [:]
+    private var snapshotCache: [String: TechnicalTermDictionarySnapshot] = [:]
 
     init(
         builtInURL: URL? = nil,
@@ -30,15 +32,32 @@ actor TechnicalTermDictionaryRepository {
     }
 
     func snapshot(for session: Session) -> TechnicalTermDictionarySnapshot {
-        let documents = documents(for: session.cwd)
-        return Self.merge(documents)
+        let cacheKey = snapshotCacheKey(for: session.cwd)
+        if let cached = snapshotCache[cacheKey] { return cached }
+
+        let snapshot = Self.merge(documents(for: session.cwd))
+        snapshotCache[cacheKey] = snapshot
+        return snapshot
     }
 
     func corpusSignature(for sessions: [Session]) -> String {
-        let values = sessions
-            .map { "\($0.id):\(snapshot(for: $0).digest)" }
-            .sorted()
-            .joined(separator: "|")
+        var digestsByCacheKey: [String: String] = [:]
+        digestsByCacheKey.reserveCapacity(sessions.count)
+
+        let values = sessions.map { session in
+            let cacheKey = snapshotCacheKey(for: session.cwd)
+            let digest: String
+            if let cachedDigest = digestsByCacheKey[cacheKey] {
+                digest = cachedDigest
+            } else {
+                let snapshot = snapshot(for: session)
+                digestsByCacheKey[cacheKey] = snapshot.digest
+                digest = snapshot.digest
+            }
+            return "\(session.id):\(digest)"
+        }
+        .sorted()
+        .joined(separator: "|")
         return Self.sha256(values)
     }
 
@@ -169,18 +188,24 @@ actor TechnicalTermDictionaryRepository {
     private func saveGlobalDocument(_ document: TechnicalTermDocument) throws {
         try Self.write(document, to: globalURL)
         globalCache = document
+        invalidateSnapshotCache()
     }
 
     private func saveProjectDocument(_ document: TechnicalTermDocument, for projectPath: String) throws {
         let url = Self.projectDictionaryURL(for: projectPath)
         try Self.write(document, to: url)
         projectCache[url.standardizedFileURL.path] = document
+        projectDictionaryURLCache.removeAll()
+        invalidateSnapshotCache()
     }
 
     private func projectDictionaryURLs(for cwd: String?) -> [URL] {
         guard let cwd, !cwd.isEmpty else { return [] }
         let home = FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL
         var current = URL(fileURLWithPath: cwd, isDirectory: true).standardizedFileURL
+        let cacheKey = current.path
+        if let cached = projectDictionaryURLCache[cacheKey] { return cached }
+
         var urls: [URL] = []
         while current.path.hasPrefix(home.path) {
             let candidate = current
@@ -192,7 +217,19 @@ actor TechnicalTermDictionaryRepository {
             if current.path == home.path { break }
             current.deleteLastPathComponent()
         }
-        return urls.reversed()
+        let resolved = Array(urls.reversed())
+        projectDictionaryURLCache[cacheKey] = resolved
+        return resolved
+    }
+
+    private func snapshotCacheKey(for cwd: String?) -> String {
+        projectDictionaryURLs(for: cwd)
+            .map { $0.standardizedFileURL.path }
+            .joined(separator: "\u{1f}")
+    }
+
+    private func invalidateSnapshotCache() {
+        snapshotCache.removeAll()
     }
 
     private func upsert(_ entry: TechnicalTermEntry, originalCanonical: String?, in document: inout TechnicalTermDocument) {
@@ -214,6 +251,7 @@ actor TechnicalTermDictionaryRepository {
             var existing = document.terms[index]
             existing.canonical = entry.canonical
             existing.kind = entry.kind
+            existing.category = entry.category
             existing.weight = entry.weight
             existing.enabled = entry.enabled
             existing.aliases = Array(Set(existing.aliases + entry.aliases)).sorted()
@@ -241,6 +279,7 @@ actor TechnicalTermDictionaryRepository {
                 if var existing = merged[key] {
                     existing.canonical = entry.canonical
                     existing.kind = entry.kind
+                    existing.category = entry.category
                     existing.weight = entry.weight
                     existing.enabled = entry.enabled
                     existing.aliases = Array(Set(existing.aliases + entry.aliases)).sorted()
@@ -324,6 +363,7 @@ actor TechnicalTermDictionaryRepository {
                 continue
             }
             let kind = TranscriptTermKind(rawValue: value("kind", in: columns)) ?? .general
+            let category = TechnicalTermCategory.parse(value("category", in: columns)) ?? .general
             let aliases = splitList(value("aliases", in: columns))
             let tags = splitList(value("tags", in: columns))
             let weight = Double(value("weight", in: columns)) ?? 1.4
@@ -331,6 +371,7 @@ actor TechnicalTermDictionaryRepository {
             entries.append(TechnicalTermEntry(
                 canonical: canonical,
                 kind: kind,
+                category: category,
                 aliases: aliases,
                 weight: weight,
                 enabled: enabled,

@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct DictionarySettingsView: View {
     @Environment(AppEnvironment.self) private var env
     @State private var scope: TechnicalTermEditScope = .global
+    @State private var selectedCategory: TechnicalTermCategory?
     @State private var query = ""
     @State private var editor: DictionaryTermEditorPayload?
     @State private var message: DictionarySettingsMessage?
@@ -12,24 +13,7 @@ struct DictionarySettingsView: View {
     private var store: TechnicalTermDictionaryStore { env.technicalTerms }
 
     private var visibleRows: [TechnicalTermDictionaryRow] {
-        let scopeRows = store.rows.filter { row in
-            switch scope {
-            case .global:
-                row.source != .project
-            case .project:
-                true
-            }
-        }
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return scopeRows }
-        let needle = TermNormalizer.normalizedKey(trimmed)
-        return scopeRows.filter { row in
-            let entry = row.entry
-            let haystack = ([entry.canonical, entry.kind.displayName, row.source.displayName] + entry.aliases + entry.tags)
-                .map(TermNormalizer.normalizedKey)
-                .joined(separator: " ")
-            return haystack.contains(needle)
-        }
+        store.filteredRows(scope: scope, category: selectedCategory, query: query)
     }
 
     var body: some View {
@@ -93,6 +77,15 @@ struct DictionarySettingsView: View {
                 .pickerStyle(.segmented)
                 .frame(width: 190)
 
+                Picker("Category", selection: $selectedCategory) {
+                    Text("All Categories").tag(Optional<TechnicalTermCategory>.none)
+                    ForEach(TechnicalTermCategory.allCases) { category in
+                        Text(category.displayName).tag(Optional(category))
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 180)
+
                 if scope == .project {
                     Picker(
                         "Project",
@@ -133,7 +126,7 @@ struct DictionarySettingsView: View {
                 .disabled(scope == .project && store.selectedProjectPath == nil)
 
                 Button {
-                    editor = .new(scope: scope)
+                    editor = .new(scope: scope, category: selectedCategory ?? .general)
                 } label: {
                     Label("Add", systemImage: "plus")
                 }
@@ -144,7 +137,7 @@ struct DictionarySettingsView: View {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.stxMuted)
-                TextField("Search terms, aliases, kinds, or tags", text: $query)
+                TextField("Search terms, aliases, categories, kinds, or tags", text: $query)
                     .textFieldStyle(.plain)
                     .font(.sora(12))
             }
@@ -171,7 +164,7 @@ struct DictionarySettingsView: View {
                 ContentUnavailableView {
                     Label("No Terms", systemImage: "text.book.closed")
                 } description: {
-                    Text(query.isEmpty ? "Add or import dictionary terms for this scope." : "No dictionary terms match the search.")
+                    Text(query.isEmpty && selectedCategory == nil ? "Add or import dictionary terms for this scope." : "No dictionary terms match the active filters.")
                 }
                 .font(.sora(12))
                 .frame(maxWidth: .infinity, minHeight: 220)
@@ -269,13 +262,14 @@ private struct DictionaryStatCard: View {
 private struct DictionaryTableHeader: View {
     var body: some View {
         HStack(spacing: 12) {
-            Text("Enabled").frame(width: 58, alignment: .leading)
+            Text("Enabled").frame(width: 52, alignment: .leading)
             Text("Term").frame(maxWidth: .infinity, alignment: .leading)
-            Text("Kind").frame(width: 78, alignment: .leading)
+            Text("Category").frame(width: 112, alignment: .leading)
+            Text("Kind").frame(width: 76, alignment: .leading)
             Text("Aliases").frame(maxWidth: .infinity, alignment: .leading)
             Text("Weight").frame(width: 58, alignment: .trailing)
             Text("Source").frame(width: 72, alignment: .leading)
-            Text("").frame(width: 158)
+            Text("").frame(width: 148)
         }
         .font(.sora(10, weight: .semibold))
         .foregroundStyle(Color.stxMuted)
@@ -302,17 +296,23 @@ private struct DictionaryTermRow: View {
             Image(systemName: row.entry.enabled ? "checkmark.circle.fill" : "minus.circle")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(row.entry.enabled ? Color.stxAccent : Color.stxMuted)
-                .frame(width: 58, alignment: .leading)
+                .frame(width: 52, alignment: .leading)
 
             Text(row.entry.canonical)
                 .font(.sora(12, weight: .semibold))
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
+            Text(row.entry.category.displayName)
+                .font(.sora(10))
+                .foregroundStyle(Color.stxMuted)
+                .lineLimit(1)
+                .frame(width: 112, alignment: .leading)
+
             Text(row.entry.kind.displayName)
                 .font(.sora(10))
                 .foregroundStyle(Color.stxMuted)
-                .frame(width: 78, alignment: .leading)
+                .frame(width: 76, alignment: .leading)
 
             Text(row.entry.aliases.joined(separator: ", "))
                 .font(.sora(10))
@@ -365,7 +365,7 @@ private struct DictionaryTermRow: View {
                 }
             }
             .buttonStyle(.borderless)
-            .frame(width: 158, alignment: .trailing)
+            .frame(width: 148, alignment: .trailing)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
@@ -379,6 +379,7 @@ private struct DictionaryTermEditorSheet: View {
 
     @State private var canonical: String
     @State private var kind: TranscriptTermKind
+    @State private var category: TechnicalTermCategory
     @State private var aliasesText: String
     @State private var tagsText: String
     @State private var weight: Double
@@ -389,6 +390,7 @@ private struct DictionaryTermEditorSheet: View {
         self.onSave = onSave
         _canonical = State(initialValue: payload.entry.canonical)
         _kind = State(initialValue: payload.entry.kind)
+        _category = State(initialValue: payload.entry.category)
         _aliasesText = State(initialValue: payload.entry.aliases.joined(separator: "\n"))
         _tagsText = State(initialValue: payload.entry.tags.joined(separator: "\n"))
         _weight = State(initialValue: payload.entry.weight)
@@ -403,6 +405,15 @@ private struct DictionaryTermEditorSheet: View {
             VStack(alignment: .leading, spacing: 12) {
                 fieldLabel("Canonical")
                 TextField("MenuBarExtra", text: $canonical)
+
+                fieldLabel("Category")
+                Picker("", selection: $category) {
+                    ForEach(TechnicalTermCategory.allCases) { category in
+                        Text(category.displayName).tag(category)
+                    }
+                }
+                .labelsHidden()
+                .frame(maxWidth: 220, alignment: .leading)
 
                 fieldLabel("Kind")
                 Picker("", selection: $kind) {
@@ -454,6 +465,7 @@ private struct DictionaryTermEditorSheet: View {
         TechnicalTermEntry(
             canonical: canonical.trimmingCharacters(in: .whitespacesAndNewlines),
             kind: kind,
+            category: category,
             aliases: splitList(aliasesText),
             weight: weight,
             enabled: enabled,
@@ -483,10 +495,13 @@ private struct DictionaryTermEditorPayload: Identifiable {
     let scope: TechnicalTermEditScope
     let originalCanonical: String?
 
-    static func new(scope: TechnicalTermEditScope) -> DictionaryTermEditorPayload {
+    static func new(
+        scope: TechnicalTermEditScope,
+        category: TechnicalTermCategory = .general
+    ) -> DictionaryTermEditorPayload {
         DictionaryTermEditorPayload(
             title: "Add \(scope.title) Term",
-            entry: TechnicalTermEntry(canonical: "", kind: .general),
+            entry: TechnicalTermEntry(canonical: "", kind: .general, category: category),
             scope: scope,
             originalCanonical: nil
         )

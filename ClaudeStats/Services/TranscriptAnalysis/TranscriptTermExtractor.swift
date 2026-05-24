@@ -38,7 +38,7 @@ struct TranscriptTermExtractor: Sendable {
     ) async -> TranscriptSessionAnalysis {
         let dictionary = dictionary ?? defaultDictionary
         let projectTerms = projectTerms(for: session, dictionary: dictionary)
-        await tokenizer.insertUserWords(dictionary.userWords + projectTerms)
+        await tokenizer.insertUserWords(dictionary.jiebaUserWords + projectTerms.filter(containsCJK))
 
         var accumulator = SessionTermAccumulator(
             sessionID: session.id,

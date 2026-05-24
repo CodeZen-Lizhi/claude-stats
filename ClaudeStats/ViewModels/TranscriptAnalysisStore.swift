@@ -7,6 +7,7 @@ struct TranscriptAnalysisProviderState: Equatable, Sendable {
     var isLoading = false
     var errorMessage: String?
     var loadedSignature: String?
+    var loadingSignature: String?
 }
 
 @MainActor
@@ -29,8 +30,10 @@ final class TranscriptAnalysisStore {
     ) {
         let signature = TranscriptAnalysisService.corpusSignature(for: sessions)
         let state = state(for: provider)
-        if state.loadedSignature == signature,
-           state.snapshot != nil || state.isLoading {
+        if state.loadedSignature == signature, state.snapshot != nil {
+            return
+        }
+        if state.isLoading, state.loadingSignature == signature {
             return
         }
         load(
@@ -93,6 +96,7 @@ final class TranscriptAnalysisStore {
             updateState(for: provider) { state in
                 state.errorMessage = "No transcript loader is available for \(provider.shortName)."
                 state.isLoading = false
+                state.loadingSignature = nil
                 state.progress = .idle
             }
             return
@@ -115,6 +119,7 @@ final class TranscriptAnalysisStore {
         )
         updateState(for: provider) { state in
             state.isLoading = true
+            state.loadingSignature = signature
             state.progress = initialProgress
             state.errorMessage = nil
         }
@@ -178,6 +183,7 @@ final class TranscriptAnalysisStore {
         updateState(for: provider) { state in
             update?(&state)
             state.isLoading = false
+            state.loadingSignature = nil
         }
     }
 

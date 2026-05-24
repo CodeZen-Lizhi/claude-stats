@@ -72,8 +72,9 @@ struct TranscriptAnalysisService: Sendable {
 
         var analyses: [TranscriptSessionAnalysis] = []
         analyses.reserveCapacity(sessions.count)
+        var pendingJobs: [(lookup: TranscriptAnalysisLookup, mode: AnalysisJob.Mode)] = []
+        pendingJobs.reserveCapacity(sessions.count)
         var jobs: [AnalysisJob] = []
-        jobs.reserveCapacity(sessions.count)
 
         var reused = 0
         var newCount = 0
@@ -88,19 +89,24 @@ struct TranscriptAnalysisService: Sendable {
             case .empty:
                 empty += 1
             case .missNew:
-                jobs.append(AnalysisJob(
-                    session: lookup.session,
-                    key: lookup.key,
-                    mode: .new,
-                    dictionary: dictionarySnapshots[lookup.session.id] ?? .fallback
-                ))
+                pendingJobs.append((lookup: lookup, mode: .new))
             case .missChanged:
-                jobs.append(AnalysisJob(
-                    session: lookup.session,
-                    key: lookup.key,
-                    mode: .changed,
-                    dictionary: dictionarySnapshots[lookup.session.id] ?? .fallback
-                ))
+                pendingJobs.append((lookup: lookup, mode: .changed))
+            }
+        }
+        if !pendingJobs.isEmpty {
+            let runtimeDictionaries = Self.runtimeDictionaries(from: dictionarySnapshots)
+            jobs = pendingJobs.map { pending in
+                AnalysisJob(
+                    session: pending.lookup.session,
+                    key: pending.lookup.key,
+                    mode: pending.mode,
+                    dictionary: Self.runtimeDictionary(
+                        for: pending.lookup.session,
+                        snapshotsBySessionID: dictionarySnapshots,
+                        runtimeDictionariesByDigest: runtimeDictionaries
+                    )
+                )
             }
         }
 
@@ -151,7 +157,7 @@ struct TranscriptAnalysisService: Sendable {
                         let analysis = await extractor.extract(
                             session: job.session,
                             messages: messages,
-                            dictionary: job.dictionary.dictionary
+                            dictionary: job.dictionary
                         )
                         return .analyzed(
                             job: job,
@@ -294,6 +300,30 @@ struct TranscriptAnalysisService: Sendable {
         return "dictionary-corpus-\(sha256(rows))"
     }
 
+    private static func runtimeDictionaries(
+        from snapshotsBySessionID: [String: TechnicalTermDictionarySnapshot]
+    ) -> [String: TechnicalTermDictionary] {
+        var dictionaries: [String: TechnicalTermDictionary] = [:]
+        dictionaries.reserveCapacity(Set(snapshotsBySessionID.values.map(\.digest)).count + 1)
+        for snapshot in snapshotsBySessionID.values where dictionaries[snapshot.digest] == nil {
+            dictionaries[snapshot.digest] = snapshot.dictionary
+        }
+        let fallback = TechnicalTermDictionarySnapshot.fallback
+        if dictionaries[fallback.digest] == nil {
+            dictionaries[fallback.digest] = fallback.dictionary
+        }
+        return dictionaries
+    }
+
+    private static func runtimeDictionary(
+        for session: Session,
+        snapshotsBySessionID: [String: TechnicalTermDictionarySnapshot],
+        runtimeDictionariesByDigest: [String: TechnicalTermDictionary]
+    ) -> TechnicalTermDictionary {
+        let snapshot = snapshotsBySessionID[session.id] ?? .fallback
+        return runtimeDictionariesByDigest[snapshot.digest] ?? snapshot.dictionary
+    }
+
     private func publish(
         _ progress: TranscriptAnalysisProgress,
         to handler: TranscriptAnalysisProgressHandler?
@@ -312,8 +342,8 @@ struct TranscriptAnalysisService: Sendable {
     }
 }
 
-private struct AnalysisJob: Sendable, Hashable {
-    enum Mode: Sendable, Hashable {
+private struct AnalysisJob: Sendable {
+    enum Mode: Sendable {
         case new
         case changed
     }
@@ -321,7 +351,7 @@ private struct AnalysisJob: Sendable, Hashable {
     let session: Session
     let key: TranscriptAnalysisKey
     let mode: Mode
-    let dictionary: TechnicalTermDictionarySnapshot
+    let dictionary: TechnicalTermDictionary
 }
 
 private enum AnalysisJobResult: Sendable {

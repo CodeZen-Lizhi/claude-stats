@@ -216,6 +216,11 @@ public final class AtollIslandRuntimeServiceOwner {
     }
 
     public func stop() {
+        guard didStart else {
+            primaryBridge = nil
+            configuration = nil
+            return
+        }
         didStart = false
         WebcamManager.shared.stopSession()
         StatsManager.shared.stopMonitoring()

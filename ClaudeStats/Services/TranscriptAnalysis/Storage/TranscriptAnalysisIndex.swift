@@ -91,36 +91,73 @@ actor TranscriptAnalysisIndex {
         forceRefresh: Bool = false
     ) throws -> [TranscriptAnalysisLookup] {
         let connection = try openConnection()
+        let keyedSessions = sessions.map { session in
+            (
+                session: session,
+                key: key(
+                    for: session,
+                    tokenizerID: tokenizerID,
+                    dictionaryVersion: dictionaryVersionsBySessionID[session.id] ?? dictionaryVersion,
+                    extractorVersion: extractorVersion,
+                    optionsDigest: optionsDigest
+                )
+            )
+        }
+
+        let cachedRows = forceRefresh
+            ? [:]
+            : try cachedSessionRows(
+                for: keyedSessions.map { $0.key.digest },
+                connection: connection
+            )
+        if !cachedRows.isEmpty {
+            try touch(keyDigests: Array(cachedRows.keys), connection: connection)
+        }
+
+        let analyzedRows = cachedRows.filter { $0.value.status == .analyzed }
+        let analysesByDigest = try readAnalyses(
+            for: analyzedRows,
+            keysByDigest: Dictionary(uniqueKeysWithValues: keyedSessions.map { ($0.key.digest, $0.key) }),
+            connection: connection
+        )
+        let missingSessionIDs = Set(keyedSessions.compactMap { item -> String? in
+            if forceRefresh { return item.session.id }
+            guard let cached = cachedRows[item.key.digest] else { return item.session.id }
+            if cached.status == .analyzed, analysesByDigest[item.key.digest] == nil {
+                return item.session.id
+            }
+            return nil
+        })
+        let priorSessionIDs = try priorSessionIDs(
+            provider: provider,
+            sessionIDs: missingSessionIDs,
+            connection: connection
+        )
+
         var out: [TranscriptAnalysisLookup] = []
         out.reserveCapacity(sessions.count)
 
-        for session in sessions {
-            let key = key(
-                for: session,
-                tokenizerID: tokenizerID,
-                dictionaryVersion: dictionaryVersionsBySessionID[session.id] ?? dictionaryVersion,
-                extractorVersion: extractorVersion,
-                optionsDigest: optionsDigest
-            )
-
-            if !forceRefresh, let status = try status(for: key, connection: connection) {
-                try touch(keyDigest: key.digest, connection: connection)
-                switch status {
+        for item in keyedSessions {
+            if !forceRefresh, let cached = cachedRows[item.key.digest] {
+                switch cached.status {
                 case .analyzed:
-                    if let analysis = try readAnalysis(for: key, connection: connection) {
-                        out.append(TranscriptAnalysisLookup(session: session, key: key, state: .hit(analysis)))
+                    if let analysis = analysesByDigest[item.key.digest] {
+                        out.append(TranscriptAnalysisLookup(session: item.session, key: item.key, state: .hit(analysis)))
                     } else {
-                        try delete(keyDigest: key.digest, connection: connection)
-                        out.append(TranscriptAnalysisLookup(session: session, key: key, state: .missChanged))
+                        try delete(keyDigest: item.key.digest, connection: connection)
+                        out.append(TranscriptAnalysisLookup(session: item.session, key: item.key, state: .missChanged))
                     }
                 case .empty:
-                    out.append(TranscriptAnalysisLookup(session: session, key: key, state: .empty))
+                    out.append(TranscriptAnalysisLookup(session: item.session, key: item.key, state: .empty))
                 }
                 continue
             }
 
-            let hadPrior = try hasPriorSession(provider: provider, sessionID: session.id, connection: connection)
-            out.append(TranscriptAnalysisLookup(session: session, key: key, state: hadPrior ? .missChanged : .missNew))
+            out.append(TranscriptAnalysisLookup(
+                session: item.session,
+                key: item.key,
+                state: priorSessionIDs.contains(item.session.id) ? .missChanged : .missNew
+            ))
         }
         return out
     }
@@ -198,135 +235,177 @@ actor TranscriptAnalysisIndex {
         return connection
     }
 
-    private func status(for key: TranscriptAnalysisKey, connection: SQLiteConnection) throws -> RowStatus? {
-        let statement = try connection.prepare("SELECT status FROM session_analysis WHERE key_digest = ?")
-        try statement.bind(key.digest, at: 1)
-        guard try statement.step(), let raw = statement.columnString(0) else { return nil }
-        return RowStatus(rawValue: raw)
+    private func cachedSessionRows(
+        for keyDigests: [String],
+        connection: SQLiteConnection
+    ) throws -> [String: CachedSessionRow] {
+        var rows: [String: CachedSessionRow] = [:]
+        for batch in Self.batches(of: Array(Set(keyDigests))) {
+            let statement = try connection.prepare(
+                """
+                SELECT key_digest, status, session_title, project_name, term_count
+                FROM session_analysis
+                WHERE key_digest IN (\(Self.placeholders(count: batch.count)))
+                """
+            )
+            try bind(batch, to: statement)
+
+            while try statement.step() {
+                guard let keyDigest = statement.columnString(0),
+                      let statusRaw = statement.columnString(1),
+                      let status = RowStatus(rawValue: statusRaw),
+                      let sessionTitle = statement.columnString(2),
+                      let projectName = statement.columnString(3) else {
+                    continue
+                }
+                rows[keyDigest] = CachedSessionRow(
+                    status: status,
+                    sessionTitle: sessionTitle,
+                    projectName: projectName,
+                    termCount: statement.columnInt(4)
+                )
+            }
+        }
+        return rows
     }
 
-    private func readAnalysis(for key: TranscriptAnalysisKey, connection: SQLiteConnection) throws -> TranscriptSessionAnalysis? {
-        let row = try connection.prepare(
-            """
-            SELECT session_title, project_name, status
-            FROM session_analysis
-            WHERE key_digest = ?
-            """
-        )
-        try row.bind(key.digest, at: 1)
-        guard try row.step(),
-              row.columnString(2) == RowStatus.analyzed.rawValue,
-              let sessionTitle = row.columnString(0),
-              let projectName = row.columnString(1) else {
-            return nil
-        }
+    private func readAnalyses(
+        for rowsByDigest: [String: CachedSessionRow],
+        keysByDigest: [String: TranscriptAnalysisKey],
+        connection: SQLiteConnection
+    ) throws -> [String: TranscriptSessionAnalysis] {
+        let keyDigests = Array(rowsByDigest.keys)
+        guard !keyDigests.isEmpty else { return [:] }
 
-        let examples = try readExamples(for: key.digest, sessionID: key.sessionID, sessionTitle: sessionTitle, projectName: projectName, connection: connection)
-        let terms = try readTerms(for: key.digest, examples: examples, connection: connection)
-        return TranscriptSessionAnalysis(
-            sessionID: key.sessionID,
-            sessionTitle: sessionTitle,
-            projectName: projectName,
-            terms: terms
+        let examplesByDigest = try readExamples(
+            for: rowsByDigest,
+            keysByDigest: keysByDigest,
+            connection: connection
         )
+        let termsByDigest = try readTerms(
+            for: keyDigests,
+            examplesByDigest: examplesByDigest,
+            connection: connection
+        )
+
+        var analyses: [String: TranscriptSessionAnalysis] = [:]
+        analyses.reserveCapacity(rowsByDigest.count)
+        for (keyDigest, row) in rowsByDigest {
+            guard let key = keysByDigest[keyDigest] else { continue }
+            let terms = termsByDigest[keyDigest] ?? []
+            guard row.termCount == 0 || !terms.isEmpty else { continue }
+            analyses[keyDigest] = TranscriptSessionAnalysis(
+                sessionID: key.sessionID,
+                sessionTitle: row.sessionTitle,
+                projectName: row.projectName,
+                terms: terms
+            )
+        }
+        return analyses
     }
 
     private func readTerms(
-        for keyDigest: String,
-        examples: [Int: TranscriptTermExample],
+        for keyDigests: [String],
+        examplesByDigest: [String: [Int: TranscriptTermExample]],
         connection: SQLiteConnection
-    ) throws -> [TranscriptSessionTerm] {
-        let statement = try connection.prepare(
-            """
-            SELECT ordinal, canonical, display_name, kind, frequency, weight,
-                   role_user, role_assistant, role_tool, role_system,
-                   source_dictionary, source_natural_language, source_jieba, source_code,
-                   source_path, source_command, source_error, source_project
-            FROM session_terms
-            WHERE key_digest = ?
-            ORDER BY ordinal ASC
-            """
-        )
-        try statement.bind(keyDigest, at: 1)
+    ) throws -> [String: [TranscriptSessionTerm]] {
+        var termsByDigest: [String: [TranscriptSessionTerm]] = [:]
+        for batch in Self.batches(of: keyDigests) {
+            let statement = try connection.prepare(
+                """
+                SELECT key_digest, ordinal, canonical, display_name, kind, frequency, weight,
+                       role_user, role_assistant, role_tool, role_system,
+                       source_dictionary, source_natural_language, source_jieba, source_code,
+                       source_path, source_command, source_error, source_project
+                FROM session_terms
+                WHERE key_digest IN (\(Self.placeholders(count: batch.count)))
+                ORDER BY key_digest ASC, ordinal ASC
+                """
+            )
+            try bind(batch, to: statement)
 
-        var terms: [TranscriptSessionTerm] = []
-        while try statement.step() {
-            let ordinal = statement.columnInt(0)
-            guard let canonical = statement.columnString(1),
-                  let displayName = statement.columnString(2),
-                  let kindRaw = statement.columnString(3),
-                  let kind = TranscriptTermKind(rawValue: kindRaw) else {
-                continue
+            while try statement.step() {
+                let ordinal = statement.columnInt(1)
+                guard let keyDigest = statement.columnString(0),
+                      let canonical = statement.columnString(2),
+                      let displayName = statement.columnString(3),
+                      let kindRaw = statement.columnString(4),
+                      let kind = TranscriptTermKind(rawValue: kindRaw) else {
+                    continue
+                }
+                let roleCounts = TranscriptRoleCounts(
+                    user: statement.columnInt(7),
+                    assistant: statement.columnInt(8),
+                    tool: statement.columnInt(9),
+                    system: statement.columnInt(10)
+                )
+                let sourceCounts = TranscriptSourceCounts(
+                    dictionary: statement.columnInt(11),
+                    naturalLanguage: statement.columnInt(12),
+                    jieba: statement.columnInt(13),
+                    code: statement.columnInt(14),
+                    path: statement.columnInt(15),
+                    command: statement.columnInt(16),
+                    error: statement.columnInt(17),
+                    project: statement.columnInt(18)
+                )
+                termsByDigest[keyDigest, default: []].append(TranscriptSessionTerm(
+                    canonical: canonical,
+                    displayName: displayName,
+                    kind: kind,
+                    frequency: statement.columnInt(5),
+                    weight: statement.columnDouble(6),
+                    roleCounts: roleCounts,
+                    sourceCounts: sourceCounts,
+                    example: examplesByDigest[keyDigest]?[ordinal]
+                ))
             }
-            let roleCounts = TranscriptRoleCounts(
-                user: statement.columnInt(6),
-                assistant: statement.columnInt(7),
-                tool: statement.columnInt(8),
-                system: statement.columnInt(9)
-            )
-            let sourceCounts = TranscriptSourceCounts(
-                dictionary: statement.columnInt(10),
-                naturalLanguage: statement.columnInt(11),
-                jieba: statement.columnInt(12),
-                code: statement.columnInt(13),
-                path: statement.columnInt(14),
-                command: statement.columnInt(15),
-                error: statement.columnInt(16),
-                project: statement.columnInt(17)
-            )
-            terms.append(TranscriptSessionTerm(
-                canonical: canonical,
-                displayName: displayName,
-                kind: kind,
-                frequency: statement.columnInt(4),
-                weight: statement.columnDouble(5),
-                roleCounts: roleCounts,
-                sourceCounts: sourceCounts,
-                example: examples[ordinal]
-            ))
         }
-        return terms
+        return termsByDigest
     }
 
     private func readExamples(
-        for keyDigest: String,
-        sessionID: String,
-        sessionTitle: String,
-        projectName: String,
+        for rowsByDigest: [String: CachedSessionRow],
+        keysByDigest: [String: TranscriptAnalysisKey],
         connection: SQLiteConnection
-    ) throws -> [Int: TranscriptTermExample] {
-        let statement = try connection.prepare(
-            """
-            SELECT term_ordinal, id, role, excerpt, timestamp_seconds
-            FROM term_examples
-            WHERE key_digest = ?
-            """
-        )
-        try statement.bind(keyDigest, at: 1)
-
-        var examples: [Int: TranscriptTermExample] = [:]
-        while try statement.step() {
-            guard let id = statement.columnString(1),
-                  let roleRaw = statement.columnString(2),
-                  let role = SessionTranscriptMessage.Role(rawValue: roleRaw),
-                  let excerpt = statement.columnString(3) else {
-                continue
-            }
-            let timestampSeconds = statement.columnDouble(4)
-            let timestamp = statement.columnIsNull(4)
-                ? nil
-                : Date(timeIntervalSince1970: timestampSeconds)
-            examples[statement.columnInt(0)] = TranscriptTermExample(
-                id: id,
-                sessionID: sessionID,
-                sessionTitle: sessionTitle,
-                projectName: projectName,
-                role: role,
-                excerpt: excerpt,
-                timestamp: timestamp
+    ) throws -> [String: [Int: TranscriptTermExample]] {
+        var examplesByDigest: [String: [Int: TranscriptTermExample]] = [:]
+        for batch in Self.batches(of: Array(rowsByDigest.keys)) {
+            let statement = try connection.prepare(
+                """
+                SELECT key_digest, term_ordinal, id, role, excerpt, timestamp_seconds
+                FROM term_examples
+                WHERE key_digest IN (\(Self.placeholders(count: batch.count)))
+                """
             )
+            try bind(batch, to: statement)
+
+            while try statement.step() {
+                guard let keyDigest = statement.columnString(0),
+                      let row = rowsByDigest[keyDigest],
+                      let key = keysByDigest[keyDigest],
+                      let id = statement.columnString(2),
+                      let roleRaw = statement.columnString(3),
+                      let role = SessionTranscriptMessage.Role(rawValue: roleRaw),
+                      let excerpt = statement.columnString(4) else {
+                    continue
+                }
+                let timestampSeconds = statement.columnDouble(5)
+                let timestamp = statement.columnIsNull(5)
+                    ? nil
+                    : Date(timeIntervalSince1970: timestampSeconds)
+                examplesByDigest[keyDigest, default: [:]][statement.columnInt(1)] = TranscriptTermExample(
+                    id: id,
+                    sessionID: key.sessionID,
+                    sessionTitle: row.sessionTitle,
+                    projectName: row.projectName,
+                    role: role,
+                    excerpt: excerpt,
+                    timestamp: timestamp
+                )
+            }
         }
-        return examples
+        return examplesByDigest
     }
 
     private func insertSessionRow(
@@ -432,22 +511,46 @@ actor TranscriptAnalysisIndex {
         try statement.finish()
     }
 
-    private func hasPriorSession(provider: ProviderKind, sessionID: String, connection: SQLiteConnection) throws -> Bool {
-        let statement = try connection.prepare(
-            "SELECT 1 FROM session_analysis WHERE provider = ? AND session_id = ? LIMIT 1"
-        )
-        try statement.bind(provider.rawValue, at: 1)
-        try statement.bind(sessionID, at: 2)
-        return try statement.step()
+    private func priorSessionIDs(
+        provider: ProviderKind,
+        sessionIDs: Set<String>,
+        connection: SQLiteConnection
+    ) throws -> Set<String> {
+        var prior: Set<String> = []
+        for batch in Self.batches(of: Array(sessionIDs)) {
+            let statement = try connection.prepare(
+                """
+                SELECT DISTINCT session_id
+                FROM session_analysis
+                WHERE provider = ? AND session_id IN (\(Self.placeholders(count: batch.count)))
+                """
+            )
+            try statement.bind(provider.rawValue, at: 1)
+            try bind(batch, to: statement, startingAt: 2)
+
+            while try statement.step() {
+                if let sessionID = statement.columnString(0) {
+                    prior.insert(sessionID)
+                }
+            }
+        }
+        return prior
     }
 
-    private func touch(keyDigest: String, connection: SQLiteConnection) throws {
-        let statement = try connection.prepare(
-            "UPDATE session_analysis SET last_accessed_at = ? WHERE key_digest = ?"
-        )
-        try statement.bind(Date().timeIntervalSince1970, at: 1)
-        try statement.bind(keyDigest, at: 2)
-        try statement.finish()
+    private func touch(keyDigests: [String], connection: SQLiteConnection) throws {
+        let accessedAt = Date().timeIntervalSince1970
+        for batch in Self.batches(of: keyDigests) {
+            let statement = try connection.prepare(
+                """
+                UPDATE session_analysis
+                SET last_accessed_at = ?
+                WHERE key_digest IN (\(Self.placeholders(count: batch.count)))
+                """
+            )
+            try statement.bind(accessedAt, at: 1)
+            try bind(batch, to: statement, startingAt: 2)
+            try statement.finish()
+        }
     }
 
     private func delete(keyDigest: String, connection: SQLiteConnection) throws {
@@ -481,8 +584,35 @@ actor TranscriptAnalysisIndex {
         return digest.map { String(format: "%02x", $0) }.joined()
     }
 
+    private func bind(_ values: [String], to statement: SQLiteStatement, startingAt start: Int32 = 1) throws {
+        for (offset, value) in values.enumerated() {
+            try statement.bind(value, at: start + Int32(offset))
+        }
+    }
+
+    private static func batches(of values: [String]) -> [[String]] {
+        guard !values.isEmpty else { return [] }
+        return stride(from: values.startIndex, to: values.endIndex, by: maxBoundParameters).map { start in
+            let end = Swift.min(start + maxBoundParameters, values.endIndex)
+            return Array(values[start..<end])
+        }
+    }
+
+    private static func placeholders(count: Int) -> String {
+        Array(repeating: "?", count: count).joined(separator: ", ")
+    }
+
     private enum RowStatus: String {
         case analyzed
         case empty
     }
+
+    private struct CachedSessionRow {
+        let status: RowStatus
+        let sessionTitle: String
+        let projectName: String
+        let termCount: Int
+    }
+
+    private static let maxBoundParameters = 900
 }

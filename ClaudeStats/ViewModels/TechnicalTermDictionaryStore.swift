@@ -50,6 +50,41 @@ final class TechnicalTermDictionaryStore {
         }
     }
 
+    func filteredRows(
+        scope: TechnicalTermEditScope,
+        category: TechnicalTermCategory?,
+        query: String
+    ) -> [TechnicalTermDictionaryRow] {
+        let scopeRows = rows.filter { row in
+            switch scope {
+            case .global:
+                row.source != .project
+            case .project:
+                true
+            }
+        }
+        let categoryRows = category.map { selected in
+            scopeRows.filter { $0.entry.category == selected }
+        } ?? scopeRows
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return categoryRows }
+
+        let needle = TermNormalizer.normalizedKey(trimmed)
+        return categoryRows.filter { row in
+            let entry = row.entry
+            let haystack = ([
+                entry.canonical,
+                entry.kind.displayName,
+                entry.category.rawValue,
+                entry.category.displayName,
+                row.source.displayName,
+            ] + entry.aliases + entry.tags)
+                .map(TermNormalizer.normalizedKey)
+                .joined(separator: " ")
+            return haystack.contains(needle)
+        }
+    }
+
     func load(sessions: [Session]) async {
         availableProjectPaths = await repository.availableProjectPaths(from: sessions)
         if selectedProjectPath == nil {
@@ -153,6 +188,7 @@ final class TechnicalTermDictionaryStore {
             var merged = entry
             merged.enabled = override.enabled
             merged.kind = override.kind
+            merged.category = override.category
             merged.weight = override.weight
             merged.aliases = Array(Set(entry.aliases + override.aliases)).sorted()
             merged.tags = Array(Set(entry.tags + override.tags)).sorted()

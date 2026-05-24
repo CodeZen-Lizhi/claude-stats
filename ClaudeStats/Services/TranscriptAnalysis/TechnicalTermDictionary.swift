@@ -6,35 +6,64 @@ struct TechnicalTermDictionary: Sendable {
     let entries: [TechnicalTermEntry]
     let stopwords: Set<String>
     let dictionaryVersion: String
+    private let exactLookup: [String: TechnicalTermEntry]
+    private let userWordsCache: [String]
+    private let jiebaUserWordsCache: [String]
+    private let candidatesByFirstToken: [String: [TechnicalTermCandidate]]
+    private let candidateFirstTokensByLength: [Int: [String]]
 
     init(
         entries: [TechnicalTermEntry] = TechnicalTermDictionary.fallbackEntries,
         stopwords: Set<String> = TechnicalTermDictionary.fallbackStopwords,
         dictionaryVersion: String = TechnicalTermDictionary.currentVersion
     ) {
-        self.entries = entries.filter(\.enabled)
+        let enabledEntries = entries.filter(\.enabled)
+        self.entries = enabledEntries
         self.stopwords = stopwords
         self.dictionaryVersion = dictionaryVersion
+        var exactLookup: [String: TechnicalTermEntry] = [:]
+        var candidatesByFirstToken: [String: [TechnicalTermCandidate]] = [:]
+        var candidateFirstTokensByLength: [Int: Set<String>] = [:]
+        let words = Set(enabledEntries.flatMap { [$0.canonical] + $0.aliases })
+        for entry in enabledEntries {
+            let keys = Set(([entry.canonical] + entry.aliases).map(Self.normalized).filter { !$0.isEmpty })
+            for key in keys {
+                exactLookup[key] = exactLookup[key] ?? entry
+                let candidate = TechnicalTermCandidate(
+                    entry: entry,
+                    tokens: key.split(separator: " ").map(String.init)
+                )
+                if let firstToken = candidate.tokens.first {
+                    candidatesByFirstToken[firstToken, default: []].append(candidate)
+                    candidateFirstTokensByLength[firstToken.count, default: []].insert(firstToken)
+                }
+            }
+        }
+        self.exactLookup = exactLookup
+        self.userWordsCache = words.sorted()
+        self.jiebaUserWordsCache = words.filter(Self.containsCJK).sorted()
+        self.candidatesByFirstToken = candidatesByFirstToken
+        self.candidateFirstTokensByLength = candidateFirstTokensByLength.mapValues { $0.sorted() }
     }
 
     var userWords: [String] {
-        Array(Set(entries.flatMap { [$0.canonical] + $0.aliases })).sorted()
+        userWordsCache
+    }
+
+    var jiebaUserWords: [String] {
+        jiebaUserWordsCache
     }
 
     func canonicalize(_ raw: String) -> TechnicalTermEntry? {
         let folded = Self.normalized(raw)
-        let candidates = entries.flatMap { entry in
-            ([entry.canonical] + entry.aliases).map { (entry: entry, key: Self.normalized($0)) }
-        }
-        if let exact = candidates.first(where: { $0.key == folded })?.entry {
+        if let exact = exactLookup[folded] {
             return exact
         }
 
         let rawTokens = TermNormalizer.tokens(in: raw)
         guard rawTokens.count >= 2 else { return nil }
-        let fuzzyMatches = candidates.filter { candidate in
-            let candidateTokens = candidate.key.split(separator: " ").map(String.init)
-            return TermNormalizer.phraseMatches(candidate: candidateTokens, text: rawTokens, allowsFuzzy: true)
+        let fuzzyMatches = candidates(matchingFirstTokenOf: rawTokens).filter { candidate in
+            Self.phraseMatches(candidate: candidate.tokens, textTokens: rawTokens, start: 0, allowsFuzzy: true).matched
         }
         let unique = Dictionary(grouping: fuzzyMatches, by: { TermNormalizer.normalizedKey($0.entry.canonical) })
         return unique.count == 1 ? fuzzyMatches.first?.entry : nil
@@ -46,29 +75,25 @@ struct TechnicalTermDictionary: Sendable {
 
         var matches: [TechnicalTermMatch] = []
         var emitted: Set<String> = []
-        for entry in entries {
-            let candidates = Set(([entry.canonical] + entry.aliases).map(Self.normalized).filter { !$0.isEmpty })
+        for start in textTokens.indices {
+            let candidates = candidates(matchingFirstTokenOf: textTokens[start])
             for candidate in candidates {
-                let candidateTokens = candidate.split(separator: " ").map(String.init)
-                guard !candidateTokens.isEmpty, candidateTokens.count <= textTokens.count else { continue }
-                for start in 0...(textTokens.count - candidateTokens.count) {
-                    let end = start + candidateTokens.count
-                    let slice = Array(textTokens[start..<end])
-                    let exact = slice == candidateTokens
-                    let fuzzy = !exact && TermNormalizer.phraseMatches(
-                        candidate: candidateTokens,
-                        text: slice,
-                        allowsFuzzy: true
-                    )
-                    guard exact || fuzzy else { continue }
-                    let key = "\(TermNormalizer.normalizedKey(entry.canonical))|\(start)|\(end)"
-                    guard emitted.insert(key).inserted else { continue }
-                    matches.append(TechnicalTermMatch(
-                        entry: entry,
-                        matchedText: slice.joined(separator: " "),
-                        isFuzzy: fuzzy
-                    ))
-                }
+                guard !candidate.tokens.isEmpty, start + candidate.tokens.count <= textTokens.count else { continue }
+                let end = start + candidate.tokens.count
+                let result = Self.phraseMatches(
+                    candidate: candidate.tokens,
+                    textTokens: textTokens,
+                    start: start,
+                    allowsFuzzy: true
+                )
+                guard result.matched else { continue }
+                let key = "\(TermNormalizer.normalizedKey(candidate.entry.canonical))|\(start)|\(end)"
+                guard emitted.insert(key).inserted else { continue }
+                matches.append(TechnicalTermMatch(
+                    entry: candidate.entry,
+                    matchedText: textTokens[start..<end].joined(separator: " "),
+                    isFuzzy: result.fuzzy
+                ))
             }
         }
         return matches
@@ -84,6 +109,59 @@ struct TechnicalTermDictionary: Sendable {
 
     static func normalizedSearchText(_ value: String) -> String {
         TermNormalizer.normalizedSearchText(value)
+    }
+
+    private func candidates(matchingFirstTokenOf tokens: [String]) -> [TechnicalTermCandidate] {
+        guard let firstToken = tokens.first else { return [] }
+        return candidates(matchingFirstTokenOf: firstToken)
+    }
+
+    private func candidates(matchingFirstTokenOf firstToken: String) -> [TechnicalTermCandidate] {
+        var matches = candidatesByFirstToken[firstToken] ?? []
+        guard firstToken.count >= 3 else { return matches }
+
+        for length in (firstToken.count - 1)...(firstToken.count + 1) {
+            guard let firstTokens = candidateFirstTokensByLength[length] else { continue }
+            for candidateFirstToken in firstTokens where candidateFirstToken != firstToken {
+                guard max(candidateFirstToken.count, firstToken.count) >= 4,
+                      TermNormalizer.isDistanceAtMostOne(candidateFirstToken, firstToken),
+                      let candidates = candidatesByFirstToken[candidateFirstToken] else {
+                    continue
+                }
+                matches += candidates
+            }
+        }
+        return matches
+    }
+
+    private static func phraseMatches(
+        candidate: [String],
+        textTokens: [String],
+        start: Int,
+        allowsFuzzy: Bool
+    ) -> (matched: Bool, fuzzy: Bool) {
+        guard !candidate.isEmpty, start + candidate.count <= textTokens.count else { return (false, false) }
+
+        var editCount = 0
+        for (offset, lhs) in candidate.enumerated() {
+            let rhs = textTokens[start + offset]
+            if lhs == rhs { continue }
+            guard allowsFuzzy, candidate.count >= 2 else { return (false, false) }
+            guard lhs.count >= 4 || rhs.count >= 4 else { return (false, false) }
+            guard TermNormalizer.isDistanceAtMostOne(lhs, rhs) else { return (false, false) }
+            editCount += 1
+            guard editCount <= 1 else { return (false, false) }
+        }
+
+        return editCount == 0 ? (true, false) : (true, true)
+    }
+
+    private static func containsCJK(_ text: String) -> Bool {
+        text.unicodeScalars.contains { scalar in
+            (0x4E00...0x9FFF).contains(Int(scalar.value))
+                || (0x3400...0x4DBF).contains(Int(scalar.value))
+                || (0xF900...0xFAFF).contains(Int(scalar.value))
+        }
     }
 
     static let fallbackEntries: [TechnicalTermEntry] = [
@@ -119,4 +197,9 @@ struct TechnicalTermDictionary: Sendable {
         "一个", "一些", "不会", "不是", "以及", "他们", "使用", "可以", "因为", "如果", "就是", "我们",
         "所以", "这个", "这些", "还是", "需要", "然后", "进行", "里面"
     ].map(TermNormalizer.normalizedKey).reduce(into: Set<String>()) { $0.insert($1) }
+}
+
+private struct TechnicalTermCandidate: Sendable {
+    let entry: TechnicalTermEntry
+    let tokens: [String]
 }

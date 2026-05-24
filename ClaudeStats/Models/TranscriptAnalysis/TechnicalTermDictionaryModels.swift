@@ -17,9 +17,50 @@ enum TechnicalTermSource: String, CaseIterable, Codable, Sendable, Hashable, Ide
     }
 }
 
+enum TechnicalTermCategory: String, CaseIterable, Codable, Sendable, Hashable, Identifiable {
+    case uiUX
+    case architecture
+    case frontend
+    case backend
+    case cloudDevOps
+    case commandLine
+    case testingQuality
+    case security
+    case dataAI
+    case applePlatform
+    case general
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .uiUX: "UI / UX"
+        case .architecture: "Architecture"
+        case .frontend: "Frontend"
+        case .backend: "Backend"
+        case .cloudDevOps: "Cloud / DevOps"
+        case .commandLine: "Command Line"
+        case .testingQuality: "Testing / Quality"
+        case .security: "Security"
+        case .dataAI: "Data / AI"
+        case .applePlatform: "Apple Platform"
+        case .general: "General"
+        }
+    }
+
+    static func parse(_ value: String) -> TechnicalTermCategory? {
+        let normalized = TermNormalizer.normalizedKey(value)
+        return allCases.first { category in
+            normalized == TermNormalizer.normalizedKey(category.rawValue)
+                || normalized == TermNormalizer.normalizedKey(category.displayName)
+        }
+    }
+}
+
 struct TechnicalTermEntry: Codable, Hashable, Identifiable, Sendable {
     var canonical: String
     var kind: TranscriptTermKind
+    var category: TechnicalTermCategory
     var aliases: [String]
     var weight: Double
     var enabled: Bool
@@ -30,6 +71,7 @@ struct TechnicalTermEntry: Codable, Hashable, Identifiable, Sendable {
     init(
         canonical: String,
         kind: TranscriptTermKind,
+        category: TechnicalTermCategory = .general,
         aliases: [String] = [],
         weight: Double = 1.4,
         enabled: Bool = true,
@@ -37,6 +79,7 @@ struct TechnicalTermEntry: Codable, Hashable, Identifiable, Sendable {
     ) {
         self.canonical = canonical
         self.kind = kind
+        self.category = category
         self.aliases = aliases
         self.weight = weight
         self.enabled = enabled
@@ -44,13 +87,14 @@ struct TechnicalTermEntry: Codable, Hashable, Identifiable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case canonical, kind, aliases, weight, enabled, tags
+        case canonical, kind, category, aliases, weight, enabled, tags
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         canonical = try container.decode(String.self, forKey: .canonical)
         kind = try container.decodeIfPresent(TranscriptTermKind.self, forKey: .kind) ?? .general
+        category = try container.decodeIfPresent(TechnicalTermCategory.self, forKey: .category) ?? .general
         aliases = try container.decodeIfPresent([String].self, forKey: .aliases) ?? []
         weight = try container.decodeIfPresent(Double.self, forKey: .weight) ?? 1.4
         enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
@@ -96,16 +140,20 @@ struct TechnicalTermDictionarySnapshot: Hashable, Sendable {
 
     static func digest(entries: [TechnicalTermEntry], stopwords: Set<String>) -> String {
         let rows = entries
-            .sorted { TermNormalizer.normalizedKey($0.canonical) < TermNormalizer.normalizedKey($1.canonical) }
             .map { entry in
-                [
-                    TermNormalizer.normalizedKey(entry.canonical),
+                let canonicalKey = TermNormalizer.normalizedKey(entry.canonical)
+                let row = [
+                    canonicalKey,
                     entry.kind.rawValue,
+                    entry.category.rawValue,
                     String(format: "%.4f", entry.weight),
                     entry.aliases.map(TermNormalizer.normalizedKey).sorted().joined(separator: ","),
                     entry.tags.map(TermNormalizer.normalizedKey).sorted().joined(separator: ","),
                 ].joined(separator: "\u{1f}")
+                return (key: canonicalKey, row: row)
             }
+            .sorted { $0.key < $1.key }
+            .map(\.row)
         let stopwordRows = stopwords.map(TermNormalizer.normalizedKey).sorted()
         let payload = (rows + ["--stopwords--"] + stopwordRows).joined(separator: "\u{1e}")
         let digest = SHA256.hash(data: Data(payload.utf8))
