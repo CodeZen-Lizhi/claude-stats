@@ -3,6 +3,14 @@
 extension ReleaseHistoryCatalog {
     static let generatedEntries: [ReleaseHistoryEntry] = [
         ReleaseHistoryEntry(
+            version: "1.7.4",
+            date: "May 24, 2026",
+            headline: "新增了完整的Sparkle增量更新自动化流程，包括delta生成、签名和appcast更新；同时扩展了调试符号清理脚本，新增对对象文件和CMake构建产物的清理，并在代码签名脚本中跳过这些无用工件；新增了对应的单元测试，完善了CI发布流程的注释与步骤调整。",
+            changes: [
+                "新增了完整的Sparkle增量更新自动化流程，包括delta生成、签名和appcast更新；同时扩展了调试符号清理脚本，新增对对象文件和CMake构建产物的清理，并在代码签名脚本中跳过这些无用工件；新增了对应的单元测试，完善了CI发布流程的注释与步骤调整。",
+            ]
+        ),
+        ReleaseHistoryEntry(
             version: "1.7.3",
             date: "May 24, 2026",
             headline: "添加llama.cpp子模块与相关桥接代码",
