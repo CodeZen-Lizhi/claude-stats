@@ -85,6 +85,7 @@ actor TranscriptAnalysisIndex {
         sessions: [Session],
         tokenizerID: String,
         dictionaryVersion: String,
+        dictionaryVersionsBySessionID: [String: String] = [:],
         extractorVersion: String = TranscriptAnalysisService.extractorVersion,
         optionsDigest: String = TranscriptAnalysisIndex.defaultOptionsDigest,
         forceRefresh: Bool = false
@@ -97,7 +98,7 @@ actor TranscriptAnalysisIndex {
             let key = key(
                 for: session,
                 tokenizerID: tokenizerID,
-                dictionaryVersion: dictionaryVersion,
+                dictionaryVersion: dictionaryVersionsBySessionID[session.id] ?? dictionaryVersion,
                 extractorVersion: extractorVersion,
                 optionsDigest: optionsDigest
             )

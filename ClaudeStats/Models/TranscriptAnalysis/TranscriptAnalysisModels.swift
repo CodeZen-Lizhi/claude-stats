@@ -257,6 +257,7 @@ struct TranscriptAnalysisSnapshot: Codable, Hashable, Sendable {
     let terms: [TranscriptTermStats]
     let sessionAnalyses: [TranscriptSessionAnalysis]
     let engine: TranscriptAnalysisEngineInfo
+    let dictionarySignature: String
     let runSummary: TranscriptAnalysisRunSummary
 
     func sessionAnalysis(for sessionID: String) -> TranscriptSessionAnalysis? {

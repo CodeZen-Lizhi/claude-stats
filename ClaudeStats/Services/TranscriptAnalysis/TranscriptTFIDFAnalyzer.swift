@@ -6,6 +6,7 @@ struct TranscriptTFIDFAnalyzer: Sendable {
         sessions: [Session],
         sessionAnalyses: [TranscriptSessionAnalysis],
         engine: TranscriptAnalysisEngineInfo,
+        dictionarySignature: String = TechnicalTermDictionarySnapshot.fallback.digest,
         runSummary: TranscriptAnalysisRunSummary = .empty,
         now: Date = .now
     ) -> TranscriptAnalysisSnapshot {
@@ -75,6 +76,7 @@ struct TranscriptTFIDFAnalyzer: Sendable {
             terms: terms,
             sessionAnalyses: sessionAnalyses,
             engine: engine,
+            dictionarySignature: dictionarySignature,
             runSummary: runSummary
         )
     }

@@ -9,6 +9,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
     case notchIsland
     case platforms
     case tracking
+    case dictionary
     case leaderboards
     case github
     case linuxDo
@@ -26,6 +27,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
         case .notchIsland: L10n.string("settings.section.notch_island", defaultValue: "Notch Island")
         case .platforms: L10n.string("settings.section.platforms", defaultValue: "Platforms")
         case .tracking:  L10n.string("settings.section.tracking", defaultValue: "Tracking")
+        case .dictionary: "Dictionary"
         case .leaderboards: L10n.string("settings.section.leaderboards", defaultValue: "Leaderboards")
         case .github:    "GitHub"
         case .linuxDo:   "LinuxDo"
@@ -43,6 +45,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
         case .notchIsland: "capsule.portrait.tophalf.filled"
         case .platforms: "square.stack.3d.up"
         case .tracking:  "waveform.path.ecg"
+        case .dictionary: "text.book.closed"
         case .leaderboards: "trophy"
         case .github:    "chevron.left.forwardslash.chevron.right"
         case .linuxDo:   "globe.asia.australia"

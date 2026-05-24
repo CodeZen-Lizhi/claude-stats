@@ -1,24 +1,29 @@
+import CryptoKit
 import Foundation
 
 typealias TranscriptMessageLoader = @Sendable (Session) async -> [SessionTranscriptMessage]
 typealias TranscriptAnalysisProgressHandler = @Sendable (TranscriptAnalysisProgress) async -> Void
+typealias TranscriptDictionaryResolver = @Sendable (Session) async -> TechnicalTermDictionarySnapshot
 
 struct TranscriptAnalysisService: Sendable {
-    static let extractorVersion = "transcript-analysis-v2"
+    static let extractorVersion = "transcript-analysis-v3"
 
     private let extractor: TranscriptTermExtractor
     private let tfidf = TranscriptTFIDFAnalyzer()
     private let index: TranscriptAnalysisIndex
     private let maxConcurrentSessions: Int
+    private let dictionaryResolver: TranscriptDictionaryResolver
 
     init(
         extractor: TranscriptTermExtractor = TranscriptTermExtractor(),
         index: TranscriptAnalysisIndex = TranscriptAnalysisIndex(),
-        maxConcurrentSessions: Int = 4
+        maxConcurrentSessions: Int = 4,
+        dictionaryResolver: @escaping TranscriptDictionaryResolver = { _ in TechnicalTermDictionarySnapshot.fallback }
     ) {
         self.extractor = extractor
         self.index = index
         self.maxConcurrentSessions = max(1, maxConcurrentSessions)
+        self.dictionaryResolver = dictionaryResolver
     }
 
     func analyze(
@@ -29,7 +34,15 @@ struct TranscriptAnalysisService: Sendable {
         onProgress: TranscriptAnalysisProgressHandler? = nil
     ) async throws -> TranscriptAnalysisSnapshot {
         let started = Date()
-        let engine = await extractor.engineInfo
+        let dictionarySnapshots = await resolveDictionaries(for: sessions)
+        let dictionaryVersionsBySessionID = Dictionary(
+            uniqueKeysWithValues: dictionarySnapshots.map { ($0.key, $0.value.digest) }
+        )
+        let dictionarySignature = Self.dictionarySignature(
+            for: sessions,
+            snapshotsBySessionID: dictionarySnapshots
+        )
+        let engine = await extractor.engineInfo(dictionaryVersion: dictionarySignature)
 
         await publish(
             TranscriptAnalysisProgress(
@@ -52,6 +65,7 @@ struct TranscriptAnalysisService: Sendable {
             sessions: sessions,
             tokenizerID: engine.tokenizerID,
             dictionaryVersion: engine.dictionaryVersion,
+            dictionaryVersionsBySessionID: dictionaryVersionsBySessionID,
             forceRefresh: forceRefresh
         )
         let lookupDuration = Date().timeIntervalSince(lookupStarted)
@@ -74,9 +88,19 @@ struct TranscriptAnalysisService: Sendable {
             case .empty:
                 empty += 1
             case .missNew:
-                jobs.append(AnalysisJob(session: lookup.session, key: lookup.key, mode: .new))
+                jobs.append(AnalysisJob(
+                    session: lookup.session,
+                    key: lookup.key,
+                    mode: .new,
+                    dictionary: dictionarySnapshots[lookup.session.id] ?? .fallback
+                ))
             case .missChanged:
-                jobs.append(AnalysisJob(session: lookup.session, key: lookup.key, mode: .changed))
+                jobs.append(AnalysisJob(
+                    session: lookup.session,
+                    key: lookup.key,
+                    mode: .changed,
+                    dictionary: dictionarySnapshots[lookup.session.id] ?? .fallback
+                ))
             }
         }
 
@@ -124,7 +148,11 @@ struct TranscriptAnalysisService: Sendable {
                         }
 
                         let extractStarted = Date()
-                        let analysis = await extractor.extract(session: job.session, messages: messages)
+                        let analysis = await extractor.extract(
+                            session: job.session,
+                            messages: messages,
+                            dictionary: job.dictionary.dictionary
+                        )
                         return .analyzed(
                             job: job,
                             analysis: analysis,
@@ -211,6 +239,7 @@ struct TranscriptAnalysisService: Sendable {
             sessions: sessions,
             sessionAnalyses: analyses,
             engine: engine,
+            dictionarySignature: dictionarySignature,
             runSummary: summary
         )
         let tfidfDuration = Date().timeIntervalSince(tfidfStarted)
@@ -243,6 +272,28 @@ struct TranscriptAnalysisService: Sendable {
             .joined(separator: "|")
     }
 
+    private func resolveDictionaries(for sessions: [Session]) async -> [String: TechnicalTermDictionarySnapshot] {
+        var snapshots: [String: TechnicalTermDictionarySnapshot] = [:]
+        snapshots.reserveCapacity(sessions.count)
+        for session in sessions {
+            snapshots[session.id] = await dictionaryResolver(session)
+        }
+        return snapshots
+    }
+
+    private static func dictionarySignature(
+        for sessions: [Session],
+        snapshotsBySessionID: [String: TechnicalTermDictionarySnapshot]
+    ) -> String {
+        let rows = sessions
+            .map { session in
+                "\(session.id):\(snapshotsBySessionID[session.id]?.digest ?? TechnicalTermDictionarySnapshot.fallback.digest)"
+            }
+            .sorted()
+            .joined(separator: "|")
+        return "dictionary-corpus-\(sha256(rows))"
+    }
+
     private func publish(
         _ progress: TranscriptAnalysisProgress,
         to handler: TranscriptAnalysisProgressHandler?
@@ -253,6 +304,11 @@ struct TranscriptAnalysisService: Sendable {
 
     private static func lastModifiedNanoseconds(for session: Session) -> Int64 {
         Int64((session.lastModified.timeIntervalSince1970 * 1_000_000_000).rounded())
+    }
+
+    private static func sha256(_ value: String) -> String {
+        let digest = SHA256.hash(data: Data(value.utf8))
+        return digest.map { String(format: "%02x", $0) }.joined()
     }
 }
 
@@ -265,6 +321,7 @@ private struct AnalysisJob: Sendable, Hashable {
     let session: Session
     let key: TranscriptAnalysisKey
     let mode: Mode
+    let dictionary: TechnicalTermDictionarySnapshot
 }
 
 private enum AnalysisJobResult: Sendable {

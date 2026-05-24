@@ -32,6 +32,170 @@ struct TechnicalTermDictionaryTests {
         #expect(dictionary.isStopword("the"))
         #expect(dictionary.matches(in: "Use Natural Language with SwiftUI").map(\.canonical).contains("NaturalLanguage"))
     }
+
+    @Test("Normalizer handles UI vocabulary aliases and one-character typo phrases")
+    func normalizerHandlesTechnicalVocabulary() {
+        let dictionary = TechnicalTermDictionary()
+
+        #expect(TermNormalizer.normalizedKey("MenuBarExtra") == TermNormalizer.normalizedKey("menu bar extra"))
+        #expect(dictionary.canonicalize("mainWindow")?.canonical == "main window")
+        #expect(dictionary.canonicalize("main windows")?.canonical == "main window")
+        #expect(dictionary.canonicalize("mian windows")?.canonical == "main window")
+        #expect(dictionary.canonicalize("主窗口")?.canonical == "main window")
+        #expect(dictionary.canonicalize("zIndex")?.canonical == "z-index")
+        #expect(dictionary.canonicalize("z_index")?.canonical == "z-index")
+        #expect(dictionary.canonicalize("层级")?.canonical == "z-index")
+    }
+
+    @Test("Dictionary matching counts occurrences without overmatching generic words")
+    func dictionaryMatchingCountsOccurrences() {
+        let dictionary = TechnicalTermDictionary()
+        let matches = dictionary.matches(in: "MenuBarExtra and menu bar extra changed zIndex, z-index, and plain menu text.")
+        let menuCount = matches.filter { $0.canonical == "MenuBarExtra" }.count
+        let zIndexCount = matches.filter { $0.canonical == "z-index" }.count
+
+        #expect(menuCount == 2)
+        #expect(zIndexCount == 2)
+        #expect(dictionary.canonicalize("main menu") == nil)
+    }
+
+    @Test("Repository merges built-in global and project dictionaries with digest invalidation")
+    func repositoryMergePrecedenceAndDigest() async throws {
+        let temp = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let homeRoot = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".claude-stats-tests", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: homeRoot) }
+
+        let builtInURL = temp.appendingPathComponent("technical_terms.json")
+        let globalURL = temp.appendingPathComponent("user_terms.json")
+        let projectRoot = homeRoot.appendingPathComponent("parent", isDirectory: true)
+        let childRoot = projectRoot.appendingPathComponent("child", isDirectory: true)
+        let parentTerms = projectRoot.appendingPathComponent(".claude-stats/terms.json")
+        let childTerms = childRoot.appendingPathComponent(".claude-stats/terms.json")
+
+        try Self.writeDocument(
+            TechnicalTermDocument(
+                terms: [
+                    TechnicalTermEntry(canonical: "MenuBarExtra", kind: .api, aliases: ["menu bar extra"], weight: 1.0),
+                    TechnicalTermEntry(canonical: "OverrideMe", kind: .api, aliases: ["built"], weight: 1.0, tags: ["built"]),
+                ],
+                stopwords: ["noise"]
+            ),
+            to: builtInURL
+        )
+        try Self.writeDocument(
+            TechnicalTermDocument(terms: [
+                TechnicalTermEntry(canonical: "MenuBarExtra", kind: .api, enabled: false),
+                TechnicalTermEntry(canonical: "OverrideMe", kind: .framework, aliases: ["global"], weight: 2.0, tags: ["global"]),
+            ]),
+            to: globalURL
+        )
+        try Self.writeDocument(
+            TechnicalTermDocument(terms: [
+                TechnicalTermEntry(canonical: "ParentTerm", kind: .general, aliases: ["parent term"], weight: 1.4),
+                TechnicalTermEntry(canonical: "OverrideMe", kind: .workflow, aliases: ["parent"], weight: 3.0, tags: ["parent"]),
+            ]),
+            to: parentTerms
+        )
+        try Self.writeDocument(
+            TechnicalTermDocument(terms: [
+                TechnicalTermEntry(canonical: "OverrideMe", kind: .typeName, aliases: ["child"], weight: 4.0, tags: ["child"]),
+            ]),
+            to: childTerms
+        )
+
+        let repository = TechnicalTermDictionaryRepository(builtInURL: builtInURL, globalURL: globalURL)
+        let session = Self.session(id: "codex::dictionary", cwd: childRoot.path)
+        let snapshot = await repository.snapshot(for: session)
+        let dictionary = snapshot.dictionary
+
+        #expect(dictionary.canonicalize("MenuBarExtra") == nil)
+        #expect(dictionary.canonicalize("parent term")?.canonical == "ParentTerm")
+        let override = try #require(dictionary.canonicalize("built"))
+        #expect(override.kind == TranscriptTermKind.typeName)
+        #expect(override.weight == 4.0)
+        #expect(Set(override.aliases).isSuperset(of: ["built", "global", "parent", "child"]))
+        #expect(Set(override.tags).isSuperset(of: ["built", "global", "parent", "child"]))
+
+        let oldDigest = snapshot.digest
+        try await repository.saveEntry(
+            TechnicalTermEntry(canonical: "NewProjectTerm", kind: .api),
+            originalCanonical: nil,
+            scope: .project,
+            projectPath: childRoot.path
+        )
+        let changed = await repository.snapshot(for: session)
+        #expect(changed.digest != oldDigest)
+        #expect(changed.dictionary.canonicalize("NewProjectTerm")?.canonical == "NewProjectTerm")
+    }
+
+    @Test("Import accepts CSV and TXT rows and export round-trips JSON")
+    func importAndExportDictionaries() async throws {
+        let temp = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let repository = TechnicalTermDictionaryRepository(
+            builtInURL: temp.appendingPathComponent("missing.json"),
+            globalURL: temp.appendingPathComponent("user_terms.json")
+        )
+        let csv = temp.appendingPathComponent("terms.csv")
+        let txt = temp.appendingPathComponent("terms.txt")
+        let export = temp.appendingPathComponent("export.json")
+        try TempDir.write(
+            """
+            canonical,kind,aliases,weight,enabled,tags
+            Custom API,api,custom api|自定义 API,2.1,true,ui|api
+            ,api,missing,1.0,true,bad
+            Custom API,framework,custom framework,2.5,true,merged
+            """,
+            to: csv
+        )
+        try TempDir.write(
+            """
+            # comments are skipped
+            Text Term
+            z-order
+            """,
+            to: txt
+        )
+
+        let csvReport = try await repository.importTerms(from: csv, scope: .global, projectPath: nil)
+        let txtReport = try await repository.importTerms(from: txt, scope: .global, projectPath: nil)
+        try await repository.exportTerms(to: export, scope: .global, projectPath: nil)
+        let exported = try JSONDecoder().decode(TechnicalTermDocument.self, from: Data(contentsOf: export))
+        let custom = try #require(exported.terms.first { $0.canonical == "Custom API" })
+
+        #expect(csvReport.imported == 2)
+        #expect(csvReport.skipped == 1)
+        #expect(txtReport.imported == 2)
+        #expect(custom.kind == .framework)
+        #expect(custom.weight == 2.5)
+        #expect(Set(custom.aliases).isSuperset(of: ["custom api", "自定义 API", "custom framework"]))
+        #expect(exported.terms.contains { $0.canonical == "Text Term" })
+    }
+
+    private static func session(id: String, cwd: String) -> Session {
+        Session(
+            id: id,
+            externalID: id,
+            provider: .codex,
+            projectDirectoryName: "project",
+            filePath: "/tmp/\(id).jsonl",
+            cwd: cwd,
+            lastModified: Date(timeIntervalSince1970: 1_000),
+            fileSize: 128,
+            stats: nil
+        )
+    }
+
+    private static func writeDocument(_ document: TechnicalTermDocument, to url: URL) throws {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(document).write(to: url)
+    }
 }
 
 @Suite("Transcript term extractor")
@@ -365,6 +529,47 @@ struct TranscriptAnalysisServiceTests {
         #expect(await loader.callCount(for: second.id) == 1)
     }
 
+    @Test("Dictionary digest changes invalidate cached session analyses")
+    func dictionaryDigestInvalidatesCache() async throws {
+        let root = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let resolver = DictionarySnapshotSpy(snapshot: .make(
+            entries: [TechnicalTermEntry(canonical: "AlphaTerm", kind: .api, aliases: ["alpha term"], weight: 2.0)],
+            stopwords: []
+        ))
+        let index = TranscriptAnalysisIndex(url: root.appendingPathComponent("index.sqlite3"))
+        let service = TranscriptAnalysisService(
+            index: index,
+            maxConcurrentSessions: 1,
+            dictionaryResolver: resolver.resolver()
+        )
+        let session = Self.session(id: "codex::dict-cache", provider: .codex, fileSize: 512)
+        let loader = MessageLoaderSpy(messages: [
+            session.id: [
+                Self.message(role: .user, text: "AlphaTerm and BetaTerm were changed in the session."),
+            ],
+        ])
+
+        let first = try await service.analyze(provider: .codex, sessions: [session], messageLoader: loader.loader())
+        let warm = try await service.analyze(provider: .codex, sessions: [session], messageLoader: loader.loader())
+        #expect(first.runSummary.newCount == 1)
+        #expect(warm.runSummary.reused == 1)
+        #expect(await loader.callCount(for: session.id) == 1)
+
+        await resolver.set(.make(
+            entries: [
+                TechnicalTermEntry(canonical: "AlphaTerm", kind: .api, aliases: ["alpha term"], weight: 2.0),
+                TechnicalTermEntry(canonical: "BetaTerm", kind: .api, aliases: ["beta term"], weight: 2.0),
+            ],
+            stopwords: []
+        ))
+        let changed = try await service.analyze(provider: .codex, sessions: [session], messageLoader: loader.loader())
+        #expect(changed.runSummary.changed == 1)
+        #expect(changed.terms.contains { $0.canonical == "BetaTerm" })
+        #expect(await loader.callCount(for: session.id) == 2)
+    }
+
     static func session(id: String, provider: ProviderKind, fileSize: Int64) -> Session {
         Session(
             id: id,
@@ -394,6 +599,28 @@ struct TranscriptAnalysisServiceTests {
             timestamp: Date(timeIntervalSince1970: 1_000),
             model: nil
         )
+    }
+}
+
+private actor DictionarySnapshotSpy {
+    private var snapshot: TechnicalTermDictionarySnapshot
+
+    init(snapshot: TechnicalTermDictionarySnapshot) {
+        self.snapshot = snapshot
+    }
+
+    nonisolated func resolver() -> TranscriptDictionaryResolver {
+        { _ in
+            await self.current()
+        }
+    }
+
+    func set(_ snapshot: TechnicalTermDictionarySnapshot) {
+        self.snapshot = snapshot
+    }
+
+    private func current() -> TechnicalTermDictionarySnapshot {
+        snapshot
     }
 }
 

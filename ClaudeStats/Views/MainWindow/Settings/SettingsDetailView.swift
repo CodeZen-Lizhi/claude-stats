@@ -65,6 +65,7 @@ struct SettingsDetailView: View {
         case .notchIsland: EmptyView()
         case .platforms: PlatformsSettingsView()
         case .tracking: TrackingSettingsView(onSelectSection: onSelectSection)
+        case .dictionary: DictionarySettingsView()
         case .leaderboards: LeaderboardsSettingsView(onSelectSection: onSelectSection)
         case .github: GitHubSettingsView(onSelectSection: onSelectSection)
         case .linuxDo: LinuxDoSettingsView(store: env.linuxDo)

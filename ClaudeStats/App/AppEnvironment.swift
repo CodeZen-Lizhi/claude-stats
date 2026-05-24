@@ -13,6 +13,7 @@ final class AppEnvironment {
     let preferences: Preferences
     let providerRegistry: ProviderRegistry
     let store: SessionStore
+    let technicalTerms: TechnicalTermDictionaryStore
     let transcriptAnalysis: TranscriptAnalysisStore
     let updater = UpdaterController()
     let floatingStatsPanel = FloatingStatsPanelController()
@@ -55,7 +56,15 @@ final class AppEnvironment {
         self.preferences = preferences
         self.providerRegistry = providerRegistry
         self.store = store
-        self.transcriptAnalysis = TranscriptAnalysisStore()
+        let technicalTermRepository = TechnicalTermDictionaryRepository()
+        self.technicalTerms = TechnicalTermDictionaryStore(repository: technicalTermRepository)
+        self.transcriptAnalysis = TranscriptAnalysisStore(
+            service: TranscriptAnalysisService(
+                dictionaryResolver: { session in
+                    await technicalTermRepository.snapshot(for: session)
+                }
+            )
+        )
         self.terminalStore = terminalStore
         self.cliEnvironment = cliEnvironment
         self.systemMonitor = systemMonitor
