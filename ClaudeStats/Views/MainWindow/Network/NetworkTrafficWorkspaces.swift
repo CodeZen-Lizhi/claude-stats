@@ -149,13 +149,15 @@ struct NetworkWebSocketWorkspace: View {
             HStack(spacing: 8) {
                 workspaceHeader("Messages", symbol: "text.bubble")
                     .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-                Picker("", selection: $store.webSocketFilter.opcode) {
-                    ForEach(NetworkWebSocketOpcodeFilter.allCases) { filter in
-                        Text(filter.title).tag(filter)
-                    }
-                }
-                .labelsHidden()
-                .frame(width: 110)
+                AppSelect(
+                    .localized("Opcode"),
+                    selection: $store.webSocketFilter.opcode,
+                    options: NetworkWebSocketOpcodeFilter.allCases.map { filter in
+                        AppSelectOption(value: filter, title: .localized(filter.title))
+                    },
+                    width: 110,
+                    size: .small
+                )
             }
             .padding(.trailing, 10)
 
@@ -290,13 +292,17 @@ struct NetworkWebSocketWorkspace: View {
                     .font(.sora(10, weight: .semibold))
                     .foregroundStyle(Color.stxMuted)
                 Spacer()
-                Picker("", selection: $store.webSocketSendDraft.opcode) {
-                    Text("Text").tag("text")
-                    Text("JSON").tag("json")
-                    Text("Binary").tag("binary")
-                }
-                .labelsHidden()
-                .frame(width: 100)
+                AppSelect(
+                    .localized("Opcode"),
+                    selection: $store.webSocketSendDraft.opcode,
+                    options: [
+                        AppSelectOption(value: "text", title: .localized("Text")),
+                        AppSelectOption(value: "json", title: .localized("JSON")),
+                        AppSelectOption(value: "binary", title: .localized("Binary")),
+                    ],
+                    width: 100,
+                    size: .small
+                )
                 Button {
                     store.sendWebSocketMessage()
                 } label: {
@@ -434,12 +440,15 @@ struct NetworkReplayWorkspace: View {
             Text("IMPORT")
                 .font(.sora(10, weight: .semibold))
                 .foregroundStyle(Color.stxMuted)
-            Picker("", selection: $store.importRequestFormat) {
-                ForEach(NetworkRequestImportFormat.allCases) { format in
-                    Text(format.title).tag(format)
-                }
-            }
-            .labelsHidden()
+            AppSelect(
+                .localized("Format"),
+                selection: $store.importRequestFormat,
+                options: NetworkRequestImportFormat.allCases.map { format in
+                    AppSelectOption(value: format, title: .localized(format.title))
+                },
+                width: 160,
+                size: .small
+            )
             TextEditor(text: $store.importRequestText)
                 .font(.system(size: 10, design: .monospaced))
                 .scrollContentBackground(.hidden)

@@ -177,10 +177,15 @@ struct ShareExportView: View {
             } else {
                 optionGroup("Time range") {
                     VStack(alignment: .leading, spacing: 8) {
-                        Picker("Time range", selection: $preset) {
-                            ForEach(StatsPeriod.allCases) { Text($0.displayName).tag($0) }
-                        }
-                        .labelsHidden()
+                        AppSelect(
+                            .localized("Time range"),
+                            selection: $preset,
+                            options: StatsPeriod.allCases.map {
+                                AppSelectOption(value: $0, title: .localized($0.displayName))
+                            },
+                            width: 170,
+                            size: .small
+                        )
                         .disabled(useCustomRange)
 
                         DisclosureGroup(isExpanded: $useCustomRange) {

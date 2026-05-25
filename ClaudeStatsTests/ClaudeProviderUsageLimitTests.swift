@@ -63,8 +63,8 @@ struct ClaudeProviderUsageLimitTests {
         #expect(report.message?.contains("Install Claude Code") == true)
     }
 
-    @Test("Stale cache asks to install Claude CLI when CLI is missing")
-    func staleCacheAsksToInstallCLIWhenMissing() async throws {
+    @Test("Stale cache wins even when Claude CLI is missing")
+    func staleCacheWinsWhenCLIMissing() async throws {
         let root = try TempDir.make()
         defer { try? FileManager.default.removeItem(at: root) }
         let cache = root.appendingPathComponent("claude-rate-limits.json")
@@ -80,8 +80,8 @@ struct ClaudeProviderUsageLimitTests {
 
         let report = await provider.usageLimitReport(now: now)
 
-        #expect(report.status == .setupRequired)
-        #expect(report.message?.contains("Install Claude Code") == true)
+        #expect(report.status == .cached)
+        #expect(report.snapshot?.windows.first?.usedPercent == 14)
     }
 
     private func setModified(_ url: URL, _ date: Date) throws {

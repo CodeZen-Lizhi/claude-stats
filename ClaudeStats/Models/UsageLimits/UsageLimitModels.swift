@@ -2,6 +2,7 @@ import Foundation
 
 enum UsageLimitStatus: String, Codable, Sendable, Hashable {
     case fresh
+    case cached
     case setupRequired
     case waitingForNextResponse
     case unavailable
@@ -18,6 +19,10 @@ struct UsageLimitReport: Codable, Sendable, Hashable {
 
     static func fresh(provider: ProviderKind, snapshot: UsageLimitSnapshot) -> UsageLimitReport {
         UsageLimitReport(provider: provider, status: .fresh, snapshot: snapshot, message: nil)
+    }
+
+    static func cached(provider: ProviderKind, snapshot: UsageLimitSnapshot) -> UsageLimitReport {
+        UsageLimitReport(provider: provider, status: .cached, snapshot: snapshot, message: nil)
     }
 
     static func setupRequired(provider: ProviderKind, message: String) -> UsageLimitReport {

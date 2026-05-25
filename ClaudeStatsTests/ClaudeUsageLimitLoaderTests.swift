@@ -126,6 +126,24 @@ struct ClaudeUsageLimitLoaderTests {
         #expect(windows.map(\.id) == ["seven_day"])
     }
 
+    @Test("Old cache returns cached usage")
+    func oldCacheReturnsCachedUsage() throws {
+        let root = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cache = root.appendingPathComponent("claude-rate-limits.json")
+        let now = try Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse("2026-01-10T09:05:00.000Z")
+        try TempDir.write(#"{"five_hour":{"used_percentage":14,"resets_at":1768100000}}"#, to: cache)
+        try Self.setModified(cache, now.addingTimeInterval(-ClaudeUsageLimitLoader.snapshotTTL - 60))
+
+        let report = ClaudeUsageLimitLoader(
+            paths: ClaudePaths(configDirectory: root),
+            cacheURLs: [cache]
+        ).report(now: now)
+
+        #expect(report.status == .cached)
+        #expect(report.snapshot?.windows.first?.usedPercent == 14)
+    }
+
     @Test("Missing cache reports setup required")
     func missingCacheRequiresSetup() throws {
         let root = try TempDir.make()

@@ -27,11 +27,7 @@ struct ClaudeUsageLimitLoader: Sendable {
             case .fresh(let snapshot):
                 return .fresh(provider: .claude, snapshot: snapshot)
             case .stale(let snapshot):
-                return .waitingForNextResponse(
-                    provider: .claude,
-                    snapshot: snapshot,
-                    message: "Claude usage limits will refresh after the next Claude Code response."
-                )
+                return .cached(provider: .claude, snapshot: snapshot)
             }
         } catch {
             return .unavailable(provider: .claude, message: "Could not read Claude usage limits: \(error.localizedDescription)")

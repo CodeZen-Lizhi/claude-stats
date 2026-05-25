@@ -216,12 +216,15 @@ struct TrackingSettingsView: View {
 
             VStack(spacing: 0) {
                 SettingRow(title: "Open git view in") {
-                    Picker("", selection: $prefs.gitOpensInWindow) {
-                        Text("Panel tab").tag(false)
-                        Text("Separate window").tag(true)
-                    }
-                    .labelsHidden()
-                    .frame(maxWidth: 180)
+                    AppSelect(
+                        .localized("Open git view in"),
+                        selection: $prefs.gitOpensInWindow,
+                        options: [
+                            AppSelectOption(value: false, title: .localized("Panel tab")),
+                            AppSelectOption(value: true, title: .localized("Separate window")),
+                        ],
+                        width: 180
+                    )
                 }
                 SettingRowDivider()
                 SettingRow(

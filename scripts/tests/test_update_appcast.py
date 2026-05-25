@@ -139,14 +139,20 @@ class UpdateAppcastTests(unittest.TestCase):
                 '<enclosure url="https://example.com/ClaudeStats-1.8.2.zip" sparkle:edSignature="full" length="123" type="application/octet-stream"/>',
                 xml,
             )
-            self.assertIn("下载大小", xml)
-            self.assertIn("增量更新包", xml)
-            self.assertIn("从 1.8.0 (build 78) 更新", xml)
-            self.assertIn("从 build 79 更新", xml)
-            self.assertIn("完整安装包", xml)
-            self.assertIn("较旧版本会自动回退下载", xml)
+            self.assertIn("本次更新", xml)
+            self.assertIn("cs-update-size-pill", xml)
+            self.assertIn('data-sparkle-version="78"', xml)
+            self.assertIn('data-sparkle-version="79"', xml)
+            self.assertIn("456 bytes", xml)
+            self.assertIn("789 bytes", xml)
+            self.assertIn("123 bytes", xml)
+            self.assertIn(".cs-update-size-delta.sparkle-installed-version", xml)
+            self.assertIn(".cs-update-size-delta.sparkle-installed-version ~ .cs-update-size-full", xml)
+            self.assertNotIn("下载大小", xml)
+            self.assertNotIn("增量更新包", xml)
+            self.assertNotIn("完整安装包", xml)
             self.assertIn("更新内容", xml)
-            self.assertLess(xml.index("下载大小"), xml.index("<p>delta release</p>"))
+            self.assertLess(xml.index("本次更新"), xml.index("<p>delta release</p>"))
 
     def test_formats_download_sizes_in_release_notes(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -194,10 +200,10 @@ class UpdateAppcastTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             xml = out.read_text(encoding="utf-8")
-            self.assertIn("从 1.8.4 (build 84) 更新", xml)
+            self.assertIn('data-sparkle-version="84"', xml)
             self.assertIn("2.2 MB", xml)
             self.assertIn("101 MB", xml)
-            self.assertLess(xml.index("下载大小"), xml.index("<p>larger release</p>"))
+            self.assertLess(xml.index("本次更新"), xml.index("<p>larger release</p>"))
 
     def test_omits_delta_container_without_delta_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -228,7 +234,11 @@ class UpdateAppcastTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertNotIn("<sparkle:deltas>", out.read_text(encoding="utf-8"))
+            xml = out.read_text(encoding="utf-8")
+            self.assertNotIn("<sparkle:deltas>", xml)
+            self.assertIn("本次更新", xml)
+            self.assertIn("123 bytes", xml)
+            self.assertNotIn('class="cs-update-size-pill cs-update-size-delta"', xml)
 
     def test_existing_version_is_left_unchanged_even_with_deltas(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

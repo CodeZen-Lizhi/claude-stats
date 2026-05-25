@@ -293,12 +293,14 @@ struct ConfigurationsView: View {
                     .textFieldStyle(.roundedBorder)
             }
             APIProviderFieldRow(title: "Category") {
-                Picker("", selection: $bindableVM.draftCategory) {
-                    ForEach(APIProviderCategory.allCases) { category in
-                        Text(category.displayName).tag(category)
-                    }
-                }
-                .labelsHidden()
+                AppSelect(
+                    .localized("Category"),
+                    selection: $bindableVM.draftCategory,
+                    options: APIProviderCategory.allCases.map { category in
+                        AppSelectOption(value: category, title: .localized(category.displayName))
+                    },
+                    width: 180
+                )
                 .disabled(isUniversal)
             }
             APIProviderFieldRow(title: "Base URL") {

@@ -422,15 +422,16 @@ private struct SkillsProviderPicker: View {
     @Binding var selectedProviderID: String?
 
     var body: some View {
-        Picker("Provider", selection: providerBinding) {
-            Text("All providers").tag("all")
-            ForEach(providers) { provider in
-                Label(provider.displayName, systemImage: provider.symbol).tag(provider.id)
-            }
-        }
-        .labelsHidden()
-        .pickerStyle(.menu)
-        .controlSize(.small)
+        AppSelect(
+            .localized("Provider"),
+            selection: providerBinding,
+            options: [AppSelectOption(value: "all", title: .localized("All providers"), systemImage: "square.grid.2x2")]
+                + providers.map { provider in
+                    AppSelectOption(value: provider.id, title: .verbatim(provider.displayName), systemImage: provider.symbol)
+                },
+            width: 160,
+            size: .small
+        )
     }
 
     private var providerBinding: Binding<String> {
@@ -445,14 +446,15 @@ private struct SkillsScopePicker: View {
     @Binding var scopeFilter: SkillScopeFilter
 
     var body: some View {
-        Picker("Scope", selection: $scopeFilter) {
-            ForEach(SkillScopeFilter.allCases) { scope in
-                Text(scope.title).tag(scope)
-            }
-        }
-        .labelsHidden()
-        .pickerStyle(.menu)
-        .controlSize(.small)
+        AppSelect(
+            .localized("Scope"),
+            selection: $scopeFilter,
+            options: SkillScopeFilter.allCases.map { scope in
+                AppSelectOption(value: scope, title: .localized(scope.title))
+            },
+            width: 126,
+            size: .small
+        )
     }
 }
 

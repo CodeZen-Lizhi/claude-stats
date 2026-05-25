@@ -139,22 +139,15 @@ struct SessionSidebarColumn: View {
                     }
                 }
 
-                Menu {
-                    Picker("Sort by", selection: $vm.sortOrder) {
-                        ForEach(SessionListViewModel.SortOrder.allCases) { order in
-                            Text(order.displayName).tag(order)
-                        }
-                    }
-                } label: {
-                    Image(systemName: "line.3.horizontal.decrease")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Color.stxMuted)
-                        .frame(width: 24, height: 22)
-                        .contentShape(Rectangle())
-                }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
+                AppSelect(
+                    .localized("Sort by"),
+                    selection: $vm.sortOrder,
+                    options: SessionListViewModel.SortOrder.allCases.map { order in
+                        AppSelectOption(value: order, title: .localized(order.displayName), systemImage: "line.3.horizontal.decrease")
+                    },
+                    width: 118,
+                    size: .small
+                )
                 .help("Sort sessions")
             }
         }

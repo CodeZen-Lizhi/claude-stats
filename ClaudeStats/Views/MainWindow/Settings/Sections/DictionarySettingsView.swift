@@ -77,36 +77,31 @@ struct DictionarySettingsView: View {
                 .pickerStyle(.segmented)
                 .frame(width: 190)
 
-                Picker("Category", selection: $selectedCategory) {
-                    Text("All Categories").tag(Optional<TechnicalTermCategory>.none)
-                    ForEach(TechnicalTermCategory.allCases) { category in
-                        Text(category.displayName).tag(Optional(category))
-                    }
-                }
-                .labelsHidden()
-                .frame(width: 180)
+                AppSelect(
+                    .localized("Category"),
+                    selection: $selectedCategory,
+                    options: [AppSelectOption(value: Optional<TechnicalTermCategory>.none, title: .localized("All Categories"))]
+                        + TechnicalTermCategory.allCases.map { category in
+                            AppSelectOption(value: Optional(category), title: .localized(category.displayName))
+                        },
+                    width: 180,
+                    size: .small
+                )
 
                 if scope == .project {
-                    Picker(
-                        "Project",
+                    AppSelect(
+                        .localized("Project"),
                         selection: Binding(
                             get: { store.selectedProjectPath },
                             set: { path in
                                 Task { await store.selectProjectPath(path) }
                             }
-                        )
-                    ) {
-                        if store.availableProjectPaths.isEmpty {
-                            Text("No project sessions").tag(Optional<String>.none)
-                        } else {
-                            ForEach(store.availableProjectPaths, id: \.self) { path in
-                                Text(URL(fileURLWithPath: path).lastPathComponent)
-                                    .tag(Optional(path))
-                            }
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(maxWidth: 240)
+                        ),
+                        options: projectOptions,
+                        width: 240,
+                        size: .small,
+                        emptyTitle: .localized("No project sessions")
+                    )
                 }
 
                 Spacer(minLength: 0)
@@ -152,6 +147,22 @@ struct DictionarySettingsView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
+        }
+    }
+
+    private var projectOptions: [AppSelectOption<String?>] {
+        if store.availableProjectPaths.isEmpty {
+            return [
+                AppSelectOption(
+                    value: Optional<String>.none,
+                    title: .localized("No project sessions"),
+                    isDisabled: true
+                ),
+            ]
+        }
+
+        return store.availableProjectPaths.map { path in
+            AppSelectOption(value: Optional(path), title: .verbatim(URL(fileURLWithPath: path).lastPathComponent))
         }
     }
 
@@ -407,22 +418,24 @@ private struct DictionaryTermEditorSheet: View {
                 TextField("MenuBarExtra", text: $canonical)
 
                 fieldLabel("Category")
-                Picker("", selection: $category) {
-                    ForEach(TechnicalTermCategory.allCases) { category in
-                        Text(category.displayName).tag(category)
-                    }
-                }
-                .labelsHidden()
-                .frame(maxWidth: 220, alignment: .leading)
+                AppSelect(
+                    .localized("Category"),
+                    selection: $category,
+                    options: TechnicalTermCategory.allCases.map { category in
+                        AppSelectOption(value: category, title: .localized(category.displayName))
+                    },
+                    width: 220
+                )
 
                 fieldLabel("Kind")
-                Picker("", selection: $kind) {
-                    ForEach(TranscriptTermKind.allCases) { kind in
-                        Text(kind.displayName).tag(kind)
-                    }
-                }
-                .labelsHidden()
-                .frame(maxWidth: 220, alignment: .leading)
+                AppSelect(
+                    .localized("Kind"),
+                    selection: $kind,
+                    options: TranscriptTermKind.allCases.map { kind in
+                        AppSelectOption(value: kind, title: .localized(kind.displayName))
+                    },
+                    width: 220
+                )
 
                 fieldLabel("Aliases")
                 TextEditor(text: $aliasesText)

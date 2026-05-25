@@ -27,11 +27,14 @@ struct MenuBarSettingsView: View {
                 VStack(spacing: 0) {
                     SettingRow(title: "Time range",
                                description: "How far back to add up the menu-bar metric.") {
-                        Picker("", selection: $prefs.menuBarPeriod) {
-                            ForEach(StatsPeriod.allCases) { Text($0.displayName).tag($0) }
-                        }
-                        .labelsHidden()
-                        .frame(maxWidth: 180)
+                        AppSelect(
+                            .localized("Time range"),
+                            selection: $prefs.menuBarPeriod,
+                            options: StatsPeriod.allCases.map {
+                                AppSelectOption(value: $0, title: .localized($0.displayName))
+                            },
+                            width: 180
+                        )
                     }
 
                     if prefs.menuBarMetric == .tokens {

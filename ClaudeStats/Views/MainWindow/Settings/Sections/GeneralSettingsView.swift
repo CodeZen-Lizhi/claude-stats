@@ -35,13 +35,14 @@ struct GeneralSettingsView: View {
                 VStack(spacing: 0) {
                     SettingRow(title: "App language",
                                description: "Choose the language Claude Stats uses after the next restart.") {
-                        Picker("", selection: $prefs.appLanguagePreference) {
-                            ForEach(AppLanguagePreference.allCases) { language in
-                                Text(language.displayName()).tag(language)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(maxWidth: 170)
+                        AppSelect(
+                            .localized("App language"),
+                            selection: $prefs.appLanguagePreference,
+                            options: AppLanguagePreference.allCases.map { language in
+                                AppSelectOption(value: language, title: .verbatim(language.displayName()))
+                            },
+                            width: 170
+                        )
                     }
                     .onChange(of: prefs.appLanguagePreference) { _, _ in
                         languageRestartNoticeVisible = true
@@ -62,13 +63,14 @@ struct GeneralSettingsView: View {
                 VStack(spacing: 0) {
                     SettingRow(title: "Refresh every",
                                description: "How often Claude Stats re-scans your session logs in the background.") {
-                        Picker("", selection: $prefs.autoRefreshMinutes) {
-                            ForEach(Self.refreshOptions, id: \.self) { minutes in
-                                Text(L10n.refreshInterval(minutes: minutes)).tag(minutes)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(maxWidth: 160)
+                        AppSelect(
+                            .localized("Refresh every"),
+                            selection: $prefs.autoRefreshMinutes,
+                            options: Self.refreshOptions.map { minutes in
+                                AppSelectOption(value: minutes, title: .verbatim(L10n.refreshInterval(minutes: minutes)))
+                            },
+                            width: 160
+                        )
                     }
                     .onChange(of: prefs.autoRefreshMinutes) { _, _ in env.applyAutoRefreshSetting() }
                 }
@@ -100,24 +102,26 @@ struct GeneralSettingsView: View {
                     SettingRowDivider()
                     SettingRow(title: "Cost mode",
                                description: "API estimate uses standard first-party token prices. Detailed billing also applies fast mode and web search charges when Claude logs expose them.") {
-                        Picker("", selection: $prefs.costEstimationMode) {
-                            ForEach(CostEstimationMode.allCases) { mode in
-                                Text(mode.displayName).tag(mode)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(maxWidth: 170)
+                        AppSelect(
+                            .localized("Cost mode"),
+                            selection: $prefs.costEstimationMode,
+                            options: CostEstimationMode.allCases.map { mode in
+                                AppSelectOption(value: mode, title: .localized(mode.displayName))
+                            },
+                            width: 170
+                        )
                     }
                     SettingRowDivider()
                     SettingRow(title: "API key storage",
                                description: "Where API Provider Switcher saves provider keys. JSON keeps them with provider data; Keychain stores references in the library.") {
-                        Picker("", selection: $prefs.apiProviderKeyStorageMode) {
-                            ForEach(APIProviderKeyStorageMode.allCases) { mode in
-                                Text(mode.displayName).tag(mode)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(maxWidth: 150)
+                        AppSelect(
+                            .localized("API key storage"),
+                            selection: $prefs.apiProviderKeyStorageMode,
+                            options: APIProviderKeyStorageMode.allCases.map { mode in
+                                AppSelectOption(value: mode, title: .localized(mode.displayName))
+                            },
+                            width: 150
+                        )
                     }
                 }
                 .settingCard()

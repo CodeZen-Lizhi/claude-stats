@@ -257,30 +257,34 @@ struct NetworkUpstreamView: View {
             HStack(spacing: 10) {
                 Text("Environment")
                     .font(.sora(12, weight: .semibold))
-                Picker("Environment", selection: Binding {
-                    store.selectedUpstreamEnvironmentID
-                } set: { value in
-                    store.selectedUpstreamEnvironmentID = value
-                    store.selectedUpstreamProfileID = store.selectedUpstreamEnvironment.selectedProfileID
-                    store.selectedUpstreamRouteRuleID = store.selectedUpstreamEnvironment.routeRules.first?.id
-                }) {
-                    ForEach(store.upstreamEnvironments) { environment in
-                        Text(environment.name).tag(environment.id)
-                    }
-                }
-                .labelsHidden()
-                .frame(width: 190)
-                Picker("Profile", selection: Binding {
-                    store.selectedUpstreamProfileID ?? store.selectedUpstreamEnvironment.selectedProfileID
-                } set: { value in
-                    store.selectUpstreamProfile(value)
-                }) {
-                    ForEach(store.selectedUpstreamEnvironment.profiles) { profile in
-                        Text(profile.name).tag(Optional(profile.id))
-                    }
-                }
-                .labelsHidden()
-                .frame(width: 210)
+                AppSelect(
+                    .localized("Environment"),
+                    selection: Binding {
+                        store.selectedUpstreamEnvironmentID
+                    } set: { value in
+                        store.selectedUpstreamEnvironmentID = value
+                        store.selectedUpstreamProfileID = store.selectedUpstreamEnvironment.selectedProfileID
+                        store.selectedUpstreamRouteRuleID = store.selectedUpstreamEnvironment.routeRules.first?.id
+                    },
+                    options: store.upstreamEnvironments.map { environment in
+                        AppSelectOption(value: environment.id, title: .verbatim(environment.name))
+                    },
+                    width: 190,
+                    size: .small
+                )
+                AppSelect(
+                    .localized("Profile"),
+                    selection: Binding {
+                        store.selectedUpstreamProfileID ?? store.selectedUpstreamEnvironment.selectedProfileID
+                    } set: { value in
+                        store.selectUpstreamProfile(value)
+                    },
+                    options: store.selectedUpstreamEnvironment.profiles.map { profile in
+                        AppSelectOption(value: Optional(profile.id), title: .verbatim(profile.name))
+                    },
+                    width: 210,
+                    size: .small
+                )
                 Spacer()
                 Button {
                     store.createUpstreamEnvironment()
@@ -465,23 +469,29 @@ struct NetworkUpstreamView: View {
             HStack(spacing: 8) {
                 Toggle("Enabled", isOn: routeRuleBinding(\.isEnabled))
                     .toggleStyle(.checkbox)
-                Picker("Scheme", selection: routeRuleBinding(\.scheme)) {
-                    ForEach(NetworkUpstreamRouteMatchScheme.allCases) { scheme in
-                        Text(scheme.rawValue.uppercased()).tag(scheme)
-                    }
-                }
-                .frame(width: 128)
+                AppSelect(
+                    .localized("Scheme"),
+                    selection: routeRuleBinding(\.scheme),
+                    options: NetworkUpstreamRouteMatchScheme.allCases.map { scheme in
+                        AppSelectOption(value: scheme, title: .verbatim(scheme.rawValue.uppercased()))
+                    },
+                    width: 128,
+                    size: .small
+                )
                 TextField("Host/domain pattern", text: routeRuleBinding(\.hostPattern))
                     .textFieldStyle(.roundedBorder)
             }
             HStack(spacing: 8) {
-                Picker("Profile", selection: routeRuleProfileBinding) {
-                    Text("Selected profile").tag(Optional<UUID>.none)
-                    ForEach(store.selectedUpstreamEnvironment.profiles) { profile in
-                        Text(profile.name).tag(Optional(profile.id))
-                    }
-                }
-                .frame(minWidth: 180)
+                AppSelect(
+                    .localized("Profile"),
+                    selection: routeRuleProfileBinding,
+                    options: [AppSelectOption(value: Optional<UUID>.none, title: .localized("Selected profile"))]
+                        + store.selectedUpstreamEnvironment.profiles.map { profile in
+                            AppSelectOption(value: Optional(profile.id), title: .verbatim(profile.name))
+                        },
+                    width: 180,
+                    size: .small
+                )
                 Toggle("Bypass localhost", isOn: routeRuleBinding(\.bypassLocalhost))
                     .toggleStyle(.checkbox)
                 Spacer()
@@ -541,12 +551,15 @@ struct NetworkUpstreamView: View {
                 .foregroundStyle(.primary)
 
             HStack(spacing: 8) {
-                Picker("Protocol", selection: $store.manualUpstreamProxyProtocol) {
-                    ForEach(NetworkUpstreamProxyProtocol.allCases) { proto in
-                        Text(proto.title).tag(proto)
-                    }
-                }
-                .frame(width: 110)
+                AppSelect(
+                    .localized("Protocol"),
+                    selection: $store.manualUpstreamProxyProtocol,
+                    options: NetworkUpstreamProxyProtocol.allCases.map { proto in
+                        AppSelectOption(value: proto, title: .localized(proto.title))
+                    },
+                    width: 110,
+                    size: .small
+                )
 
                 if store.manualUpstreamProxyProtocol == .pac {
                     TextField("PAC URL", text: $store.manualUpstreamProxyPACURL)
@@ -1142,12 +1155,15 @@ struct NetworkRulesView: View {
                 .tracking(0.8)
                 .foregroundStyle(Color.stxMuted)
             HStack(spacing: 8) {
-                Picker("Method", selection: binding(\.method)) {
-                    ForEach(NetworkRuleMatchMethod.allCases) { method in
-                        Text(method.rawValue).tag(method)
-                    }
-                }
-                .frame(width: 130)
+                AppSelect(
+                    .localized("Method"),
+                    selection: binding(\.method),
+                    options: NetworkRuleMatchMethod.allCases.map { method in
+                        AppSelectOption(value: method, title: .verbatim(method.rawValue))
+                    },
+                    width: 130,
+                    size: .small
+                )
                 TextField("URL regex", text: binding(\.urlPattern))
                     .textFieldStyle(.roundedBorder)
             }
@@ -1166,12 +1182,15 @@ struct NetworkRulesView: View {
                 .font(.sora(10, weight: .semibold))
                 .tracking(0.8)
                 .foregroundStyle(Color.stxMuted)
-            Picker("Action", selection: actionBinding(\.kind)) {
-                ForEach(NetworkRuleActionKind.allCases) { kind in
-                    Text(kind.title).tag(kind)
-                }
-            }
-            .frame(width: 220)
+            AppSelect(
+                .localized("Action"),
+                selection: actionBinding(\.kind),
+                options: NetworkRuleActionKind.allCases.map { kind in
+                    AppSelectOption(value: kind, title: .localized(kind.title))
+                },
+                width: 220,
+                size: .small
+            )
 
             switch store.selectedRule?.action.kind ?? .block {
             case .block:
@@ -1191,12 +1210,15 @@ struct NetworkRulesView: View {
                     Stepper("Delay \(store.selectedRule?.action.networkConditionDelayMs ?? 1_000) ms", value: actionBinding(\.networkConditionDelayMs), in: 0...120_000, step: 100)
                 }
             case .breakpoint:
-                Picker("Phase", selection: actionBinding(\.breakpointPhase)) {
-                    ForEach(NetworkBreakpointPhase.allCases) { phase in
-                        Text(phase.rawValue.capitalized).tag(phase)
-                    }
-                }
-                .frame(width: 180)
+                AppSelect(
+                    .localized("Phase"),
+                    selection: actionBinding(\.breakpointPhase),
+                    options: NetworkBreakpointPhase.allCases.map { phase in
+                        AppSelectOption(value: phase, title: .verbatim(phase.rawValue.capitalized))
+                    },
+                    width: 180,
+                    size: .small
+                )
             case .script:
                 scriptEditor
             }
@@ -1249,18 +1271,24 @@ struct NetworkRulesView: View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(store.selectedRule?.action.headerOperations ?? []) { operation in
                 HStack(spacing: 8) {
-                    Picker("", selection: headerOperationBinding(operation.id, \.kind)) {
-                        ForEach(NetworkHeaderOperationKind.allCases) { kind in
-                            Text(kind.rawValue.capitalized).tag(kind)
-                        }
-                    }
-                    .frame(width: 105)
-                    Picker("", selection: headerOperationBinding(operation.id, \.phase)) {
-                        ForEach(NetworkHeaderOperationPhase.allCases) { phase in
-                            Text(phase.rawValue.capitalized).tag(phase)
-                        }
-                    }
-                    .frame(width: 110)
+                    AppSelect(
+                        .localized("Operation"),
+                        selection: headerOperationBinding(operation.id, \.kind),
+                        options: NetworkHeaderOperationKind.allCases.map { kind in
+                            AppSelectOption(value: kind, title: .verbatim(kind.rawValue.capitalized))
+                        },
+                        width: 105,
+                        size: .small
+                    )
+                    AppSelect(
+                        .localized("Phase"),
+                        selection: headerOperationBinding(operation.id, \.phase),
+                        options: NetworkHeaderOperationPhase.allCases.map { phase in
+                            AppSelectOption(value: phase, title: .verbatim(phase.rawValue.capitalized))
+                        },
+                        width: 110,
+                        size: .small
+                    )
                     TextField("Header", text: headerOperationBinding(operation.id, \.name))
                         .textFieldStyle(.roundedBorder)
                     TextField("Value", text: headerOperationBinding(operation.id, \.value))
@@ -1285,11 +1313,15 @@ struct NetworkRulesView: View {
     private var scriptEditor: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Picker("Mode", selection: actionBinding(\.scriptMode)) {
-                    ForEach(NetworkScriptRuleMode.allCases) { mode in
-                        Text(mode.title).tag(mode)
-                    }
-                }
+                AppSelect(
+                    .localized("Mode"),
+                    selection: actionBinding(\.scriptMode),
+                    options: NetworkScriptRuleMode.allCases.map { mode in
+                        AppSelectOption(value: mode, title: .localized(mode.title))
+                    },
+                    width: 128,
+                    size: .small
+                )
                 Toggle("Request", isOn: actionBinding(\.scriptRunOnRequest))
                     .toggleStyle(.checkbox)
                 Toggle("Response", isOn: actionBinding(\.scriptRunOnResponse))

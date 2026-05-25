@@ -24,11 +24,15 @@ struct SessionListView: View {
                               text: $vm.searchText)
                         .textFieldStyle(.plain)
                         .font(.sora(12))
-                    Picker("Sort", selection: $vm.sortOrder) {
-                        ForEach(SessionListViewModel.SortOrder.allCases) { Text($0.displayName).tag($0) }
-                    }
-                    .labelsHidden()
-                    .fixedSize()
+                    AppSelect(
+                        .localized("Sort"),
+                        selection: $vm.sortOrder,
+                        options: SessionListViewModel.SortOrder.allCases.map {
+                            AppSelectOption(value: $0, title: .localized($0.displayName))
+                        },
+                        width: 126,
+                        size: .small
+                    )
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
