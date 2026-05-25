@@ -209,7 +209,6 @@ enum NotchIslandModule: String, CaseIterable, Sendable, Identifiable {
     case lockScreenWidgets
     case extensionBridge
     case screenAssistant
-    case terminal
 
     static let defaultEnabled: Set<NotchIslandModule> = [
         .media,
@@ -247,7 +246,6 @@ enum NotchIslandModule: String, CaseIterable, Sendable, Identifiable {
         case .lockScreenWidgets: "Lock Widgets"
         case .extensionBridge: "Extensions"
         case .screenAssistant: "Screen Assistant"
-        case .terminal: "Terminal"
         }
     }
 
@@ -270,7 +268,6 @@ enum NotchIslandModule: String, CaseIterable, Sendable, Identifiable {
         case .lockScreenWidgets: "lock.display"
         case .extensionBridge: "puzzlepiece.extension"
         case .screenAssistant: "sparkles"
-        case .terminal: "terminal"
         }
     }
 
@@ -293,7 +290,6 @@ enum NotchIslandModule: String, CaseIterable, Sendable, Identifiable {
         case .lockScreenWidgets: "Atoll-style lock-screen panels and widgets."
         case .extensionBridge: "Atoll extension RPC/XPC event bridge."
         case .screenAssistant: "Screen assistant panels, screenshot snipping, and model chooser."
-        case .terminal: "Terminal tab surface backed by the existing embedded terminal stack."
         }
     }
 
@@ -301,7 +297,7 @@ enum NotchIslandModule: String, CaseIterable, Sendable, Identifiable {
         switch self {
         case .media, .stats, .timer, .clipboard, .colorPicker, .calendar, .privacy, .battery:
             false
-        case .shelf, .recording, .focus, .bluetooth, .downloads, .osd, .lockScreenWidgets, .extensionBridge, .screenAssistant, .terminal:
+        case .shelf, .recording, .focus, .bluetooth, .downloads, .osd, .lockScreenWidgets, .extensionBridge, .screenAssistant:
             true
         }
     }
@@ -325,7 +321,6 @@ enum NotchIslandModule: String, CaseIterable, Sendable, Identifiable {
         case .lockScreenWidgets: "ThirdParty/Atoll/DynamicIsland/components/LockScreen"
         case .extensionBridge: "ThirdParty/Atoll/DynamicIsland/services/Extensions"
         case .screenAssistant: "ThirdParty/Atoll/DynamicIsland/components/ScreenAssistant"
-        case .terminal: "ThirdParty/Atoll/DynamicIsland/managers/TerminalManager.swift"
         }
     }
 }

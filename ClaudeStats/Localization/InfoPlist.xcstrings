@@ -19,13 +19,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A program running in the embedded terminal may request AppleScript access. Notch Island media controls may also use Apple Events for local music apps."
+            "value" : "Notch Island media controls may use Apple Events for local music apps."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "嵌入式终端中运行的程序可能会请求 AppleScript 访问权限。Notch Island 媒体控制也可能使用 Apple Events 控制本机音乐应用。"
+            "value" : "Notch Island 媒体控制可能使用 Apple Events 控制本机音乐应用。"
           }
         }
       }
@@ -70,13 +70,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A program running in the embedded terminal may request Bluetooth access. Notch Island can show Bluetooth audio device status when enabled."
+            "value" : "Notch Island can show Bluetooth audio device status when enabled."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "嵌入式终端中运行的程序可能会请求蓝牙访问权限。启用后，Notch Island 可以显示蓝牙音频设备状态。"
+            "value" : "启用后，Notch Island 可以显示蓝牙音频设备状态。"
           }
         }
       }
@@ -87,13 +87,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A program running in the embedded terminal may request calendar access."
+            "value" : "Notch Island can show calendar and reminder previews when enabled."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "嵌入式终端中运行的程序可能会请求日历访问权限。"
+            "value" : "启用后，Notch Island 可以显示日历和提醒事项预览。"
           }
         }
       }
@@ -104,13 +104,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A program running in the embedded terminal may request camera access."
+            "value" : "Notch Island can show camera privacy indicators when enabled."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "嵌入式终端中运行的程序可能会请求相机访问权限。"
+            "value" : "启用后，Notch Island 可以显示相机隐私指示器。"
           }
         }
       }
@@ -121,13 +121,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A program running in the embedded terminal may request contacts access."
+            "value" : "Claude Stats may request contacts access for enabled Notch Island modules."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "嵌入式终端中运行的程序可能会请求通讯录访问权限。"
+            "value" : "Claude Stats 可能会为已启用的 Notch Island 模块请求通讯录访问权限。"
           }
         }
       }
@@ -150,13 +150,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A program running in the embedded terminal may request local network access."
+            "value" : "Claude Stats can inspect local network traffic when the network debugger is enabled."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "嵌入式终端中运行的程序可能会请求本地网络访问权限。"
+            "value" : "启用网络调试器后，Claude Stats 可以检查本地网络流量。"
           }
         }
       }
@@ -167,13 +167,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A program running in the embedded terminal may request location access."
+            "value" : "Claude Stats may request location access for enabled Notch Island modules."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "嵌入式终端中运行的程序可能会请求位置访问权限。"
+            "value" : "Claude Stats 可能会为已启用的 Notch Island 模块请求位置访问权限。"
           }
         }
       }
@@ -184,13 +184,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A program running in the embedded terminal may request microphone access. Notch Island can show microphone privacy indicators when enabled."
+            "value" : "Notch Island can show microphone privacy indicators when enabled."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "嵌入式终端中运行的程序可能会请求麦克风访问权限。启用后，Notch Island 可以显示麦克风隐私指示器。"
+            "value" : "启用后，Notch Island 可以显示麦克风隐私指示器。"
           }
         }
       }
@@ -201,13 +201,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A program running in the embedded terminal may request photo library access."
+            "value" : "Claude Stats may request photo library access for enabled Notch Island modules."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "嵌入式终端中运行的程序可能会请求照片图库访问权限。"
+            "value" : "Claude Stats 可能会为已启用的 Notch Island 模块请求照片图库访问权限。"
           }
         }
       }
@@ -218,13 +218,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A program running in the embedded terminal may request reminders access."
+            "value" : "Notch Island can show reminders alongside calendar previews when enabled."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "嵌入式终端中运行的程序可能会请求提醒事项访问权限。"
+            "value" : "启用后，Notch Island 可以在日历预览旁显示提醒事项。"
           }
         }
       }
@@ -252,13 +252,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A program running in the embedded terminal may request speech recognition access."
+            "value" : "Claude Stats may request speech recognition access for enabled Notch Island modules."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "嵌入式终端中运行的程序可能会请求语音识别访问权限。"
+            "value" : "Claude Stats 可能会为已启用的 Notch Island 模块请求语音识别访问权限。"
           }
         }
       }
@@ -269,13 +269,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A program running in the embedded terminal may request elevated privileges."
+            "value" : "Claude Stats may request elevated privileges for helper tools when explicitly enabled."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "嵌入式终端中运行的程序可能会请求提升权限。"
+            "value" : "明确启用辅助工具时，Claude Stats 可能会请求提升权限。"
           }
         }
       }

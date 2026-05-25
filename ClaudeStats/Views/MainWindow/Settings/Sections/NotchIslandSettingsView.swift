@@ -110,7 +110,6 @@ enum NotchIslandSettingsTab: String, CaseIterable, Identifiable {
     case lockScreenWidgets
     case extensionBridge
     case screenAssistant
-    case terminal
 
     var id: String { rawValue }
 
@@ -135,7 +134,6 @@ enum NotchIslandSettingsTab: String, CaseIterable, Identifiable {
         case .lockScreenWidgets: "Lock Widgets"
         case .extensionBridge: "Extensions"
         case .screenAssistant: "Screen Assistant"
-        case .terminal: "Terminal"
         }
     }
 
@@ -160,7 +158,6 @@ enum NotchIslandSettingsTab: String, CaseIterable, Identifiable {
         case .lockScreenWidgets: "lock.display"
         case .extensionBridge: "puzzlepiece.extension"
         case .screenAssistant: "sparkles"
-        case .terminal: "terminal"
         }
     }
 
@@ -168,7 +165,7 @@ enum NotchIslandSettingsTab: String, CaseIterable, Identifiable {
         switch self {
         case .island, .appearance: .core
         case .media, .stats, .timer, .calendar, .privacy, .recording, .focus, .battery: .live
-        case .clipboard, .colorPicker, .shelf, .downloads, .osd, .terminal: .utilities
+        case .clipboard, .colorPicker, .shelf, .downloads, .osd: .utilities
         case .bluetooth, .lockScreenWidgets: .system
         case .extensionBridge, .screenAssistant: .integrations
         }
@@ -212,8 +209,6 @@ enum NotchIslandSettingsTab: String, CaseIterable, Identifiable {
             .extensionBridge
         case .screenAssistant:
             .screenAssistant
-        case .terminal:
-            .terminal
         }
     }
 

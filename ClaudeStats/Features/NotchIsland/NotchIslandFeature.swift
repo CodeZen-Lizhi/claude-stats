@@ -41,8 +41,7 @@ enum NotchIslandFeatureRegistry {
         .clipboard,
         .colorPicker,
         .battery,
-        .privacy,
-        .terminal
+        .privacy
     ]
 
     private static func permissionState(for module: NotchIslandModule) -> NotchIslandPermissionState {
@@ -51,7 +50,7 @@ enum NotchIslandFeatureRegistry {
             .needsPermission("Music / Apple Events")
         case .calendar:
             .needsPermission("Calendar")
-        case .colorPicker, .clipboard, .stats, .timer, .battery, .terminal:
+        case .colorPicker, .clipboard, .stats, .timer, .battery:
             .available
         case .privacy:
             .needsPermission("Camera / Microphone")

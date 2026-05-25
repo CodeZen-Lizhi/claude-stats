@@ -108,8 +108,6 @@ extension NotchIslandModule {
             return .extensionBridge
         case .screenAssistant:
             return .screenAssistant
-        case .terminal:
-            return .terminal
         }
     }
 }

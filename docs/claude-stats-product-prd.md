@@ -31,7 +31,7 @@ Claude Stats 是一个原生 macOS 菜单栏应用，面向每天长时间使用
 - `Provider` 协议、`ProviderRegistry`、`SessionStore`、`UsageLimitStore` 等共享抽象继续存在。
 - `ProviderRegistry` 只注册 `CodexProvider`。
 - App 内部继续通过 `CodexProvider` 读取 Codex sessions、统计、配置和用量限制，避免把 Codex 文件扫描和解析逻辑散落到 UI。
-- Git、Terminal、Network、LinuxDo、Local AI、Skills、System Monitor、Notch Island、Atoll、Rockxy、Ghostty 等非 AI session provider 功能不属于本次删除范围。
+- Git、Network、Skills、System Monitor、Notch Island、Atoll、Rockxy 等非 AI session provider 功能不属于 Codex-only provider 删除范围。内嵌终端、LinuxDo、Local AI、CloudKit 排行榜和上游 Dictionary / Technical Terms 功能不属于当前产品范围。
 
 以后同步原项目或上游更新时的规则：
 
@@ -146,10 +146,7 @@ Claude Stats 是一个原生 macOS 菜单栏应用，面向每天长时间使用
 当前界面包括：
 
 - Git 和仓库活动
-- 内嵌终端
 - 网络调试
-- LinuxDo 集成
-- 本地 AI 模型管理
 - Skills 库
 - 系统监控
 - 运维工具
@@ -176,12 +173,8 @@ Claude Stats 是一个原生 macOS 菜单栏应用，面向每天长时间使用
 - 菜单栏
 - Notch Island
 - 跟踪
-- 本地 AI
-- 排行榜
 - GitHub
-- LinuxDo
 - 系统监控
-- 终端
 - 关于
 
 ### 12. 更新
@@ -196,7 +189,7 @@ Claude Stats 是一个原生 macOS 菜单栏应用，面向每天长时间使用
 
 ## Fork 专属删减
 
-本 fork 明确不包含上游 Dictionary / Technical Terms 功能。用户自维护 transcript 术语、对应设置页、内置术语资源以及导入导出流程都不属于当前产品范围。以后同步上游时，默认不跟进这类改动；只有本 fork 明确重新需要用户维护术语时再评估。
+本 fork 明确不包含内嵌终端、LinuxDo、Local AI、CloudKit 排行榜，以及上游 Dictionary / Technical Terms 功能。用户自维护 transcript 术语、对应设置页、内置术语资源以及导入导出流程都不属于当前产品范围。以后同步上游时，默认不跟进这类改动；只有本 fork 明确重新需要用户维护术语时再评估。
 
 ## 非功能需求
 

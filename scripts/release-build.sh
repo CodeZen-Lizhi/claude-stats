@@ -19,18 +19,13 @@
 #   SIGN_IDENTITY              codesign identity, e.g. "Developer ID Application: Foo (TEAMID)"
 #   APPLE_TEAM_ID              10-char Apple Developer Team ID
 #   PROVISIONING_PROFILE_SPECIFIER
-#                              Developer ID provisioning profile with the
-#                              iCloud/CloudKit capability enabled
+#                              optional Developer ID provisioning profile
 #   APPLE_ID + APP_PASSWORD    Apple ID + app-specific password for notarytool
 #   NOTARY_KEYCHAIN_PROFILE    (alternative to APPLE_ID/APP_PASSWORD) a stored notarytool profile
 #
 # Environment (all release builds):
 #   LINGUIST_RUNTIME_SOURCE    relocatable GitTools runtime produced by
 #                              scripts/build-gittools-runtime.sh
-#   GHOSTTY_RELEASE_OPTIMIZE   GhosttyKit optimize mode for distributable builds;
-#                              defaults to ReleaseFast. Must be ReleaseFast or
-#                              ReleaseSmall so Ghostty's debug warning is never
-#                              shipped.
 #
 # The finished artifacts are written to ./dist/.
 set -euo pipefail
@@ -38,7 +33,6 @@ cd "$(dirname "$0")/.."
 
 DERIVED=/tmp/claude-stats-release
 DIST="$PWD/dist"
-CLOUDKIT_ENTITLEMENTS="ClaudeStats/App/ClaudeStatsCloudKit.entitlements"
 SIGNED_ENTITLEMENTS="$DIST/signed-entitlements.plist"
 UNSIGNED_ENTITLEMENTS="$DIST/unsigned-entitlements.plist"
 
@@ -49,30 +43,16 @@ ZIP="$DIST/ClaudeStats-$VERSION.zip"
 
 SIGNED=0
 [[ -n "${SIGN_IDENTITY:-}" ]] && SIGNED=1
-GHOSTTY_RELEASE_OPTIMIZE="${GHOSTTY_RELEASE_OPTIMIZE:-ReleaseFast}"
 
 if [[ "$(uname -m)" != "arm64" ]]; then
     echo "error: Claude Stats release builds must run on Apple Silicon." >&2
     exit 1
 fi
 
-case "$GHOSTTY_RELEASE_OPTIMIZE" in
-    ReleaseFast|ReleaseSmall) ;;
-    *)
-        echo "error: release builds require GHOSTTY_RELEASE_OPTIMIZE=ReleaseFast or ReleaseSmall" >&2
-        echo "hint: Ghostty shows a debug performance warning for Debug and ReleaseSafe builds" >&2
-        exit 1
-        ;;
-esac
-
 echo "==> Building Claude Stats $VERSION (Release, $([[ $SIGNED -eq 1 ]] && echo "signed + notarized" || echo "unsigned"))"
-GHOSTTY_OPTIMIZE="$GHOSTTY_RELEASE_OPTIMIZE" \
-GHOSTTY_XCFRAMEWORK_TARGET="${GHOSTTY_XCFRAMEWORK_TARGET:-native}" \
-    bash scripts/build-ghosttykit.sh
 REQUIRE_LINGUIST_RUNTIME="${REQUIRE_LINGUIST_RUNTIME:-1}" \
 REQUIRE_RELOCATABLE_LINGUIST_RUNTIME="${REQUIRE_RELOCATABLE_LINGUIST_RUNTIME:-1}" \
     bash scripts/build-linguist-runtime.sh
-LLAMA_ARCHS=arm64 bash scripts/build-llama-runtime.sh
 python3 scripts/generate-release-history.py --tag "v$VERSION"
 bash scripts/generate.sh
 
@@ -88,11 +68,7 @@ fi
 XCODE_BUILD_ARGS=(ARCHS="$RELEASE_ARCHS")
 if [[ $SIGNED -eq 1 ]]; then
     [[ -n "${APPLE_TEAM_ID:-}" ]] || {
-        echo "error: signed CloudKit builds require APPLE_TEAM_ID" >&2
-        exit 1
-    }
-    [[ -n "${PROVISIONING_PROFILE_SPECIFIER:-}" || -n "${PROVISIONING_PROFILE:-}" ]] || {
-        echo "error: signed CloudKit builds require PROVISIONING_PROFILE_SPECIFIER (or PROVISIONING_PROFILE) for a CloudKit-capable Developer ID profile" >&2
+        echo "error: signed builds require APPLE_TEAM_ID" >&2
         exit 1
     }
     echo "==> Signing with: $SIGN_IDENTITY (hardened runtime)"
@@ -179,18 +155,15 @@ echo "==> Verifying bundled GitTools runtime"
 bash scripts/verify-gittools-runtime.sh "$GITTOOLS_DIR"
 
 if [[ $SIGNED -eq 1 ]]; then
-    # Xcode combines our requested CloudKit entitlements with restricted values
-    # from the provisioning profile, including `com.apple.application-identifier`.
-    # Preserve that resolved set for the final manual re-sign below; using only
-    # our source entitlements plist strips the application identifier and makes
-    # CloudKit fail at runtime with "without an application ID".
+    # Preserve the resolved entitlements from Xcode for the final manual
+    # re-sign below.
     echo "==> Capturing resolved app entitlements"
     codesign -d --entitlements :- "$APP" > "$SIGNED_ENTITLEMENTS"
     /usr/libexec/PlistBuddy -c 'Delete :com.apple.security.get-task-allow' "$SIGNED_ENTITLEMENTS" 2>/dev/null || true
 
     # xcodebuild signs before our release pruning/thinning steps are complete,
     # and Sparkle contains nested XPC/helper code. Re-sign all nested code
-    # bottom-up, then re-sign the main app with the resolved CloudKit entitlements.
+    # bottom-up, then re-sign the main app with the resolved entitlements.
     echo "==> Deep re-signing nested code + main app"
     codesign_nested_release_code "$APP" --options runtime --timestamp --sign "$SIGN_IDENTITY"
     if [[ ! -f "$ROCKXY_HELPER_TOOL" ]]; then
@@ -315,14 +288,6 @@ echo "==> Checking release entitlements"
 assert_no_get_task_allow_entitlements "$APP"
 ENTITLEMENTS_OUT="$DIST/entitlements.plist"
 codesign -dvvv --entitlements :- "$APP" > "$ENTITLEMENTS_OUT"
-grep -q "com.apple.developer.icloud-services" "$ENTITLEMENTS_OUT" || {
-    echo "error: signed app is missing the CloudKit entitlement" >&2
-    exit 1
-}
-grep -q "com.apple.application-identifier" "$ENTITLEMENTS_OUT" || {
-    echo "error: signed app is missing the application identifier entitlement required by CloudKit" >&2
-    exit 1
-}
 
 echo "==> Packaging DMG"
 make_dmg

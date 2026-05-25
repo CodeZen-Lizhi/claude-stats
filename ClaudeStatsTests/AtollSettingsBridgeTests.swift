@@ -25,8 +25,8 @@ struct AtollSettingsBridgeTests {
             "stats.showCpuGraph",
             "stats.statsUpdateInterval",
             "clipboard.clipboardHistorySize",
-            "terminal.terminalShellPath",
-            "terminal.terminalBackgroundColor"
+            "screenAssistant.selectedAIProvider",
+            "downloads.selectedDownloadIndicatorStyle"
         ].reduce(into: [String: AtollSettingValue]()) { result, id in
             result[id] = AtollSettingsBridge.value(for: id)
         }
@@ -45,12 +45,11 @@ struct AtollSettingsBridgeTests {
         #expect(AtollSettingsBridge.setValue(.int(7), for: "clipboard.clipboardHistorySize"))
         #expect(AtollSettingsBridge.value(for: "clipboard.clipboardHistorySize") == .int(7))
 
-        #expect(AtollSettingsBridge.setValue(.string("/bin/bash"), for: "terminal.terminalShellPath"))
-        #expect(AtollSettingsBridge.value(for: "terminal.terminalShellPath") == .string("/bin/bash"))
+        #expect(AtollSettingsBridge.setValue(.string("anthropic"), for: "screenAssistant.selectedAIProvider"))
+        #expect(AtollSettingsBridge.value(for: "screenAssistant.selectedAIProvider") == .string("anthropic"))
 
-        let color = AtollSettingColor(red: 0.2, green: 0.4, blue: 0.6, opacity: 1)
-        #expect(AtollSettingsBridge.setValue(.color(color), for: "terminal.terminalBackgroundColor"))
-        #expect(AtollSettingsBridge.value(for: "terminal.terminalBackgroundColor") == .color(color))
+        #expect(AtollSettingsBridge.setValue(.string("Minimal"), for: "downloads.selectedDownloadIndicatorStyle"))
+        #expect(AtollSettingsBridge.value(for: "downloads.selectedDownloadIndicatorStyle") == .string("Minimal"))
     }
 
     @Test("Unknown setting identifiers fail safely")
@@ -64,7 +63,7 @@ struct AtollSettingsBridgeTests {
         let originalFeatures = AtollDefaultsBridge.featuresFromCurrentDefaults
         let originalStatsGraph = AtollSettingsBridge.value(for: "stats.showCpuGraph")
         let originalMediaAutoHide = AtollSettingsBridge.value(for: "media.autoHideInactiveNotchMediaPlayer")
-        let originalTerminalFont = AtollSettingsBridge.value(for: "terminal.terminalFontSize")
+        let originalDownloadsStyle = AtollSettingsBridge.value(for: "downloads.selectedDownloadIndicatorStyle")
         defer {
             if let originalStatsGraph {
                 _ = AtollSettingsBridge.setValue(originalStatsGraph, for: "stats.showCpuGraph")
@@ -72,8 +71,8 @@ struct AtollSettingsBridgeTests {
             if let originalMediaAutoHide {
                 _ = AtollSettingsBridge.setValue(originalMediaAutoHide, for: "media.autoHideInactiveNotchMediaPlayer")
             }
-            if let originalTerminalFont {
-                _ = AtollSettingsBridge.setValue(originalTerminalFont, for: "terminal.terminalFontSize")
+            if let originalDownloadsStyle {
+                _ = AtollSettingsBridge.setValue(originalDownloadsStyle, for: "downloads.selectedDownloadIndicatorStyle")
             }
             AtollDefaultsBridge.sync(
                 AtollIslandConfiguration(
@@ -88,11 +87,11 @@ struct AtollSettingsBridgeTests {
 
         #expect(AtollSettingsBridge.setValue(.bool(false), for: "stats.showCpuGraph"))
         #expect(AtollSettingsBridge.setValue(.bool(false), for: "media.autoHideInactiveNotchMediaPlayer"))
-        #expect(AtollSettingsBridge.setValue(.double(18), for: "terminal.terminalFontSize"))
+        #expect(AtollSettingsBridge.setValue(.string("Minimal"), for: "downloads.selectedDownloadIndicatorStyle"))
 
         AtollDefaultsBridge.sync(
             AtollIslandConfiguration(
-                enabledFeatures: [.media, .stats, .terminal],
+                enabledFeatures: [.media, .stats, .downloads],
                 openNotchWidth: 640,
                 openOnHover: true,
                 showOnAllDisplays: false,
@@ -102,7 +101,7 @@ struct AtollSettingsBridgeTests {
 
         #expect(AtollSettingsBridge.value(for: "stats.showCpuGraph") == .bool(false))
         #expect(AtollSettingsBridge.value(for: "media.autoHideInactiveNotchMediaPlayer") == .bool(false))
-        #expect(AtollSettingsBridge.value(for: "terminal.terminalFontSize") == .double(18))
+        #expect(AtollSettingsBridge.value(for: "downloads.selectedDownloadIndicatorStyle") == .string("Minimal"))
     }
 
     @Test("Sync updates module availability gates")

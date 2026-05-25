@@ -294,7 +294,6 @@ private extension NotchIslandModule {
         case .lockScreenWidgets: .lockScreenWidgets
         case .extensionBridge: .extensionBridge
         case .screenAssistant: .screenAssistant
-        case .terminal: .terminal
         }
     }
 }

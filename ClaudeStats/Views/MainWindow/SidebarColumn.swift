@@ -2,8 +2,8 @@ import SwiftUI
 import AppKit
 
 /// The main window's left column. Two regions stacked vertically:
-///   - Top nav (Dashboard, STATS for usage/leaderboards/activity, then TOOLS
-///     for configuration, Git, and terminal tools).
+///   - Top nav (Dashboard, STATS for usage/activity, then TOOLS for
+///     configuration and Git tools).
 /// Settings stays pinned at the bottom.
 ///
 /// Lives over a window-level `NSVisualEffectView` (`.sidebar` material), so
@@ -11,9 +11,7 @@ import AppKit
 struct SidebarColumn: View {
     @Binding var page: MainPage
     var availablePages: [MainPage]
-    var isLinuxDoActive = false
     var onOpenSettings: () -> Void
-    var onOpenLinuxDo: () -> Void
     var onOpenSessions: () -> Void
     var onOpenConfigs: () -> Void
     var onOpenNetwork: () -> Void
@@ -27,22 +25,10 @@ struct SidebarColumn: View {
             Color.clear.frame(height: 44)
 
             navRow(.dashboard)
-            SidebarRow(
-                title: MainPage.linuxDo.title,
-                symbol: MainPage.linuxDo.symbol,
-                assetName: MainPage.linuxDo.assetName,
-                isSelected: isLinuxDoActive,
-                trailingSymbol: "chevron.right",
-                showsTrailingOnHover: true
-            ) {
-                clearTextFocus()
-                onOpenLinuxDo()
-            }
             sessionsEntryRow
 
             sectionHeader("STATS")
             navRow(.usage)
-            navRow(.leaderboards)
             if env.preferences.aiActivityAnalysisEnabled { navRow(.activity) }
             if env.preferences.systemMonitorEnabled { navRow(.system) }
 
@@ -80,7 +66,6 @@ struct SidebarColumn: View {
                 clearTextFocus()
                 onOpenNetwork()
             }
-            navRow(.terminal)
 
             Spacer(minLength: 0)
 
@@ -105,7 +90,6 @@ struct SidebarColumn: View {
             SidebarRow(
                 title: p.title,
                 symbol: p.symbol,
-                assetName: p.assetName,
                 isSelected: page == p
             ) {
                 clearTextFocus()
@@ -222,9 +206,7 @@ struct SidebarRow: View {
     return SidebarColumn(
         page: $page,
         availablePages: [.dashboard, .configurations, .usage, .activity, .git],
-        isLinuxDoActive: false,
         onOpenSettings: {},
-        onOpenLinuxDo: {},
         onOpenSessions: {},
         onOpenConfigs: {},
         onOpenNetwork: {},

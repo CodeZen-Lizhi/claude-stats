@@ -1,5 +1,4 @@
 import Foundation
-import GhosttyEmbed
 import Observation
 
 /// Composition root. Constructs the pricing table, preferences, provider
@@ -13,21 +12,17 @@ final class AppEnvironment {
     let preferences: Preferences
     let providerRegistry: ProviderRegistry
     let store: SessionStore
-    let localAI: LocalAIStore
     let transcriptAnalysis: TranscriptAnalysisStore
     let updater = UpdaterController()
     let floatingStatsPanel = FloatingStatsPanelController()
     let notchIsland = NotchIslandController()
-    let terminalStore: EmbeddedTerminalStore
     /// View models live in the environment so the Settings window and the
     /// individual pages can share state — and so the VMs persist across
     /// main-window open/close cycles (reopening doesn't refire a fetch).
     let dashboard: DashboardViewModel
     let gitActivity: GitActivityViewModel
     let github = GitHubViewModel()
-    let linuxDo: LinuxDoStore
     let openAIStatus: OpenAIStatusViewModel
-    let leaderboards: LeaderboardSyncViewModel
     let usageLimits: UsageLimitStore
     let configurationProfiles: ConfigurationProfilesViewModel
     let apiProviders: APIProviderSwitcherViewModel
@@ -43,46 +38,24 @@ final class AppEnvironment {
         preferences: Preferences,
         providerRegistry: ProviderRegistry,
         store: SessionStore,
-        terminalStore: EmbeddedTerminalStore = EmbeddedTerminalStore(),
         usageLimits: UsageLimitStore? = nil,
         cliEnvironment: CLIEnvironmentViewModel = CLIEnvironmentViewModel(),
         systemMonitor: SystemMonitorViewModel = SystemMonitorViewModel(),
         networkDebugger: NetworkDebuggerStore? = nil,
-        ops: OpsStore = OpsStore(),
-        linuxDo: LinuxDoStore? = nil
+        ops: OpsStore = OpsStore()
     ) {
         self.pricing = pricing
         self.preferences = preferences
         self.providerRegistry = providerRegistry
         self.store = store
-        let localAI = LocalAIStore()
-        self.localAI = localAI
-        self.transcriptAnalysis = TranscriptAnalysisStore(
-            service: TranscriptAnalysisService(
-                embeddingStatusResolver: {
-                    await MainActor.run {
-                        localAI.selectedEmbeddingStatus
-                    }
-                }
-            )
-        )
-        self.terminalStore = terminalStore
+        self.transcriptAnalysis = TranscriptAnalysisStore()
         self.cliEnvironment = cliEnvironment
         self.systemMonitor = systemMonitor
         self.networkDebugger = networkDebugger ?? NetworkDebuggerStore(preferences: preferences)
         self.ops = ops
-        let linuxDoCredentials: any LinuxDoCredentialStoring = Self.isRunningUnitTests
-            ? InMemoryLinuxDoCredentialStore()
-            : LinuxDoKeychainStore.shared
-        self.linuxDo = linuxDo ?? LinuxDoStore(preferences: preferences, credentials: linuxDoCredentials)
         self.dashboard = DashboardViewModel(pricing: pricing)
         self.gitActivity = GitActivityViewModel()
         self.openAIStatus = OpenAIStatusViewModel(preferences: preferences)
-        self.leaderboards = LeaderboardSyncViewModel(
-            preferences: preferences,
-            store: store,
-            remoteNotificationRegistrar: Self.isRunningUnitTests ? nil : AppKitLeaderboardRemoteNotificationRegistrar()
-        )
         self.usageLimits = usageLimits ?? UsageLimitStore(registry: providerRegistry)
         self.configurationProfiles = ConfigurationProfilesViewModel(registry: providerRegistry)
         self.apiProviders = APIProviderSwitcherViewModel()
@@ -91,18 +64,13 @@ final class AppEnvironment {
     }
 
     convenience init() {
-        self.init(terminalStore: EmbeddedTerminalStore())
-    }
-
-    convenience init(terminalStore: EmbeddedTerminalStore) {
         let pricing = ModelPricing.loadDefault()
         let registry = ProviderRegistry(pricing: pricing)
         self.init(
             pricing: pricing,
             preferences: Preferences(),
             providerRegistry: registry,
-            store: SessionStore(registry: registry, pricing: pricing),
-            terminalStore: terminalStore
+            store: SessionStore(registry: registry, pricing: pricing)
         )
     }
 
@@ -110,17 +78,12 @@ final class AppEnvironment {
     func start() {
         LegacyFeatureDataCleaner().cleanRemovedFeatureData()
         LaunchAtLogin.enableByDefaultIfNeeded()
-        store.onRefresh = { [weak self] in
-            self?.leaderboards.scheduleSilentSyncAfterDataRefresh()
-        }
-        leaderboards.start()
         Task {
             await apiProviders.loadIfNeeded(keyStorageMode: preferences.apiProviderKeyStorageMode)
             await configurationProfiles.loadIfNeeded()
             await store.refresh()
         }
         openAIStatus.start()
-        linuxDo.start()
         applyAutoRefreshSetting()
         updater.start()
         floatingStatsPanel.start(environment: self)
@@ -131,14 +94,6 @@ final class AppEnvironment {
 
     func applyAutoRefreshSetting() {
         store.startAutoRefresh(every: TimeInterval(preferences.autoRefreshMinutes) * 60)
-    }
-
-    @discardableResult
-    func handleOpenURL(_ url: URL) -> Bool {
-        if linuxDo.handleOpenURL(url) {
-            return true
-        }
-        return false
     }
 
     private static var isRunningUnitTests: Bool {

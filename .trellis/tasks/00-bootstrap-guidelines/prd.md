@@ -21,22 +21,14 @@ the rest conversationally.
 
 ## Status (update the checkboxes as you complete each item)
 
-- [ ] Fill guidelines for ThirdParty/ghostty
 - [ ] Fill guidelines for ThirdParty/Atoll
 - [ ] Fill guidelines for ThirdParty/Rockxy
 - [ ] Fill guidelines for ThirdParty/CppJieba
-- [ ] Fill guidelines for ThirdParty/llama.cpp
 - [ ] Add code examples
 
 ---
 
 ## Spec files to populate
-
-### Package: ThirdParty/ghostty (`spec/ThirdParty/ghostty/`)
-
-- Backend guidelines: `.trellis/spec/ThirdParty/ghostty/backend/`
-
-- Frontend guidelines: `.trellis/spec/ThirdParty/ghostty/frontend/`
 
 ### Package: ThirdParty/Atoll (`spec/ThirdParty/Atoll/`)
 
@@ -55,13 +47,6 @@ the rest conversationally.
 - Backend guidelines: `.trellis/spec/ThirdParty/CppJieba/backend/`
 
 - Frontend guidelines: `.trellis/spec/ThirdParty/CppJieba/frontend/`
-
-### Package: ThirdParty/llama.cpp (`spec/ThirdParty/llama.cpp/`)
-
-- Backend guidelines: `.trellis/spec/ThirdParty/llama.cpp/backend/`
-
-- Frontend guidelines: `.trellis/spec/ThirdParty/llama.cpp/frontend/`
-
 
 ### Thinking guides (already populated)
 

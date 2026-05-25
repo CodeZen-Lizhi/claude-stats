@@ -4,43 +4,30 @@ import SwiftUI
 /// Top-level page shown in the main window's detail column. Settings live in
 /// their own main-window mode, not as a `MainPage`.
 enum MainPage: String, CaseIterable, Identifiable, Sendable {
-    case dashboard, linuxDo, configurations, usage, leaderboards, activity, git, system, skills, terminal
+    case dashboard, configurations, usage, activity, git, system, skills
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .dashboard: L10n.string("main_page.dashboard", defaultValue: "Dashboard")
-        case .linuxDo: "LinuxDo"
         case .configurations: L10n.string("main_page.switcher", defaultValue: "Switcher")
         case .usage: L10n.string("main_page.usage", defaultValue: "Usage")
-        case .leaderboards: L10n.string("main_page.leaderboards", defaultValue: "Leaderboards")
         case .activity: L10n.string("main_page.activity", defaultValue: "Activity")
         case .git: L10n.string("main_page.git", defaultValue: "Git")
         case .system: L10n.string("main_page.system", defaultValue: "System")
         case .skills: "Skills"
-        case .terminal: L10n.string("main_page.terminal", defaultValue: "Terminal")
         }
     }
 
     var symbol: String {
         switch self {
         case .dashboard: "square.grid.2x2"
-        case .linuxDo: "globe.asia.australia"
         case .configurations: "slider.horizontal.3"
         case .usage: "chart.bar.xaxis"
-        case .leaderboards: "trophy"
         case .activity: "waveform"
         case .git: "arrow.triangle.branch"
         case .system: "cpu"
         case .skills: "sparkles"
-        case .terminal: "terminal"
-        }
-    }
-
-    var assetName: String? {
-        switch self {
-        case .linuxDo: "LinuxDoLogo"
-        default: nil
         }
     }
 }
@@ -74,16 +61,13 @@ struct MainWindowView: View {
     @State private var page: MainPage = .dashboard
     @State private var toggleHovering = false
     @State private var trafficLights = TrafficLightPositioner()
-    @State private var linuxDoWebLoginPresented = false
-    @State private var linuxDoSignInEnabled = true
 
     private var availablePages: [MainPage] {
-        var pages: [MainPage] = [.dashboard, .configurations, .usage, .leaderboards]
+        var pages: [MainPage] = [.dashboard, .configurations, .usage]
         if env.preferences.aiActivityAnalysisEnabled { pages.append(.activity) }
         if env.preferences.gitTrackingEnabled { pages.append(.git) }
         if env.preferences.systemMonitorEnabled { pages.append(.system) }
         pages.append(.skills)
-        pages.append(.terminal)
         return pages
     }
 
@@ -186,20 +170,11 @@ struct MainWindowView: View {
                 SidebarColumn(
                     page: $page,
                     availablePages: availablePages,
-                    isLinuxDoActive: mode == .linuxDo,
                     onOpenSettings: openSettings,
-                    onOpenLinuxDo: openLinuxDo,
                     onOpenSessions: openSessions,
                     onOpenConfigs: openConfigs,
                     onOpenNetwork: openNetwork,
                     onOpenOps: openOps
-                )
-            } linuxDoSidebar: {
-                LinuxDoSidebarColumn(
-                    store: env.linuxDo,
-                    signInEnabled: linuxDoSignInEnabled,
-                    onExit: closeLinuxDo,
-                    onSignIn: openLinuxDoSignIn
                 )
             } sessionsSidebar: {
                 SessionSidebarColumn(
@@ -220,8 +195,6 @@ struct MainWindowView: View {
                 OpsSidebarColumn(section: opsSectionBinding, onExit: closeOps)
             } appDetail: {
                 detail
-            } linuxDoDetail: {
-                LinuxDoWorkspaceView(store: env.linuxDo)
             } sessionsDetail: {
                 sessionsDetail
             } configsDetail: {
@@ -244,7 +217,7 @@ struct MainWindowView: View {
                     .onTapGesture { clearTextFocus() }
             }
 
-            if mode == .app || mode == .linuxDo || mode == .sessions || mode == .configs || mode == .network || mode == .ops {
+            if mode == .app || mode == .sessions || mode == .configs || mode == .network || mode == .ops {
                 sidebarToggle
                     .padding(.leading, 81)
                     .padding(.top, 11)
@@ -264,9 +237,6 @@ struct MainWindowView: View {
         .onDisappear {
             DockVisibilityCoordinator.shared.release()
             Log.app.info("Main window closed")
-        }
-        .sheet(isPresented: $linuxDoWebLoginPresented) {
-            LinuxDoWebLoginSheet(store: env.linuxDo, isPresented: $linuxDoWebLoginPresented)
         }
         .onChange(of: page) { _, new in
             guard availablePages.contains(new) else {
@@ -332,14 +302,10 @@ struct MainWindowView: View {
         switch page {
         case .dashboard:
             DashboardView()
-        case .linuxDo:
-            DashboardView()
         case .configurations:
             ConfigurationsView()
         case .usage:
             MainUsageView()
-        case .leaderboards:
-            LeaderboardsView()
         case .activity:
             MainActivityView()
         case .git:
@@ -348,8 +314,6 @@ struct MainWindowView: View {
             MainSystemMonitorView()
         case .skills:
             SkillsWorkspaceView(store: env.skills)
-        case .terminal:
-            TerminalWorkspaceView(store: env.terminalStore)
         }
     }
 
@@ -393,30 +357,6 @@ struct MainWindowView: View {
         transition(to: .sessions)
     }
 
-    private func openLinuxDo() {
-        linuxDoSignInEnabled = false
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(150))
-            page = availablePages.contains(page) ? page : .dashboard
-            pageRaw = page.rawValue
-            sidebarVisible = true
-            Log.app.info("Opening LinuxDo mode")
-            transition(to: .linuxDo)
-            try? await Task.sleep(for: .seconds(2))
-            guard mode == .linuxDo else { return }
-            linuxDoSignInEnabled = true
-        }
-    }
-
-    private func openLinuxDoSignIn() {
-        guard linuxDoSignInEnabled else {
-            Log.app.info("Ignoring LinuxDo sign-in trigger during mode transition")
-            return
-        }
-        Log.app.info("Opening LinuxDo web sign-in sheet")
-        linuxDoWebLoginPresented = true
-    }
-
     private func openConfigs() {
         transition(to: .configs)
     }
@@ -434,11 +374,6 @@ struct MainWindowView: View {
     }
 
     private func closeSessions() {
-        transition(to: .app)
-    }
-
-    private func closeLinuxDo() {
-        Log.app.info("Closing LinuxDo mode")
         transition(to: .app)
     }
 
@@ -461,9 +396,6 @@ struct MainWindowView: View {
             transition(to: .app)
         case .network:
             transition(to: .network)
-        case .linuxDoTopic(let route):
-            env.linuxDo.openTopic(route)
-            openLinuxDo()
         }
     }
 
@@ -502,9 +434,6 @@ struct MainWindowView: View {
             pageRaw = MainPage.dashboard.rawValue
         }
 
-        if mode == .linuxDo {
-            sidebarVisible = true
-        }
     }
 }
 

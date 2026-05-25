@@ -189,12 +189,6 @@ final class Preferences {
     var sessionsExpandedOnAppOpen: Bool {
         didSet { defaults.set(sessionsExpandedOnAppOpen, forKey: Keys.sessionsExpandedOnAppOpen) }
     }
-    var terminalChromeMode: TerminalChromeMode {
-        didSet { defaults.set(terminalChromeMode.rawValue, forKey: Keys.terminalChromeMode) }
-    }
-    var terminalBackgroundStyle: TerminalBackgroundStyle {
-        didSet { defaults.set(terminalBackgroundStyle.rawValue, forKey: Keys.terminalBackgroundStyle) }
-    }
     var apiProviderKeyStorageMode: APIProviderKeyStorageMode {
         didSet { defaults.set(apiProviderKeyStorageMode.rawValue, forKey: Keys.apiProviderKeyStorageMode) }
     }
@@ -298,36 +292,6 @@ final class Preferences {
     var githubLogin: String {
         didSet { defaults.set(githubLogin, forKey: Keys.githubLogin) }
     }
-    var linuxDoNotificationsEnabled: Bool {
-        didSet { defaults.set(linuxDoNotificationsEnabled, forKey: Keys.linuxDoNotificationsEnabled) }
-    }
-    var linuxDoLastSeenNotificationID: Int {
-        didSet { defaults.set(linuxDoLastSeenNotificationID, forKey: Keys.linuxDoLastSeenNotificationID) }
-    }
-    var linuxDoNotificationDeliveredIDs: [Int] {
-        didSet {
-            defaults.set(
-                linuxDoNotificationDeliveredIDs.map(String.init).joined(separator: ","),
-                forKey: Keys.linuxDoNotificationDeliveredIDs
-            )
-        }
-    }
-    var linuxDoLastLoginUsername: String {
-        didSet { defaults.set(linuxDoLastLoginUsername, forKey: Keys.linuxDoLastLoginUsername) }
-    }
-    var linuxDoSelectedFeed: String {
-        didSet { defaults.set(linuxDoSelectedFeed, forKey: Keys.linuxDoSelectedFeed) }
-    }
-    var linuxDoReadingPositions: [Int: LinuxDoReadingPosition] {
-        didSet {
-            let trimmed = Self.trimLinuxDoReadingPositions(linuxDoReadingPositions)
-            guard trimmed == linuxDoReadingPositions else {
-                linuxDoReadingPositions = trimmed
-                return
-            }
-            persistLinuxDoReadingPositions()
-        }
-    }
     /// OpenAI Status product groups shown on the Dashboard and monitored for
     /// optional notifications. Defaults to ChatGPT and Codex.
     var openAIStatusVisibleGroupIDs: Set<String> {
@@ -351,36 +315,6 @@ final class Preferences {
     /// Which colour scheme the Overlap heatmap should use.
     var overlapPalette: OverlapPalette {
         didSet { defaults.set(overlapPalette.rawValue, forKey: Keys.overlapPalette) }
-    }
-    /// Opt-in to publishing aggregate, privacy-preserving leaderboard scores to
-    /// CloudKit's public database. Off by default.
-    var leaderboardsEnabled: Bool {
-        didSet { defaults.set(leaderboardsEnabled, forKey: Keys.leaderboardsEnabled) }
-    }
-    /// Public display name shown next to submitted leaderboard scores. Stored
-    /// locally in defaults; CloudKit receives only this nickname and aggregate
-    /// scores.
-    var leaderboardNickname: String {
-        didSet { defaults.set(leaderboardNickname, forKey: Keys.leaderboardNickname) }
-    }
-    /// Random seed used to render the user's public Beam avatar. It is scoped
-    /// to the current iCloud user hash by ``leaderboardProfileUserHash``.
-    var leaderboardAvatarSeed: String {
-        didSet { defaults.set(leaderboardAvatarSeed, forKey: Keys.leaderboardAvatarSeed) }
-    }
-    /// Last iCloud user hash this local leaderboard profile was reconciled
-    /// against. If it changes, the app reloads or regenerates the avatar seed.
-    var leaderboardProfileUserHash: String {
-        didSet { defaults.set(leaderboardProfileUserHash, forKey: Keys.leaderboardProfileUserHash) }
-    }
-    var leaderboardLastSyncedAt: Date? {
-        didSet { defaults.set(leaderboardLastSyncedAt, forKey: Keys.leaderboardLastSyncedAt) }
-    }
-    var leaderboardLastSyncError: String {
-        didSet { defaults.set(leaderboardLastSyncError, forKey: Keys.leaderboardLastSyncError) }
-    }
-    var leaderboardLastSubmittedPeriodKeys: [String] {
-        didSet { defaults.set(leaderboardLastSubmittedPeriodKeys, forKey: Keys.leaderboardLastSubmittedPeriodKeys) }
     }
     /// Extra GUI coding-surface bundle ids the user added on top of
     /// ``ActivitySurfaceCatalog/codingSurfaceDefaults``.
@@ -479,8 +413,6 @@ final class Preferences {
         networkManualUpstreamBypassLocalhost = (defaults.object(forKey: Keys.networkManualUpstreamBypassLocalhost) as? Bool) ?? true
         networkManualUpstreamDNSOverSOCKS = (defaults.object(forKey: Keys.networkManualUpstreamDNSOverSOCKS) as? Bool) ?? true
         sessionsExpandedOnAppOpen = (defaults.object(forKey: Keys.sessionsExpandedOnAppOpen) as? Bool) ?? false
-        terminalChromeMode = TerminalChromeMode(rawValue: defaults.string(forKey: Keys.terminalChromeMode) ?? "") ?? .tabsAndStatus
-        terminalBackgroundStyle = TerminalBackgroundStyle(rawValue: defaults.string(forKey: Keys.terminalBackgroundStyle) ?? "") ?? .fluidGradient
         apiProviderKeyStorageMode = APIProviderKeyStorageMode(rawValue: defaults.string(forKey: Keys.apiProviderKeyStorageMode) ?? "") ?? .json
         systemMonitorEnabled = defaults.bool(forKey: Keys.systemMonitorEnabled)
         systemMonitorRefreshRate = SystemMonitorRefreshRate(rawValue: defaults.string(forKey: Keys.systemMonitorRefreshRate) ?? "") ?? .threeSeconds
@@ -502,19 +434,6 @@ final class Preferences {
         ) ?? .fine
         githubEnabled = defaults.bool(forKey: Keys.githubEnabled)
         githubLogin = defaults.string(forKey: Keys.githubLogin) ?? ""
-        linuxDoNotificationsEnabled = defaults.bool(forKey: Keys.linuxDoNotificationsEnabled)
-        linuxDoLastSeenNotificationID = (defaults.object(forKey: Keys.linuxDoLastSeenNotificationID) as? Int) ?? 0
-        linuxDoNotificationDeliveredIDs = (defaults.string(forKey: Keys.linuxDoNotificationDeliveredIDs) ?? "")
-            .split(separator: ",")
-            .compactMap { Int($0) }
-        linuxDoLastLoginUsername = defaults.string(forKey: Keys.linuxDoLastLoginUsername) ?? ""
-        linuxDoSelectedFeed = defaults.string(forKey: Keys.linuxDoSelectedFeed) ?? LinuxDoFeed.latest.storedValue
-        if let data = defaults.data(forKey: Keys.linuxDoReadingPositions),
-           let positions = try? JSONDecoder().decode([Int: LinuxDoReadingPosition].self, from: data) {
-            linuxDoReadingPositions = Self.trimLinuxDoReadingPositions(positions)
-        } else {
-            linuxDoReadingPositions = [:]
-        }
         let storedOpenAIStatusGroupIDs = (defaults.string(forKey: Keys.openAIStatusVisibleGroupIDs) ?? "")
             .split(separator: ",")
             .map { String($0) }
@@ -524,13 +443,6 @@ final class Preferences {
         openAIStatusNotificationsEnabled = defaults.bool(forKey: Keys.openAIStatusNotificationsEnabled)
         openAIStatusLastNotificationFingerprint = defaults.string(forKey: Keys.openAIStatusLastNotificationFingerprint) ?? ""
         overlapPalette = OverlapPalette(rawValue: defaults.string(forKey: Keys.overlapPalette) ?? "") ?? .appCohesive
-        leaderboardsEnabled = defaults.bool(forKey: Keys.leaderboardsEnabled)
-        leaderboardNickname = defaults.string(forKey: Keys.leaderboardNickname) ?? ""
-        leaderboardAvatarSeed = defaults.string(forKey: Keys.leaderboardAvatarSeed) ?? ""
-        leaderboardProfileUserHash = defaults.string(forKey: Keys.leaderboardProfileUserHash) ?? ""
-        leaderboardLastSyncedAt = defaults.object(forKey: Keys.leaderboardLastSyncedAt) as? Date
-        leaderboardLastSyncError = defaults.string(forKey: Keys.leaderboardLastSyncError) ?? ""
-        leaderboardLastSubmittedPeriodKeys = defaults.stringArray(forKey: Keys.leaderboardLastSubmittedPeriodKeys) ?? []
         let hasNewCodingSurfaceAdditions = defaults.object(forKey: Keys.codingSurfaceBundleIDsAdded) != nil
         let hasNewCodingSurfaceRemovals = defaults.object(forKey: Keys.codingSurfaceBundleIDsRemoved) != nil
         let storedCodingSurfaceBundleIDsAdded = defaults.stringArray(forKey: Keys.codingSurfaceBundleIDsAdded)
@@ -571,27 +483,6 @@ final class Preferences {
             return
         }
         defaults.set(json, forKey: Keys.notchIslandScreenStyles)
-    }
-
-    private func persistLinuxDoReadingPositions() {
-        guard let data = try? JSONEncoder().encode(linuxDoReadingPositions) else {
-            defaults.removeObject(forKey: Keys.linuxDoReadingPositions)
-            return
-        }
-        defaults.set(data, forKey: Keys.linuxDoReadingPositions)
-    }
-
-    private static func trimLinuxDoReadingPositions(
-        _ positions: [Int: LinuxDoReadingPosition],
-        limit: Int = 200
-    ) -> [Int: LinuxDoReadingPosition] {
-        guard positions.count > limit else { return positions }
-        return Dictionary(
-            uniqueKeysWithValues: positions
-                .sorted { lhs, rhs in lhs.value.updatedAt > rhs.value.updatedAt }
-                .prefix(limit)
-                .map { ($0.key, $0.value) }
-        )
     }
 
     private static func decodeNotchIslandScreenStyles(_ raw: String?) -> [String: NotchIslandScreenStyle] {
@@ -643,8 +534,6 @@ final class Preferences {
         static let networkManualUpstreamBypassLocalhost = "networkManualUpstreamBypassLocalhost"
         static let networkManualUpstreamDNSOverSOCKS = "networkManualUpstreamDNSOverSOCKS"
         static let sessionsExpandedOnAppOpen = "sessionsExpandedOnAppOpen"
-        static let terminalChromeMode = "terminalChromeMode"
-        static let terminalBackgroundStyle = "terminalBackgroundStyle"
         static let apiProviderKeyStorageMode = "apiProviderKeyStorageMode"
         static let systemMonitorEnabled = "systemMonitorEnabled"
         static let systemMonitorRefreshRate = "systemMonitorRefreshRate"
@@ -666,22 +555,9 @@ final class Preferences {
         static let rememberSelectedProvider = "rememberSelectedProvider"
         static let githubEnabled = "githubEnabled"
         static let githubLogin = "githubLogin"
-        static let linuxDoNotificationsEnabled = "linuxDoNotificationsEnabled"
-        static let linuxDoLastSeenNotificationID = "linuxDoLastSeenNotificationID"
-        static let linuxDoNotificationDeliveredIDs = "linuxDoNotificationDeliveredIDs"
-        static let linuxDoLastLoginUsername = "linuxDoLastLoginUsername"
-        static let linuxDoSelectedFeed = "linuxDoSelectedFeed"
-        static let linuxDoReadingPositions = "linuxDoReadingPositions"
         static let openAIStatusVisibleGroupIDs = "openAIStatusVisibleGroupIDs"
         static let openAIStatusNotificationsEnabled = "openAIStatusNotificationsEnabled"
         static let openAIStatusLastNotificationFingerprint = "openAIStatusLastNotificationFingerprint"
         static let overlapPalette = "overlapPalette"
-        static let leaderboardsEnabled = "leaderboardsEnabled"
-        static let leaderboardNickname = "leaderboardNickname"
-        static let leaderboardAvatarSeed = "leaderboardAvatarSeed"
-        static let leaderboardProfileUserHash = "leaderboardProfileUserHash"
-        static let leaderboardLastSyncedAt = "leaderboardLastSyncedAt"
-        static let leaderboardLastSyncError = "leaderboardLastSyncError"
-        static let leaderboardLastSubmittedPeriodKeys = "leaderboardLastSubmittedPeriodKeys"
     }
 }

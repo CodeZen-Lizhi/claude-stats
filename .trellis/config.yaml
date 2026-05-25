@@ -91,9 +91,6 @@ max_journal_lines: 2000
 
 # Auto-detected monorepo packages
 packages:
-  ThirdParty/ghostty:
-    path: ThirdParty/ghostty
-    type: submodule
   ThirdParty/Atoll:
     path: ThirdParty/Atoll
     type: submodule
@@ -103,7 +100,4 @@ packages:
   ThirdParty/CppJieba:
     path: ThirdParty/CppJieba
     type: submodule
-  ThirdParty/llama.cpp:
-    path: ThirdParty/llama.cpp
-    type: submodule
-default_package: ThirdParty/ghostty
+default_package: ThirdParty/Atoll

@@ -76,8 +76,7 @@ struct AtollIslandPreviewTests {
             "stats.showCpuGraph",
             "timer.timerProgressStyle",
             "downloads.selectedDownloadIndicatorStyle",
-            "terminal.terminalFontSize",
-            "terminal.terminalBackgroundColor"
+            "screenAssistant.selectedAIProvider"
         ]
         let originals = settingIDs.reduce(into: [String: AtollSettingValue]()) { result, id in
             result[id] = AtollSettingsBridge.value(for: id)
@@ -88,19 +87,16 @@ struct AtollIslandPreviewTests {
             }
         }
 
-        let color = AtollSettingColor(red: 0.1, green: 0.2, blue: 0.3, opacity: 0.9)
         #expect(AtollSettingsBridge.setValue(.bool(false), for: "stats.showCpuGraph"))
         #expect(AtollSettingsBridge.setValue(.string("Ring"), for: "timer.timerProgressStyle"))
         #expect(AtollSettingsBridge.setValue(.string("Circle"), for: "downloads.selectedDownloadIndicatorStyle"))
-        #expect(AtollSettingsBridge.setValue(.double(18), for: "terminal.terminalFontSize"))
-        #expect(AtollSettingsBridge.setValue(.color(color), for: "terminal.terminalBackgroundColor"))
+        #expect(AtollSettingsBridge.setValue(.string("anthropic"), for: "screenAssistant.selectedAIProvider"))
 
         let snapshot = AtollIslandPreviewSettings.current()
         #expect(!snapshot.showCpuGraph)
         #expect(snapshot.timerProgressStyle == "Ring")
         #expect(snapshot.selectedDownloadIndicatorStyle == "Circle")
-        #expect(snapshot.terminalFontSize == 18)
-        #expect(snapshot.terminalBackgroundColor == color)
+        #expect(snapshot.selectedAIProvider == "anthropic")
     }
 
     @Test("Sample data and fallback tab mapping are deterministic")

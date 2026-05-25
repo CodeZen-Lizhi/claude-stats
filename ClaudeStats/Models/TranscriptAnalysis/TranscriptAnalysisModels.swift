@@ -182,7 +182,7 @@ enum EmbeddingModelStatus: String, Codable, Sendable, Hashable {
 }
 
 enum EmbeddingMode: String, Codable, Sendable, Hashable {
-    case llamaGGUF
+    case unavailable
 }
 
 struct TranscriptAnalysisEngineInfo: Codable, Hashable, Sendable {
@@ -295,7 +295,7 @@ struct UnconfiguredEmbeddingEngine: EmbeddingEngine {
     let modelID = "none"
     let modelRevision = "none"
     let dimensions = 0
-    let embedMode: EmbeddingMode = .llamaGGUF
+    let embedMode: EmbeddingMode = .unavailable
 
     func embed(_ texts: [String]) async throws -> [[Float]] {
         []

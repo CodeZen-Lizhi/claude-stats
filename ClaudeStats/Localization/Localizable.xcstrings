@@ -849,16 +849,6 @@
         }
       }
     },
-    "Browse Linux.do topics with a native macOS reader." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "用原生 macOS 阅读器浏览 Linux.do 话题。"
-          }
-        }
-      }
-    },
     "Browse local SKILL.md directories and inspect skills.sh metadata." : {
       "localizations" : {
         "zh-Hans" : {
@@ -938,16 +928,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "检查更新…"
-          }
-        }
-      }
-    },
-    "Choose a LinuxDo topic to read it here." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择一个 LinuxDo 话题以在此阅读。"
           }
         }
       }
@@ -2118,16 +2098,6 @@
         }
       }
     },
-    "Enable them in Features, choose a public nickname, then sync aggregate scores and a generated Beam avatar to CloudKit." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在“功能”中启用它们，选择一个公开昵称，然后将汇总分数和生成的 Beam 头像同步到 CloudKit。"
-          }
-        }
-      }
-    },
     "English" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2700,26 +2670,6 @@
         }
       }
     },
-    "LEADERBOARDS" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "排行榜"
-          }
-        }
-      }
-    },
-    "Leaderboards are off" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "排行榜已关闭"
-          }
-        }
-      }
-    },
     "left" : {
       "localizations" : {
         "en" : {
@@ -2742,22 +2692,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "更少"
-          }
-        }
-      }
-    },
-    "Linux.do" : {
-
-    },
-    "LinuxDo" : {
-
-    },
-    "LinuxDo Sign In" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "登录 LinuxDo"
           }
         }
       }
@@ -2863,23 +2797,6 @@
         }
       }
     },
-    "main_page.leaderboards" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Leaderboards"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "排行榜"
-          }
-        }
-      }
-    },
     "main_page.switcher" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2910,23 +2827,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "系统"
-          }
-        }
-      }
-    },
-    "main_page.terminal" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Terminal"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "终端"
           }
         }
       }
@@ -3166,16 +3066,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "网络"
-          }
-        }
-      }
-    },
-    "New LinuxDo Topic" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "新建 LinuxDo 话题"
           }
         }
       }
@@ -5064,23 +4954,6 @@
         }
       }
     },
-    "settings.section.leaderboards" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Leaderboards"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "排行榜"
-          }
-        }
-      }
-    },
     "settings.section.menu_bar" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5145,23 +5018,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "系统监视器"
-          }
-        }
-      }
-    },
-    "settings.section.terminal" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Terminal"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "终端"
           }
         }
       }
@@ -7652,16 +7508,6 @@
         }
       }
     },
-    "Leaderboard" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "排行榜"
-          }
-        }
-      }
-    },
     "Repository activity" : {
       "localizations" : {
         "zh-Hans" : {
@@ -7862,16 +7708,6 @@
         }
       }
     },
-    "Authorize LinuxDo in your default browser, then return to Claude Stats from the browser prompt." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在默认浏览器中授权 LinuxDo，然后从浏览器提示返回 Claude Stats。"
-          }
-        }
-      }
-    },
     "Back" : {
       "localizations" : {
         "zh-Hans" : {
@@ -8048,16 +7884,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "关闭标签页"
-          }
-        }
-      }
-    },
-    "Close Terminal?" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "关闭终端？"
           }
         }
       }
@@ -8308,16 +8134,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "每日明细"
-          }
-        }
-      }
-    },
-    "Daily leaderboard date" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "每日排行榜日期"
           }
         }
       }
@@ -8612,36 +8428,6 @@
         }
       }
     },
-    "Leaderboard history" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "排行榜历史"
-          }
-        }
-      }
-    },
-    "LinuxDo Detail" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LinuxDo 详情"
-          }
-        }
-      }
-    },
-    "LinuxDo reading position" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LinuxDo 阅读位置"
-          }
-        }
-      }
-    },
     "Load More Posts" : {
       "localizations" : {
         "zh-Hans" : {
@@ -8758,16 +8544,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "新建标签页"
-          }
-        }
-      }
-    },
-    "New Terminal Tab" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "新建终端标签页"
           }
         }
       }
@@ -9492,16 +9268,6 @@
         }
       }
     },
-    "Sign in to LinuxDo" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "登录 LinuxDo"
-          }
-        }
-      }
-    },
     "Sort sessions" : {
       "localizations" : {
         "zh-Hans" : {
@@ -9732,16 +9498,6 @@
         }
       }
     },
-    "A generated Beam avatar linked to your iCloud leaderboard profile." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "与你 iCloud 排行榜个人资料关联的生成 Beam 头像。"
-          }
-        }
-      }
-    },
     "AI Activity Analysis" : {
       "localizations" : {
         "zh-Hans" : {
@@ -9898,26 +9654,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "选择本地或市场技能以查看其 SKILL.md、文件与元数据。"
-          }
-        }
-      }
-    },
-    "Claude Stats polls Linux.do every two minutes and sends local macOS notifications for new unread items." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Claude Stats 每两分钟轮询一次 Linux.do，对新的未读项发送本地 macOS 通知。"
-          }
-        }
-      }
-    },
-    "CloudKit Leaderboards" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "CloudKit 排行榜"
           }
         }
       }
@@ -10132,16 +9868,6 @@
         }
       }
     },
-    "LinuxDo uses a browser session by default. User API Key sign-in remains available if Linux.do enables it again." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LinuxDo 默认使用浏览器会话。如果 Linux.do 重新启用，用户 API 密钥登录仍可用。"
-          }
-        }
-      }
-    },
     "Market comparison" : {
       "localizations" : {
         "zh-Hans" : {
@@ -10282,26 +10008,6 @@
         }
       }
     },
-    "Publishes aggregate scores to CloudKit's public database. The app never uploads prompts, paths, session titles, model names, or transcript content." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "将汇总分数发布到 CloudKit 的公共数据库。应用永远不会上传提示词、路径、会话标题、模型名称或对话内容。"
-          }
-        }
-      }
-    },
-    "Publishes privacy-preserving aggregate scores to CloudKit's public database." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "将保护隐私的汇总分数发布到 CloudKit 的公共数据库。"
-          }
-        }
-      }
-    },
     "Reads commit history of repos you've used Codex in (via the `git` command) and compares it with your Codex activity — churn, recent commits, and a usage-vs-commits timeline." : {
       "localizations" : {
         "zh-Hans" : {
@@ -10418,16 +10124,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在“发现”或“精选”中选择一个 skills.sh 结果，以查看远程元数据与审计。"
-          }
-        }
-      }
-    },
-    "Shown on the leaderboard instead of your iCloud identity." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在排行榜上显示该项，而非你的 iCloud 身份。"
           }
         }
       }
@@ -10958,16 +10654,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "规则名称"
-          }
-        }
-      }
-    },
-    "Search LinuxDo" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "搜索 LinuxDo"
           }
         }
       }

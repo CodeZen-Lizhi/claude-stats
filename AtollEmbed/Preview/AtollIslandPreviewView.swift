@@ -97,8 +97,6 @@ private struct AtollIslandClosedPreviewColumn: View {
             closedBadge(symbol: "puzzlepiece.extension", title: "\(configuration.settings.extensionLiveActivityCapacity)", tint: .purple)
         case .screenAssistant:
             closedBadge(symbol: "sparkles", title: "Ask", tint: .yellow)
-        case .terminal:
-            closedBadge(symbol: "apple.terminal", title: "~", tint: .green)
         }
     }
 
@@ -257,8 +255,6 @@ private struct AtollIslandClosedPreviewColumn: View {
                 supplementLine("Extensions", detail: "\(configuration.settings.extensionLiveActivityCapacity) live")
             case .screenAssistant:
                 supplementLine("Assistant", detail: configuration.settings.selectedAIProvider)
-            case .terminal:
-                supplementLine(configuration.settings.terminalShellPath, detail: "\(Int(configuration.settings.terminalFontSize)) pt")
             }
         }
     }
@@ -375,8 +371,6 @@ private struct AtollIslandOpenPreviewColumn: View {
                 extensionContent
             case .screenAssistant:
                 screenAssistantContent
-            case .terminal:
-                terminalContent
             }
         }
         .padding(.horizontal, 16)
@@ -690,50 +684,6 @@ private struct AtollIslandOpenPreviewColumn: View {
         )
     }
 
-    private var terminalContent: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 7) {
-                Image(systemName: "apple.terminal")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.56))
-                Text(configuration.settings.terminalShellPath)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.62))
-                    .lineLimit(1)
-                Spacer()
-                Text("\(Int(configuration.settings.terminalFontSize)) pt")
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.45))
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-
-            Rectangle()
-                .fill(Color.white.opacity(0.08))
-                .frame(height: 1)
-
-            VStack(alignment: .leading, spacing: 5) {
-                ForEach(sampleData.terminalLines, id: \.self) { line in
-                    Text(line)
-                        .font(.system(size: max(9, configuration.settings.terminalFontSize - 1), design: .monospaced))
-                        .foregroundStyle(line.hasPrefix("$") ? configuration.settings.terminalForegroundColor.swiftUIColor : .green)
-                        .lineLimit(1)
-                }
-                HStack(spacing: 0) {
-                    Rectangle()
-                        .fill(configuration.settings.terminalCursorColor.swiftUIColor)
-                        .frame(width: 7, height: 13)
-                    Spacer()
-                }
-            }
-            .padding(10)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(configuration.settings.terminalBackgroundColor.swiftUIColor.opacity(configuration.settings.terminalOpacity))
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .padding(.top, 8)
-    }
-
     private var headerTabs: [AtollIslandPreviewHeaderTab] {
         var tabs: [AtollIslandPreviewHeaderTab] = []
         tabs.append(.init(id: "home", symbol: "house.fill", title: "Home", isSelected: selectedHeaderID == "home", accent: .white))
@@ -749,9 +699,6 @@ private struct AtollIslandOpenPreviewColumn: View {
         }
         if configuration.enabledTabs.contains(.clipboard) || configuration.selectedTab == .clipboard {
             tabs.append(.init(id: "clipboard", symbol: "doc.on.clipboard", title: "Clipboard", isSelected: selectedHeaderID == "clipboard", accent: .white))
-        }
-        if configuration.enabledTabs.contains(.terminal) || configuration.selectedTab == .terminal {
-            tabs.append(.init(id: "terminal", symbol: "apple.terminal", title: "Terminal", isSelected: selectedHeaderID == "terminal", accent: .white))
         }
         if configuration.enabledTabs.contains(.extensionBridge) || configuration.selectedTab == .extensionBridge {
             tabs.append(.init(id: "extensions", symbol: "puzzlepiece.extension", title: "Extensions", isSelected: selectedHeaderID == "extensions", accent: .purple, usesAccentBackground: true))
@@ -770,8 +717,6 @@ private struct AtollIslandOpenPreviewColumn: View {
             return "stats"
         case .clipboard:
             return "clipboard"
-        case .terminal:
-            return "terminal"
         case .extensionBridge:
             return "extensions"
         default:

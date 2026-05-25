@@ -18,7 +18,6 @@ struct FeaturesSettingsView: View {
             gitTrackingCard(prefs: prefs)
             systemMonitorCard(prefs: prefs)
             githubCard(prefs: prefs)
-            leaderboardsCard(prefs: prefs)
             floatingTabCard(prefs: prefs)
             notchIslandCard(prefs: prefs)
         }
@@ -80,19 +79,6 @@ struct FeaturesSettingsView: View {
         }
     }
 
-    private func leaderboardsCard(prefs: Preferences) -> some View {
-        FeatureControlCard(
-            title: "CloudKit Leaderboards",
-            symbol: "trophy",
-            description: "Publishes privacy-preserving aggregate scores to CloudKit's public database.",
-            status: prefs.leaderboardsEnabled ? env.leaderboards.syncStatus.displayText : "Not joined",
-            isOn: leaderboardsBinding(prefs: prefs),
-            onConfigure: { onSelectSection(.leaderboards) }
-        ) {
-            LeaderboardsFeaturePreview()
-        }
-    }
-
     private func floatingTabCard(prefs: Preferences) -> some View {
         @Bindable var prefs = prefs
         return FeatureControlCard(
@@ -149,22 +135,6 @@ struct FeaturesSettingsView: View {
         case .failed:
             return "Needs attention"
         }
-    }
-
-    private func leaderboardsBinding(prefs: Preferences) -> Binding<Bool> {
-        Binding(
-            get: { prefs.leaderboardsEnabled },
-            set: { enabled in
-                prefs.leaderboardsEnabled = enabled
-                Task {
-                    if enabled {
-                        await env.leaderboards.syncIfDue(force: false)
-                    } else {
-                        await env.leaderboards.checkAccountStatus()
-                    }
-                }
-            }
-        )
     }
 
 }
@@ -299,42 +269,6 @@ private struct GitHubFeaturePreview: View {
             case 2, 7: Color.green.opacity(0.72)
             case 5: Color.primary.opacity(0.44)
             default: Color.primary.opacity(0.08)
-            }
-        }
-    }
-}
-
-private struct LeaderboardsFeaturePreview: View {
-    private let rows = [
-        ("Ada", "1.42M", "1"),
-        ("Claude", "1.18M", "2"),
-        ("You", "924K", "3"),
-    ]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Label("Leaderboard", systemImage: "trophy")
-                    .font(.sora(12, weight: .semibold))
-                Spacer()
-                Text("Daily")
-                    .font(.sora(10, weight: .medium))
-                    .foregroundStyle(Color.stxMuted)
-            }
-
-            ForEach(rows, id: \.0) { row in
-                HStack(spacing: 8) {
-                    Text("#\(row.2)")
-                        .font(.sora(10, weight: .semibold).monospacedDigit())
-                        .foregroundStyle(Color.stxMuted)
-                        .frame(width: 26, alignment: .leading)
-                    BeamAvatarView(seed: "features-\(row.0)", size: 24, isDecorative: true)
-                    Text(row.0)
-                        .font(.sora(11, weight: .medium))
-                    Spacer()
-                    Text(row.1)
-                        .font(.sora(11, weight: .semibold).monospacedDigit())
-                }
             }
         }
     }

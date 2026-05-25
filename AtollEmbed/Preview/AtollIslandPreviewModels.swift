@@ -21,7 +21,6 @@ public enum AtollIslandPreviewTab: String, CaseIterable, Identifiable, Sendable 
     case lockScreenWidgets
     case extensionBridge
     case screenAssistant
-    case terminal
 
     public var id: String { rawValue }
 
@@ -46,7 +45,6 @@ public enum AtollIslandPreviewTab: String, CaseIterable, Identifiable, Sendable 
         case .lockScreenWidgets: "Lock Widgets"
         case .extensionBridge: "Extensions"
         case .screenAssistant: "Screen Assistant"
-        case .terminal: "Terminal"
         }
     }
 
@@ -71,7 +69,6 @@ public enum AtollIslandPreviewTab: String, CaseIterable, Identifiable, Sendable 
         case .lockScreenWidgets: "lock.display"
         case .extensionBridge: "puzzlepiece.extension"
         case .screenAssistant: "sparkles"
-        case .terminal: "apple.terminal"
         }
     }
 
@@ -189,13 +186,6 @@ public struct AtollIslandPreviewSettings: Equatable, Sendable {
     public var extensionLiveActivityCapacity: Int
     public var screenAssistantDisplayMode: String
     public var selectedAIProvider: String
-    public var terminalShellPath: String
-    public var terminalFontFamily: String
-    public var terminalFontSize: Double
-    public var terminalOpacity: Double
-    public var terminalBackgroundColor: AtollSettingColor
-    public var terminalForegroundColor: AtollSettingColor
-    public var terminalCursorColor: AtollSettingColor
 
     public init(
         externalDisplayStyle: String,
@@ -250,14 +240,7 @@ public struct AtollIslandPreviewSettings: Equatable, Sendable {
         lockScreenBatteryShowsBatteryGauge: Bool,
         extensionLiveActivityCapacity: Int,
         screenAssistantDisplayMode: String,
-        selectedAIProvider: String,
-        terminalShellPath: String,
-        terminalFontFamily: String,
-        terminalFontSize: Double,
-        terminalOpacity: Double,
-        terminalBackgroundColor: AtollSettingColor,
-        terminalForegroundColor: AtollSettingColor,
-        terminalCursorColor: AtollSettingColor
+        selectedAIProvider: String
     ) {
         self.externalDisplayStyle = externalDisplayStyle
         self.enableShadow = enableShadow
@@ -312,13 +295,6 @@ public struct AtollIslandPreviewSettings: Equatable, Sendable {
         self.extensionLiveActivityCapacity = extensionLiveActivityCapacity
         self.screenAssistantDisplayMode = screenAssistantDisplayMode
         self.selectedAIProvider = selectedAIProvider
-        self.terminalShellPath = terminalShellPath
-        self.terminalFontFamily = terminalFontFamily
-        self.terminalFontSize = terminalFontSize
-        self.terminalOpacity = terminalOpacity
-        self.terminalBackgroundColor = terminalBackgroundColor
-        self.terminalForegroundColor = terminalForegroundColor
-        self.terminalCursorColor = terminalCursorColor
     }
 
     @MainActor
@@ -376,14 +352,7 @@ public struct AtollIslandPreviewSettings: Equatable, Sendable {
             lockScreenBatteryShowsBatteryGauge: bool("lockScreen.lockScreenBatteryShowsBatteryGauge", fallback: true),
             extensionLiveActivityCapacity: int("extensions.extensionLiveActivityCapacity", fallback: 3),
             screenAssistantDisplayMode: string("screenAssistant.screenAssistantDisplayMode", fallback: "panel"),
-            selectedAIProvider: string("screenAssistant.selectedAIProvider", fallback: "openAI"),
-            terminalShellPath: string("terminal.terminalShellPath", fallback: "/bin/zsh"),
-            terminalFontFamily: string("terminal.terminalFontFamily", fallback: "Menlo"),
-            terminalFontSize: double("terminal.terminalFontSize", fallback: 12),
-            terminalOpacity: double("terminal.terminalOpacity", fallback: 1),
-            terminalBackgroundColor: color("terminal.terminalBackgroundColor", fallback: .init(red: 0.03, green: 0.03, blue: 0.04)),
-            terminalForegroundColor: color("terminal.terminalForegroundColor", fallback: .init(red: 0.88, green: 0.92, blue: 0.9)),
-            terminalCursorColor: color("terminal.terminalCursorColor", fallback: .init(red: 0.3, green: 0.86, blue: 0.55))
+            selectedAIProvider: string("screenAssistant.selectedAIProvider", fallback: "openAI")
         )
     }
 }
@@ -396,7 +365,6 @@ public struct AtollIslandPreviewSampleData: Equatable, Sendable {
     public var colors: [AtollSettingColor]
     public var calendar: [CalendarEvent]
     public var shelfItems: [ShelfItem]
-    public var terminalLines: [String]
 
     public init(
         media: Media,
@@ -405,8 +373,7 @@ public struct AtollIslandPreviewSampleData: Equatable, Sendable {
         clipboard: [String],
         colors: [AtollSettingColor],
         calendar: [CalendarEvent],
-        shelfItems: [ShelfItem],
-        terminalLines: [String]
+        shelfItems: [ShelfItem]
     ) {
         self.media = media
         self.stats = stats
@@ -415,7 +382,6 @@ public struct AtollIslandPreviewSampleData: Equatable, Sendable {
         self.colors = colors
         self.calendar = calendar
         self.shelfItems = shelfItems
-        self.terminalLines = terminalLines
     }
 
     public static let deterministic = AtollIslandPreviewSampleData(
@@ -456,11 +422,6 @@ public struct AtollIslandPreviewSampleData: Equatable, Sendable {
             .init(id: "draft", title: "Draft.md", symbol: "doc.text.fill"),
             .init(id: "shot", title: "Preview.png", symbol: "photo.fill"),
             .init(id: "bundle", title: "Assets", symbol: "folder.fill")
-        ],
-        terminalLines: [
-            "$ codex-stats --notch-preview",
-            "sample data loaded",
-            "rendering Atoll shell..."
         ]
     )
 

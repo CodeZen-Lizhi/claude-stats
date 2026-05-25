@@ -89,7 +89,6 @@ struct PreferencesTests {
         #expect(!prefs.notchIslandEnabledModules.contains(.lockScreenWidgets))
         #expect(!prefs.notchIslandEnabledModules.contains(.extensionBridge))
         #expect(!prefs.notchIslandEnabledModules.contains(.screenAssistant))
-        #expect(!prefs.notchIslandEnabledModules.contains(.terminal))
     }
 
     @Test("Notch Island preferences persist and invalid values fall back")
@@ -247,38 +246,6 @@ struct PreferencesTests {
 
         let reloaded = Preferences(defaults: defaults)
         #expect(reloaded.networkAutoEnableSystemProxyOnStart == true)
-    }
-
-    @Test("Terminal appearance defaults use full chrome and fluid background")
-    func terminalAppearanceDefaults() {
-        let defaults = makeDefaults()
-        let prefs = Preferences(defaults: defaults)
-
-        #expect(prefs.terminalChromeMode == .tabsAndStatus)
-        #expect(prefs.terminalBackgroundStyle == .fluidGradient)
-    }
-
-    @Test("Terminal appearance preferences persist")
-    func terminalAppearancePersists() {
-        let defaults = makeDefaults()
-        let prefs = Preferences(defaults: defaults)
-        prefs.terminalChromeMode = .statusOnly
-        prefs.terminalBackgroundStyle = .solid
-
-        let reloaded = Preferences(defaults: defaults)
-        #expect(reloaded.terminalChromeMode == .statusOnly)
-        #expect(reloaded.terminalBackgroundStyle == .solid)
-    }
-
-    @Test("Invalid terminal appearance values fall back safely")
-    func invalidTerminalAppearanceFallsBack() {
-        let defaults = makeDefaults()
-        defaults.set("floating", forKey: "terminalChromeMode")
-        defaults.set("wallpaper", forKey: "terminalBackgroundStyle")
-
-        let prefs = Preferences(defaults: defaults)
-        #expect(prefs.terminalChromeMode == .tabsAndStatus)
-        #expect(prefs.terminalBackgroundStyle == .fluidGradient)
     }
 
     @Test("System Monitor defaults are off with balanced refresh and all modules")

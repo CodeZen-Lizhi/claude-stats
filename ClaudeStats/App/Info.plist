@@ -14,17 +14,6 @@
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleURLName</key>
-			<string>com.claudestats.ClaudeStats.linuxdo</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>claude-stats</string>
-			</array>
-		</dict>
-	</array>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
@@ -68,33 +57,33 @@
 	<key>RockxySharedUTTypePrefix</key>
 	<string>$(ROCKXY_SHARED_UTTYPE_PREFIX)</string>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>A program running in the embedded terminal may request AppleScript access. Notch Island media controls may also use Apple Events for local music apps.</string>
+	<string>Notch Island media controls may use Apple Events for local music apps.</string>
 	<key>NSAppleMusicUsageDescription</key>
 	<string>Notch Island can read local Apple Music playback metadata when the media module is enabled.</string>
 	<key>NSAudioCaptureUsageDescription</key>
 	<string>Notch Island can capture local audio levels for visualizer modules when audio features are enabled.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>A program running in the embedded terminal may request Bluetooth access. Notch Island can show Bluetooth audio device status when enabled.</string>
+	<string>Notch Island can show Bluetooth audio device status when enabled.</string>
 	<key>NSCalendarsUsageDescription</key>
-	<string>A program running in the embedded terminal may request calendar access.</string>
+	<string>Notch Island can show calendar and reminder previews when enabled.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>A program running in the embedded terminal may request camera access.</string>
+	<string>Notch Island can show camera privacy indicators when enabled.</string>
 	<key>NSContactsUsageDescription</key>
-	<string>A program running in the embedded terminal may request contacts access.</string>
+	<string>Claude Stats may request contacts access for enabled Notch Island modules.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>A program running in the embedded terminal may request local network access.</string>
+	<string>Claude Stats can inspect local network traffic when the network debugger is enabled.</string>
 	<key>NSLocationUsageDescription</key>
-	<string>A program running in the embedded terminal may request location access.</string>
+	<string>Claude Stats may request location access for enabled Notch Island modules.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>A program running in the embedded terminal may request microphone access. Notch Island can show microphone privacy indicators when enabled.</string>
+	<string>Notch Island can show microphone privacy indicators when enabled.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>A program running in the embedded terminal may request photo library access.</string>
+	<string>Claude Stats may request photo library access for enabled Notch Island modules.</string>
 	<key>NSRemindersUsageDescription</key>
-	<string>A program running in the embedded terminal may request reminders access.</string>
+	<string>Notch Island can show reminders alongside calendar previews when enabled.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>A program running in the embedded terminal may request speech recognition access.</string>
+	<string>Claude Stats may request speech recognition access for enabled Notch Island modules.</string>
 	<key>NSSystemAdministrationUsageDescription</key>
-	<string>A program running in the embedded terminal may request elevated privileges.</string>
+	<string>Claude Stats may request elevated privileges for helper tools when explicitly enabled.</string>
 	<key>NSScreenCaptureUsageDescription</key>
 	<string>Claude Stats can use screen recording for Notch Island recording indicators and screen assistant modules when enabled.</string>
 	<!--

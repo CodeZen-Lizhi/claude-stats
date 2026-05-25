@@ -13,33 +13,33 @@ struct AtollDefaultsBridgeTests {
         #expect(AtollDefaultsBridge.standardTabCount(for: fiveTabs) == 5)
         #expect(AtollDefaultsBridge.recommendedMinimumWidth(for: fiveTabs) == 690)
 
-        let sixTabs = fiveTabs.union([.terminal])
-        #expect(AtollDefaultsBridge.standardTabCount(for: sixTabs) == 6)
-        #expect(AtollDefaultsBridge.recommendedMinimumWidth(for: sixTabs) == 770)
+        let fourTabs: Set<AtollIslandFeature> = [.media, .shelf, .timer, .stats]
+        #expect(AtollDefaultsBridge.standardTabCount(for: fourTabs) == 4)
+        #expect(AtollDefaultsBridge.recommendedMinimumWidth(for: fourTabs) == 640)
     }
 
     @Test("Resolved width never undercuts Atoll recommendation")
     func resolvedWidthDoesNotUndercutRecommendation() {
-        let sixTabs: Set<AtollIslandFeature> = [.media, .shelf, .timer, .stats, .clipboard, .terminal]
+        let fiveTabs: Set<AtollIslandFeature> = [.media, .shelf, .timer, .stats, .clipboard]
 
         #expect(
             AtollDefaultsBridge.resolvedOpenWidth(
                 requested: 420,
-                features: sixTabs,
+                features: fiveTabs,
                 maxAllowedWidth: 900
-            ) == 770
+            ) == 690
         )
         #expect(
             AtollDefaultsBridge.resolvedOpenWidth(
                 requested: 840,
-                features: sixTabs,
+                features: fiveTabs,
                 maxAllowedWidth: 900
             ) == 840
         )
         #expect(
             AtollDefaultsBridge.resolvedOpenWidth(
                 requested: 840,
-                features: sixTabs,
+                features: fiveTabs,
                 maxAllowedWidth: 700
             ) == 700
         )

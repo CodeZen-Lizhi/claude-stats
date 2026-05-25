@@ -5,7 +5,7 @@
 <h1 align="center">Claude Stats</h1>
 
 <p align="center">
-  Native macOS menu-bar stats, terminal, Notch Island, and network debugging for AI coding work.
+  Native macOS menu-bar stats, Notch Island, and network debugging for AI coding work.
 </p>
 
 <p align="center">
@@ -19,7 +19,7 @@
 
 Claude Stats is an open-source native macOS app for people who work in AI coding tools all day. It runs from the menu bar, reads local usage and activity data, and turns it into quick answers about sessions, tokens, cost, limits, repository activity, local status, and debugging context.
 
-The app began as a focused macOS take on the open-source [Claude Statistics](https://github.com/sj719045032/claude-statistics) project. It is now a Codex-only product with a provider abstraction kept internally for clean session, usage, and configuration boundaries, plus an embedded terminal, a Notch Island surface, and an integrated network debugger.
+The app began as a focused macOS take on the open-source [Claude Statistics](https://github.com/sj719045032/claude-statistics) project. It is now a Codex-only product with a provider abstraction kept internally for clean session, usage, and configuration boundaries, plus a Notch Island surface and an integrated network debugger.
 
 ## Reference Notes
 
@@ -32,8 +32,7 @@ The app began as a focused macOS take on the open-source [Claude Statistics](htt
 - Codex session log discovery, parsing, usage stats, estimated cost, usage limits, and OpenAI service status.
 - API provider switcher for Codex CLI configuration.
 - Git and repository activity views, including optional bundled Git tooling for release builds.
-- A Ghostty-powered embedded terminal.
-- An Atoll-backed Notch Island surface for optional media, timer, stats, clipboard, terminal, and related modules.
+- An Atoll-backed Notch Island surface for optional media, timer, stats, clipboard, and related modules.
 - A Rockxy-backed network debugger with proxy, rule, certificate, and helper-tool integration.
 - Sparkle-based automatic updates for packaged releases.
 
@@ -87,16 +86,10 @@ Screenshots and GIF demos live in [`docs/assets/screens`](docs/assets/screens), 
 <p><strong>AI-assisted focus timeline</strong></p>
 <img src="docs/assets/screens/activity-focus-timeline.png" alt="AI-assisted focus timeline">
 
-<p><strong>Weekly leaderboards</strong></p>
-<img src="docs/assets/screens/leaderboards-weekly.png" alt="Weekly usage leaderboard">
-
 </details>
 
 <details>
-<summary><strong>Community and local knowledge</strong></summary>
-
-<p><strong>LinuxDo native reader</strong></p>
-<img src="docs/assets/screens/linuxdo-reader.png" alt="LinuxDo native topic reader">
+<summary><strong>Configuration and local knowledge</strong></summary>
 
 <p><strong>Plans and config browser</strong></p>
 <img src="docs/assets/screens/configs-plans-browser.png" alt="Plans and config browser">
@@ -118,7 +111,7 @@ Screenshots and GIF demos live in [`docs/assets/screens`](docs/assets/screens), 
 </details>
 
 <details>
-<summary><strong>Ops, network, and terminal</strong></summary>
+<summary><strong>Ops and network</strong></summary>
 
 <p><strong>Listening ports</strong></p>
 <img src="docs/assets/screens/ops-listening-ports.png" alt="Listening ports inspector">
@@ -132,9 +125,6 @@ Screenshots and GIF demos live in [`docs/assets/screens`](docs/assets/screens), 
 <p><strong>Network traffic</strong></p>
 <img src="docs/assets/screens/network-traffic.png" alt="Network traffic debugger">
 
-<p><strong>Embedded terminal</strong></p>
-<img src="docs/assets/screens/terminal-session.png" alt="Embedded terminal session">
-
 </details>
 
 <details>
@@ -142,9 +132,6 @@ Screenshots and GIF demos live in [`docs/assets/screens`](docs/assets/screens), 
 
 <p><strong>Feature toggles</strong></p>
 <img src="docs/assets/screens/settings-features.png" alt="Feature settings">
-
-<p><strong>Terminal appearance</strong></p>
-<img src="docs/assets/screens/settings-terminal-appearance.png" alt="Terminal appearance settings">
 
 </details>
 
@@ -167,7 +154,7 @@ Intel Macs are not supported by current releases. The last public universal buil
 
 Claude Stats is local-first. Core usage stats are read from local Codex data such as `~/.codex/sessions/`; optional activity features may request macOS permissions such as Full Disk Access, Accessibility, or Screen Recording.
 
-Network-facing features are opt-in or feature-specific: Sparkle checks for updates, OpenAI status views may query public status pages, Linux.do integration may authenticate through the browser, and the network debugger proxies only the traffic you route through it. The Rockxy helper and certificate features are powerful debugging tools, so review the source and settings before enabling HTTPS interception.
+Network-facing features are opt-in or feature-specific: Sparkle checks for updates, OpenAI status views may query public status pages, and the network debugger proxies only the traffic you route through it. The Rockxy helper and certificate features are powerful debugging tools, so review the source and settings before enabling HTTPS interception.
 
 ## Build From Source
 
@@ -182,7 +169,6 @@ Install local build tools:
 
 ```bash
 brew install xcodegen
-bash scripts/install-zig.sh  # installs the Zig version used to build GhosttyKit
 ```
 
 Generate the Xcode project if you want to inspect it directly:
@@ -206,7 +192,6 @@ bash scripts/run-tests.sh  # generate + build test dependencies + run unit tests
 - Apple Silicon Mac with macOS 15+
 - Xcode 26+ with Swift 6 language mode
 - XcodeGen for project generation
-- Zig 0.15.2 for rebuilding `GhosttyKit.xcframework`
 
 ## Project Layout
 
@@ -219,12 +204,11 @@ ClaudeStats/
   Resources/    pricing data, Git tools placeholder, app resources
   Services/     stores, scanners, network debugging, system integrations
   ViewModels/   per-screen and feature view models
-  Views/        menu bar, main window, settings, terminal, network, activity UI
+  Views/        menu bar, main window, settings, network, activity UI
   Utilities/    formatters, logging, shared helpers
 AtollEmbed/       app-side wrapper for the Atoll/DynamicIsland integration
-GhosttyEmbed/     app-side wrapper for embedded Ghostty terminal support
 RockxyBackendEmbed/ app-side wrapper for Rockxy proxy/debugging support
-ThirdParty/       git submodules for Atoll, Rockxy, and Ghostty
+ThirdParty/       git submodules for Atoll and Rockxy
 ClaudeStatsTests/ parser, scanner, settings, integration, and feature tests
 docs/assets/      README images, icons, screenshots, and GIFs
 scripts/          project generation, local run/test, release, appcast tooling
@@ -238,9 +222,8 @@ Claude Stats is released under the [GNU Affero General Public License v3.0](LICE
 | --- | --- | --- |
 | [Rockxy](https://github.com/1pitaph/Rockxy) | AGPL-3.0 | Integrated through `RockxyBackendEmbed` and `RockxyHelperTool` for the network debugger, proxy engine, rule handling, certificates, and privileged helper flow. |
 | [Atoll / DynamicIsland](https://github.com/1pitaph/Atoll) | GPL-3.0 | Integrated through `AtollEmbed` for the optional Notch Island surface and modules. Its [`NOTICE`](ThirdParty/Atoll/NOTICE) and [`COPYRIGHT_ASSETS`](ThirdParty/Atoll/COPYRIGHT_ASSETS) files remain part of the attribution trail. |
-| [Ghostty](https://github.com/ghostty-org/ghostty) | MIT | Integrated through `GhosttyEmbed` and `ThirdParty/ghostty/macos/GhosttyKit.xcframework` for the embedded terminal. Vendored Ghostty assets and dependencies retain their own licenses. |
 
-Additional Swift Package Manager dependencies include Sparkle, SwiftNIO, SwiftNIOSSL, Swift Certificates, Swift Crypto, Defaults, KeyboardShortcuts, SwiftUIIntrospect, Lottie, MacroVisionKit, SkyLightWindow, AtollExtensionKit, Swift Collections, and SwiftSoup. Those packages keep their upstream licenses and notices.
+Additional Swift Package Manager dependencies include Sparkle, SwiftNIO, SwiftNIOSSL, Swift Certificates, Swift Crypto, Defaults, KeyboardShortcuts, SwiftUIIntrospect, Lottie, MacroVisionKit, SkyLightWindow, AtollExtensionKit, and Swift Collections. Those packages keep their upstream licenses and notices.
 
 ## Contributing
 
@@ -256,4 +239,4 @@ For app behavior changes, also run:
 bash scripts/run-debug.sh
 ```
 
-Keep Swift 6 strict concurrency warning-free. When changing Atoll, Rockxy, or Ghostty integration code, make the source changes in the relevant submodule/fork first, then update the submodule pointer in this repo.
+Keep Swift 6 strict concurrency warning-free. When changing Atoll or Rockxy integration code, make the source changes in the relevant submodule/fork first, then update the submodule pointer in this repo.

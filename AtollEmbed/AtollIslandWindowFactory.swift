@@ -56,10 +56,6 @@ public enum AtollIslandSizing {
             baseSize.height = 250
         case .notes, .clipboard:
             baseSize.height = max(baseSize.height, coordinator.notesLayoutState.preferredHeight)
-        case .terminal:
-            let screenHeight = screen?.visibleFrame.height ?? NSScreen.main?.visibleFrame.height ?? 800
-            let maxFraction = Defaults[.terminalMaxHeightFraction]
-            baseSize.height = min(screenHeight * maxFraction, max(300, screenHeight * maxFraction))
         case .stats:
             baseSize = statsAdjustedNotchSize(
                 from: baseSize,

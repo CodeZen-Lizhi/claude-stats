@@ -48,7 +48,7 @@ public enum AtollDefaultsBridge {
         syncExtensionAvailability(extensionsEnabled, lockScreenEnabled: lockScreenEnabled)
 
         Defaults[.enableScreenAssistant] = features.contains(.screenAssistant)
-        Defaults[.enableTerminalFeature] = features.contains(.terminal)
+        Defaults[.enableTerminalFeature] = false
 
         Defaults[.openNotchWidth] = resolvedOpenWidth(
             requested: configuration.openNotchWidth,
@@ -151,9 +151,6 @@ public enum AtollDefaultsBridge {
         if features.contains(.clipboard) {
             count += 1
         }
-        if features.contains(.terminal) {
-            count += 1
-        }
         return count
     }
 
@@ -195,9 +192,6 @@ public enum AtollDefaultsBridge {
         }
         if Defaults[.enableClipboardManager], Defaults[.clipboardDisplayMode] == .separateTab {
             features.insert(.clipboard)
-        }
-        if Defaults[.enableTerminalFeature] {
-            features.insert(.terminal)
         }
         return features
     }

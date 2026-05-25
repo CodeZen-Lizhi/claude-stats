@@ -19,7 +19,6 @@ public enum AtollIslandFeature: String, CaseIterable, Sendable {
     case lockScreenWidgets
     case extensionBridge
     case screenAssistant
-    case terminal
 }
 
 public enum AtollIslandScreenStyle: String, Sendable, Equatable {

@@ -151,9 +151,7 @@ public final class AtollIslandRuntimeBridge {
             Defaults.publisher(.showMemoryGraph, options: []).map { _ in () }.eraseToAnyPublisher(),
             Defaults.publisher(.showGpuGraph, options: []).map { _ in () }.eraseToAnyPublisher(),
             Defaults.publisher(.showNetworkGraph, options: []).map { _ in () }.eraseToAnyPublisher(),
-            Defaults.publisher(.showDiskGraph, options: []).map { _ in () }.eraseToAnyPublisher(),
-            Defaults.publisher(.enableTerminalFeature, options: []).map { _ in () }.eraseToAnyPublisher(),
-            Defaults.publisher(.terminalMaxHeightFraction, options: []).map { _ in () }.eraseToAnyPublisher()
+            Defaults.publisher(.showDiskGraph, options: []).map { _ in () }.eraseToAnyPublisher()
         ]
 
         Publishers.MergeMany(defaultChanges)
@@ -186,8 +184,6 @@ public final class AtollIslandRuntimeBridge {
             coordinator.currentView = .stats
         } else if features.contains(.clipboard) {
             coordinator.currentView = .notes
-        } else if features.contains(.terminal) {
-            coordinator.currentView = .terminal
         } else {
             coordinator.currentView = .home
         }

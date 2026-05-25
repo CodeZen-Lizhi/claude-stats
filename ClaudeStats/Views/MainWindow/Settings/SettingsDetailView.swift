@@ -64,12 +64,8 @@ struct SettingsDetailView: View {
         case .menuBar: MenuBarSettingsView()
         case .notchIsland: EmptyView()
         case .tracking: TrackingSettingsView(onSelectSection: onSelectSection)
-        case .localAI: LocalAIModelsSettingsView()
-        case .leaderboards: LeaderboardsSettingsView(onSelectSection: onSelectSection)
         case .github: GitHubSettingsView(onSelectSection: onSelectSection)
-        case .linuxDo: LinuxDoSettingsView(store: env.linuxDo)
         case .systemMonitor: SystemMonitorSettingsView(onSelectSection: onSelectSection)
-        case .terminal: TerminalSettingsView()
         case .about: AboutSettingsView(onShowReleaseHistory: showReleaseHistory)
         }
     }

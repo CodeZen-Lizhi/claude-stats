@@ -23,7 +23,6 @@ public enum AtollSettingsTabID: String, CaseIterable, Identifiable, Sendable {
     case lockScreenWidgets
     case extensionBridge
     case screenAssistant
-    case terminal
 
     public var id: String { rawValue }
 }
@@ -297,21 +296,6 @@ public enum AtollSettingsBridge {
         case "screenAssistant.enableThinkingMode": .bool(Defaults[.enableThinkingMode])
         case "screenAssistant.localModelEndpoint": .string(Defaults[.localModelEndpoint])
 
-        case "terminal.terminalStickyMode": .bool(Defaults[.terminalStickyMode])
-        case "terminal.terminalShellPath": .string(Defaults[.terminalShellPath])
-        case "terminal.terminalFontFamily": .string(Defaults[.terminalFontFamily])
-        case "terminal.terminalFontSize": .double(Defaults[.terminalFontSize])
-        case "terminal.terminalOpacity": .double(Defaults[.terminalOpacity])
-        case "terminal.terminalMaxHeightFraction": .double(Defaults[.terminalMaxHeightFraction])
-        case "terminal.terminalBackgroundColor": colorValue(Defaults[.terminalBackgroundColor])
-        case "terminal.terminalForegroundColor": colorValue(Defaults[.terminalForegroundColor])
-        case "terminal.terminalCursorColor": colorValue(Defaults[.terminalCursorColor])
-        case "terminal.terminalBoldAsBright": .bool(Defaults[.terminalBoldAsBright])
-        case "terminal.terminalCursorStyle": .string(Defaults[.terminalCursorStyle])
-        case "terminal.terminalScrollbackLines": .int(Defaults[.terminalScrollbackLines])
-        case "terminal.terminalOptionAsMeta": .bool(Defaults[.terminalOptionAsMeta])
-        case "terminal.terminalMouseReporting": .bool(Defaults[.terminalMouseReporting])
-
         default:
             nil
         }
@@ -511,21 +495,6 @@ public enum AtollSettingsBridge {
         case "screenAssistant.selectedAIProvider": return setStringEnum(value, AIModelProvider.self) { Defaults[.selectedAIProvider] = $0 }
         case "screenAssistant.enableThinkingMode": return setBool(value) { Defaults[.enableThinkingMode] = $0 }
         case "screenAssistant.localModelEndpoint": return setString(value) { Defaults[.localModelEndpoint] = $0 }
-
-        case "terminal.terminalStickyMode": return setBool(value) { Defaults[.terminalStickyMode] = $0 }
-        case "terminal.terminalShellPath": return setString(value) { Defaults[.terminalShellPath] = $0 }
-        case "terminal.terminalFontFamily": return setString(value) { Defaults[.terminalFontFamily] = $0 }
-        case "terminal.terminalFontSize": return setDouble(value) { Defaults[.terminalFontSize] = $0 }
-        case "terminal.terminalOpacity": return setDouble(value) { Defaults[.terminalOpacity] = $0 }
-        case "terminal.terminalMaxHeightFraction": return setDouble(value) { Defaults[.terminalMaxHeightFraction] = $0 }
-        case "terminal.terminalBackgroundColor": return setColor(value) { Defaults[.terminalBackgroundColor] = $0 }
-        case "terminal.terminalForegroundColor": return setColor(value) { Defaults[.terminalForegroundColor] = $0 }
-        case "terminal.terminalCursorColor": return setColor(value) { Defaults[.terminalCursorColor] = $0 }
-        case "terminal.terminalBoldAsBright": return setBool(value) { Defaults[.terminalBoldAsBright] = $0 }
-        case "terminal.terminalCursorStyle": return setString(value) { Defaults[.terminalCursorStyle] = $0 }
-        case "terminal.terminalScrollbackLines": return setInt(value) { Defaults[.terminalScrollbackLines] = $0 }
-        case "terminal.terminalOptionAsMeta": return setBool(value) { Defaults[.terminalOptionAsMeta] = $0 }
-        case "terminal.terminalMouseReporting": return setBool(value) { Defaults[.terminalMouseReporting] = $0 }
 
         default:
             return false
@@ -826,30 +795,6 @@ private extension AtollSettingsBridge {
                 picker("screenAssistant.selectedAIProvider", "Default provider", nil, enumOptions(AIModelProvider.self) { $0.displayName }),
                 toggle("screenAssistant.enableThinkingMode", "Enable thinking mode", nil),
                 text("screenAssistant.localModelEndpoint", "Local model endpoint", "Endpoint used by local model providers.")
-            ])
-        ],
-        .terminal: [
-            group("General", [
-                toggle("terminal.terminalStickyMode", "Keep terminal open until clicked outside", nil),
-                text("terminal.terminalShellPath", "Shell path", nil)
-            ]),
-            group("Appearance", [
-                text("terminal.terminalFontFamily", "Font family", "Leave empty for System Monospaced."),
-                slider("terminal.terminalFontSize", "Font size", nil, 8, 24, 1, "pt"),
-                slider("terminal.terminalOpacity", "Terminal opacity", nil, 0.3, 1, 0.05, nil),
-                slider("terminal.terminalMaxHeightFraction", "Maximum height", nil, 0.2, 0.5, 0.05, nil)
-            ]),
-            group("Colors", [
-                color("terminal.terminalBackgroundColor", "Background", nil),
-                color("terminal.terminalForegroundColor", "Foreground", nil),
-                color("terminal.terminalCursorColor", "Cursor", nil),
-                toggle("terminal.terminalBoldAsBright", "Bold text as bright colors", nil)
-            ]),
-            group("Input", [
-                picker("terminal.terminalCursorStyle", "Cursor style", nil, fixedOptions([("blinkBlock", "Blinking block"), ("block", "Block"), ("underline", "Underline"), ("bar", "Bar")])),
-                slider("terminal.terminalScrollbackLines", "Scrollback lines", nil, 100, 10000, 100, nil),
-                toggle("terminal.terminalOptionAsMeta", "Option as Meta", nil),
-                toggle("terminal.terminalMouseReporting", "Mouse reporting", nil)
             ])
         ]
     ]

@@ -216,13 +216,6 @@ struct FloatingStatsPanelView: View {
                 )
             }
 
-            FloatingStatsActionButton(symbol: "terminal", label: "Open Terminal") {
-                NotificationCenter.default.post(
-                    name: .openMainWindowDestinationFromFloatingStats,
-                    object: FloatingStatsMainWindowDestination.page(.terminal)
-                )
-            }
-
             FloatingStatsActionButton(symbol: "network", label: "Open Network") {
                 NotificationCenter.default.post(
                     name: .openMainWindowDestinationFromFloatingStats,

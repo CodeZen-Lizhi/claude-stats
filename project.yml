@@ -8,7 +8,6 @@ options:
 
 configs:
   Debug: debug
-  DebugCloudKit: debug
   Release: release
   ReleaseSigned: release
 
@@ -55,9 +54,6 @@ packages:
   SwiftCollections:
     url: https://github.com/apple/swift-collections.git
     from: "1.1.0"
-  SwiftSoup:
-    url: https://github.com/scinfu/SwiftSoup
-    from: "2.13.5"
 
 settings:
   base:
@@ -119,10 +115,6 @@ targets:
         Debug:
           CODE_SIGN_IDENTITY: "-"
           CODE_SIGN_STYLE: Automatic
-        DebugCloudKit:
-          CODE_SIGN_IDENTITY: Apple Development
-          CODE_SIGN_STYLE: Automatic
-          DEVELOPMENT_TEAM: 24XGLNT76L
         Release:
           CODE_SIGN_IDENTITY: "-"
           CODE_SIGN_STYLE: Automatic
@@ -203,50 +195,6 @@ targets:
           ENABLE_HARDENED_RUNTIME: YES
           OTHER_CODE_SIGN_FLAGS: "--timestamp"
 
-  GhosttyEmbed:
-    type: framework
-    platform: macOS
-    sources:
-      - path: GhosttyEmbed
-        excludes:
-          - Resources
-      - path: ThirdParty/ghostty/macos/Sources/Ghostty
-        excludes:
-          - "**/*_UIKit.swift"
-      - path: ThirdParty/ghostty/macos/Sources/Features/Terminal
-      - path: ThirdParty/ghostty/macos/Sources/Features/Splits
-      - path: ThirdParty/ghostty/macos/Sources/Features/Command Palette
-      - path: ThirdParty/ghostty/macos/Sources/Features/ClipboardConfirmation
-      - path: ThirdParty/ghostty/macos/Sources/Features/Secure Input
-      - path: ThirdParty/ghostty/macos/Sources/Features/QuickTerminal
-      - path: ThirdParty/ghostty/macos/Sources/Features/Update
-      - path: ThirdParty/ghostty/macos/Sources/Helpers
-      - path: ThirdParty/ghostty/macos/Assets.xcassets
-      - path: GhosttyEmbed/Resources
-        type: folder
-        buildPhase: resources
-    dependencies:
-      - package: Sparkle
-      - framework: ThirdParty/ghostty/macos/GhosttyKit.xcframework
-      - sdk: Carbon.framework
-      - sdk: libc++.tbd
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.claudestats.GhosttyEmbed
-        PRODUCT_NAME: GhosttyEmbed
-        GENERATE_INFOPLIST_FILE: YES
-        SWIFT_VERSION: "5.0"
-        SWIFT_STRICT_CONCURRENCY: minimal
-        SWIFT_OBJC_BRIDGING_HEADER: ThirdParty/ghostty/macos/Sources/App/macOS/ghostty-bridging-header.h
-        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
-      configs:
-        ReleaseSigned:
-          CODE_SIGN_STYLE: Manual
-          CODE_SIGN_IDENTITY: "$(SIGN_IDENTITY)"
-          DEVELOPMENT_TEAM: "$(APPLE_TEAM_ID)"
-          ENABLE_HARDENED_RUNTIME: YES
-          OTHER_CODE_SIGN_FLAGS: "--timestamp"
-
   AtollEmbed:
     type: framework
     platform: macOS
@@ -270,7 +218,6 @@ targets:
         type: folder
         buildPhase: resources
     dependencies:
-      - target: GhosttyEmbed
       - package: Defaults
       - package: KeyboardShortcuts
       - package: SwiftUIIntrospect
@@ -348,21 +295,15 @@ targets:
         copy:
           destination: wrapper
           subpath: Contents/Library/HelperTools
-      - target: GhosttyEmbed
       - target: AtollEmbed
       - package: Lottie
       - package: SwiftCollections
         product: Collections
-      - package: SwiftSoup
       - framework: ThirdParty/Atoll/Frameworks/MediaRemoteAdapter.framework
-        embed: true
-        codeSign: true
-      - framework: ThirdParty/llama.cpp/build-macos/framework/llama.framework
         embed: true
         codeSign: true
       - sdk: ApplicationServices.framework
       - sdk: Accelerate.framework
-      - sdk: Metal.framework
       - sdk: ScreenCaptureKit.framework
       - sdk: Vision.framework
       - sdk: IOKit.framework
@@ -496,19 +437,13 @@ targets:
           ENABLE_HARDENED_RUNTIME: NO
           CODE_SIGN_IDENTITY: "-"
           CODE_SIGN_STYLE: Automatic
-        DebugCloudKit:
-          CODE_SIGN_ENTITLEMENTS: ClaudeStats/App/ClaudeStatsCloudKitDebug.entitlements
-          ENABLE_HARDENED_RUNTIME: NO
-          CODE_SIGN_IDENTITY: Apple Development
-          CODE_SIGN_STYLE: Automatic
-          DEVELOPMENT_TEAM: 24XGLNT76L
         Release:
           CODE_SIGN_ENTITLEMENTS: ClaudeStats/App/ClaudeStats.entitlements
           ENABLE_HARDENED_RUNTIME: NO
           CODE_SIGN_IDENTITY: "-"
           CODE_SIGN_STYLE: Automatic
         ReleaseSigned:
-          CODE_SIGN_ENTITLEMENTS: ClaudeStats/App/ClaudeStatsCloudKit.entitlements
+          CODE_SIGN_ENTITLEMENTS: ClaudeStats/App/ClaudeStats.entitlements
           ENABLE_HARDENED_RUNTIME: YES
           CODE_SIGN_IDENTITY: "$(SIGN_IDENTITY)"
           CODE_SIGN_STYLE: Manual
@@ -547,10 +482,6 @@ targets:
         Debug:
           CODE_SIGN_IDENTITY: "-"
           CODE_SIGN_STYLE: Automatic
-        DebugCloudKit:
-          CODE_SIGN_IDENTITY: Apple Development
-          CODE_SIGN_STYLE: Automatic
-          DEVELOPMENT_TEAM: 24XGLNT76L
         Release:
           CODE_SIGN_IDENTITY: "-"
           CODE_SIGN_STYLE: Automatic
@@ -592,22 +523,5 @@ schemes:
       config: Release
     analyze:
       config: Debug
-    archive:
-      config: Release
-
-  ClaudeStats CloudKit:
-    build:
-      targets:
-        ClaudeStats: all
-    run:
-      config: DebugCloudKit
-    test:
-      config: Debug
-      targets:
-        - ClaudeStatsTests
-    profile:
-      config: DebugCloudKit
-    analyze:
-      config: DebugCloudKit
     archive:
       config: Release

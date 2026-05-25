@@ -8,12 +8,8 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
     case menuBar
     case notchIsland
     case tracking
-    case localAI
-    case leaderboards
     case github
-    case linuxDo
     case systemMonitor
-    case terminal
     case about
 
     var id: String { rawValue }
@@ -25,12 +21,8 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
         case .menuBar:   L10n.string("settings.section.menu_bar", defaultValue: "Menu Bar")
         case .notchIsland: L10n.string("settings.section.notch_island", defaultValue: "Notch Island")
         case .tracking:  L10n.string("settings.section.tracking", defaultValue: "Tracking")
-        case .localAI: "Local AI"
-        case .leaderboards: L10n.string("settings.section.leaderboards", defaultValue: "Leaderboards")
         case .github:    "GitHub"
-        case .linuxDo:   "LinuxDo"
         case .systemMonitor: L10n.string("settings.section.system_monitor", defaultValue: "System Monitor")
-        case .terminal:  L10n.string("settings.section.terminal", defaultValue: "Terminal")
         case .about:     L10n.string("settings.section.about", defaultValue: "About")
         }
     }
@@ -42,20 +34,9 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
         case .menuBar:   "menubar.rectangle"
         case .notchIsland: "capsule.portrait.tophalf.filled"
         case .tracking:  "waveform.path.ecg"
-        case .localAI: "brain"
-        case .leaderboards: "trophy"
         case .github:    "chevron.left.forwardslash.chevron.right"
-        case .linuxDo:   "globe.asia.australia"
         case .systemMonitor: "cpu"
-        case .terminal:  "terminal"
         case .about:     "info.circle"
-        }
-    }
-
-    var assetName: String? {
-        switch self {
-        case .linuxDo: "LinuxDoLogo"
-        default: nil
         }
     }
 }

@@ -19,7 +19,7 @@ actor TranscriptEmbeddingIndex {
     private let url: URL
     private var connection: SQLiteConnection?
 
-    init(url: URL = LocalAIPaths.embeddingIndexURL()) {
+    init(url: URL = TranscriptAnalysisPaths.embeddingIndexURL()) {
         self.url = url
     }
 
