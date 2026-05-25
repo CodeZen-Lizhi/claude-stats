@@ -134,16 +134,8 @@ struct MainUsageView: View {
                 openClaudeSettings()
             } : nil,
             claudeDesktopPermissionIssue: provider == .claude ? env.usageLimits.claudeDesktopPermissionIssue : nil,
-            claudeDesktopAutoMode: provider == .claude ? env.preferences.claudeDesktopUsageAutoMode : nil,
-            claudeDesktopTimedCaptureEnabled: provider == .claude ? env.preferences.claudeDesktopUsageTimedCaptureEnabled : false,
             onReadClaudeDesktop: provider == .claude ? {
                 Task { await env.usageLimits.captureClaudeDesktopUsage(trigger: .manual) }
-            } : nil,
-            onSetClaudeDesktopAutoMode: provider == .claude ? { mode in
-                env.preferences.claudeDesktopUsageAutoMode = mode
-            } : nil,
-            onSetClaudeDesktopTimedCaptureEnabled: provider == .claude ? { enabled in
-                env.preferences.claudeDesktopUsageTimedCaptureEnabled = enabled
             } : nil,
             onOpenAccessibilitySettings: provider == .claude ? {
                 openClaudeAccessibilitySettings()

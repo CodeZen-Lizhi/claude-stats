@@ -11,11 +11,7 @@ struct UsageLimitPanel: View {
     let onCopyClaudeSettingsSnippet: (() -> Void)?
     let onOpenClaudeSettings: (() -> Void)?
     let claudeDesktopPermissionIssue: ClaudeDesktopUsagePermissionIssue?
-    let claudeDesktopAutoMode: ClaudeDesktopUsageAutoMode?
-    let claudeDesktopTimedCaptureEnabled: Bool
     let onReadClaudeDesktop: (() -> Void)?
-    let onSetClaudeDesktopAutoMode: ((ClaudeDesktopUsageAutoMode) -> Void)?
-    let onSetClaudeDesktopTimedCaptureEnabled: ((Bool) -> Void)?
     let onOpenAccessibilitySettings: (() -> Void)?
     let onOpenScreenRecordingSettings: (() -> Void)?
 
@@ -57,6 +53,17 @@ struct UsageLimitPanel: View {
             .buttonStyle(.plain)
             .foregroundStyle(Color.stxMuted)
             .help(L10n.string("usage.limit.refresh", defaultValue: "Refresh usage limits"))
+            if provider == .claude, let onReadClaudeDesktop {
+                Button(action: onReadClaudeDesktop) {
+                    Image(systemName: "text.viewfinder")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.stxMuted)
+                .disabled(isLoading)
+                .help("Read Claude Desktop")
+                .accessibilityLabel("Read Claude Desktop")
+            }
         }
     }
 
@@ -86,7 +93,7 @@ struct UsageLimitPanel: View {
                     limitWindows(displayedWindows(snapshot.windows))
                     sourceFooter(snapshot: snapshot)
                     if provider == .claude {
-                        claudeDesktopControls
+                        claudeDesktopPermissionButtons
                     }
                 }
             case .setupRequired where provider == .claude:
@@ -158,7 +165,7 @@ struct UsageLimitPanel: View {
                 message: message,
                 lastCapturedAt: nil
             )
-            claudeDesktopControls
+            claudeDesktopPermissionButtons
             claudeBridgeButtons
         }
     }
@@ -175,7 +182,7 @@ struct UsageLimitPanel: View {
                 lastCapturedAt: report.lastCapturedAt
             )
             if provider == .claude {
-                claudeDesktopControls
+                claudeDesktopPermissionButtons
             }
         }
     }
@@ -206,51 +213,7 @@ struct UsageLimitPanel: View {
     }
 
     @ViewBuilder
-    private var claudeDesktopControls: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                if let onReadClaudeDesktop {
-                    Button("Read Claude Desktop", action: onReadClaudeDesktop)
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                }
-                if let onSetClaudeDesktopAutoMode {
-                    Picker(
-                        L10n.string("usage.limit.desktop_auto.picker", defaultValue: "Claude Desktop auto capture"),
-                        selection: Binding(
-                            get: { claudeDesktopAutoMode ?? .off },
-                            set: { onSetClaudeDesktopAutoMode($0) }
-                        )
-                    ) {
-                        ForEach(ClaudeDesktopUsageAutoMode.allCases) { mode in
-                            Text(mode.displayName).tag(mode)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.segmented)
-                    .controlSize(.small)
-                    .frame(width: 210)
-                }
-                if let onSetClaudeDesktopTimedCaptureEnabled {
-                    Toggle(
-                        "Timed",
-                        isOn: Binding(
-                            get: { claudeDesktopTimedCaptureEnabled },
-                            set: { onSetClaudeDesktopTimedCaptureEnabled($0) }
-                        )
-                    )
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                }
-                Spacer(minLength: 0)
-            }
-
-            permissionButtons
-        }
-    }
-
-    @ViewBuilder
-    private var permissionButtons: some View {
+    private var claudeDesktopPermissionButtons: some View {
         switch claudeDesktopPermissionIssue {
         case .accessibility:
             if let onOpenAccessibilitySettings {
@@ -636,11 +599,7 @@ private struct UsageLimitHatchedSwatch: View {
         onCopyClaudeSettingsSnippet: nil,
         onOpenClaudeSettings: nil,
         claudeDesktopPermissionIssue: nil,
-        claudeDesktopAutoMode: nil,
-        claudeDesktopTimedCaptureEnabled: false,
         onReadClaudeDesktop: nil,
-        onSetClaudeDesktopAutoMode: nil,
-        onSetClaudeDesktopTimedCaptureEnabled: nil,
         onOpenAccessibilitySettings: nil,
         onOpenScreenRecordingSettings: nil
     )

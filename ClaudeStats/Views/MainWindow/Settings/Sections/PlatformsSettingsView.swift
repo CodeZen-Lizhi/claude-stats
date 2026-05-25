@@ -82,13 +82,53 @@ struct PlatformsSettingsView: View {
             caption: "5h and 7d limits are always shown. Extra Claude Desktop plan rows can be shown when the GUI capture finds them."
         ) {
             VStack(spacing: 0) {
+                claudeDesktopAutoCaptureRow(prefs: prefs)
+                SettingRowDivider()
+                claudeDesktopTimedCaptureRow(prefs: prefs)
                 let optionalRows = Array(UsageLimitWindowCatalog.claudeOptionalWindowIDs.enumerated())
-                ForEach(optionalRows, id: \.element) { index, windowID in
-                    if index > 0 { SettingRowDivider() }
+                ForEach(optionalRows, id: \.element) { _, windowID in
+                    SettingRowDivider()
                     claudeUsageLimitWindowRow(windowID, prefs: prefs)
                 }
             }
             .settingCard()
+        }
+    }
+
+    private func claudeDesktopAutoCaptureRow(prefs: Preferences) -> some View {
+        SettingRow(
+            title: "Claude Desktop auto capture",
+            description: "Choose whether Claude Stats reads visible Claude Desktop usage limits automatically."
+        ) {
+            Picker(
+                L10n.string("usage.limit.desktop_auto.picker", defaultValue: "Claude Desktop auto capture"),
+                selection: Binding(
+                    get: { prefs.claudeDesktopUsageAutoMode },
+                    set: { prefs.claudeDesktopUsageAutoMode = $0 }
+                )
+            ) {
+                ForEach(ClaudeDesktopUsageAutoMode.allCases) { mode in
+                    Text(mode.displayName).tag(mode)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .controlSize(.small)
+            .frame(width: 210)
+        }
+    }
+
+    private func claudeDesktopTimedCaptureRow(prefs: Preferences) -> some View {
+        SettingRow(
+            title: "Timed capture",
+            description: "Periodically reads Claude Desktop usage while Claude usage is selected."
+        ) {
+            Toggle("", isOn: Binding(
+                get: { prefs.claudeDesktopUsageTimedCaptureEnabled },
+                set: { prefs.claudeDesktopUsageTimedCaptureEnabled = $0 }
+            ))
+            .labelsHidden()
+            .toggleStyle(.switch)
         }
     }
 
