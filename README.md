@@ -21,6 +21,11 @@ Claude Stats is an open-source native macOS app for people who work in AI coding
 
 The app began as a focused macOS take on the open-source [Claude Statistics](https://github.com/sj719045032/claude-statistics) project. It now includes a multi-provider foundation, an embedded terminal, a Notch Island surface, and an integrated network debugger while keeping the main product name **Claude Stats**.
 
+## Reference Notes
+
+- [Claude Statistics inspiration notes](docs/claude-statistics-inspiration-notes.md) collects product ideas worth reusing here, especially share cards, model pricing management, and transcript-based stats and cost analysis.
+- [Claude Stats product PRD](docs/claude-stats-product-prd.md) documents the current product by feature family for future refactors and second-development work.
+
 ## Features
 
 - Menu-bar usage stats for AI coding sessions, tokens, estimated cost, and recent activity.
