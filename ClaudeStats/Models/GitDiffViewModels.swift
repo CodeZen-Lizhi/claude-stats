@@ -24,6 +24,22 @@ enum DiffViewMode: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+enum GitDiffBlockGranularity: String, CaseIterable, Identifiable, Sendable {
+    case fine
+    case coarse
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .fine:
+            return "Fine"
+        case .coarse:
+            return "Coarse"
+        }
+    }
+}
+
 struct StructuredFileDiff: Sendable, Hashable {
     let path: String
     let isBinary: Bool
@@ -235,6 +251,21 @@ struct FluidSyncMap: Sendable, Hashable {
 
 struct DiffStructureBuilder: Sendable {
     private let inlineDiffer = InlineDiffBuilder()
+    private static let linePairThreshold = 0.34
+    private static let linePairDPLimit = 40_000
+    private static let linePairGapPenalty = -0.01
+
+    private enum AlignmentStep {
+        case modified(old: Int, new: Int)
+        case deleted(old: Int)
+        case inserted(new: Int)
+    }
+
+    private enum AlignmentParent {
+        case modified
+        case deleted
+        case inserted
+    }
 
     func build(from diff: FileDiff) -> StructuredFileDiff {
         var fileHeaders: [String] = []
@@ -321,54 +352,193 @@ struct DiffStructureBuilder: Sendable {
 
     private func buildChangeBlock(id: String, oldLines: [DiffTextLine], newLines: [DiffTextLine]) -> ChangeBlock {
         var pairs: [DiffLinePair] = []
+        for step in Self.align(oldLines: oldLines, newLines: newLines) {
+            switch step {
+            case .modified(let oldIndex, let newIndex):
+                let oldLine = oldLines[oldIndex]
+                let newLine = newLines[newIndex]
+                let spans = inlineDiffer.spans(old: oldLine.text, new: newLine.text)
+                pairs.append(DiffLinePair(
+                    id: "\(id)-modified-\(oldIndex)-\(newIndex)",
+                    kind: .modified,
+                    oldLine: oldLine.withInlineSpans(spans.old),
+                    newLine: newLine.withInlineSpans(spans.new)
+                ))
+            case .deleted(let oldIndex):
+                let oldLine = oldLines[oldIndex]
+                pairs.append(DiffLinePair(id: "\(id)-delete-\(oldIndex)", kind: .deleted, oldLine: oldLine, newLine: nil))
+            case .inserted(let newIndex):
+                let newLine = newLines[newIndex]
+                pairs.append(DiffLinePair(id: "\(id)-insert-\(newIndex)", kind: .inserted, oldLine: nil, newLine: newLine))
+            }
+        }
+
+        let pairedOld = pairs.compactMap(\.oldLine)
+        let pairedNew = pairs.compactMap(\.newLine)
+        return ChangeBlock(id: id, oldLines: pairedOld, newLines: pairedNew, linePairs: pairs)
+    }
+
+    private static func align(oldLines: [DiffTextLine], newLines: [DiffTextLine]) -> [AlignmentStep] {
+        if oldLines.isEmpty {
+            return newLines.indices.map { .inserted(new: $0) }
+        }
+        if newLines.isEmpty {
+            return oldLines.indices.map { .deleted(old: $0) }
+        }
+        if oldLines.count * newLines.count > linePairDPLimit {
+            return greedyAlign(oldLines: oldLines, newLines: newLines)
+        }
+
+        let oldCount = oldLines.count
+        let newCount = newLines.count
+        var scores = Array(repeating: Array(repeating: 0.0, count: newCount), count: oldCount)
+        for oldIndex in oldLines.indices {
+            for newIndex in newLines.indices {
+                scores[oldIndex][newIndex] = lineSimilarity(oldLines[oldIndex].text, newLines[newIndex].text)
+            }
+        }
+
+        var table = Array(
+            repeating: Array(repeating: -Double.infinity, count: newCount + 1),
+            count: oldCount + 1
+        )
+        var parents = Array(
+            repeating: Array(repeating: AlignmentParent?.none, count: newCount + 1),
+            count: oldCount + 1
+        )
+        table[0][0] = 0
+
+        for oldIndex in 0...oldCount {
+            for newIndex in 0...newCount {
+                let current = table[oldIndex][newIndex]
+                guard current.isFinite else { continue }
+                if oldIndex < oldCount {
+                    update(
+                        &table,
+                        &parents,
+                        row: oldIndex + 1,
+                        column: newIndex,
+                        score: current + linePairGapPenalty,
+                        parent: .deleted
+                    )
+                }
+                if newIndex < newCount {
+                    update(
+                        &table,
+                        &parents,
+                        row: oldIndex,
+                        column: newIndex + 1,
+                        score: current + linePairGapPenalty,
+                        parent: .inserted
+                    )
+                }
+                if oldIndex < oldCount, newIndex < newCount {
+                    let similarity = scores[oldIndex][newIndex]
+                    if similarity >= linePairThreshold {
+                        update(
+                            &table,
+                            &parents,
+                            row: oldIndex + 1,
+                            column: newIndex + 1,
+                            score: current + similarity,
+                            parent: .modified
+                        )
+                    }
+                }
+            }
+        }
+
+        var steps: [AlignmentStep] = []
+        var oldIndex = oldCount
+        var newIndex = newCount
+        while oldIndex > 0 || newIndex > 0 {
+            switch parents[oldIndex][newIndex] {
+            case .modified:
+                steps.append(.modified(old: oldIndex - 1, new: newIndex - 1))
+                oldIndex -= 1
+                newIndex -= 1
+            case .deleted:
+                steps.append(.deleted(old: oldIndex - 1))
+                oldIndex -= 1
+            case .inserted:
+                steps.append(.inserted(new: newIndex - 1))
+                newIndex -= 1
+            case nil:
+                if newIndex > 0 {
+                    steps.append(.inserted(new: newIndex - 1))
+                    newIndex -= 1
+                } else {
+                    steps.append(.deleted(old: oldIndex - 1))
+                    oldIndex -= 1
+                }
+            }
+        }
+        return steps.reversed()
+    }
+
+    private static func update(
+        _ table: inout [[Double]],
+        _ parents: inout [[AlignmentParent?]],
+        row: Int,
+        column: Int,
+        score: Double,
+        parent: AlignmentParent
+    ) {
+        if score > table[row][column] || (score == table[row][column] && priority(parent) > priority(parents[row][column])) {
+            table[row][column] = score
+            parents[row][column] = parent
+        }
+    }
+
+    private static func priority(_ parent: AlignmentParent?) -> Int {
+        switch parent {
+        case .modified:
+            return 3
+        case .inserted:
+            return 2
+        case .deleted:
+            return 1
+        case nil:
+            return 0
+        }
+    }
+
+    private static func greedyAlign(oldLines: [DiffTextLine], newLines: [DiffTextLine]) -> [AlignmentStep] {
+        var steps: [AlignmentStep] = []
         var consumedNew = Set<Int>()
         var nextNewSearch = 0
 
         for oldIndex in oldLines.indices {
-            let oldLine = oldLines[oldIndex]
             var bestIndex: Int?
             var bestScore = 0.0
             for newIndex in nextNewSearch..<newLines.count where !consumedNew.contains(newIndex) {
-                let score = Self.lineSimilarity(oldLine.text, newLines[newIndex].text)
+                let score = lineSimilarity(oldLines[oldIndex].text, newLines[newIndex].text)
                 if score > bestScore {
                     bestScore = score
                     bestIndex = newIndex
                 }
             }
 
-            if let bestIndex, bestScore >= 0.34 {
+            if let bestIndex, bestScore >= linePairThreshold {
                 while nextNewSearch < bestIndex {
                     if !consumedNew.contains(nextNewSearch) {
-                        let newLine = newLines[nextNewSearch]
-                        pairs.append(DiffLinePair(id: "\(id)-insert-\(nextNewSearch)", kind: .inserted, oldLine: nil, newLine: newLine))
+                        steps.append(.inserted(new: nextNewSearch))
                         consumedNew.insert(nextNewSearch)
                     }
                     nextNewSearch += 1
                 }
-
-                let newLine = newLines[bestIndex]
-                let spans = inlineDiffer.spans(old: oldLine.text, new: newLine.text)
-                pairs.append(DiffLinePair(
-                    id: "\(id)-modified-\(oldIndex)-\(bestIndex)",
-                    kind: .modified,
-                    oldLine: oldLine.withInlineSpans(spans.old),
-                    newLine: newLine.withInlineSpans(spans.new)
-                ))
+                steps.append(.modified(old: oldIndex, new: bestIndex))
                 consumedNew.insert(bestIndex)
                 nextNewSearch = bestIndex + 1
             } else {
-                pairs.append(DiffLinePair(id: "\(id)-delete-\(oldIndex)", kind: .deleted, oldLine: oldLine, newLine: nil))
+                steps.append(.deleted(old: oldIndex))
             }
         }
 
         for newIndex in newLines.indices where !consumedNew.contains(newIndex) {
-            let newLine = newLines[newIndex]
-            pairs.append(DiffLinePair(id: "\(id)-insert-\(newIndex)", kind: .inserted, oldLine: nil, newLine: newLine))
+            steps.append(.inserted(new: newIndex))
         }
-
-        let pairedOld = pairs.compactMap(\.oldLine)
-        let pairedNew = pairs.compactMap(\.newLine)
-        return ChangeBlock(id: id, oldLines: pairedOld, newLines: pairedNew, linePairs: pairs)
+        return steps
     }
 
     private static func textLine(from line: DiffLine, side: DiffTextLine.Side, id: String) -> DiffTextLine {

@@ -22,7 +22,6 @@ struct SemanticVisualizationSnapshotTests {
         #expect(visual.nodes.count == SemanticVisualizationSnapshot.atlasTermLimit)
         #expect(visual.atlasNodes.count == SemanticVisualizationSnapshot.atlasTermLimit)
         #expect(visual.bubbleNodes.count == SemanticVisualizationSnapshot.bubbleTermLimit)
-        #expect(visual.matrixTerms.count == SemanticVisualizationSnapshot.matrixTermLimit)
         #expect(visual.wordCloudItems.count == SemanticVisualizationSnapshot.wordCloudTermLimit)
         #expect(visual.nodes.first?.canonical == "Term 89")
         #expect(visual.kindSummaries.first { $0.kind == .framework }?.termCount == 45)
@@ -151,7 +150,6 @@ struct SemanticVisualizationSnapshotTests {
         )
         #expect(empty.isEmpty)
         #expect(empty.atlasNodes.isEmpty)
-        #expect(empty.matrixCells.isEmpty)
         #expect(empty.timelinePoints.isEmpty)
 
         let single = SemanticVisualizationSnapshot(
@@ -164,7 +162,6 @@ struct SemanticVisualizationSnapshotTests {
         let positioned = try #require(single.atlasNodes.first)
         #expect(positioned.x == 0.5)
         #expect(positioned.y == 0.5)
-        #expect(single.matrixCells.count == 1)
         #expect(single.timelinePoints.count == 1)
     }
 

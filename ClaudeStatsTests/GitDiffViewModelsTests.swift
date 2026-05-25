@@ -173,6 +173,36 @@ struct GitDiffViewModelsTests {
         #expect(change.linePairs.map(\.kind) == [.deleted, .inserted])
     }
 
+    @Test("Repeated similar line pairing remains monotonic")
+    func repeatedSimilarLinePairingIsMonotonic() throws {
+        let structured = StructuredFileDiff.build(from: fileDiff("""
+        @@ -1,2 +1,2 @@
+        -let firstProvider = alpha
+        -let secondProvider = beta
+        +let secondProvider = beta
+        +let firstProvider = alpha
+        """))
+        let change = try #require(structured.hunks.first?.segments.first?.change)
+        let modified = change.linePairs.compactMap { pair -> (old: Int, new: Int)? in
+            guard pair.kind == .modified,
+                  let oldLine = pair.oldLine?.oldLine,
+                  let newLine = pair.newLine?.newLine else {
+                return nil
+            }
+            return (oldLine, newLine)
+        }
+
+        var isMonotonic = true
+        for index in modified.indices.dropFirst() {
+            let previous = modified[modified.index(before: index)]
+            let current = modified[index]
+            if current.old < previous.old || (current.old == previous.old && current.new < previous.new) {
+                isMonotonic = false
+            }
+        }
+        #expect(isMonotonic)
+    }
+
     @Test("Inline diff highlights token replacements")
     func inlineDiffHighlightsReplacement() {
         let spans = InlineDiffBuilder().spans(old: "let name = oldValue", new: "let name = newValue")

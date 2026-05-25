@@ -257,6 +257,10 @@ final class Preferences {
     var gitStatsScope: GitStatsScope {
         didSet { defaults.set(gitStatsScope.rawValue, forKey: Keys.gitStatsScope) }
     }
+    /// How split diff panes group changed lines into colored blocks.
+    var gitDiffBlockGranularity: GitDiffBlockGranularity {
+        didSet { defaults.set(gitDiffBlockGranularity.rawValue, forKey: Keys.gitDiffBlockGranularity) }
+    }
     /// Opt-in to comparing local activity against the GitHub contribution
     /// graph on the Dashboard. Off by default — the dashboard's GitHub panel
     /// only appears when this is on and a PAT is configured.
@@ -514,6 +518,9 @@ final class Preferences {
         gitTrackingEnabled = defaults.bool(forKey: Keys.gitTrackingEnabled)
         gitOpensInWindow = defaults.bool(forKey: Keys.gitOpensInWindow)
         gitStatsScope = GitStatsScope(rawValue: defaults.string(forKey: Keys.gitStatsScope) ?? "") ?? .head
+        gitDiffBlockGranularity = GitDiffBlockGranularity(
+            rawValue: defaults.string(forKey: Keys.gitDiffBlockGranularity) ?? ""
+        ) ?? .fine
         githubEnabled = defaults.bool(forKey: Keys.githubEnabled)
         githubLogin = defaults.string(forKey: Keys.githubLogin) ?? ""
         linuxDoNotificationsEnabled = defaults.bool(forKey: Keys.linuxDoNotificationsEnabled)
@@ -694,6 +701,7 @@ final class Preferences {
         static let gitTrackingEnabled = "gitTrackingEnabled"
         static let gitOpensInWindow = "gitOpensInWindow"
         static let gitStatsScope = "gitStatsScope"
+        static let gitDiffBlockGranularity = "gitDiffBlockGranularity"
         static let codingSurfaceBundleIDsAdded = "codingSurfaceBundleIDsAdded"
         static let codingSurfaceBundleIDsRemoved = "codingSurfaceBundleIDsRemoved"
         static let cliHostBundleIDsAdded = "cliHostBundleIDsAdded"

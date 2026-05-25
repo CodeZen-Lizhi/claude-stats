@@ -327,6 +327,33 @@ struct PreferencesTests {
         #expect(prefs.gitStatsScope == .head)
     }
 
+    @Test("Git diff block granularity defaults to fine")
+    func gitDiffBlockGranularityDefault() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+
+        #expect(prefs.gitDiffBlockGranularity == .fine)
+    }
+
+    @Test("Git diff block granularity preference persists")
+    func gitDiffBlockGranularityPersists() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+        prefs.gitDiffBlockGranularity = .coarse
+
+        let reloaded = Preferences(defaults: defaults)
+        #expect(reloaded.gitDiffBlockGranularity == .coarse)
+    }
+
+    @Test("Invalid git diff block granularity falls back safely")
+    func invalidGitDiffBlockGranularityFallsBack() {
+        let defaults = makeDefaults()
+        defaults.set("medium", forKey: "gitDiffBlockGranularity")
+
+        let prefs = Preferences(defaults: defaults)
+        #expect(prefs.gitDiffBlockGranularity == .fine)
+    }
+
     @Test("Cost estimation mode defaults to API estimate")
     func costEstimationModeDefault() {
         let defaults = makeDefaults()

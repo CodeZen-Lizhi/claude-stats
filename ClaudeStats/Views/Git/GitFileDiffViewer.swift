@@ -24,7 +24,9 @@ struct GitFileDiffViewer: View {
     let request: GitFileDiffRequest
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppEnvironment.self) private var env
     @State private var diff: FileDiff?
+    @State private var structuredDiff: StructuredFileDiff?
     @State private var isLoading = false
     @State private var didFail = false
     @State private var mode: DiffViewMode = .fluid
@@ -104,14 +106,19 @@ struct GitFileDiffViewer: View {
         } else if let diff {
             if diff.isBinary {
                 GitDiffViewerEmptyState("Binary file — no textual diff.")
-            } else {
-                let structured = StructuredFileDiff.build(from: diff)
+            } else if let structured = structuredDiff {
                 if structured.isEmpty {
                     GitDiffViewerEmptyState("No changes to show.")
                 } else {
-                    GitDiffRendererView(diff: structured, mode: mode)
+                    GitDiffRendererView(
+                        diff: structured,
+                        mode: mode,
+                        granularity: env.preferences.gitDiffBlockGranularity
+                    )
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+            } else {
+                GitDiffViewerEmptyState("No changes to show.")
             }
         } else {
             GitDiffViewerEmptyState("No changes to show.")
@@ -124,9 +131,12 @@ struct GitFileDiffViewer: View {
         let repo = request.repo
         let hash = request.hash
         let path = request.path
+        diff = nil
+        structuredDiff = nil
         let loaded = await GitRepositoryService.shared.fileDiff(for: hash, path: path, in: repo)
         guard !Task.isCancelled, request.repo == repo, request.hash == hash, request.path == path else { return }
         diff = loaded
+        structuredDiff = loaded.flatMap { $0.isBinary ? nil : StructuredFileDiff.build(from: $0) }
         didFail = loaded == nil
         isLoading = false
     }
@@ -193,5 +203,6 @@ private extension PillSegmentedBarStyle {
     )
     .frame(width: 1180, height: 780)
     .background(Color.stxBackground)
+    .environment(AppEnvironment.preview())
 }
 #endif

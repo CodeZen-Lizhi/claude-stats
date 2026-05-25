@@ -222,6 +222,21 @@ struct TrackingSettingsView: View {
                 }
                 SettingRowDivider()
                 SettingRow(
+                    title: "Diff block granularity",
+                    description: "Fine separates mixed changes into modified, inserted, and deleted bands; Coarse keeps each change region as one block."
+                ) {
+                    Picker("", selection: $prefs.gitDiffBlockGranularity) {
+                        ForEach(GitDiffBlockGranularity.allCases) { granularity in
+                            Text(granularity.displayName).tag(granularity)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .controlSize(.small)
+                    .frame(maxWidth: 180)
+                }
+                SettingRowDivider()
+                SettingRow(
                     title: "Language engine",
                     description: "Language detection uses GitHub Linguist; scc supplies line counts."
                 ) {

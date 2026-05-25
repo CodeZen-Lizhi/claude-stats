@@ -30,7 +30,6 @@ struct SemanticVisualizationSnapshot: Hashable, Sendable {
     static let atlasTermLimit = 80
     static let atlasEdgeLimit = 120
     static let bubbleTermLimit = 64
-    static let matrixTermLimit = 32
     static let wordCloudTermLimit = 80
     static let termsPerSessionForCooccurrence = 12
 
@@ -42,9 +41,6 @@ struct SemanticVisualizationSnapshot: Hashable, Sendable {
     let edges: [SemanticCooccurrenceEdge]
     let atlasNodes: [SemanticPositionedNode]
     let bubbleNodes: [SemanticPositionedNode]
-    let matrixTerms: [SemanticTermNode]
-    let matrixCells: [SemanticMatrixCell]
-    let sunburstSegments: [SemanticSunburstSegment]
     let wordCloudItems: [SemanticWordCloudItem]
     let timelineGranularity: SemanticTimelineGranularity
     let timelineKinds: [TranscriptTermKind]
@@ -75,9 +71,6 @@ struct SemanticVisualizationSnapshot: Hashable, Sendable {
 
         atlasNodes = Self.makeAtlasNodes(nodes: nodes, edges: edges)
         bubbleNodes = Self.makeBubbleNodes(nodes: Array(nodes.prefix(Self.bubbleTermLimit)))
-        matrixTerms = Self.makeMatrixTerms(from: nodes)
-        matrixCells = Self.makeMatrixCells(terms: matrixTerms, pairCounts: pairCounts)
-        sunburstSegments = Self.makeSunburstSegments(provider: analysis.provider, nodes: nodes, kindSummaries: kindSummaries)
         wordCloudItems = Self.makeWordCloudItems(nodes: Array(nodes.prefix(Self.wordCloudTermLimit)))
 
         let timeline = Self.makeTimeline(
@@ -314,90 +307,6 @@ struct SemanticVisualizationSnapshot: Hashable, Sendable {
         return placed
     }
 
-    private static func makeMatrixTerms(from nodes: [SemanticTermNode]) -> [SemanticTermNode] {
-        Array(nodes.prefix(Self.matrixTermLimit)).sorted {
-            let lhsKind = TranscriptTermKind.allCases.firstIndex(of: $0.kind) ?? 0
-            let rhsKind = TranscriptTermKind.allCases.firstIndex(of: $1.kind) ?? 0
-            if lhsKind != rhsKind { return lhsKind < rhsKind }
-            return nodeSort($0, $1)
-        }
-    }
-
-    private static func makeMatrixCells(
-        terms: [SemanticTermNode],
-        pairCounts: [String: Int]
-    ) -> [SemanticMatrixCell] {
-        terms.flatMap { row in
-            terms.map { column in
-                let isDiagonal = row.id == column.id
-                let value = isDiagonal ? row.documentFrequency : pairCounts[pairKey(row.id, column.id), default: 0]
-                return SemanticMatrixCell(rowID: row.id, columnID: column.id, value: value, isDiagonal: isDiagonal)
-            }
-        }
-    }
-
-    private static func makeSunburstSegments(
-        provider: ProviderKind,
-        nodes: [SemanticTermNode],
-        kindSummaries: [SemanticKindSummary]
-    ) -> [SemanticSunburstSegment] {
-        guard !nodes.isEmpty else { return [] }
-        let grouped = Dictionary(grouping: nodes, by: \.kind)
-        let total = max(kindSummaries.reduce(0) { $0 + max($1.tfidf, 0) }, 1)
-        var start = -Double.pi / 2
-        var segments: [SemanticSunburstSegment] = [
-            SemanticSunburstSegment(
-                id: "provider|\(provider.rawValue)",
-                termID: nil,
-                kind: nil,
-                label: provider.shortName,
-                value: total,
-                startAngle: -Double.pi / 2,
-                endAngle: Double.pi * 1.5,
-                innerRadius: 0,
-                outerRadius: 0.28
-            )
-        ]
-
-        for summary in kindSummaries where summary.tfidf > 0 {
-            let span = max(summary.tfidf, 0) / total * Double.pi * 2
-            let kindStart = start
-            let kindEnd = start + span
-            segments.append(SemanticSunburstSegment(
-                id: "kind|\(summary.kind.rawValue)",
-                termID: nil,
-                kind: summary.kind,
-                label: summary.kind.displayName,
-                value: summary.tfidf,
-                startAngle: kindStart,
-                endAngle: kindEnd,
-                innerRadius: 0.31,
-                outerRadius: 0.55
-            ))
-
-            let terms = Array((grouped[summary.kind] ?? []).prefix(8))
-            let termTotal = max(terms.reduce(0) { $0 + max($1.tfidf, 0) }, 1)
-            var termStart = kindStart
-            for term in terms {
-                let termSpan = max(term.tfidf, 0) / termTotal * span
-                segments.append(SemanticSunburstSegment(
-                    id: "term|\(term.id)",
-                    termID: term.id,
-                    kind: term.kind,
-                    label: term.displayName,
-                    value: term.tfidf,
-                    startAngle: termStart,
-                    endAngle: termStart + termSpan,
-                    innerRadius: 0.58,
-                    outerRadius: 0.94
-                ))
-                termStart += termSpan
-            }
-            start = kindEnd
-        }
-        return segments
-    }
-
     private static func makeWordCloudItems(nodes: [SemanticTermNode]) -> [SemanticWordCloudItem] {
         nodes.map { node in
             SemanticWordCloudItem(
@@ -601,27 +510,6 @@ struct SemanticPositionedNode: Identifiable, Hashable, Sendable {
     let x: Double
     let y: Double
     let radius: Double
-}
-
-struct SemanticMatrixCell: Identifiable, Hashable, Sendable {
-    var id: String { "\(rowID)|\(columnID)" }
-
-    let rowID: String
-    let columnID: String
-    let value: Int
-    let isDiagonal: Bool
-}
-
-struct SemanticSunburstSegment: Identifiable, Hashable, Sendable {
-    let id: String
-    let termID: String?
-    let kind: TranscriptTermKind?
-    let label: String
-    let value: Double
-    let startAngle: Double
-    let endAngle: Double
-    let innerRadius: Double
-    let outerRadius: Double
 }
 
 struct SemanticWordCloudItem: Identifiable, Hashable, Sendable {

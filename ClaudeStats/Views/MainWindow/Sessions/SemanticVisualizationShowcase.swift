@@ -4,8 +4,6 @@ import SwiftUI
 private enum SemanticVisualizationMode: String, CaseIterable, Identifiable {
     case atlas
     case bubbles
-    case sunburst
-    case matrix
     case cloud
     case timeline
 
@@ -15,8 +13,6 @@ private enum SemanticVisualizationMode: String, CaseIterable, Identifiable {
         switch self {
         case .atlas: "Atlas"
         case .bubbles: "Bubbles"
-        case .sunburst: "Sunburst"
-        case .matrix: "Matrix"
         case .cloud: "Cloud"
         case .timeline: "Timeline"
         }
@@ -26,8 +22,6 @@ private enum SemanticVisualizationMode: String, CaseIterable, Identifiable {
         switch self {
         case .atlas: "point.3.connected.trianglepath.dotted"
         case .bubbles: "circle.grid.3x3.circle"
-        case .sunburst: "circle.dotted.circle"
-        case .matrix: "square.grid.3x3"
         case .cloud: "textformat"
         case .timeline: "chart.xyaxis.line"
         }
@@ -41,7 +35,6 @@ struct SemanticVisualizationShowcase: View {
     @State private var mode: SemanticVisualizationMode = .atlas
     @State private var selectedTermID: String?
     @State private var hoveredTermID: String?
-    @State private var selectedRelation: SemanticRelationshipSelection?
     @State private var visualization: SemanticVisualizationSnapshot?
     @State private var cacheKey: String?
 
@@ -79,8 +72,7 @@ struct SemanticVisualizationShowcase: View {
                 SemanticSelectionSummary(
                     visualization: visualization,
                     selectedTermID: selectedTermID,
-                    hoveredTermID: hoveredTermID,
-                    selectedRelation: mode == .matrix ? selectedRelation : nil
+                    hoveredTermID: hoveredTermID
                 )
             }
         }
@@ -88,7 +80,6 @@ struct SemanticVisualizationShowcase: View {
         .onAppear { rebuildIfNeeded() }
         .onChange(of: currentCacheKey) { _, _ in rebuildIfNeeded() }
         .onChange(of: mode) { _, _ in
-            selectedRelation = nil
             hoveredTermID = nil
         }
     }
@@ -133,18 +124,6 @@ struct SemanticVisualizationShowcase: View {
                 selectedTermID: $selectedTermID,
                 hoveredTermID: $hoveredTermID
             )
-        case .sunburst:
-            SemanticSunburstView(
-                visualization: visualization,
-                selectedTermID: $selectedTermID,
-                hoveredTermID: $hoveredTermID
-            )
-        case .matrix:
-            SemanticMatrixView(
-                visualization: visualization,
-                selectedTermID: $selectedTermID,
-                selectedRelation: $selectedRelation
-            )
         case .cloud:
             SemanticWordCloudView(
                 visualization: visualization,
@@ -179,32 +158,20 @@ struct SemanticVisualizationShowcase: View {
         cacheKey = key
         selectedTermID = nil
         hoveredTermID = nil
-        selectedRelation = nil
     }
-}
-
-private struct SemanticRelationshipSelection: Hashable {
-    let sourceID: String
-    let targetID: String
-    let count: Int
 }
 
 private struct SemanticSelectionSummary: View {
     let visualization: SemanticVisualizationSnapshot
     let selectedTermID: String?
     let hoveredTermID: String?
-    let selectedRelation: SemanticRelationshipSelection?
 
     private var activeNode: SemanticTermNode? {
         visualization.node(for: selectedTermID) ?? visualization.node(for: hoveredTermID)
     }
 
     var body: some View {
-        if let relation = selectedRelation,
-           let source = visualization.node(for: relation.sourceID),
-           let target = visualization.node(for: relation.targetID) {
-            relationSummary(source: source, target: target, count: relation.count)
-        } else if let activeNode {
+        if let activeNode {
             termSummary(activeNode)
         } else {
             HStack(spacing: 8) {
@@ -252,26 +219,6 @@ private struct SemanticSelectionSummary: View {
                     }
                 }
             }
-        }
-        .padding(10)
-        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-
-    private func relationSummary(source: SemanticTermNode, target: SemanticTermNode, count: Int) -> some View {
-        HStack(alignment: .center, spacing: 10) {
-            Label(source.displayName, systemImage: source.kind.symbol)
-                .font(.sora(11, weight: .semibold))
-                .foregroundStyle(SemanticVisualizationPalette.color(for: source.kind))
-            Image(systemName: "arrow.left.and.right")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(Color.stxMuted)
-            Label(target.displayName, systemImage: target.kind.symbol)
-                .font(.sora(11, weight: .semibold))
-                .foregroundStyle(SemanticVisualizationPalette.color(for: target.kind))
-            Spacer(minLength: 0)
-            Text(count == 1 ? "1 shared session" : "\(count) shared sessions")
-                .font(.sora(10).monospacedDigit())
-                .foregroundStyle(Color.stxMuted)
         }
         .padding(10)
         .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -371,153 +318,6 @@ private struct SemanticBubbleAtlasView: View {
                 }
             }
         }
-    }
-}
-
-private struct SemanticSunburstView: View {
-    let visualization: SemanticVisualizationSnapshot
-    @Binding var selectedTermID: String?
-    @Binding var hoveredTermID: String?
-
-    var body: some View {
-        GeometryReader { geometry in
-            let size = min(geometry.size.width, geometry.size.height) * 0.86
-            let center = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
-            ZStack {
-                SemanticVisualizationBackground()
-                Canvas { context, _ in
-                    for segment in visualization.sunburstSegments {
-                        let highlighted = segment.termID == selectedTermID || segment.termID == hoveredTermID
-                        let path = SemanticSunburstGeometry.path(
-                            center: center,
-                            maxRadius: size / 2,
-                            segment: segment
-                        )
-                        let color = segment.kind.map(SemanticVisualizationPalette.color(for:)) ?? Color.stxAccent
-                        context.fill(path, with: .color(color.opacity(highlighted ? 0.92 : segment.termID == nil ? 0.45 : 0.68)))
-                        context.stroke(path, with: .color(Color.stxBackground.opacity(0.9)), lineWidth: 1)
-                    }
-                }
-
-                Text(visualization.provider.shortName)
-                    .font(.sora(16, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .padding(8)
-                    .background(Color.stxBackground.opacity(0.72), in: Circle())
-                    .position(center)
-
-                ForEach(visualization.sunburstSegments.filter { $0.termID != nil && $0.endAngle - $0.startAngle > 0.14 }) { segment in
-                    if let termID = segment.termID, let node = visualization.node(for: termID) {
-                        let point = SemanticSunburstGeometry.labelPoint(center: center, maxRadius: size / 2, segment: segment)
-                        Button {
-                            selectedTermID = selectedTermID == termID ? nil : termID
-                        } label: {
-                            Text(node.displayName)
-                                .font(.sora(9, weight: selectedTermID == termID ? .semibold : .regular))
-                                .lineLimit(1)
-                                .foregroundStyle(selectedTermID == termID ? .primary : Color.stxMuted)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 2)
-                                .background(Color.stxBackground.opacity(0.62), in: RoundedRectangle(cornerRadius: 4))
-                        }
-                        .buttonStyle(.plain)
-                        .help(node.helpText)
-                        .position(point)
-                        .onHover { hovering in hoveredTermID = hovering ? termID : nil }
-                    }
-                }
-            }
-        }
-    }
-}
-
-private struct SemanticMatrixView: View {
-    let visualization: SemanticVisualizationSnapshot
-    @Binding var selectedTermID: String?
-    @Binding var selectedRelation: SemanticRelationshipSelection?
-
-    @State private var hoveredCellID: String?
-
-    var body: some View {
-        GeometryReader { geometry in
-            let terms = visualization.matrixTerms
-            let count = max(terms.count, 1)
-            let labelWidth: CGFloat = 124
-            let topHeight: CGFloat = 86
-            let available = CGSize(width: max(1, geometry.size.width - labelWidth - 18), height: max(1, geometry.size.height - topHeight - 18))
-            let cell = floor(min(available.width, available.height) / CGFloat(count))
-            let origin = CGPoint(
-                x: labelWidth,
-                y: topHeight + max(0, (available.height - cell * CGFloat(count)) / 2)
-            )
-            let maxValue = max(visualization.matrixCells.map(\.value).max() ?? 1, 1)
-
-            ZStack(alignment: .topLeading) {
-                SemanticVisualizationBackground()
-
-                ForEach(Array(terms.enumerated()), id: \.element.id) { index, node in
-                    Text(node.displayName)
-                        .font(.sora(8, weight: selectedTermID == node.id ? .semibold : .regular))
-                        .foregroundStyle(selectedTermID == node.id ? .primary : Color.stxMuted)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .frame(width: labelWidth - 10, alignment: .trailing)
-                        .position(x: labelWidth / 2 - 8, y: origin.y + CGFloat(index) * cell + cell / 2)
-
-                    Text(node.displayName)
-                        .font(.sora(8, weight: selectedTermID == node.id ? .semibold : .regular))
-                        .foregroundStyle(selectedTermID == node.id ? .primary : Color.stxMuted)
-                        .lineLimit(1)
-                        .frame(width: 82, alignment: .leading)
-                        .rotationEffect(.degrees(-45), anchor: .leading)
-                        .position(x: origin.x + CGFloat(index) * cell + cell / 2, y: topHeight - 18)
-                }
-
-                ForEach(visualization.matrixCells) { matrixCell in
-                    if let row = terms.firstIndex(where: { $0.id == matrixCell.rowID }),
-                       let column = terms.firstIndex(where: { $0.id == matrixCell.columnID }),
-                       let rowNode = visualization.node(for: matrixCell.rowID),
-                       let columnNode = visualization.node(for: matrixCell.columnID) {
-                        Button {
-                            selectedTermID = matrixCell.rowID
-                            selectedRelation = matrixCell.isDiagonal
-                                ? nil
-                                : SemanticRelationshipSelection(sourceID: matrixCell.rowID, targetID: matrixCell.columnID, count: matrixCell.value)
-                        } label: {
-                            RoundedRectangle(cornerRadius: 2, style: .continuous)
-                                .fill(cellColor(matrixCell, rowNode: rowNode, maxValue: maxValue))
-                                .overlay {
-                                    if hoveredCellID == matrixCell.id || selectedRelation?.sourceID == matrixCell.rowID && selectedRelation?.targetID == matrixCell.columnID {
-                                        RoundedRectangle(cornerRadius: 2, style: .continuous)
-                                            .strokeBorder(Color.primary.opacity(0.35), lineWidth: 1)
-                                    }
-                                }
-                        }
-                        .buttonStyle(.plain)
-                        .frame(width: max(2, cell - 1), height: max(2, cell - 1))
-                        .position(x: origin.x + CGFloat(column) * cell + cell / 2, y: origin.y + CGFloat(row) * cell + cell / 2)
-                        .help(help(for: matrixCell, row: rowNode, column: columnNode))
-                        .onHover { hovering in hoveredCellID = hovering ? matrixCell.id : nil }
-                    }
-                }
-            }
-        }
-    }
-
-    private func cellColor(_ cell: SemanticMatrixCell, rowNode: SemanticTermNode, maxValue: Int) -> Color {
-        guard cell.value > 0 else { return Color.primary.opacity(0.045) }
-        let opacity = 0.18 + 0.74 * (Double(cell.value) / Double(maxValue))
-        if cell.isDiagonal {
-            return Color.stxMuted.opacity(opacity)
-        }
-        return SemanticVisualizationPalette.color(for: rowNode.kind).opacity(opacity)
-    }
-
-    private func help(for cell: SemanticMatrixCell, row: SemanticTermNode, column: SemanticTermNode) -> String {
-        if cell.isDiagonal {
-            return "\(row.displayName) appears in \(cell.value) sessions"
-        }
-        return "\(row.displayName) + \(column.displayName): \(cell.value) shared sessions"
     }
 }
 
@@ -760,33 +560,6 @@ private struct SemanticVisualizationBackground: View {
                 context.stroke(path, with: .color(Color.stxStroke.opacity(0.34)), lineWidth: 0.5)
             }
         }
-    }
-}
-
-private enum SemanticSunburstGeometry {
-    static func path(center: CGPoint, maxRadius: CGFloat, segment: SemanticSunburstSegment) -> Path {
-        let inner = maxRadius * CGFloat(segment.innerRadius)
-        let outer = maxRadius * CGFloat(segment.outerRadius)
-        let start = Angle.radians(segment.startAngle)
-        let end = Angle.radians(segment.endAngle)
-        var path = Path()
-
-        if inner <= 1 {
-            path.move(to: center)
-            path.addArc(center: center, radius: outer, startAngle: start, endAngle: end, clockwise: false)
-            path.closeSubpath()
-        } else {
-            path.addArc(center: center, radius: outer, startAngle: start, endAngle: end, clockwise: false)
-            path.addArc(center: center, radius: inner, startAngle: end, endAngle: start, clockwise: true)
-            path.closeSubpath()
-        }
-        return path
-    }
-
-    static func labelPoint(center: CGPoint, maxRadius: CGFloat, segment: SemanticSunburstSegment) -> CGPoint {
-        let angle = (segment.startAngle + segment.endAngle) / 2
-        let radius = maxRadius * CGFloat((segment.innerRadius + segment.outerRadius) / 2)
-        return CGPoint(x: center.x + cos(angle) * radius, y: center.y + sin(angle) * radius)
     }
 }
 
