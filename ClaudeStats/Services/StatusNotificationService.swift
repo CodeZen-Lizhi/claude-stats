@@ -1,7 +1,7 @@
 import Foundation
 import UserNotifications
 
-enum ClaudeStatusNotificationAuthorizationStatus: Sendable, Equatable {
+enum StatusNotificationAuthorizationStatus: Sendable, Equatable {
     case notDetermined
     case denied
     case authorized
@@ -17,14 +17,14 @@ enum ClaudeStatusNotificationAuthorizationStatus: Sendable, Equatable {
     }
 }
 
-protocol ClaudeStatusNotificationServicing: Sendable {
-    func authorizationStatus() async -> ClaudeStatusNotificationAuthorizationStatus
-    func requestAuthorization() async -> ClaudeStatusNotificationAuthorizationStatus
+protocol StatusNotificationServicing: Sendable {
+    func authorizationStatus() async -> StatusNotificationAuthorizationStatus
+    func requestAuthorization() async -> StatusNotificationAuthorizationStatus
     func sendStatusAlert(title: String, body: String, identifier: String) async throws
 }
 
-struct ClaudeStatusNotificationService: ClaudeStatusNotificationServicing {
-    func authorizationStatus() async -> ClaudeStatusNotificationAuthorizationStatus {
+struct StatusNotificationService: StatusNotificationServicing {
+    func authorizationStatus() async -> StatusNotificationAuthorizationStatus {
         await withCheckedContinuation { continuation in
             UNUserNotificationCenter.current().getNotificationSettings { settings in
                 continuation.resume(returning: Self.map(settings.authorizationStatus))
@@ -32,11 +32,11 @@ struct ClaudeStatusNotificationService: ClaudeStatusNotificationServicing {
         }
     }
 
-    func requestAuthorization() async -> ClaudeStatusNotificationAuthorizationStatus {
+    func requestAuthorization() async -> StatusNotificationAuthorizationStatus {
         let granted = await withCheckedContinuation { continuation in
             UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
                 if let error {
-                    Log.app.error("Claude Status notification authorization failed: \(error.localizedDescription, privacy: .public)")
+                    Log.app.error("Status notification authorization failed: \(error.localizedDescription, privacy: .public)")
                 }
                 continuation.resume(returning: granted)
             }
@@ -63,7 +63,7 @@ struct ClaudeStatusNotificationService: ClaudeStatusNotificationServicing {
         }
     }
 
-    private static func map(_ status: UNAuthorizationStatus) -> ClaudeStatusNotificationAuthorizationStatus {
+    private static func map(_ status: UNAuthorizationStatus) -> StatusNotificationAuthorizationStatus {
         switch status {
         case .notDetermined: .notDetermined
         case .denied: .denied

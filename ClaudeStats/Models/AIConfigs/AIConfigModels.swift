@@ -131,9 +131,9 @@ enum AIConfigsSection: String, CaseIterable, Sendable, Hashable, Identifiable {
     var detailDescription: String {
         switch self {
         case .overview:
-            "Review Claude and Codex configuration coverage, plan ownership, and file health."
+            "Review Codex configuration coverage, plan ownership, and file health."
         case .instructions:
-            "Inspect global and project instruction files such as CLAUDE.md and AGENTS.md."
+            "Inspect global and project instruction files such as AGENTS.md."
         case .provider:
             "Inspect provider settings and local configuration files without editing them."
         case .plans:

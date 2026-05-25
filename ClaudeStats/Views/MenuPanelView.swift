@@ -88,11 +88,7 @@ struct StatsPanelBody: View {
     var body: some View {
         VStack(spacing: 0) {
             if !isExport || (export?.showTopBar ?? true) {
-                if env.preferences.enabledProviders.count > 1 {
-                    ProviderSwitcherBar(interactive: !isExport)
-                } else {
-                    TickBar(active: env.store.isLoading)
-                }
+                TickBar(active: env.store.isLoading)
             }
             header
             StxRule()

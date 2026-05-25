@@ -11,8 +11,6 @@ struct DashboardView: View {
 
     @SceneStorage("dashboard.section") private var sectionRaw: String = DashboardViewModel.Section.overview.rawValue
     @SceneStorage("dashboard.period") private var periodRaw: String = StatsPeriod.last30Days.rawValue
-    @SceneStorage("dashboard.statusProvider") private var statusProviderRaw: String = ""
-
     /// GitHub cells filtered to the current heatmap window, cached so both
     /// `githubHeatmapSection` and `overlapCard` don't independently re-filter
     /// per body pass.
@@ -33,24 +31,6 @@ struct DashboardView: View {
     private struct GitHubReloadKey: Equatable {
         let githubEnabled: Bool
         let githubLogin: String
-    }
-
-    private enum StatusProvider: String, Equatable {
-        case claude, codex
-
-        var alternate: StatusProvider {
-            switch self {
-            case .claude: .codex
-            case .codex: .claude
-            }
-        }
-
-        var switchHelp: String {
-            switch alternate {
-            case .claude: L10n.string("status.claude.show", defaultValue: "Show Claude Status")
-            case .codex: L10n.string("status.openai.show", defaultValue: "Show OpenAI Status")
-            }
-        }
     }
 
     var body: some View {
@@ -78,12 +58,10 @@ struct DashboardView: View {
         }
         .onAppear {
             syncFromSceneStorage()
-            syncStatusProviderFromSelection(env.preferences.selectedProvider)
             refreshDerived()
         }
         .onChange(of: vm.section) { _, new in sectionRaw = new.rawValue }
         .onChange(of: vm.period) { _, new in periodRaw = new.rawValue }
-        .onChange(of: env.preferences.selectedProvider) { _, new in syncStatusProviderFromSelection(new) }
         .onChange(of: vm.heatmapCells) { _, _ in refreshDerived() }
         .onChange(of: env.github.cells) { _, _ in refreshDerived() }
         .task(id: dashboardReloadKey) {
@@ -134,27 +112,6 @@ struct DashboardView: View {
         if let p = StatsPeriod(rawValue: periodRaw),
            RangeChips.supported.contains(p) {
             vm.period = p
-        }
-    }
-
-    private var statusProvider: StatusProvider {
-        StatusProvider(rawValue: statusProviderRaw) ?? defaultStatusProvider
-    }
-
-    private var defaultStatusProvider: StatusProvider {
-        env.preferences.selectedProvider == .codex ? .codex : .claude
-    }
-
-    private func syncStatusProviderFromSelection(_ provider: ProviderKind) {
-        switch provider {
-        case .claude:
-            statusProviderRaw = StatusProvider.claude.rawValue
-        case .codex:
-            statusProviderRaw = StatusProvider.codex.rawValue
-        case .gemini, .kimi, .minimax:
-            if StatusProvider(rawValue: statusProviderRaw) == nil {
-                statusProviderRaw = defaultStatusProvider.rawValue
-            }
         }
     }
 
@@ -218,24 +175,7 @@ struct DashboardView: View {
 
     @ViewBuilder
     private var statusCard: some View {
-        switch statusProvider {
-        case .claude:
-            ClaudeStatusCard(
-                status: env.claudeStatus,
-                onSwitchStatusProvider: switchStatusProvider,
-                switchStatusHelp: statusProvider.switchHelp
-            )
-        case .codex:
-            OpenAIStatusCard(
-                status: env.openAIStatus,
-                onSwitchStatusProvider: switchStatusProvider,
-                switchStatusHelp: statusProvider.switchHelp
-            )
-        }
-    }
-
-    private func switchStatusProvider() {
-        statusProviderRaw = statusProvider.alternate.rawValue
+        OpenAIStatusCard(status: env.openAIStatus)
     }
 
     // MARK: - Heatmap row (Claude + GitHub side-by-side, no card chrome)

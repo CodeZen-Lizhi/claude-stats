@@ -96,12 +96,12 @@
 	<key>NSSystemAdministrationUsageDescription</key>
 	<string>A program running in the embedded terminal may request elevated privileges.</string>
 	<key>NSScreenCaptureUsageDescription</key>
-	<string>Claude Stats can use screen recording to read visible Claude Desktop usage limits when you choose Desktop usage capture. Notch Island can also use it for recording indicators and screen assistant modules when enabled.</string>
+	<string>Claude Stats can use screen recording for Notch Island recording indicators and screen assistant modules when enabled.</string>
 	<!--
 	  Sparkle auto-update. SUPublicEDKey is the EdDSA *public* key produced by
 	  Sparkle's `generate_keys` (the matching private key lives only in the
 	  release workflow's SPARKLE_PRIVATE_ED_KEY secret). Replace the placeholder
-	  below after running `generate_keys` — see CLAUDE.md ▸ Releasing.
+	  below after running `generate_keys` — see AGENTS.md ▸ Releasing.
 	-->
 	<key>SUFeedURL</key>
 	<string>https://1pitaph.github.io/claude-stats-releases/appcast.xml</string>

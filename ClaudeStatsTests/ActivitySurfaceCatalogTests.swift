@@ -3,12 +3,11 @@ import Testing
 
 @Suite("ActivitySurfaceCatalog")
 struct ActivitySurfaceCatalogTests {
-    @Test("Coding surface defaults include Codex and Claude GUI but not ChatGPT")
+    @Test("Coding surface defaults include Codex but not ChatGPT")
     func codingSurfaceDefaults() {
         let ids = ActivitySurfaceCatalog.effectiveCodingSurfaceBundleIDs(added: [], removed: [])
 
         #expect(ids.contains("com.openai.codex"))
-        #expect(ids.contains("com.anthropic.claudefordesktop"))
         #expect(!ids.contains("com.openai.chat"))
     }
 

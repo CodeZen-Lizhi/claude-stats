@@ -51,7 +51,7 @@ struct TranscriptEmbeddingIndexTests {
         let index = TranscriptEmbeddingIndex(url: root.appendingPathComponent("embeddings.sqlite"))
 
         try await index.replaceChunks(
-            provider: .claude,
+            provider: .codex,
             sessionID: "s1",
             modelID: "multilingual-e5-small-gguf-q8",
             modelRevision: "gguf-q8-v1",
@@ -75,7 +75,7 @@ struct TranscriptEmbeddingIndexTests {
             ]
         )
         try await index.replaceChunks(
-            provider: .claude,
+            provider: .codex,
             sessionID: "s2",
             modelID: "multilingual-e5-small-gguf-q8",
             modelRevision: "gguf-q8-v1",
@@ -93,7 +93,7 @@ struct TranscriptEmbeddingIndexTests {
         )
 
         let cached = try await index.cachedChunkHashes(
-            provider: .claude,
+            provider: .codex,
             sessionID: "s1",
             modelID: "multilingual-e5-small-gguf-q8",
             modelRevision: "gguf-q8-v1",
@@ -102,7 +102,7 @@ struct TranscriptEmbeddingIndexTests {
         #expect(cached == ["chunk-0": "hash-a", "chunk-1": "hash-b"])
 
         let hits = try await index.search(
-            provider: .claude,
+            provider: .codex,
             modelID: "multilingual-e5-small-gguf-q8",
             modelRevision: "gguf-q8-v1",
             chunkerVersion: "test-chunker",
@@ -113,7 +113,7 @@ struct TranscriptEmbeddingIndexTests {
         #expect(hits.first?.excerpt == "SwiftUI settings work")
 
         let excludingCurrent = try await index.search(
-            provider: .claude,
+            provider: .codex,
             modelID: "multilingual-e5-small-gguf-q8",
             modelRevision: "gguf-q8-v1",
             chunkerVersion: "test-chunker",

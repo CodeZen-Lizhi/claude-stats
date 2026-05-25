@@ -43,7 +43,6 @@ enum ActivitySurfaceCatalog {
         App(bundleID: "org.vim.MacVim", name: "MacVim"),
         App(bundleID: "io.neovim.neovide", name: "Neovide"),
         App(bundleID: "com.openai.codex", name: "OpenAI Codex"),
-        App(bundleID: "com.anthropic.claudefordesktop", name: "Claude"),
     ]
 
     /// Terminal-style hosts shown separately from coding-surface time.

@@ -86,9 +86,9 @@ struct DashboardModelTable: View {
     }
     return DashboardModelTable(
         models: [
-            usage(.claude, "claude-opus-4-7", 6_300_000, 81_700_000),
+            usage(.codex, "gpt-5.4", 6_300_000, 81_700_000),
             usage(.codex, "gpt-5.5", 1_500_000, 15_600_000),
-            usage(.claude, "claude-haiku-4-5", 9_600_000, 4_100_000),
+            usage(.codex, "gpt-5-mini", 9_600_000, 4_100_000),
         ],
         displayName: { "\($0.provider.shortName) - \($0.model)" }
     )

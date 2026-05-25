@@ -19,7 +19,7 @@
 
 Claude Stats is an open-source native macOS app for people who work in AI coding tools all day. It runs from the menu bar, reads local usage and activity data, and turns it into quick answers about sessions, tokens, cost, limits, repository activity, local status, and debugging context.
 
-The app began as a focused macOS take on the open-source [Claude Statistics](https://github.com/sj719045032/claude-statistics) project. It now includes a multi-provider foundation, an embedded terminal, a Notch Island surface, and an integrated network debugger while keeping the main product name **Claude Stats**.
+The app began as a focused macOS take on the open-source [Claude Statistics](https://github.com/sj719045032/claude-statistics) project. It is now a Codex-only product with a provider abstraction kept internally for clean session, usage, and configuration boundaries, plus an embedded terminal, a Notch Island surface, and an integrated network debugger.
 
 ## Reference Notes
 
@@ -29,8 +29,8 @@ The app began as a focused macOS take on the open-source [Claude Statistics](htt
 ## Features
 
 - Menu-bar usage stats for AI coding sessions, tokens, estimated cost, and recent activity.
-- Provider support for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and OpenAI Codex session logs; Gemini, Kimi, and MiniMax are recognized in the UI while their on-disk session parsers are still future work.
-- Usage-limit and service-status views for supported providers.
+- Codex session log discovery, parsing, usage stats, estimated cost, usage limits, and OpenAI service status.
+- API provider switcher for Codex CLI configuration.
 - Git and repository activity views, including optional bundled Git tooling for release builds.
 - A Ghostty-powered embedded terminal.
 - An Atoll-backed Notch Island surface for optional media, timer, stats, clipboard, terminal, and related modules.
@@ -79,7 +79,7 @@ Screenshots and GIF demos live in [`docs/assets/screens`](docs/assets/screens), 
 <img src="docs/assets/screens/dashboard-overview.png" alt="Claude Stats dashboard overview">
 
 <p><strong>Sessions overview</strong></p>
-<img src="docs/assets/screens/sessions-overview.png" alt="Claude session statistics overview">
+<img src="docs/assets/screens/sessions-overview.png" alt="Codex session statistics overview">
 
 <p><strong>Token usage and limits</strong></p>
 <img src="docs/assets/screens/usage-token-limits.png" alt="Token usage and usage limits">
@@ -165,9 +165,9 @@ Intel Macs are not supported by current releases. The last public universal buil
 
 ## Privacy & Data
 
-Claude Stats is local-first. Core usage stats are read from local tool data such as `~/.claude/projects/` and `~/.codex/sessions/`; optional activity and desktop-limit features may request macOS permissions such as Full Disk Access, Accessibility, or Screen Recording.
+Claude Stats is local-first. Core usage stats are read from local Codex data such as `~/.codex/sessions/`; optional activity features may request macOS permissions such as Full Disk Access, Accessibility, or Screen Recording.
 
-Network-facing features are opt-in or feature-specific: Sparkle checks for updates, provider status views may query public status pages, Linux.do integration may authenticate through the browser, and the network debugger proxies only the traffic you route through it. The Rockxy helper and certificate features are powerful debugging tools, so review the source and settings before enabling HTTPS interception.
+Network-facing features are opt-in or feature-specific: Sparkle checks for updates, OpenAI status views may query public status pages, Linux.do integration may authenticate through the browser, and the network debugger proxies only the traffic you route through it. The Rockxy helper and certificate features are powerful debugging tools, so review the source and settings before enabling HTTPS interception.
 
 ## Build From Source
 
@@ -215,7 +215,7 @@ ClaudeStats/
   App/          @main entry point, app environment, Info.plist, entitlements
   Features/     feature-specific app integrations such as Notch Island
   Models/       Sendable value types and generated release history
-  Providers/    provider protocol, registry, and per-provider scanners/parsers
+  Providers/    provider protocol, registry, and Codex scanner/parser
   Resources/    pricing data, Git tools placeholder, app resources
   Services/     stores, scanners, network debugging, system integrations
   ViewModels/   per-screen and feature view models

@@ -4,54 +4,6 @@ import Testing
 
 @Suite("API provider switcher")
 struct APIProviderSwitcherTests {
-    @Test("Claude provider writes managed env and preserves non-provider settings")
-    func claudeProviderPreservesNonProviderSettings() async throws {
-        let temp = try TempDir.make()
-        defer { try? FileManager.default.removeItem(at: temp) }
-
-        let claudeConfig = temp.appendingPathComponent("Claude", isDirectory: true)
-        let settingsURL = claudeConfig.appendingPathComponent("settings.json", isDirectory: false)
-        try TempDir.write(
-            """
-            {
-              "env" : {
-                "ANTHROPIC_BASE_URL" : "https://old.example",
-                "ANTHROPIC_API_KEY" : "old-key",
-                "CUSTOM_ENV" : "keep-me"
-              },
-              "permissions" : {
-                "allow" : ["Bash(ls)"]
-              },
-              "statusLine" : {
-                "command" : "echo ok"
-              }
-            }
-            """,
-            to: settingsURL
-        )
-
-        let store = makeStore(temp: temp, claudeConfig: claudeConfig)
-        let provider = CLIAPIProvider(
-            id: "gateway",
-            cli: .claude,
-            name: "Gateway",
-            baseURL: "https://gateway.example",
-            apiKey: .inline("sk-gateway"),
-            model: "claude-compatible"
-        )
-
-        _ = try await store.apply(provider: provider, currentActive: nil, keyStorageMode: .json)
-
-        let object = try readJSONObject(settingsURL)
-        let env = try #require(object["env"] as? [String: Any])
-        #expect(env["ANTHROPIC_BASE_URL"] as? String == "https://gateway.example")
-        #expect(env["ANTHROPIC_AUTH_TOKEN"] as? String == "sk-gateway")
-        #expect(env["ANTHROPIC_API_KEY"] == nil)
-        #expect(env["CUSTOM_ENV"] as? String == "keep-me")
-        #expect(object["permissions"] != nil)
-        #expect(object["statusLine"] != nil)
-    }
-
     @Test("Codex provider writes auth and config while preserving common config")
     func codexProviderPreservesCommonConfig() async throws {
         let temp = try TempDir.make()
@@ -99,28 +51,28 @@ struct APIProviderSwitcherTests {
         #expect(config.contains("[model_providers.old]") == false)
     }
 
-    @Test("Import Current creates Default provider")
+    @Test("Import Current creates Default Codex provider")
     func importCurrentCreatesDefaultProvider() async throws {
         let temp = try TempDir.make()
         defer { try? FileManager.default.removeItem(at: temp) }
 
-        let claudeConfig = temp.appendingPathComponent("Claude", isDirectory: true)
+        let codexHome = temp.appendingPathComponent("Codex", isDirectory: true)
+        try TempDir.write(#"{"OPENAI_API_KEY":"sk-current"}"#, to: codexHome.appendingPathComponent("auth.json"))
         try TempDir.write(
             """
-            {
-              "env" : {
-                "ANTHROPIC_BASE_URL" : "https://current.example",
-                "ANTHROPIC_AUTH_TOKEN" : "sk-current",
-                "ANTHROPIC_MODEL" : "current-model"
-              }
-            }
+            model_provider = "current"
+            model = "current-model"
+
+            [model_providers.current]
+            name = "Current"
+            base_url = "https://current.example"
             """,
-            to: claudeConfig.appendingPathComponent("settings.json")
+            to: codexHome.appendingPathComponent("config.toml")
         )
 
-        let store = makeStore(temp: temp, claudeConfig: claudeConfig)
+        let store = makeStore(temp: temp, codexHome: codexHome)
         let provider = try await store.importCurrentProvider(
-            cli: .claude,
+            cli: .codex,
             name: "Default",
             id: "default",
             keyStorageMode: .json
@@ -140,9 +92,10 @@ struct APIProviderSwitcherTests {
         let temp = try TempDir.make()
         defer { try? FileManager.default.removeItem(at: temp) }
 
-        let claudeConfig = temp.appendingPathComponent("Claude", isDirectory: true)
-        try TempDir.write(#"{ "env" : { "ANTHROPIC_BASE_URL" : "https://default.example" } }"#, to: claudeConfig.appendingPathComponent("settings.json"))
-        let store = makeStore(temp: temp, claudeConfig: claudeConfig)
+        let codexHome = temp.appendingPathComponent("Codex", isDirectory: true)
+        try TempDir.write(#"{"OPENAI_API_KEY":"old-key"}"#, to: codexHome.appendingPathComponent("auth.json"))
+        try TempDir.write(#"model = "old-model""#, to: codexHome.appendingPathComponent("config.toml"))
+        let store = makeStore(temp: temp, codexHome: codexHome)
         let vm = APIProviderSwitcherViewModel(store: store)
 
         await vm.reload(keyStorageMode: .json)
@@ -154,46 +107,40 @@ struct APIProviderSwitcherTests {
 
         await vm.enableSelectedProvider(rawMode: false, keyStorageMode: .json)
 
-        let active = try #require(vm.activeProvider(for: .claude))
+        let active = try #require(vm.activeProvider(for: .codex))
         #expect(active.name == "Gateway")
         #expect(vm.latestApplyResult != nil)
         if let backup = vm.latestApplyResult?.backupDirectory {
             #expect(FileManager.default.fileExists(atPath: backup.appendingPathComponent("manifest.json").path))
         }
-        let settings = try readJSONObject(claudeConfig.appendingPathComponent("settings.json"))
-        let env = try #require(settings["env"] as? [String: Any])
-        #expect(env["ANTHROPIC_BASE_URL"] as? String == "https://gateway.example")
+        let auth = try readJSONObject(codexHome.appendingPathComponent("auth.json"))
+        #expect(auth["OPENAI_API_KEY"] as? String == "sk-gateway")
     }
 
-    @Test("Universal provider generates Claude and Codex child providers")
-    func universalProviderGeneratesChildren() throws {
+    @Test("Universal provider generates Codex child provider")
+    func universalProviderGeneratesCodexChild() throws {
         let temp = try TempDir.make()
         defer { try? FileManager.default.removeItem(at: temp) }
 
         let store = makeStore(temp: temp)
         let (universal, initialChildren) = store.makeUniversalProvider(keyStorageMode: .json)
-        #expect(Set(initialChildren.map(\.cli)) == Set(APIProviderCLI.allCases))
+        #expect(initialChildren.map(\.cli) == [.codex])
 
         let saved = try store.universalBySavingDraft(
             existing: universal,
-            editedCLI: .claude,
+            editedCLI: .codex,
             name: "OpenRouter",
             baseURL: "https://openrouter.ai/api/v1",
             apiKey: "sk-universal",
-            model: "anthropic/claude-compatible",
+            model: "openai/gpt-oss",
             keyStorageMode: .json
         )
-        let children = store.childProviders(for: saved, keyStorageMode: .json)
-        let claude = try #require(children.first { $0.cli == .claude })
-        let codex = try #require(children.first { $0.cli == .codex })
-        #expect(claude.name == "OpenRouter")
-        #expect(codex.name == "OpenRouter")
-        #expect(claude.baseURL == "https://openrouter.ai/api/v1")
-        #expect(codex.baseURL == "https://openrouter.ai/api/v1")
-        #expect(claude.model == "anthropic/claude-compatible")
-        #expect(codex.model == "gpt-5.4")
-        #expect(claude.apiKey == .inline("sk-universal"))
-        #expect(codex.apiKey == .inline("sk-universal"))
+        let child = try #require(store.childProviders(for: saved, keyStorageMode: .json).first)
+        #expect(child.cli == .codex)
+        #expect(child.name == "OpenRouter")
+        #expect(child.baseURL == "https://openrouter.ai/api/v1")
+        #expect(child.model == "openai/gpt-oss")
+        #expect(child.apiKey == .inline("sk-universal"))
     }
 
     @Test("JSON and Keychain API key storage resolve the same key")
@@ -203,7 +150,7 @@ struct APIProviderSwitcherTests {
 
         let secretStore = InMemoryAPIProviderSecretStore()
         let store = makeStore(temp: temp, secretStore: secretStore)
-        let existing = CLIAPIProvider(id: "provider", cli: .claude, name: "Provider")
+        let existing = CLIAPIProvider(id: "provider", cli: .codex, name: "Provider")
 
         let jsonProvider = try store.providerBySavingDraft(
             existing: existing,
@@ -245,26 +192,26 @@ struct APIProviderSwitcherTests {
         defer { try? FileManager.default.removeItem(at: temp) }
 
         let secretStore = InMemoryAPIProviderSecretStore()
-        secretStore.saveAPIKey("sk-old", account: "claude-provider")
+        secretStore.saveAPIKey("sk-old", account: "codex-provider")
         let store = makeStore(temp: temp, secretStore: secretStore)
         let provider = CLIAPIProvider(
             id: "provider",
-            cli: .claude,
+            cli: .codex,
             origin: .appSpecific,
             name: "Provider",
-            apiKey: .keychain(account: "claude-provider")
+            apiKey: .keychain(account: "codex-provider")
         )
         try await store.saveLibrary(ConfigurationProviderLibrary(cliProviders: [provider]))
         let vm = APIProviderSwitcherViewModel(store: store)
 
         await vm.reload(keyStorageMode: .keychain)
-        let loadedProvider = try #require(vm.providers(for: .claude).first { $0.id == "provider" })
+        let loadedProvider = try #require(vm.providers(for: .codex).first { $0.id == "provider" })
         vm.selectProvider(loadedProvider, keyStorageMode: .keychain)
 
         await vm.deleteSelectedProvider(keyStorageMode: .keychain)
 
-        #expect(secretStore.readAPIKey(account: "claude-provider") == nil)
-        #expect(vm.providers(for: .claude).contains { $0.id == "provider" } == false)
+        #expect(secretStore.readAPIKey(account: "codex-provider") == nil)
+        #expect(vm.providers(for: .codex).contains { $0.id == "provider" } == false)
     }
 
     @MainActor
@@ -277,13 +224,13 @@ struct APIProviderSwitcherTests {
         let vm = APIProviderSwitcherViewModel(store: store)
 
         await vm.reload(keyStorageMode: .json)
-        let initial = vm.providers(for: .claude)
-        #expect(vm.providers(for: .claude).map(\.id) == initial.map(\.id))
+        let initial = vm.providers(for: .codex)
+        #expect(vm.providers(for: .codex).map(\.id) == initial.map(\.id))
 
         await vm.addProvider(keyStorageMode: .json)
 
         let selectedID = try #require(vm.selectedProviderID)
-        let updated = vm.providers(for: .claude)
+        let updated = vm.providers(for: .codex)
         #expect(updated.count == initial.count + 1)
         #expect(updated.contains { $0.id == selectedID })
     }
@@ -295,29 +242,29 @@ struct APIProviderSwitcherTests {
         defer { try? FileManager.default.removeItem(at: temp) }
 
         let secretStore = InMemoryAPIProviderSecretStore()
-        secretStore.saveAPIKey("sk-old", account: "claude-provider")
+        secretStore.saveAPIKey("sk-old", account: "codex-provider")
         let store = makeStore(temp: temp, secretStore: secretStore)
         let provider = CLIAPIProvider(
             id: "provider",
-            cli: .claude,
+            cli: .codex,
             origin: .appSpecific,
             name: "Provider",
-            apiKey: .keychain(account: "claude-provider")
+            apiKey: .keychain(account: "codex-provider")
         )
         try await store.saveLibrary(ConfigurationProviderLibrary(cliProviders: [provider]))
         let vm = APIProviderSwitcherViewModel(store: store)
 
         await vm.reload(keyStorageMode: .keychain)
-        let loadedProvider = try #require(vm.providers(for: .claude).first { $0.id == "provider" })
+        let loadedProvider = try #require(vm.providers(for: .codex).first { $0.id == "provider" })
         vm.selectProvider(loadedProvider, keyStorageMode: .keychain)
         vm.draftAPIKey = "sk-json"
 
         let saved = await vm.saveDraft(rawMode: false, keyStorageMode: .json)
 
-        let updatedProvider = try #require(vm.providers(for: .claude).first { $0.id == "provider" })
+        let updatedProvider = try #require(vm.providers(for: .codex).first { $0.id == "provider" })
         #expect(saved)
         #expect(updatedProvider.apiKey == .inline("sk-json"))
-        #expect(secretStore.readAPIKey(account: "claude-provider") == nil)
+        #expect(secretStore.readAPIKey(account: "codex-provider") == nil)
     }
 
     @Test("Provider library persists CLI-keyed maps as string dictionaries")
@@ -329,11 +276,11 @@ struct APIProviderSwitcherTests {
         let universal = UniversalAPIProvider(
             id: "u",
             name: "Universal",
-            modelOverrides: [.claude: "claude-model", .codex: "codex-model"]
+            modelOverrides: [.codex: "codex-model"]
         )
         let library = ConfigurationProviderLibrary(
             universalProviders: [universal],
-            activeProviderIDs: [.claude: "default", .codex: "official"],
+            activeProviderIDs: [.codex: "official"],
             commonConfigByCLI: [.codex: "[mcp_servers.github]"]
         )
 
@@ -345,27 +292,51 @@ struct APIProviderSwitcherTests {
                 .appendingPathComponent("providers.json", isDirectory: false),
             encoding: .utf8
         )
-        #expect(raw.contains(#""claude" : "default""#))
         #expect(raw.contains(#""codex" : "official""#))
-        #expect(raw.contains(#""claude" : "claude-model""#))
         #expect(raw.contains(#""codex" : "codex-model""#))
 
         let loaded = try await store.loadLibrary()
-        #expect(loaded.activeProviderIDs[.claude] == "default")
         #expect(loaded.activeProviderIDs[.codex] == "official")
-        #expect(loaded.universalProviders.first?.modelOverrides[.claude] == "claude-model")
         #expect(loaded.universalProviders.first?.modelOverrides[.codex] == "codex-model")
+    }
+
+    @Test("Legacy non-Codex providers are ignored when loading library")
+    func legacyNonCodexProvidersAreIgnored() async throws {
+        let temp = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let libraryURL = temp
+            .appendingPathComponent("ProviderLibrary", isDirectory: true)
+            .appendingPathComponent("providers.json", isDirectory: false)
+        try TempDir.write(
+            """
+            {
+              "cliProviders" : [
+                { "id" : "legacy", "cli" : "claude", "origin" : { "kind" : "appSpecific" }, "name" : "Legacy", "category" : "custom", "baseURL" : "", "apiKey" : { "kind" : "none" }, "model" : "", "rawConfig" : "", "createdAt" : "2026-01-01T00:00:00Z", "updatedAt" : "2026-01-01T00:00:00Z" },
+                { "id" : "codex", "cli" : "codex", "origin" : { "kind" : "appSpecific" }, "name" : "Codex", "category" : "custom", "baseURL" : "", "apiKey" : { "kind" : "none" }, "model" : "", "rawConfig" : "", "createdAt" : "2026-01-01T00:00:00Z", "updatedAt" : "2026-01-01T00:00:00Z" }
+              ],
+              "universalProviders" : [],
+              "activeProviderIDs" : { "claude" : "legacy", "codex" : "codex" },
+              "commonConfigByCLI" : { "claude" : "old", "codex" : "new" }
+            }
+            """,
+            to: libraryURL
+        )
+
+        let loaded = try await makeStore(temp: temp).loadLibrary()
+
+        #expect(loaded.cliProviders.map(\.id) == ["codex"])
+        #expect(loaded.activeProviderIDs == [.codex: "codex"])
+        #expect(loaded.commonConfigByCLI == [.codex: "new"])
     }
 
     private func makeStore(
         temp: URL,
-        claudeConfig: URL? = nil,
         codexHome: URL? = nil,
         secretStore: any APIProviderSecretStoring = InMemoryAPIProviderSecretStore()
     ) -> ConfigurationProviderStore {
         ConfigurationProviderStore(
             rootDirectory: temp.appendingPathComponent("ProviderLibrary", isDirectory: true),
-            claudePaths: ClaudePaths(configDirectory: claudeConfig ?? temp.appendingPathComponent("Claude", isDirectory: true)),
             codexPaths: CodexPaths(homeDirectory: codexHome ?? temp.appendingPathComponent("Codex", isDirectory: true)),
             secretStore: secretStore
         )

@@ -1,7 +1,6 @@
 import Foundation
 
 enum GitWorkspaceSourceID: String, CaseIterable, Codable, Sendable, Identifiable, Hashable {
-    case claude
     case codex
     case cursor
     case windsurf
@@ -31,16 +30,9 @@ struct GitWorkspaceSourceDescriptor: Sendable, Identifiable, Hashable {
 }
 
 enum GitWorkspaceSourceCatalog {
-    static let defaultEnabled: Set<GitWorkspaceSourceID> = [.claude, .codex]
+    static let defaultEnabled: Set<GitWorkspaceSourceID> = [.codex]
 
     static let sessionSources: [GitWorkspaceSourceDescriptor] = [
-        GitWorkspaceSourceDescriptor(
-            id: .claude,
-            displayName: "Claude Code",
-            detail: "Repos from Claude Code transcript working directories.",
-            assetName: "claudecode-logo",
-            kind: .sessionProvider(.claude)
-        ),
         GitWorkspaceSourceDescriptor(
             id: .codex,
             displayName: "OpenAI Codex",

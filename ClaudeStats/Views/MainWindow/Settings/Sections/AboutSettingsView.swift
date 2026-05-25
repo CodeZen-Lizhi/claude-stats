@@ -9,10 +9,10 @@ struct AboutSettingsView: View {
         VStack(alignment: .leading, spacing: 28) {
             SettingGroup(title: "Data") {
                 VStack(spacing: 0) {
-                    SettingRow(title: "Claude config directory",
-                               description: ClaudePaths.default.configDirectory.path) {
+                    SettingRow(title: "Codex config directory",
+                               description: CodexPaths.default.homeDirectory.path) {
                         Button("Reveal in Finder") {
-                            NSWorkspace.shared.activateFileViewerSelecting([ClaudePaths.default.configDirectory])
+                            NSWorkspace.shared.activateFileViewerSelecting([CodexPaths.default.homeDirectory])
                         }
                     }
                 }

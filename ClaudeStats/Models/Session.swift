@@ -8,7 +8,7 @@ struct Session: Sendable, Identifiable, Hashable {
     /// The transcript file's own basename without extension (the session UUID).
     let externalID: String
     let provider: ProviderKind
-    /// The encoded project directory name (Claude's `~/.claude/projects/<this>`).
+    /// The encoded project directory name from the provider's session storage.
     let projectDirectoryName: String
     /// Absolute path of the `.jsonl` transcript.
     let filePath: String

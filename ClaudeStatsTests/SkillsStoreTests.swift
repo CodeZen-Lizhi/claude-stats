@@ -26,7 +26,7 @@ struct SkillsStoreTests {
             description: Helps beta projects
             ---
             """,
-            to: root.appendingPathComponent(".claude/skills/beta/SKILL.md")
+            to: root.appendingPathComponent(".codex/skills/beta/SKILL.md")
         )
 
         let store = SkillsStore(

@@ -288,7 +288,7 @@ struct ModelsTrendChartSnapshot: Equatable {
         series: series,
         seriesID: "preview",
         includeCacheInTotals: true,
-        displayName: { ClaudeProvider.prettyName(for: $0) }
+        displayName: { $0 }
     )
     .padding(24)
     .frame(width: 760)

@@ -51,7 +51,7 @@ struct LeaderboardSyncViewModelTests {
     func syncProfileIncludesFavoriteModels() async {
         let now = dateUTC(2026, 5, 16, 8)
         let fixture = makeFixture(enabled: true, sessions: [
-            session("sonnet", provider: .claude, at: now, tokens: 300, modelName: "sonnet"),
+            session("sonnet", provider: .codex, at: now, tokens: 300, modelName: "sonnet"),
             session("opus", provider: .codex, at: now, tokens: 100, modelName: "opus"),
         ])
 
@@ -66,8 +66,8 @@ struct LeaderboardSyncViewModelTests {
     func currentUserFavoriteModelsUseLocalSessions() async {
         let now = dateUTC(2026, 5, 16, 8)
         let fixture = makeFixture(enabled: true, sessions: [
-            session("a", provider: .claude, at: now, tokens: 10, modelName: "haiku"),
-            session("b", provider: .claude, at: now, tokens: 40, modelName: "sonnet"),
+            session("a", provider: .codex, at: now, tokens: 10, modelName: "haiku"),
+            session("b", provider: .codex, at: now, tokens: 40, modelName: "sonnet"),
         ])
 
         #expect(fixture.viewModel.currentUserFavoriteModels.map(\.model) == ["sonnet", "haiku"])
@@ -553,7 +553,7 @@ struct LeaderboardSyncViewModelTests {
         let sessions = [
             session(
                 "timeline",
-                provider: .claude,
+                provider: .codex,
                 at: now,
                 tokens: 0,
                 timeline: [
@@ -648,7 +648,7 @@ struct LeaderboardSyncViewModelTests {
                              silentSyncDebounceInterval: TimeInterval = 0,
                              silentSyncMinimumInterval: TimeInterval = 0,
                              realtimeRefreshDebounceInterval: TimeInterval = 0) -> Fixture {
-        let suiteName = "com.claudestats.tests.leaderboards.\(UUID().uuidString)"
+        let suiteName = "com.codexstats.tests.leaderboards.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName) ?? .standard
         defaults.removePersistentDomain(forName: suiteName)
         let preferences = Preferences(defaults: defaults)
@@ -658,7 +658,7 @@ struct LeaderboardSyncViewModelTests {
         let store = SessionStore(registry: ProviderRegistry(pricing: TestPricing.table), pricing: TestPricing.table)
         let now = Date()
         store.loadPreviewSessions(sessions ?? [
-            session("a", provider: .claude, at: now, tokens: 100),
+            session("a", provider: .codex, at: now, tokens: 100),
             session("b", provider: .codex, at: now.addingTimeInterval(60), tokens: 200),
         ])
         let client = FakeLeaderboardClient()

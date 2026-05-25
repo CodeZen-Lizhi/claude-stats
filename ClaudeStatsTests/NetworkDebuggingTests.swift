@@ -774,21 +774,21 @@ struct NetworkDebuggingTests {
     @Test("LaunchDaemon plist uses ClaudeStats Rockxy helper identity")
     func launchDaemonPlistUsesClaudeStatsIdentity() throws {
         let data = try RockxyHelperLaunchDaemonPlist.data(
-            machServiceName: "com.claudestats.rockxy.helper",
+            machServiceName: "com.codexstats.rockxy.helper",
             bundleProgram: "Contents/Library/HelperTools/RockxyHelperTool",
-            allowedCallerIdentifiers: ["com.claudestats.ClaudeStats"]
+            allowedCallerIdentifiers: ["com.codexstats.ClaudeStats"]
         )
         let object = try PropertyListSerialization.propertyList(from: data, format: nil)
         let plist = try #require(object as? [String: Any])
 
-        #expect(plist["Label"] as? String == "com.claudestats.rockxy.helper")
+        #expect(plist["Label"] as? String == "com.codexstats.rockxy.helper")
         #expect(plist["BundleProgram"] as? String == "Contents/Library/HelperTools/RockxyHelperTool")
-        #expect(plist["AssociatedBundleIdentifiers"] as? [String] == ["com.claudestats.ClaudeStats"])
+        #expect(plist["AssociatedBundleIdentifiers"] as? [String] == ["com.codexstats.ClaudeStats"])
         #expect(plist["RunAtLoad"] == nil)
         #expect(plist["KeepAlive"] == nil)
 
         let machServices = try #require(plist["MachServices"] as? [String: Bool])
-        #expect(machServices["com.claudestats.rockxy.helper"] == true)
+        #expect(machServices["com.codexstats.rockxy.helper"] == true)
     }
 
     private func makeTransaction(
@@ -875,7 +875,7 @@ struct NetworkDebuggingTests {
     }
 
     private func makeDefaults() -> UserDefaults {
-        let suiteName = "com.claudestats.network.tests.\(UUID().uuidString)"
+        let suiteName = "com.codexstats.network.tests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName) ?? .standard
         defaults.removePersistentDomain(forName: suiteName)
         return defaults

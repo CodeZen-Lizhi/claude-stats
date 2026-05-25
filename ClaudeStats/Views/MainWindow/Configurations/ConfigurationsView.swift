@@ -310,7 +310,7 @@ struct ConfigurationsView: View {
                     .textFieldStyle(.roundedBorder)
             }
             APIProviderFieldRow(title: "Model") {
-                TextField(bindableVM.draftCLI == .claude ? "claude-compatible model" : "gpt-compatible model", text: $bindableVM.draftModel)
+                TextField("gpt-compatible model", text: $bindableVM.draftModel)
                     .textFieldStyle(.roundedBorder)
             }
         }
@@ -324,7 +324,7 @@ struct ConfigurationsView: View {
         return VStack(alignment: .leading, spacing: 8) {
             ConfigurationTextEditor(
                 text: $bindableVM.draftRawConfig,
-                fileKind: bindableVM.draftCLI == .claude ? .json : .toml,
+                fileKind: .toml,
                 isEditable: isEditable
             ) { line, column in
                 cursorLine = line
@@ -335,7 +335,7 @@ struct ConfigurationsView: View {
             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.stxStroke, lineWidth: 1))
 
             HStack(spacing: 8) {
-                Text(bindableVM.draftCLI == .claude ? "settings.json" : "config.toml")
+                Text("config.toml")
                 Text("·")
                 Text("\(cursorLine):\(cursorColumn)")
                 Spacer(minLength: 8)
@@ -724,7 +724,7 @@ private struct CLIEnvironmentConflictPanel: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Environment variable conflicts")
                             .font(.sora(13, weight: .semibold))
-                        Text("\(vm.conflicts.count) ANTHROPIC / OPENAI variable\(vm.conflicts.count == 1 ? "" : "s") found in your local environment.")
+                        Text("\(vm.conflicts.count) OPENAI variable\(vm.conflicts.count == 1 ? "" : "s") found in your local environment.")
                             .font(.sora(11))
                             .foregroundStyle(Color.stxMuted)
                     }
@@ -777,7 +777,7 @@ private struct CLIEnvironmentConflictPanel: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("No environment conflicts")
                     .font(.sora(13, weight: .semibold))
-                Text("No ANTHROPIC or OPENAI overrides were found in process or shell config files.")
+                Text("No OPENAI overrides were found in process or shell config files.")
                     .font(.sora(11))
                     .foregroundStyle(Color.stxMuted)
                     .lineLimit(2)

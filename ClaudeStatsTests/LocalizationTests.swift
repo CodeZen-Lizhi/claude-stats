@@ -57,7 +57,7 @@ struct LocalizationTests {
     }
 
     private func makeDefaults() -> (UserDefaults, String) {
-        let suiteName = "com.claudestats.localization.tests.\(UUID().uuidString)"
+        let suiteName = "com.codexstats.localization.tests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName) ?? .standard
         defaults.removePersistentDomain(forName: suiteName)
         return (defaults, suiteName)

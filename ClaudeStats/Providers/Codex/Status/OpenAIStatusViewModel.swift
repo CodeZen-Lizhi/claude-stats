@@ -13,7 +13,7 @@ final class OpenAIStatusViewModel {
     private(set) var uptimeSnapshot: OpenAIStatusUptimeSnapshot?
     private(set) var isUptimeStale = false
     private(set) var uptimeLastError: String?
-    private(set) var notificationAuthorization: ClaudeStatusNotificationAuthorizationStatus = .notDetermined
+    private(set) var notificationAuthorization: StatusNotificationAuthorizationStatus = .notDetermined
     private(set) var isRequestingNotificationAuthorization = false
 
     var availableGroups: [OpenAIStatusGroup] {
@@ -49,7 +49,7 @@ final class OpenAIStatusViewModel {
     @ObservationIgnored private let cache: any OpenAIStatusCaching
     @ObservationIgnored private let uptimeClient: any OpenAIStatusUptimeFetching
     @ObservationIgnored private let uptimeCache: any OpenAIStatusUptimeCaching
-    @ObservationIgnored private let notifications: any ClaudeStatusNotificationServicing
+    @ObservationIgnored private let notifications: any StatusNotificationServicing
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
 
     init(
@@ -58,7 +58,7 @@ final class OpenAIStatusViewModel {
         cache: any OpenAIStatusCaching = OpenAIStatusCache(),
         uptimeClient: any OpenAIStatusUptimeFetching = OpenAIStatusUptimeClient(),
         uptimeCache: any OpenAIStatusUptimeCaching = OpenAIStatusUptimeCache(),
-        notifications: any ClaudeStatusNotificationServicing = ClaudeStatusNotificationService()
+        notifications: any StatusNotificationServicing = StatusNotificationService()
     ) {
         self.preferences = preferences
         self.client = client

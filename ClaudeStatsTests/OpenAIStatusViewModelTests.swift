@@ -148,9 +148,9 @@ struct OpenAIStatusViewModelTests {
         uptimeCacheSnapshot: OpenAIStatusUptimeSnapshot? = nil,
         uptimeCacheStale: Bool = false,
         uptimeClientResult: Result<OpenAIStatusUptimeSnapshot, OpenAIStatusClient.ClientError>? = nil,
-        notificationStatus: ClaudeStatusNotificationAuthorizationStatus = .notDetermined
+        notificationStatus: StatusNotificationAuthorizationStatus = .notDetermined
     ) -> Fixture {
-        let suiteName = "com.claudestats.tests.openai-status.\(UUID().uuidString)"
+        let suiteName = "com.codexstats.tests.openai-status.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName) ?? .standard
         defaults.removePersistentDomain(forName: suiteName)
         let preferences = Preferences(defaults: defaults)
@@ -339,19 +339,19 @@ private final class FakeOpenAIStatusUptimeCache: OpenAIStatusUptimeCaching, @unc
     }
 }
 
-private actor FakeOpenAIStatusNotifications: ClaudeStatusNotificationServicing {
-    private var status: ClaudeStatusNotificationAuthorizationStatus
+private actor FakeOpenAIStatusNotifications: StatusNotificationServicing {
+    private var status: StatusNotificationAuthorizationStatus
     private var sentAlerts: [(title: String, body: String, identifier: String)] = []
 
-    init(status: ClaudeStatusNotificationAuthorizationStatus) {
+    init(status: StatusNotificationAuthorizationStatus) {
         self.status = status
     }
 
-    func authorizationStatus() async -> ClaudeStatusNotificationAuthorizationStatus {
+    func authorizationStatus() async -> StatusNotificationAuthorizationStatus {
         status
     }
 
-    func requestAuthorization() async -> ClaudeStatusNotificationAuthorizationStatus {
+    func requestAuthorization() async -> StatusNotificationAuthorizationStatus {
         status
     }
 

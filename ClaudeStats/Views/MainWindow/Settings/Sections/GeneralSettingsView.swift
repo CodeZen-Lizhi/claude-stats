@@ -92,14 +92,14 @@ struct GeneralSettingsView: View {
                     }
                     SettingRowDivider()
                     SettingRow(title: "Include cache reads in token counts",
-                               description: "Anthropic's API re-reports the cached context on every assistant turn, so the same tokens get counted many times. Turn off to show only \u{201C}new\u{201D} traffic (input + output + cache writes). Estimated cost is unaffected.") {
+                               description: "Some APIs re-report cached context on assistant turns, so the same tokens can be counted many times. Turn off to show only \u{201C}new\u{201D} traffic (input + output + cache writes). Estimated cost is unaffected.") {
                         Toggle("", isOn: $prefs.includeCacheInTokens)
                             .labelsHidden()
                             .toggleStyle(.switch)
                     }
                     SettingRowDivider()
                     SettingRow(title: "Cost mode",
-                               description: "API estimate uses standard first-party token prices. Detailed billing also applies fast mode and web search charges when Claude logs expose them.") {
+                               description: "API estimate uses standard first-party token prices. Detailed billing is kept for compatible imported data and currently matches the standard Codex estimate.") {
                         Picker("", selection: $prefs.costEstimationMode) {
                             ForEach(CostEstimationMode.allCases) { mode in
                                 Text(mode.displayName).tag(mode)

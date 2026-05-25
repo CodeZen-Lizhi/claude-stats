@@ -169,7 +169,7 @@ struct GitActivityView: View {
     private var correlationPanel: some View {
         let vm = activityModel
         let points = vm.correlationPoints
-        let hasTokens = points.contains { $0.claudeTokens > 0 }
+        let hasTokens = points.contains { $0.aiTokens > 0 }
         return VStack(alignment: .leading, spacing: 10) {
             Text("AI USAGE vs COMMITS")
                 .font(.sora(13, weight: .semibold))
@@ -195,10 +195,10 @@ struct GitActivityView: View {
 
     private func tokensChart(_ points: [GitActivityViewModel.CorrelationPoint], hasTokens: Bool) -> some View {
         Chart(points) { p in
-            AreaMark(x: .value("When", p.start), y: .value("Tokens", p.claudeTokens))
+            AreaMark(x: .value("When", p.start), y: .value("Tokens", p.aiTokens))
                 .foregroundStyle(Color.stxAccent.opacity(0.16))
                 .interpolationMethod(.monotone)
-            LineMark(x: .value("When", p.start), y: .value("Tokens", p.claudeTokens))
+            LineMark(x: .value("When", p.start), y: .value("Tokens", p.aiTokens))
                 .foregroundStyle(Color.stxAccent)
                 .interpolationMethod(.monotone)
                 .lineStyle(StrokeStyle(lineWidth: 2))

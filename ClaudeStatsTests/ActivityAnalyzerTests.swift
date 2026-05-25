@@ -19,7 +19,7 @@ struct ActivityAnalyzerTests {
     private func session(ai intervals: [DateInterval]) -> Session {
         let stats = SessionStats(title: "t", messageCount: 1, firstActivity: nil, lastActivity: nil,
                                  models: [], timeline: [], activityIntervals: intervals)
-        return Session(id: "s", externalID: "s", provider: .claude, projectDirectoryName: "-p",
+        return Session(id: "s", externalID: "s", provider: .codex, projectDirectoryName: "-p",
                        filePath: "/s.jsonl", cwd: nil, lastModified: day, fileSize: 1, stats: stats)
     }
 

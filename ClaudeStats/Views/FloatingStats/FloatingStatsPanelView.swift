@@ -265,39 +265,19 @@ struct FloatingStatsPanelView: View {
     }
 
     private func providerLogoTint(for provider: ProviderKind) -> Color {
-        switch provider {
-        case .codex, .kimi:
-            Color.primary
-        case .claude, .gemini, .minimax:
-            provider.accentColor
-        }
+        Color.primary
     }
 
     private func floatingStatusContent(for provider: ProviderKind) -> FloatingProviderStatusContent? {
-        switch provider {
-        case .claude:
-            if let summary = ClaudeFloatingStatusAdapter.summary(from: env.claudeStatus) {
-                return .summary(summary)
-            }
-            return floatingStatusMessage(
-                isLoading: env.claudeStatus.isLoading,
-                primaryError: env.claudeStatus.lastError,
-                secondaryError: env.claudeStatus.uptimeLastError,
-                fallback: "CLAUDE STATUS UNAVAILABLE"
-            )
-        case .codex:
-            if let summary = OpenAIFloatingStatusAdapter.summary(from: env.openAIStatus) {
-                return .summary(summary)
-            }
-            return floatingStatusMessage(
-                isLoading: env.openAIStatus.isLoading,
-                primaryError: env.openAIStatus.lastError,
-                secondaryError: env.openAIStatus.uptimeLastError,
-                fallback: "OPENAI STATUS UNAVAILABLE"
-            )
-        case .gemini, .kimi, .minimax:
-            return nil
+        if let summary = OpenAIFloatingStatusAdapter.summary(from: env.openAIStatus) {
+            return .summary(summary)
         }
+        return floatingStatusMessage(
+            isLoading: env.openAIStatus.isLoading,
+            primaryError: env.openAIStatus.lastError,
+            secondaryError: env.openAIStatus.uptimeLastError,
+            fallback: "OPENAI STATUS UNAVAILABLE"
+        )
     }
 
     private func floatingStatusMessage(
@@ -316,14 +296,7 @@ struct FloatingStatsPanelView: View {
     }
 
     private func refreshProviderStatusIfNeeded(provider: ProviderKind) async {
-        switch provider {
-        case .claude:
-            await env.claudeStatus.refreshIfNeeded()
-        case .codex:
-            await env.openAIStatus.refreshIfNeeded()
-        case .gemini, .kimi, .minimax:
-            return
-        }
+        await env.openAIStatus.refreshIfNeeded()
     }
 
     private func metricBlock(title: String, value: String) -> some View {

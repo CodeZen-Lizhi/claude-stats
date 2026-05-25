@@ -184,7 +184,7 @@ final class GitActivityViewModel {
 
     struct CorrelationPoint: Identifiable, Sendable {
         let start: Date
-        let claudeTokens: Int
+        let aiTokens: Int
         let commitCount: Int
         let churn: Int
         var id: TimeInterval { start.timeIntervalSinceReferenceDate }
@@ -334,7 +334,7 @@ final class GitActivityViewModel {
     nonisolated private static func makeOverviewCorrelation(points: [CorrelationPoint]) -> OverviewCorrelation {
         guard !points.isEmpty else { return .empty }
 
-        let tokenValues = points.map(\.claudeTokens)
+        let tokenValues = points.map(\.aiTokens)
         let commitValues = points.map(\.commitCount)
         let tokenMax = niceCeiling(tokenValues.max() ?? 0)
         let commitMax = niceCeiling(commitValues.max() ?? 0)
@@ -454,7 +454,7 @@ final class GitActivityViewModel {
 
         return Self.slots(unit: unit, windowStart: since, endExclusive: endExclusive, calendar: calendar).map { start in
             let v = byStart[start] ?? (0, 0, 0)
-            return CorrelationPoint(start: start, claudeTokens: v.tokens, commitCount: v.commits, churn: v.churn)
+            return CorrelationPoint(start: start, aiTokens: v.tokens, commitCount: v.commits, churn: v.churn)
         }
     }
 }

@@ -177,7 +177,7 @@ struct SemanticVisualizationSnapshotTests {
         analyses: [TranscriptSessionAnalysis]
     ) -> TranscriptAnalysisSnapshot {
         TranscriptAnalysisSnapshot(
-            provider: .claude,
+            provider: .codex,
             generatedAt: Date(timeIntervalSince1970: 1_000),
             sessionCount: analyses.count,
             analyzedSessionCount: analyses.count,
@@ -244,7 +244,7 @@ struct SemanticVisualizationSnapshotTests {
         Session(
             id: id,
             externalID: id,
-            provider: .claude,
+            provider: .codex,
             projectDirectoryName: "Project",
             filePath: "/tmp/\(id).jsonl",
             cwd: "/tmp/Project",

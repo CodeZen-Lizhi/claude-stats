@@ -1,198 +1,217 @@
-# Claude Stats Product PRD
+# Claude Stats 产品 PRD
 
-This document translates the current Claude Stats codebase into a product-level reference for future extension work.
+这份文档把当前 Claude Stats 代码库整理成产品级参考，方便后续扩展、重构和二次开发时保持一致。
 
-## Goal
+## 目标
 
-Claude Stats is a native macOS menu-bar app for people who spend all day in AI coding tools. The product turns local session data, usage data, status data, and developer tooling data into a compact workflow surface.
+Claude Stats 是一个原生 macOS 菜单栏应用，面向每天长时间使用 AI 编码工具的人。它把本地会话数据、用量数据、服务状态数据和开发工具数据，整理成一个紧凑的工作流入口。
 
-This PRD describes the existing product as it works today so future changes can preserve the same intent and module boundaries.
+这份 PRD 描述的是产品当前已经具备的能力，不是新的愿景清单。后续改动应该尽量保留这里记录的产品意图和模块边界。
 
-## Product Principles
+## 产品原则
 
-- Local-first by default.
-- Fast access from the menu bar and main window.
-- Deep drill-down when the user needs detail.
-- Shared behavior should stay in shared modules; provider-specific quirks belong to provider modules.
-- UI should surface the current working context, not just raw metrics.
+- 默认本地优先。
+- 菜单栏和主窗口都要能快速访问关键信息。
+- 当用户需要细节时，要能继续下钻。
+- 通用行为留在共享模块里，Codex 特有的文件路径、解析和配置细节留在 `CodexProvider` 模块里。
+- UI 应该展示当前工作上下文，而不是只堆原始指标。
 
-## Core Product Areas
+## Codex-only Provider 决策
 
-### 1. Menu Bar Surface
+本项目主线产品边界是 **Codex-only**。这里的 provider 指 AI session provider，也就是负责发现本地会话、解析 transcript、计算用量限制、管理 CLI API 配置和展示服务状态的数据入口。
 
-The app must provide a lightweight menu-bar experience for quick access to the most important facts.
+已删除并不再作为主线维护的 provider 范围：
 
-- Show usage, activity, and Git-related summaries.
-- Provide direct navigation into the main window.
-- Keep the interaction fast enough for repeated daily use.
+- Claude provider 实现、Claude transcript parser、Claude usage limit bridge、Claude Desktop 用量采集和 Claude status UI。
+- Gemini、Kimi、MiniMax 的 provider 空壳、UI 入口和测试占位。
+- 平台设置页、菜单栏 provider switcher，以及面向多 AI session provider 的选择控件。
 
-### 2. Session Discovery And Analysis
+必须保留的边界：
 
-The app must discover local sessions from supported providers and parse them into a common session model.
+- `Provider` 协议、`ProviderRegistry`、`SessionStore`、`UsageLimitStore` 等共享抽象继续存在。
+- `ProviderRegistry` 只注册 `CodexProvider`。
+- App 内部继续通过 `CodexProvider` 读取 Codex sessions、统计、配置和用量限制，避免把 Codex 文件扫描和解析逻辑散落到 UI。
+- Git、Terminal、Network、LinuxDo、Local AI、Skills、System Monitor、Notch Island、Atoll、Rockxy、Ghostty 等非 AI session provider 功能不属于本次删除范围。
 
-Supported or recognized providers:
+以后同步原项目或上游更新时的规则：
 
-- Claude Code
+- 可以跳过 Claude、Gemini、Kimi、MiniMax provider 实现、provider UI、provider 测试和 provider 文案的新增或修改。
+- 如果上游改动同时触碰共享抽象和其他 provider，只同步对 `Provider` 协议、Codex 数据口、共享统计、共享配置、共享 UI 结构真正有用的部分。
+- 不要为了兼容上游多 provider 改动重新加入 provider switcher、平台设置页、Claude Desktop capture 或 Claude status。
+- 只有当产品重新决定支持第二个 AI session provider 时，才通过新 provider 目录、`Provider` 协议实现和 `ProviderRegistry` 注册接入；否则默认拒绝非 Codex provider 改动。
+
+## 核心产品区域
+
+### 1. 菜单栏入口
+
+应用必须提供轻量的菜单栏体验，让用户快速看到最重要的信息。
+
+- 展示用量、活动和 Git 相关摘要。
+- 支持直接进入主窗口。
+- 交互要足够快，适合用户每天反复打开查看。
+
+### 2. 会话发现与分析
+
+应用必须能从 Codex 本地数据中发现会话，并解析成统一的会话模型。
+
+当前支持的平台：
+
 - OpenAI Codex
-- Gemini
-- Kimi
-- MiniMax
 
-Current behavior:
+当前行为：
 
-- Claude and Codex have concrete on-disk parsing pipelines.
-- Gemini, Kimi, and MiniMax are recognized in the UI, but their session parsers are future work.
-- Session updates should refresh automatically when local files change.
+- Codex 通过 `~/.codex/sessions/` 读取本地 session transcript。
+- 应用内部仍保留 `Provider` 协议和 `CodexProvider` 数据口，方便会话、统计、配置、用量限制走统一链路。
+- 旧用户偏好或配置里出现的 Claude、Gemini、Kimi、MiniMax provider 值会被忽略或收敛到 Codex。
+- 本地文件变化后，会话数据应该能自动刷新。
 
-### 3. Session List
+### 3. 会话列表
 
-The session list is the primary browsing surface for local history.
+会话列表是浏览本地历史记录的主要入口。
 
-Requirements:
+需求：
 
-- Search by project path, topic, session name, or session ID.
-- Show recent sessions for quick return.
-- Group sessions by project directory.
-- Support expand/collapse for grouped results.
-- Show the key facts at a glance: title, model, message count, token count, cost, context usage, and time.
-- Support batch selection and bulk delete.
-- Refresh automatically from file watching or provider-specific rescans.
-- Offer hover shortcuts for common actions such as new session, resume, open transcript, delete, and copy path.
+- 支持按项目路径、主题、会话名称或会话 ID 搜索。
+- 展示最近会话，方便快速回到刚才的工作。
+- 按项目目录对会话分组。
+- 支持分组展开和折叠。
+- 一眼展示关键事实：标题、模型、消息数、token 数、成本、上下文用量和时间。
+- 支持批量选择和批量删除。
+- 支持通过文件监听或平台专属重扫自动刷新。
+- 鼠标悬停时提供常用快捷操作，例如新建会话、恢复会话、打开 transcript、删除和复制路径。
 
-### 4. Session Detail
+### 4. 会话详情
 
-Each session detail view must explain one session clearly.
+每个会话详情页都要把单个会话解释清楚。
 
-Requirements:
+需求：
 
-- Show model, duration, file size, start time, and end time.
-- Show exact token accounting: input, output, cache write, and cache read.
-- Show multi-model cost breakdown.
-- Show context window utilization.
-- Show token distribution and cache detail.
-- Show tool usage ranking and a trend chart.
+- 展示模型、持续时间、文件大小、开始时间和结束时间。
+- 展示精确的 token 统计：输入、输出、缓存写入和缓存读取。
+- 展示多模型成本拆分。
+- 展示上下文窗口使用率。
+- 展示 token 分布和缓存细节。
+- 展示工具调用排行和趋势图。
 
-### 5. Statistics And Cost Analysis
+### 5. 统计与成本分析
 
-This is the core analytical view for local transcript data.
+这是本地 transcript 数据的核心分析视图。
 
-Requirements:
+需求：
 
-- Full summary of total cost, session count, token count, and message count.
-- Period aggregation by day, week, month, and year.
-- Interactive cost bar chart with drill-down into period detail.
-- Period detail pages containing overview, trend chart, token distribution, and model breakdown.
-- Cache token detail for 5-minute write, 1-hour write, and cache read.
-- Period list optimized for scanning expensive or token-heavy windows.
-- All-time summary must be computed from parsed sessions directly so it does not change when the selected period changes.
+- 汇总总成本、会话数、token 数和消息数。
+- 支持按日、周、月、年聚合。
+- 提供可交互的成本柱状图，并能下钻到周期详情。
+- 周期详情页包含概览、趋势图、token 分布和模型拆分。
+- 缓存 token 需要区分 5 分钟写入、1 小时写入和缓存读取。
+- 周期列表要适合快速扫出高成本或高 token 的时间窗口。
+- 全量汇总必须直接基于已解析会话计算，不能随着当前选中的周期变化而变化。
 
-### 6. Usage Limits And Service Status
+### 6. 用量限制与服务状态
 
-The app must surface provider usage and provider health in a way the user can act on.
+应用必须把 Codex 用量和 OpenAI 服务健康状态展示成用户能行动的信息。
 
-Requirements:
+需求：
 
-- Show usage-limit status where supported.
-- Show service-status views for supported providers.
-- Surface alerts and permission state clearly.
-- Keep usage-limit data separate from long-term session stats.
+- 展示 Codex 用量限制状态。
+- 展示 OpenAI/Codex 相关服务状态。
+- 清楚展示告警和权限状态。
+- 用量限制数据要和长期会话统计分开。
 
-### 7. Provider Configuration And Switching
+### 7. Provider 配置与切换
 
-The app includes an API Provider Switcher for managing provider configuration.
+应用包含 API Provider Switcher，用于管理 Codex CLI 的 API provider 配置。
 
-Requirements:
+需求：
 
-- Switch between providers from the configuration surface.
-- Inspect and edit provider configuration entries.
-- Support key storage mode selection.
-- Keep provider-specific configuration handling in provider-specific code paths.
+- 能在配置界面切换 Codex 的 API provider。
+- 能查看和编辑 Codex provider 配置项。
+- 支持选择 key 的存储方式。
+- Codex 专属配置必须留在 Codex provider 专属代码路径里处理。
 
-### 8. Sharing And Presentation
+### 8. 分享与展示
 
-The app should support shareable output that makes analytics feel presentable.
+应用应该支持可分享的输出，让统计结果更适合展示。
 
-Requirements:
+需求：
 
-- Generate share cards from usage or stats data.
-- Make the output visual and metric-driven.
-- Keep the exported result polished enough for sharing.
+- 能基于用量或统计数据生成分享卡片。
+- 输出要有视觉表现力，并以指标为核心。
+- 导出的结果要足够精致，适合分享。
 
-### 9. Developer Tooling Surfaces
+### 9. 开发者工具界面
 
-The app must expose the auxiliary developer tools already present in the product.
+应用必须暴露当前产品里已经存在的辅助开发工具。
 
-Current surfaces:
+当前界面包括：
 
-- Git and repository activity
-- Embedded terminal
-- Network debugging
-- LinuxDo integration
-- Local AI model management
-- Skills library
-- System monitoring
-- Ops tooling
-- AI config browsing
+- Git 和仓库活动
+- 内嵌终端
+- 网络调试
+- LinuxDo 集成
+- 本地 AI 模型管理
+- Skills 库
+- 系统监控
+- 运维工具
+- AI 配置浏览
 
-### 10. Notch Island And Floating Stats
+### 10. Notch Island 与悬浮统计
 
-The product includes two fast surfaces for passive monitoring.
+产品包含两个用于被动监控的快速入口。
 
-Requirements:
+需求：
 
-- Provide a Notch Island surface for live session context.
-- Provide floating stats for quick status visibility.
-- Keep these surfaces optional and driven by app preferences.
+- 提供 Notch Island，用于展示实时会话上下文。
+- 提供悬浮统计，方便快速查看状态。
+- 这些入口必须是可选功能，并由应用偏好设置控制。
 
-### 11. Settings
+### 11. 设置
 
-Settings should be the control plane for feature visibility and behavior.
+设置页是控制功能可见性和行为的地方。
 
-Current settings families include:
+当前设置分组包括：
 
-- General
-- Features
-- Menu bar
+- 通用
+- 功能
+- 菜单栏
 - Notch Island
-- Platforms
-- Tracking
-- Local AI
-- Leaderboards
+- 跟踪
+- 本地 AI
+- 排行榜
 - GitHub
 - LinuxDo
-- System Monitor
-- Terminal
-- About
+- 系统监控
+- 终端
+- 关于
 
-### 12. Updates
+### 12. 更新
 
-The app must support automatic updates for packaged releases.
+应用必须支持打包版本的自动更新。
 
-Requirements:
+需求：
 
-- Sparkle-powered update checks.
-- Clear "Check for Updates" action in Settings.
-- Support packaged releases without changing the in-app product flow.
+- 使用 Sparkle 检查更新。
+- 在设置中提供清晰的“检查更新”操作。
+- 支持打包发布，但不能改变应用内产品流程。
 
-## Fork-Specific Omissions
+## Fork 专属删减
 
-This fork intentionally does not include the upstream Dictionary / Technical Terms feature. User-managed transcript terminology, its settings page, bundled term resources, and import/export workflow are out of scope for this project. Future upstream changes in that area should not be followed by default; reconsider only if this fork explicitly needs user-maintained terminology again.
+本 fork 明确不包含上游 Dictionary / Technical Terms 功能。用户自维护 transcript 术语、对应设置页、内置术语资源以及导入导出流程都不属于当前产品范围。以后同步上游时，默认不跟进这类改动；只有本 fork 明确重新需要用户维护术语时再评估。
 
-## Non-Functional Requirements
+## 非功能需求
 
-- Keep the app local-first and low friction.
-- Preserve stable all-time summaries.
-- Keep search and scanning responsive as data grows.
-- Preserve a clear boundary between shared behavior and provider-specific logic.
-- Keep UI affordances compact and task-oriented.
+- 保持本地优先，降低使用阻力。
+- 保证全量汇总稳定。
+- 随着数据增长，搜索和扫描仍要保持响应。
+- 保持共享行为与 Codex provider 专属逻辑之间的清晰边界。
+- UI 控件应该紧凑、面向任务，而不是展示型堆砌。
 
-## Explicit Future Work
+## 明确的未来工作
 
-- Gemini, Kimi, and MiniMax on-disk session parsing can be added later.
-- New providers should enter through the provider registry and provider-specific folder.
-- Any new analytics view should reuse the same local-session source of truth where possible.
+- 如未来重新增加其他 AI session provider，应通过 provider registry 和 provider 专属目录接入，不能把专属解析逻辑散落到共享 UI。
+- 新增分析视图时，应尽量复用同一套本地会话事实源。
 
-## Reference Files
+## 参考文件
 
 - `README.md`
 - `.trellis/tasks/05-25-project-prd-inventory/prd.md`

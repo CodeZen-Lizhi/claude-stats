@@ -38,7 +38,7 @@ struct SessionStoreTests {
         Session(
             id: "project::session",
             externalID: "session",
-            provider: .claude,
+            provider: .codex,
             projectDirectoryName: "project",
             filePath: "/tmp/session.jsonl",
             cwd: "/tmp/project",
@@ -61,7 +61,7 @@ struct SessionStoreTests {
 }
 
 private final class MutableSessionProvider: Provider, @unchecked Sendable {
-    let kind: ProviderKind = .claude
+    let kind: ProviderKind = .codex
     var dataDirectoryExists: Bool { true }
 
     private let lock = NSLock()

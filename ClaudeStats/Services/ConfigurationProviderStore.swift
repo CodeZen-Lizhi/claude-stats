@@ -2,16 +2,13 @@ import Foundation
 
 enum ConfigurationProviderStoreError: LocalizedError, Sendable {
     case unsupportedCLI
-    case invalidClaudeJSON
     case invalidCodexConfig
     case providerNotFound
 
     var errorDescription: String? {
         switch self {
         case .unsupportedCLI:
-            "Only Claude Code and Codex are supported in this switcher."
-        case .invalidClaudeJSON:
-            "Claude provider raw config must be a JSON object."
+            "Only Codex is supported in this switcher."
         case .invalidCodexConfig:
             "Codex provider raw config must be valid provider TOML text."
         case .providerNotFound:
@@ -27,7 +24,6 @@ struct ConfigurationProviderApplyResult: Sendable, Hashable {
 
 struct ConfigurationProviderStore: Sendable {
     let rootDirectory: URL
-    let claudePaths: ClaudePaths
     let codexPaths: CodexPaths
     let secretStore: any APIProviderSecretStoring
 
@@ -37,10 +33,6 @@ struct ConfigurationProviderStore: Sendable {
 
     private var backupsDirectory: URL {
         rootDirectory.appendingPathComponent("Backups", isDirectory: true)
-    }
-
-    private var claudeSettingsURL: URL {
-        claudePaths.configDirectory.appendingPathComponent("settings.json", isDirectory: false)
     }
 
     private var codexAuthURL: URL {
@@ -53,12 +45,10 @@ struct ConfigurationProviderStore: Sendable {
 
     init(
         rootDirectory: URL = Self.defaultRootDirectory(),
-        claudePaths: ClaudePaths = .default,
         codexPaths: CodexPaths = .default,
         secretStore: any APIProviderSecretStoring = APIProviderKeychainStore.shared
     ) {
         self.rootDirectory = rootDirectory
-        self.claudePaths = claudePaths
         self.codexPaths = codexPaths
         self.secretStore = secretStore
     }
@@ -120,36 +110,22 @@ struct ConfigurationProviderStore: Sendable {
     }
 
     func importCurrentProvider(
-        cli: APIProviderCLI,
+        cli _: APIProviderCLI,
         name: String,
         id: String = UUID().uuidString,
         keyStorageMode: APIProviderKeyStorageMode
     ) async throws -> CLIAPIProvider {
-        switch cli {
-        case .claude:
-            let live = try await readClaudeSettingsText()
-            return try providerFromClaudeRaw(
-                id: id,
-                name: name,
-                origin: .importedDefault,
-                category: .imported,
-                rawConfig: live,
-                keyStorageMode: keyStorageMode,
-                createdAt: .now
-            )
-        case .codex:
-            let live = try await readCodexLive()
-            return try providerFromCodexRaw(
-                id: id,
-                name: name,
-                origin: .importedDefault,
-                category: .imported,
-                rawConfig: live.config,
-                authJSON: live.auth,
-                keyStorageMode: keyStorageMode,
-                createdAt: .now
-            )
-        }
+        let live = try await readCodexLive()
+        return try providerFromCodexRaw(
+            id: id,
+            name: name,
+            origin: .importedDefault,
+            category: .imported,
+            rawConfig: live.config,
+            authJSON: live.auth,
+            keyStorageMode: keyStorageMode,
+            createdAt: .now
+        )
     }
 
     func providerBySavingDraft(
@@ -165,37 +141,20 @@ struct ConfigurationProviderStore: Sendable {
     ) throws -> CLIAPIProvider {
         let savedAt = Date()
         if rawMode {
-            switch existing.cli {
-            case .claude:
-                var provider = try providerFromClaudeRaw(
-                    id: existing.id,
-                    name: name,
-                    origin: existing.origin,
-                    category: category,
-                    rawConfig: rawConfig,
-                    keyStorageMode: keyStorageMode,
-                    createdAt: existing.createdAt,
-                    updatedAt: savedAt
-                )
-                provider.iconName = existing.iconName
-                provider.iconColorHex = existing.iconColorHex
-                return provider
-            case .codex:
-                var provider = try providerFromCodexRaw(
-                    id: existing.id,
-                    name: name,
-                    origin: existing.origin,
-                    category: category,
-                    rawConfig: rawConfig,
-                    authJSON: ["OPENAI_API_KEY": apiKey],
-                    keyStorageMode: keyStorageMode,
-                    createdAt: existing.createdAt,
-                    updatedAt: savedAt
-                )
-                provider.iconName = existing.iconName
-                provider.iconColorHex = existing.iconColorHex
-                return provider
-            }
+            var provider = try providerFromCodexRaw(
+                id: existing.id,
+                name: name,
+                origin: existing.origin,
+                category: category,
+                rawConfig: rawConfig,
+                authJSON: ["OPENAI_API_KEY": apiKey],
+                keyStorageMode: keyStorageMode,
+                createdAt: existing.createdAt,
+                updatedAt: savedAt
+            )
+            provider.iconName = existing.iconName
+            provider.iconColorHex = existing.iconColorHex
+            return provider
         }
 
         var provider = existing
@@ -231,7 +190,7 @@ struct ConfigurationProviderStore: Sendable {
             name: "Universal Provider",
             baseURL: "",
             apiKey: .none,
-            modelOverrides: [.claude: defaultModel(for: .claude), .codex: defaultModel(for: .codex)],
+            modelOverrides: [.codex: defaultModel(for: .codex)],
             iconName: "network"
         )
         return (universal, childProviders(for: universal, keyStorageMode: keyStorageMode))
@@ -316,12 +275,7 @@ struct ConfigurationProviderStore: Sendable {
     }
 
     func renderRawConfig(for provider: CLIAPIProvider) -> String {
-        switch provider.cli {
-        case .claude:
-            return renderClaudeRaw(provider: provider, apiKey: resolvedAPIKey(for: provider.apiKey))
-        case .codex:
-            return renderCodexConfig(provider: provider)
-        }
+        renderCodexConfig(provider: provider)
     }
 
     static func officialProvider(for cli: APIProviderCLI) -> CLIAPIProvider {
@@ -329,15 +283,15 @@ struct ConfigurationProviderStore: Sendable {
             id: "official",
             cli: cli,
             origin: .official,
-            name: cli == .claude ? "Claude Official" : "OpenAI Official",
+            name: "OpenAI Official",
             category: .official,
             baseURL: "",
             apiKey: .none,
             model: "",
-            iconName: cli == .claude ? "anthropic" : "openai",
-            iconColorHex: cli == .claude ? "#D4915D" : "#00A67E"
+            iconName: "openai",
+            iconColorHex: "#00A67E"
         )
-        provider.rawConfig = cli == .claude ? "{\n  \"env\" : {\n\n  }\n}" : ""
+        provider.rawConfig = ""
         return provider
     }
 
@@ -358,16 +312,6 @@ struct ConfigurationProviderStore: Sendable {
             }
         }
         return accounts
-    }
-
-    private func readClaudeSettingsText() async throws -> String {
-        let url = claudeSettingsURL
-        return try await Task.detached(priority: .utility) {
-            guard FileManager.default.fileExists(atPath: url.path) else {
-                return "{\n  \"env\" : {\n\n  }\n}"
-            }
-            return try String(contentsOf: url, encoding: .utf8)
-        }.value
     }
 
     private func readCodexLive() async throws -> (auth: [String: String], config: String) {
@@ -391,33 +335,18 @@ struct ConfigurationProviderStore: Sendable {
     }
 
     private func writeLiveConfig(for provider: CLIAPIProvider) async throws {
-        switch provider.cli {
-        case .claude:
-            let target = renderClaudeRaw(provider: provider, apiKey: resolvedAPIKey(for: provider.apiKey))
-            let url = claudeSettingsURL
-            try await Task.detached(priority: .utility) {
-                try Self.writeClaudeSettings(providerFragment: target, to: url)
-            }.value
-        case .codex:
-            let config = renderCodexConfig(provider: provider)
-            let key = resolvedAPIKey(for: provider.apiKey)
-            let authURL = codexAuthURL
-            let configURL = codexConfigURL
-            try await Task.detached(priority: .utility) {
-                try Self.writeCodexLive(configFragment: config, apiKey: key, authURL: authURL, configURL: configURL)
-            }.value
-        }
+        let config = renderCodexConfig(provider: provider)
+        let key = resolvedAPIKey(for: provider.apiKey)
+        let authURL = codexAuthURL
+        let configURL = codexConfigURL
+        try await Task.detached(priority: .utility) {
+            try Self.writeCodexLive(configFragment: config, apiKey: key, authURL: authURL, configURL: configURL)
+        }.value
     }
 
     private func backupLiveFiles(for cli: APIProviderCLI, providerID: String) async throws -> URL {
         let backupsDirectory = backupsDirectory
-        let sources: [URL]
-        switch cli {
-        case .claude:
-            sources = [claudeSettingsURL]
-        case .codex:
-            sources = [codexAuthURL, codexConfigURL]
-        }
+        let sources = [codexAuthURL, codexConfigURL]
         return try await Task.detached(priority: .utility) {
             let date = Date()
             let formatter = ISO8601DateFormatter()
@@ -451,76 +380,21 @@ struct ConfigurationProviderStore: Sendable {
     }
 
     private func backfilledProvider(_ provider: CLIAPIProvider, keyStorageMode: APIProviderKeyStorageMode) async throws -> CLIAPIProvider {
-        switch provider.cli {
-        case .claude:
-            let raw = try await readClaudeSettingsText()
-            var updated = try providerFromClaudeRaw(
-                id: provider.id,
-                name: provider.name,
-                origin: provider.origin,
-                category: provider.category,
-                rawConfig: raw,
-                keyStorageMode: keyStorageMode,
-                createdAt: provider.createdAt
-            )
-            updated.iconName = provider.iconName
-            updated.iconColorHex = provider.iconColorHex
-            updated.updatedAt = .now
-            return updated
-        case .codex:
-            let live = try await readCodexLive()
-            var updated = try providerFromCodexRaw(
-                id: provider.id,
-                name: provider.name,
-                origin: provider.origin,
-                category: provider.category,
-                rawConfig: live.config,
-                authJSON: live.auth,
-                keyStorageMode: keyStorageMode,
-                createdAt: provider.createdAt
-            )
-            updated.iconName = provider.iconName
-            updated.iconColorHex = provider.iconColorHex
-            updated.updatedAt = .now
-            return updated
-        }
-    }
-
-    private func providerFromClaudeRaw(
-        id: String,
-        name: String,
-        origin: APIProviderOrigin,
-        category: APIProviderCategory,
-        rawConfig: String,
-        keyStorageMode: APIProviderKeyStorageMode,
-        createdAt: Date,
-        updatedAt: Date = .now
-    ) throws -> CLIAPIProvider {
-        guard let data = rawConfig.data(using: .utf8),
-              let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw ConfigurationProviderStoreError.invalidClaudeJSON
-        }
-        let env = object["env"] as? [String: Any] ?? [:]
-        let apiKey = (env["ANTHROPIC_AUTH_TOKEN"] as? String) ?? (env["ANTHROPIC_API_KEY"] as? String) ?? ""
-        let baseURL = env["ANTHROPIC_BASE_URL"] as? String ?? ""
-        let model = env["ANTHROPIC_MODEL"] as? String ?? ""
-        var provider = CLIAPIProvider(
-            id: id,
-            cli: .claude,
-            origin: origin,
-            name: name,
-            category: category,
-            baseURL: baseURL,
-            apiKey: try storedSecret(rawKey: apiKey, cli: .claude, providerID: id, keyStorageMode: keyStorageMode),
-            model: model,
-            rawConfig: rawConfig,
-            iconName: "anthropic",
-            iconColorHex: "#D4915D",
-            createdAt: createdAt,
-            updatedAt: updatedAt
+        let live = try await readCodexLive()
+        var updated = try providerFromCodexRaw(
+            id: provider.id,
+            name: provider.name,
+            origin: provider.origin,
+            category: provider.category,
+            rawConfig: live.config,
+            authJSON: live.auth,
+            keyStorageMode: keyStorageMode,
+            createdAt: provider.createdAt
         )
-        provider.rawConfig = storedRawConfig(for: provider, keyStorageMode: keyStorageMode)
-        return provider
+        updated.iconName = provider.iconName
+        updated.iconColorHex = provider.iconColorHex
+        updated.updatedAt = .now
+        return updated
     }
 
     private func providerFromCodexRaw(
@@ -574,31 +448,7 @@ struct ConfigurationProviderStore: Sendable {
     }
 
     private func storedRawConfig(for provider: CLIAPIProvider, keyStorageMode: APIProviderKeyStorageMode) -> String {
-        switch provider.cli {
-        case .claude:
-            let key = keyStorageMode == .json ? resolvedAPIKey(for: provider.apiKey) : ""
-            return renderClaudeRaw(provider: provider, apiKey: key)
-        case .codex:
-            return renderCodexConfig(provider: provider)
-        }
-    }
-
-    private func renderClaudeRaw(provider: CLIAPIProvider, apiKey: String) -> String {
-        var env: [String: String] = [:]
-        if !provider.baseURL.isEmpty { env["ANTHROPIC_BASE_URL"] = provider.baseURL }
-        if !apiKey.isEmpty { env["ANTHROPIC_AUTH_TOKEN"] = apiKey }
-        if !provider.model.isEmpty {
-            env["ANTHROPIC_MODEL"] = provider.model
-            env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = provider.model
-            env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = provider.model
-            env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = provider.model
-        }
-        let object: [String: Any] = ["env": env]
-        guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]),
-              let raw = String(data: data, encoding: .utf8) else {
-            return "{\n  \"env\" : {\n\n  }\n}"
-        }
-        return raw
+        renderCodexConfig(provider: provider)
     }
 
     private func renderCodexConfig(provider: CLIAPIProvider) -> String {
@@ -622,43 +472,8 @@ struct ConfigurationProviderStore: Sendable {
         return lines.joined(separator: "\n")
     }
 
-    private func defaultModel(for cli: APIProviderCLI) -> String {
-        switch cli {
-        case .claude: ""
-        case .codex: "gpt-5.4"
-        }
-    }
-
-    private static func writeClaudeSettings(providerFragment: String, to url: URL) throws {
-        let target = try jsonObject(from: providerFragment)
-        let targetEnv = target["env"] as? [String: Any] ?? [:]
-        let existing: [String: Any]
-        if FileManager.default.fileExists(atPath: url.path),
-           let data = try? Data(contentsOf: url),
-           let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            existing = object
-        } else {
-            existing = [:]
-        }
-
-        var merged = existing
-        var env = merged["env"] as? [String: Any] ?? [:]
-        for key in claudeManagedEnvKeys {
-            env.removeValue(forKey: key)
-        }
-        for (key, value) in targetEnv {
-            if let string = value as? String, string.isEmpty { continue }
-            env[key] = value
-        }
-        if env.isEmpty {
-            merged.removeValue(forKey: "env")
-        } else {
-            merged["env"] = env
-        }
-
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let data = try JSONSerialization.data(withJSONObject: merged, options: [.prettyPrinted, .sortedKeys])
-        try data.write(to: url, options: .atomic)
+    private func defaultModel(for _: APIProviderCLI) -> String {
+        "gpt-5.4"
     }
 
     private static func writeCodexLive(configFragment: String, apiKey: String, authURL: URL, configURL: URL) throws {
@@ -678,25 +493,6 @@ struct ConfigurationProviderStore: Sendable {
         try FileManager.default.createDirectory(at: configURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try next.write(to: configURL, atomically: true, encoding: .utf8)
     }
-
-    private static func jsonObject(from raw: String) throws -> [String: Any] {
-        guard let data = raw.data(using: .utf8),
-              let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw ConfigurationProviderStoreError.invalidClaudeJSON
-        }
-        return object
-    }
-
-    private static let claudeManagedEnvKeys: Set<String> = [
-        "ANTHROPIC_BASE_URL",
-        "ANTHROPIC_AUTH_TOKEN",
-        "ANTHROPIC_API_KEY",
-        "ANTHROPIC_MODEL",
-        "ANTHROPIC_DEFAULT_HAIKU_MODEL",
-        "ANTHROPIC_DEFAULT_SONNET_MODEL",
-        "ANTHROPIC_DEFAULT_OPUS_MODEL",
-        "API_TIMEOUT_MS",
-    ]
 
     private static func parseCodexProviderFields(_ raw: String) -> (baseURL: String, model: String) {
         let model = firstTomlValue(named: "model", in: raw) ?? ""

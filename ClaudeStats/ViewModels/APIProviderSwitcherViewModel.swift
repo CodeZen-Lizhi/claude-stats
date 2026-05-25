@@ -16,11 +16,11 @@ final class APIProviderSwitcherViewModel {
     private(set) var lastError: String?
     private(set) var latestApplyResult: ConfigurationProviderApplyResult?
 
-    var selectedCLI: APIProviderCLI = .claude
+    var selectedCLI: APIProviderCLI = .codex
     var selectedProviderID: String?
 
     var draftProviderID: String?
-    var draftCLI: APIProviderCLI = .claude
+    var draftCLI: APIProviderCLI = .codex
     var draftOrigin: APIProviderOrigin?
     var draftName = "" { didSet { markDraftDirty(oldValue, draftName) } }
     var draftCategory: APIProviderCategory = .custom { didSet { markDraftDirty(oldValue, draftCategory) } }
