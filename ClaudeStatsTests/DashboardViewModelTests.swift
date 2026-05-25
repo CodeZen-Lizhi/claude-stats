@@ -12,9 +12,9 @@ struct DashboardViewModelTests {
         let viewModel = DashboardViewModel(pricing: TestPricing.table)
         viewModel.period = .last7Days
         let sessions = [
-            session("claude-recent", provider: .claude, daysAgo: 1, hour: 10, model: "shared-model", tokens: 100, messages: 3),
+            session("claude-recent", provider: .codex, daysAgo: 1, hour: 10, model: "shared-model", tokens: 100, messages: 3),
             session("codex-recent", provider: .codex, daysAgo: 2, hour: 11, model: "shared-model", tokens: 250, messages: 5),
-            session("old", provider: .claude, daysAgo: 10, hour: 12, model: "old-model", tokens: 900, messages: 7),
+            session("old", provider: .codex, daysAgo: 10, hour: 12, model: "old-model", tokens: 900, messages: 7),
         ]
 
         await viewModel.reload(sessions: sessions)
@@ -26,7 +26,7 @@ struct DashboardViewModelTests {
         #expect(viewModel.stats.favoriteModel == DashboardModelKey(provider: .codex, model: "shared-model"))
         #expect(viewModel.modelBreakdown.map(\.key) == [
             DashboardModelKey(provider: .codex, model: "shared-model"),
-            DashboardModelKey(provider: .claude, model: "shared-model"),
+            DashboardModelKey(provider: .codex, model: "shared-model"),
         ])
         #expect(viewModel.modelBreakdown.map(\.usage.total) == [250, 100])
         #expect(viewModel.modelTrend.models == viewModel.modelBreakdown.map(\.id))
@@ -38,7 +38,7 @@ struct DashboardViewModelTests {
         let viewModel = DashboardViewModel(pricing: TestPricing.table)
         viewModel.period = .last7Days
         let sessions = [
-            session("claude-recent", provider: .claude, daysAgo: 1, hour: 10, model: "claude-model", tokens: 100, messages: 1),
+            session("claude-recent", provider: .codex, daysAgo: 1, hour: 10, model: "claude-model", tokens: 100, messages: 1),
             session("codex-recent", provider: .codex, daysAgo: 2, hour: 11, model: "codex-model", tokens: 250, messages: 1),
             session("outside-selected-period", provider: .codex, daysAgo: 10, hour: 12, model: "codex-model", tokens: 900, messages: 1),
         ]
@@ -56,7 +56,7 @@ struct DashboardViewModelTests {
         let viewModel = DashboardViewModel(pricing: TestPricing.table)
         viewModel.period = .last30Days
         let sessions = [
-            session("legacy-claude", provider: .claude, daysAgo: 3, hour: 9, model: "legacy-model", tokens: 420, messages: 2, includeTimeline: false),
+            session("legacy-claude", provider: .codex, daysAgo: 3, hour: 9, model: "legacy-model", tokens: 420, messages: 2, includeTimeline: false),
         ]
 
         await viewModel.reload(sessions: sessions)

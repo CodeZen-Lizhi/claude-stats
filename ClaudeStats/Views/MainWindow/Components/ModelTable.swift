@@ -67,12 +67,12 @@ struct ModelTable: View {
     }
     return ModelTable(
         models: [
-            mu("claude-opus-4-7", 410, 6_300_000, 81_700_000),
-            mu("claude-opus-4-6", 220, 1_500_000, 15_600_000),
-            mu("claude-haiku-4-5", 110, 9_600_000, 4_100_000),
-            mu("claude-sonnet-4-6", 80, 3_100, 177_200),
+            mu("gpt-5.4", 410, 6_300_000, 81_700_000),
+            mu("gpt-5.3", 220, 1_500_000, 15_600_000),
+            mu("gpt-5-mini", 110, 9_600_000, 4_100_000),
+            mu("gpt-5-nano", 80, 3_100, 177_200),
         ],
-        displayName: { ClaudeProvider.prettyName(for: $0) }
+        displayName: { $0 }
     )
     .padding(24)
     .frame(width: 760)

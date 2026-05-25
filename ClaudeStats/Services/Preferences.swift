@@ -221,16 +221,22 @@ final class Preferences {
     /// enabled platform (and the original scanline strip). Always non-empty.
     var enabledProviders: Set<ProviderKind> {
         didSet {
-            if enabledProviders.isEmpty { enabledProviders = [.claude] }   // re-fires didSet, persists below
-            defaults.set(enabledProviders.map(\.rawValue).joined(separator: ","), forKey: Keys.enabledProviders)
-            if !enabledProviders.contains(selectedProvider) {
-                selectedProvider = orderedEnabledProviders.first ?? .claude
+            if enabledProviders != [.codex] {
+                enabledProviders = [.codex]
+                return
             }
+            defaults.set(ProviderKind.codex.rawValue, forKey: Keys.enabledProviders)
         }
     }
     /// The platform currently being viewed. Always a member of ``enabledProviders``.
     var selectedProvider: ProviderKind {
-        didSet { defaults.set(selectedProvider.rawValue, forKey: Keys.selectedProvider) }
+        didSet {
+            if selectedProvider != .codex {
+                selectedProvider = .codex
+                return
+            }
+            defaults.set(selectedProvider.rawValue, forKey: Keys.selectedProvider)
+        }
     }
     /// When off, the app forgets ``selectedProvider`` on launch and starts on
     /// the first enabled platform.
@@ -240,7 +246,7 @@ final class Preferences {
 
     /// ``enabledProviders`` in canonical (``ProviderKind/allCases``) order.
     var orderedEnabledProviders: [ProviderKind] {
-        ProviderKind.allCases.filter(enabledProviders.contains)
+        [.codex]
     }
 
     /// Opt-in to the AI activity analysis (reads macOS Screen Time; needs Full
@@ -248,7 +254,7 @@ final class Preferences {
     var aiActivityAnalysisEnabled: Bool {
         didSet { defaults.set(aiActivityAnalysisEnabled, forKey: Keys.aiActivityAnalysisEnabled) }
     }
-    /// Opt-in to git tracking — adds a view that correlates Claude usage with the
+    /// Opt-in to git tracking — adds a view that correlates Codex usage with the
     /// commit activity of the repos you've used Claude in. Off by default.
     var gitTrackingEnabled: Bool {
         didSet { defaults.set(gitTrackingEnabled, forKey: Keys.gitTrackingEnabled) }
@@ -259,7 +265,7 @@ final class Preferences {
         didSet { defaults.set(gitOpensInWindow, forKey: Keys.gitOpensInWindow) }
     }
     /// Sources whose remembered workspaces feed the Git view. Defaults to
-    /// Claude Code + Codex sessions, with AI editor workspace histories opt-in.
+    /// Codex sessions, with AI editor workspace histories opt-in.
     var gitWorkspaceSourceIDs: Set<GitWorkspaceSourceID> {
         didSet {
             let normalized = GitWorkspaceSourceCatalog.normalized(gitWorkspaceSourceIDs)
@@ -320,57 +326,6 @@ final class Preferences {
                 return
             }
             persistLinuxDoReadingPositions()
-        }
-    }
-    /// Claude Status components shown on the Dashboard and monitored for
-    /// optional notifications. Defaults to `claude.ai` and `Claude Code`.
-    var claudeStatusVisibleComponentIDs: Set<String> {
-        didSet {
-            if claudeStatusVisibleComponentIDs.isEmpty {
-                claudeStatusVisibleComponentIDs = ClaudeStatusComponentCatalog.defaultVisibleComponentIDs
-            }
-            defaults.set(claudeStatusVisibleComponentIDs.sorted().joined(separator: ","), forKey: Keys.claudeStatusVisibleComponentIDs)
-        }
-    }
-    /// Opt-in to macOS notifications when one of the visible Claude Status
-    /// components is not operational.
-    var claudeStatusNotificationsEnabled: Bool {
-        didSet { defaults.set(claudeStatusNotificationsEnabled, forKey: Keys.claudeStatusNotificationsEnabled) }
-    }
-    /// Last abnormal visible-component status notification sent. Stored so the
-    /// app does not repeat the same alert across polling cycles or relaunches.
-    var claudeStatusLastNotificationFingerprint: String {
-        didSet { defaults.set(claudeStatusLastNotificationFingerprint, forKey: Keys.claudeStatusLastNotificationFingerprint) }
-    }
-    /// Claude Desktop UI usage capture. The default only tries when Claude is
-    /// already frontmost, so it never steals focus.
-    var claudeDesktopUsageAutoMode: ClaudeDesktopUsageAutoMode {
-        didSet { defaults.set(claudeDesktopUsageAutoMode.rawValue, forKey: Keys.claudeDesktopUsageAutoMode) }
-    }
-    /// Optional timed Claude Desktop usage capture. Disabled by default.
-    var claudeDesktopUsageTimedCaptureEnabled: Bool {
-        didSet { defaults.set(claudeDesktopUsageTimedCaptureEnabled, forKey: Keys.claudeDesktopUsageTimedCaptureEnabled) }
-    }
-    var claudeDesktopUsageTimedIntervalMinutes: Int {
-        didSet {
-            let clamped = min(240, max(5, claudeDesktopUsageTimedIntervalMinutes))
-            guard clamped == claudeDesktopUsageTimedIntervalMinutes else {
-                claudeDesktopUsageTimedIntervalMinutes = clamped
-                return
-            }
-            defaults.set(claudeDesktopUsageTimedIntervalMinutes, forKey: Keys.claudeDesktopUsageTimedIntervalMinutes)
-        }
-    }
-    /// Claude usage-limit windows shown in the Usage Limits panel. The 5h and
-    /// 7d windows are always visible; this set controls optional GUI-only rows.
-    var claudeUsageLimitVisibleWindowIDs: Set<String> {
-        didSet {
-            let normalized = UsageLimitWindowCatalog.normalizedClaudeVisibleWindowIDs(claudeUsageLimitVisibleWindowIDs)
-            guard normalized == claudeUsageLimitVisibleWindowIDs else {
-                claudeUsageLimitVisibleWindowIDs = normalized
-                return
-            }
-            defaults.set(normalized.sorted().joined(separator: ","), forKey: Keys.claudeUsageLimitVisibleWindowIDs)
         }
     }
     /// OpenAI Status product groups shown on the Dashboard and monitored for
@@ -560,24 +515,6 @@ final class Preferences {
         } else {
             linuxDoReadingPositions = [:]
         }
-        let storedClaudeStatusComponentIDs = (defaults.string(forKey: Keys.claudeStatusVisibleComponentIDs) ?? "")
-            .split(separator: ",")
-            .map { String($0) }
-        claudeStatusVisibleComponentIDs = storedClaudeStatusComponentIDs.isEmpty
-            ? ClaudeStatusComponentCatalog.defaultVisibleComponentIDs
-            : Set(storedClaudeStatusComponentIDs)
-        claudeStatusNotificationsEnabled = defaults.bool(forKey: Keys.claudeStatusNotificationsEnabled)
-        claudeStatusLastNotificationFingerprint = defaults.string(forKey: Keys.claudeStatusLastNotificationFingerprint) ?? ""
-        claudeDesktopUsageAutoMode = ClaudeDesktopUsageAutoMode(rawValue: defaults.string(forKey: Keys.claudeDesktopUsageAutoMode) ?? "") ?? .visibleOnly
-        claudeDesktopUsageTimedCaptureEnabled = (defaults.object(forKey: Keys.claudeDesktopUsageTimedCaptureEnabled) as? Bool) ?? false
-        let storedClaudeDesktopUsageTimedInterval = (defaults.object(forKey: Keys.claudeDesktopUsageTimedIntervalMinutes) as? Int) ?? 30
-        claudeDesktopUsageTimedIntervalMinutes = min(240, max(5, storedClaudeDesktopUsageTimedInterval))
-        let storedClaudeUsageLimitWindowIDs = (defaults.string(forKey: Keys.claudeUsageLimitVisibleWindowIDs) ?? "")
-            .split(separator: ",")
-            .map { String($0) }
-        claudeUsageLimitVisibleWindowIDs = UsageLimitWindowCatalog.normalizedClaudeVisibleWindowIDs(
-            Set(storedClaudeUsageLimitWindowIDs)
-        )
         let storedOpenAIStatusGroupIDs = (defaults.string(forKey: Keys.openAIStatusVisibleGroupIDs) ?? "")
             .split(separator: ",")
             .map { String($0) }
@@ -614,21 +551,11 @@ final class Preferences {
             defaults.set(storedCodingSurfaceBundleIDsRemoved, forKey: Keys.codingSurfaceBundleIDsRemoved)
         }
 
-        let storedEnabled = (defaults.string(forKey: Keys.enabledProviders) ?? "")
-            .split(separator: ",")
-            .compactMap { ProviderKind(rawValue: String($0)) }
-        let enabled = storedEnabled.isEmpty ? Set([ProviderKind.claude]) : Set(storedEnabled)
         let remember = (defaults.object(forKey: Keys.rememberSelectedProvider) as? Bool) ?? true
-        let storedSelected = ProviderKind(rawValue: defaults.string(forKey: Keys.selectedProvider) ?? "")
-        let firstEnabled = ProviderKind.allCases.first(where: enabled.contains) ?? .claude
 
-        enabledProviders = enabled
+        enabledProviders = [.codex]
         rememberSelectedProvider = remember
-        if remember, let s = storedSelected, enabled.contains(s) {
-            selectedProvider = s
-        } else {
-            selectedProvider = firstEnabled
-        }
+        selectedProvider = .codex
         appLanguagePreference.applyToAppleLanguages(defaults: defaults)
     }
 
@@ -745,13 +672,6 @@ final class Preferences {
         static let linuxDoLastLoginUsername = "linuxDoLastLoginUsername"
         static let linuxDoSelectedFeed = "linuxDoSelectedFeed"
         static let linuxDoReadingPositions = "linuxDoReadingPositions"
-        static let claudeStatusVisibleComponentIDs = "claudeStatusVisibleComponentIDs"
-        static let claudeStatusNotificationsEnabled = "claudeStatusNotificationsEnabled"
-        static let claudeStatusLastNotificationFingerprint = "claudeStatusLastNotificationFingerprint"
-        static let claudeDesktopUsageAutoMode = "claudeDesktopUsageAutoMode"
-        static let claudeDesktopUsageTimedCaptureEnabled = "claudeDesktopUsageTimedCaptureEnabled"
-        static let claudeDesktopUsageTimedIntervalMinutes = "claudeDesktopUsageTimedIntervalMinutes"
-        static let claudeUsageLimitVisibleWindowIDs = "claudeUsageLimitVisibleWindowIDs"
         static let openAIStatusVisibleGroupIDs = "openAIStatusVisibleGroupIDs"
         static let openAIStatusNotificationsEnabled = "openAIStatusNotificationsEnabled"
         static let openAIStatusLastNotificationFingerprint = "openAIStatusLastNotificationFingerprint"

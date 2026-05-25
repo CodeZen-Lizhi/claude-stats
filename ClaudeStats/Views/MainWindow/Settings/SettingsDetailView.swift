@@ -63,7 +63,6 @@ struct SettingsDetailView: View {
         case .features: FeaturesSettingsView(onSelectSection: onSelectSection)
         case .menuBar: MenuBarSettingsView()
         case .notchIsland: EmptyView()
-        case .platforms: PlatformsSettingsView()
         case .tracking: TrackingSettingsView(onSelectSection: onSelectSection)
         case .dictionary: DictionarySettingsView()
         case .localAI: LocalAIModelsSettingsView()

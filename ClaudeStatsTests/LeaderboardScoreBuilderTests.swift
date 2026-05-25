@@ -21,13 +21,13 @@ struct LeaderboardScoreBuilderTests {
         let now = dateUTC(2026, 5, 15, 13)
         let window = LeaderboardPeriodCalculator.window(for: .day, now: now)
         let sessions = [
-            session("claude", provider: .claude, at: dateUTC(2026, 5, 15, 10),
+            session("claude", provider: .codex, at: dateUTC(2026, 5, 15, 10),
                     usage: TokenUsage(inputTokens: 100, outputTokens: 50, cacheReadTokens: 1_000,
                                       cacheCreation5mTokens: 25, cacheCreation1hTokens: 0)),
             session("codex", provider: .codex, at: dateUTC(2026, 5, 15, 11),
                     usage: TokenUsage(inputTokens: 200, outputTokens: 75, cacheReadTokens: 2_000,
                                       cacheCreation5mTokens: 0, cacheCreation1hTokens: 5)),
-            session("outside", provider: .claude, at: dateUTC(2026, 5, 14, 23),
+            session("outside", provider: .codex, at: dateUTC(2026, 5, 14, 23),
                     usage: TokenUsage(inputTokens: 9_999, outputTokens: 0, cacheReadTokens: 0,
                                       cacheCreation5mTokens: 0, cacheCreation1hTokens: 0)),
         ]
@@ -51,7 +51,7 @@ struct LeaderboardScoreBuilderTests {
         let now = dateUTC(2026, 5, 15, 13)
         let window = LeaderboardPeriodCalculator.window(for: .day, now: now)
         let sessions = [
-            session("activity", provider: .claude, at: dateUTC(2026, 5, 15, 10),
+            session("activity", provider: .codex, at: dateUTC(2026, 5, 15, 10),
                     usage: TokenUsage(inputTokens: 1, outputTokens: 0, cacheReadTokens: 0,
                                       cacheCreation5mTokens: 0, cacheCreation1hTokens: 0),
                     activityIntervals: [
@@ -87,7 +87,7 @@ struct LeaderboardScoreBuilderTests {
         let sessions = [
             session(
                 "cross-day",
-                provider: .claude,
+                provider: .codex,
                 at: dateUTC(2026, 5, 16, 23),
                 usage: TokenUsage(inputTokens: 9_999),
                 timeline: [
@@ -155,7 +155,7 @@ struct LeaderboardScoreBuilderTests {
     func historySubmissionsIncludeMetrics() {
         let now = dateUTC(2026, 5, 16, 8)
         let sessions = [
-            session("history", provider: .claude, at: now,
+            session("history", provider: .codex, at: now,
                     usage: TokenUsage(inputTokens: 20),
                     timeline: [
                         ModelBucket(model: "model", start: dateUTC(2026, 5, 16, 1), usage: TokenUsage(inputTokens: 20)),
@@ -187,7 +187,7 @@ struct LeaderboardScoreBuilderTests {
         let sessions = [
             session(
                 "timeline",
-                provider: .claude,
+                provider: .codex,
                 at: now,
                 usage: TokenUsage(inputTokens: 9_999),
                 timeline: [

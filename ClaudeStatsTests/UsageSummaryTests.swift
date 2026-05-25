@@ -22,7 +22,7 @@ struct UsageSummaryTests {
             models: [ModelUsage(model: model, messageCount: 1, usage: tokens(count), pricing: TestPricing.table)],
             timeline: [ModelBucket(model: model, start: when, usage: tokens(count))]
         )
-        return Session(id: id, externalID: id, provider: .claude, projectDirectoryName: "-p",
+        return Session(id: id, externalID: id, provider: .codex, projectDirectoryName: "-p",
                        filePath: "/\(id).jsonl", cwd: nil, lastModified: when, fileSize: 1, stats: stats)
     }
 
@@ -36,7 +36,7 @@ struct UsageSummaryTests {
             models: models,
             timeline: []
         )
-        return Session(id: id, externalID: id, provider: .claude, projectDirectoryName: "-p",
+        return Session(id: id, externalID: id, provider: .codex, projectDirectoryName: "-p",
                        filePath: "/\(id).jsonl", cwd: nil, lastModified: when, fileSize: 1, stats: stats)
     }
 
@@ -57,7 +57,7 @@ struct UsageSummaryTests {
             models: models,
             timeline: timeline
         )
-        return Session(id: id, externalID: id, provider: .claude, projectDirectoryName: "-p",
+        return Session(id: id, externalID: id, provider: .codex, projectDirectoryName: "-p",
                        filePath: "/\(id).jsonl", cwd: nil, lastModified: when, fileSize: 1, stats: stats)
     }
 
@@ -183,7 +183,7 @@ struct UsageSummaryTests {
 
     @Test("Subagent turns that appear in both parent and child sessions are deduped by message hash")
     func dedupesSubagentTurnsByHash() {
-        // Simulate Claude Code's Task tool: the same assistant turn (same
+        // Simulate duplicated assistant turns: the same assistant turn (same
         // message.id + requestId) shows up in both the parent session's
         // JSONL and the subagent's. Without dedup, aggregate cost would be
         // counted twice.
@@ -217,7 +217,7 @@ struct UsageSummaryTests {
                 models: [modelUsage], timeline: [],
                 billableMessages: msgs
             )
-            return Session(id: id, externalID: id, provider: .claude,
+            return Session(id: id, externalID: id, provider: .codex,
                            projectDirectoryName: "-p", filePath: "/\(id).jsonl",
                            cwd: nil, lastModified: when, fileSize: 1, stats: stats)
         }
@@ -264,15 +264,15 @@ struct UsageSummaryTests {
 
         let key = UsageDerivedData.Key(
             period: .allTime,
-            provider: .claude,
+            provider: .codex,
             lastRefreshedAt: store.lastRefreshedAt
         )
         let snapshot = UsageDerivedData.make(key: key, store: store)
 
         #expect(snapshot.summary.totalTokens == 120)
         #expect(snapshot.series.models == ["model-a"])
-        #expect(key == UsageDerivedData.Key(period: .allTime, provider: .claude, lastRefreshedAt: store.lastRefreshedAt))
-        #expect(key != UsageDerivedData.Key(period: .last7Days, provider: .claude, lastRefreshedAt: store.lastRefreshedAt))
+        #expect(key == UsageDerivedData.Key(period: .allTime, provider: .codex, lastRefreshedAt: store.lastRefreshedAt))
+        #expect(key != UsageDerivedData.Key(period: .last7Days, provider: .codex, lastRefreshedAt: store.lastRefreshedAt))
         #expect(key != UsageDerivedData.Key(period: .allTime, provider: .codex, lastRefreshedAt: store.lastRefreshedAt))
     }
 
@@ -285,7 +285,7 @@ struct UsageSummaryTests {
         ])
         let key = UsageDerivedData.Key(
             period: .allTime,
-            provider: .claude,
+            provider: .codex,
             lastRefreshedAt: store.lastRefreshedAt
         )
         let empty = UsageDerivedData.empty(for: key)
@@ -321,7 +321,7 @@ struct UsageSummaryTests {
         ])
         let key = UsageDerivedData.Key(
             period: .allTime,
-            provider: .claude,
+            provider: .codex,
             lastRefreshedAt: store.lastRefreshedAt
         )
         let empty = UsageDerivedData.empty(for: key)
@@ -355,7 +355,7 @@ struct UsageSummaryTests {
         ])
         let key = UsageDerivedData.Key(
             period: .allTime,
-            provider: .claude,
+            provider: .codex,
             lastRefreshedAt: store.lastRefreshedAt
         )
 

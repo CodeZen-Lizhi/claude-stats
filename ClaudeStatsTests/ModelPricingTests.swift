@@ -7,51 +7,36 @@ struct ModelPricingTests {
 
     @Test("Exact match wins over fuzzy fallback")
     func exactMatch() {
-        let rate = ModelPricing.fallback.rate(for: "claude-opus-4-7")
-        #expect(rate.input == 5)
-        #expect(rate.output == 25)
-        #expect(ModelPricing.fallback.hasExactRate(for: "claude-opus-4-7"))
+        let rate = ModelPricing.fallback.rate(for: "gpt-5.4")
+        #expect(rate.input == 2.5)
+        #expect(rate.output == 15)
+        #expect(ModelPricing.fallback.hasExactRate(for: "gpt-5.4"))
     }
 
-    @Test("Current Opus 4.5 and later prices use Anthropic's lower API rate")
-    func currentOpusPricing() {
+    @Test("Codex model prices load from bundled defaults")
+    func codexPricing() {
         let pricing = ModelPricing.loadDefault(bundle: .main, userFile: nil)
-        for model in ["claude-opus-4-7", "claude-opus-4-6", "claude-opus-4-5"] {
-            let rate = pricing.rate(for: model)
-            #expect(rate.input == 5)
-            #expect(rate.output == 25)
-            #expect(rate.cacheWrite5m == 6.25)
-            #expect(rate.cacheWrite1h == 10)
-            #expect(rate.cacheRead == 0.5)
-        }
+        let rate = pricing.rate(for: "gpt-5-codex")
+        #expect(rate.input == 1.25)
+        #expect(rate.output == 10)
+        #expect(rate.cacheWrite5m == 1.25)
+        #expect(rate.cacheWrite1h == 1.25)
+        #expect(rate.cacheRead == 0.125)
     }
 
-    @Test("Legacy Opus 4.1 and 4 prices keep their higher API rate")
-    func legacyOpusPricing() {
+    @Test("Dated GPT ids match their dateless alias pricing")
+    func datedGPTAliasPricing() {
         let pricing = ModelPricing.loadDefault(bundle: .main, userFile: nil)
-        for model in ["claude-opus-4-1", "claude-opus-4"] {
-            let rate = pricing.rate(for: model)
-            #expect(rate.input == 15)
-            #expect(rate.output == 75)
-            #expect(rate.cacheWrite5m == 18.75)
-            #expect(rate.cacheWrite1h == 30)
-            #expect(rate.cacheRead == 1.5)
-        }
+        let rate = pricing.rate(for: "gpt-5.4-20260501")
+        #expect(rate.input == 2.5)
+        #expect(rate.output == 15)
     }
 
-    @Test("Dated Claude ids match their dateless alias pricing")
-    func datedClaudeAliasPricing() {
-        let pricing = ModelPricing.loadDefault(bundle: .main, userFile: nil)
-        let rate = pricing.rate(for: "claude-opus-4-7-20260501")
-        #expect(rate.input == 5)
-        #expect(rate.output == 25)
-    }
-
-    @Test("Unknown Sonnet variant falls back to a sonnet rate")
-    func fuzzySonnet() {
-        let rate = ModelPricing.fallback.rate(for: "claude-3-5-sonnet-20241022")
-        #expect(rate.input == 3) // claude-sonnet-4-6 in the fallback table
-        #expect(!ModelPricing.fallback.hasExactRate(for: "claude-3-5-sonnet-20241022"))
+    @Test("Unknown GPT family falls back to a GPT rate")
+    func fuzzyGPT() {
+        let rate = ModelPricing.fallback.rate(for: "gpt-unknown-codex")
+        #expect(rate.input == 2.5)
+        #expect(!ModelPricing.fallback.hasExactRate(for: "gpt-unknown-codex"))
     }
 
     @Test("Unknown family uses the default rate")

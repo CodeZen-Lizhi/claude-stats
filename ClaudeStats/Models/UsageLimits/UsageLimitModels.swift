@@ -73,69 +73,8 @@ struct UsageLimitWindow: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
-struct UsageLimitWindowMetadata: Sendable, Hashable {
-    let id: String
-    let label: String
-    let minutes: Int
-}
-
-enum UsageLimitWindowCatalog {
-    static let claudeCoreWindowIDs: Set<String> = ["five_hour", "seven_day"]
-    static let claudeDefaultVisibleWindowIDs: Set<String> = claudeCoreWindowIDs
-    static let claudeOptionalWindowIDs: [String] = ["weekly_claude_design", "sonnet_only"]
-
-    static let claudeWindowDefinitions: [UsageLimitWindowMetadata] = [
-        UsageLimitWindowMetadata(id: "five_hour", label: "5h", minutes: 300),
-        UsageLimitWindowMetadata(id: "seven_day", label: "7d", minutes: 10_080),
-        UsageLimitWindowMetadata(id: "weekly_claude_design", label: "Claude Design", minutes: 10_080),
-        UsageLimitWindowMetadata(id: "sonnet_only", label: "Sonnet", minutes: 10_080),
-    ]
-
-    private static let claudeOrderByID = Dictionary(
-        uniqueKeysWithValues: claudeWindowDefinitions.enumerated().map { ($0.element.id, $0.offset) }
-    )
-    private static let claudeKnownWindowIDs = Set(claudeWindowDefinitions.map(\.id))
-
-    static func isClaudeCoreComplete(_ windows: [UsageLimitWindow]) -> Bool {
-        claudeCoreWindowIDs.isSubset(of: Set(windows.map(\.id)))
-    }
-
-    static func orderedClaudeWindows(_ windows: [UsageLimitWindow]) -> [UsageLimitWindow] {
-        windows.sorted { lhs, rhs in
-            let lhsOrder = claudeOrderByID[lhs.id] ?? Int.max
-            let rhsOrder = claudeOrderByID[rhs.id] ?? Int.max
-            if lhsOrder != rhsOrder {
-                return lhsOrder < rhsOrder
-            }
-            return lhs.id.localizedStandardCompare(rhs.id) == .orderedAscending
-        }
-    }
-
-    static func visibleClaudeWindows(
-        _ windows: [UsageLimitWindow],
-        visibleWindowIDs: Set<String>
-    ) -> [UsageLimitWindow] {
-        let normalizedVisibleIDs = normalizedClaudeVisibleWindowIDs(visibleWindowIDs)
-        return orderedClaudeWindows(windows).filter { normalizedVisibleIDs.contains($0.id) }
-    }
-
-    static func normalizedClaudeVisibleWindowIDs(_ ids: Set<String>) -> Set<String> {
-        let knownIDs = ids.intersection(claudeKnownWindowIDs)
-        return knownIDs.union(claudeCoreWindowIDs)
-    }
-
-    static func claudeMetadata(for id: String) -> UsageLimitWindowMetadata? {
-        claudeWindowDefinitions.first { $0.id == id }
-    }
-}
-
 extension ProviderKind {
     var supportsUsageLimits: Bool {
-        switch self {
-        case .claude, .codex:
-            true
-        case .gemini, .kimi, .minimax:
-            false
-        }
+        true
     }
 }

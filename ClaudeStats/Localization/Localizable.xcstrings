@@ -110,18 +110,18 @@
         }
       }
     },
-    "%@ ANTHROPIC / OPENAI variable%@ found in your local environment." : {
+    "%@ OPENAI variable%@ found in your local environment." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "%1$@ ANTHROPIC / OPENAI variable%2$@ found in your local environment."
+            "value" : "%1$@ OPENAI variable%2$@ found in your local environment."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在本地环境中发现 %@ 个 ANTHROPIC / OPENAI 变量。"
+            "value" : "在本地环境中发现 %@ 个 OPENAI 变量。"
           }
         }
       }
@@ -1823,13 +1823,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Claude activity only"
+            "value" : "Codex activity only"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "仅有 Claude 活动"
+            "value" : "仅有 Codex 活动"
           }
         }
       }
@@ -3180,12 +3180,12 @@
         }
       }
     },
-    "No ANTHROPIC or OPENAI overrides were found in process or shell config files." : {
+    "No OPENAI overrides were found in process or shell config files." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在进程或 shell 配置文件中未发现 ANTHROPIC 或 OPENAI 覆盖项。"
+            "value" : "在进程或 shell 配置文件中未发现 OPENAI 覆盖项。"
           }
         }
       }
@@ -6748,13 +6748,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Connect Claude Code status line"
+            "value" : "Connect Codex status line"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "连接 Claude Code 状态行"
+            "value" : "连接 Codex 状态行"
           }
         }
       }
@@ -9092,7 +9092,7 @@
         }
       }
     },
-    "Read Claude Desktop" : {
+    "Read Codex" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -10302,12 +10302,12 @@
         }
       }
     },
-    "Reads commit history of repos you've used Claude Code in (via the `git` command) and compares it with your Claude activity — churn, recent commits, and a usage-vs-commits timeline." : {
+    "Reads commit history of repos you've used Codex in (via the `git` command) and compares it with your Codex activity — churn, recent commits, and a usage-vs-commits timeline." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "通过 `git` 命令读取你用过 Claude Code 的仓库的提交历史，并与你的 Claude 活动对比 —— 代码改动、最近提交、用量与提交对比时间线。"
+            "value" : "通过 `git` 命令读取你用过 Codex 的仓库的提交历史，并与你的 Codex 活动对比 —— 代码改动、最近提交、用量与提交对比时间线。"
           }
         }
       }
@@ -10722,32 +10722,32 @@
         }
       }
     },
-    "Connect Claude Code's status line to let Claude Stats capture 5h and weekly limits." : {
+    "Connect Codex's status line to let Claude Stats capture 5h and weekly limits." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "连接 Claude Code 的状态行，让 Claude Stats 抓取 5 小时与每周限额。"
+            "value" : "连接 Codex 的状态行，让 Claude Stats 抓取 5 小时与每周限额。"
           }
         }
       }
     },
-    "Claude usage limits will refresh after the next Claude Code response." : {
+    "Codex usage limits will refresh after the next Codex response." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Claude 用量限制将在下一次 Claude Code 响应后刷新。"
+            "value" : "Codex 用量限制将在下一次 Codex 响应后刷新。"
           }
         }
       }
     },
-    "Could not read Claude usage limits: %@" : {
+    "Could not read Codex usage limits: %@" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "无法读取 Claude 用量限制：%@"
+            "value" : "无法读取 Codex 用量限制：%@"
           }
         }
       }

@@ -19,7 +19,6 @@ struct SkillsLocalScanner: SkillsLocalScanning, Sendable {
             return Self.scanSync(
                 roots: roots,
                 codexPluginCacheURL: homeDirectory.appendingPathComponent(".codex/plugins/cache", isDirectory: true),
-                claudeMarketplaceURL: homeDirectory.appendingPathComponent(".claude/plugins/marketplaces", isDirectory: true),
                 codexConfigURL: homeDirectory.appendingPathComponent(".codex/config.toml"),
                 scannedAt: .now,
                 mode: mode
@@ -30,7 +29,6 @@ struct SkillsLocalScanner: SkillsLocalScanning, Sendable {
     static func scanSync(
         roots: [SkillRootDefinition],
         codexPluginCacheURL: URL? = nil,
-        claudeMarketplaceURL: URL? = nil,
         codexConfigURL: URL? = nil,
         scannedAt: Date = .now,
         mode: SkillsScanMode = .fullHash
@@ -46,22 +44,6 @@ struct SkillsLocalScanner: SkillsLocalScanning, Sendable {
 
         if let codexPluginCacheURL {
             skills += scanCodexPluginCache(root: codexPluginCacheURL, configURL: codexConfigURL, mode: mode)
-        }
-
-        if let claudeMarketplaceURL {
-            let provider = SkillProviderDefinition(
-                id: "claude-plugin",
-                displayName: "Claude Plugin",
-                symbol: "puzzlepiece.extension"
-            )
-            let root = SkillRootDefinition(
-                provider: provider,
-                scope: .plugin,
-                url: claudeMarketplaceURL,
-                maxDepth: 9,
-                allowsHiddenDirectories: false
-            )
-            skills += scanSkillDirectories(root: root, plugin: nil, mode: mode)
         }
 
         let deduped = dedupeByRealPath(skills)
@@ -118,10 +100,8 @@ struct SkillsLocalScanner: SkillsLocalScanning, Sendable {
         }
 
         let codex = SkillProviderDefinition(id: "codex", displayName: "Codex", symbol: "chevron.left.forwardslash.chevron.right")
-        let claude = SkillProviderDefinition(id: "claude", displayName: "Claude", symbol: "sparkles")
         let agents = SkillProviderDefinition(id: "agents", displayName: "Agents", symbol: "person.2")
         let openCode = SkillProviderDefinition(id: "opencode", displayName: "OpenCode", symbol: "curlybraces")
-        let gemini = SkillProviderDefinition(id: "gemini", displayName: "Gemini", symbol: "sparkle")
         let cursor = SkillProviderDefinition(id: "cursor", displayName: "Cursor", symbol: "cursorarrow")
         let copilot = SkillProviderDefinition(id: "copilot", displayName: "GitHub Copilot", symbol: "ellipsis.curlybraces")
         let windsurf = SkillProviderDefinition(id: "windsurf", displayName: "Windsurf", symbol: "wind")
@@ -139,10 +119,8 @@ struct SkillsLocalScanner: SkillsLocalScanning, Sendable {
 
         append(codex, .global, home(".codex/skills"))
         append(codex, .global, home(".codex/skills/public"))
-        append(claude, .global, home(".claude/skills"))
         append(agents, .global, home(".agents/skills"))
         append(openCode, .global, home(".config/opencode/skills"))
-        append(gemini, .global, home(".gemini/skills"))
         append(cursor, .global, home(".cursor/rules"))
         append(copilot, .global, home(".github/instructions"))
         append(windsurf, .global, home(".windsurf/rules"))
@@ -170,10 +148,8 @@ struct SkillsLocalScanner: SkillsLocalScanning, Sendable {
             let scope = SkillScope.project(path: path)
             append(codex, scope, projectURL.appendingPathComponent(".codex/skills", isDirectory: true))
             append(codex, scope, projectURL.appendingPathComponent(".codex/skills/public", isDirectory: true))
-            append(claude, scope, projectURL.appendingPathComponent(".claude/skills", isDirectory: true))
             append(agents, scope, projectURL.appendingPathComponent(".agents/skills", isDirectory: true))
             append(openCode, scope, projectURL.appendingPathComponent(".opencode/skills", isDirectory: true))
-            append(gemini, scope, projectURL.appendingPathComponent(".gemini/skills", isDirectory: true))
             append(cursor, scope, projectURL.appendingPathComponent(".cursor/rules", isDirectory: true))
             append(copilot, scope, projectURL.appendingPathComponent(".github/instructions", isDirectory: true))
             append(windsurf, scope, projectURL.appendingPathComponent(".windsurf/rules", isDirectory: true))

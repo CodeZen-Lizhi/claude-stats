@@ -27,7 +27,6 @@ final class AppEnvironment {
     let gitActivity: GitActivityViewModel
     let github = GitHubViewModel()
     let linuxDo: LinuxDoStore
-    let claudeStatus: ClaudeStatusViewModel
     let openAIStatus: OpenAIStatusViewModel
     let leaderboards: LeaderboardSyncViewModel
     let usageLimits: UsageLimitStore
@@ -84,7 +83,6 @@ final class AppEnvironment {
         self.linuxDo = linuxDo ?? LinuxDoStore(preferences: preferences, credentials: linuxDoCredentials)
         self.dashboard = DashboardViewModel(pricing: pricing)
         self.gitActivity = GitActivityViewModel()
-        self.claudeStatus = ClaudeStatusViewModel(preferences: preferences)
         self.openAIStatus = OpenAIStatusViewModel(preferences: preferences)
         self.leaderboards = LeaderboardSyncViewModel(
             preferences: preferences,
@@ -127,7 +125,6 @@ final class AppEnvironment {
             await configurationProfiles.loadIfNeeded()
             await store.refresh()
         }
-        claudeStatus.start()
         openAIStatus.start()
         linuxDo.start()
         applyAutoRefreshSetting()

@@ -64,7 +64,7 @@ struct TechnicalTermDictionaryTests {
         let temp = try TempDir.make()
         defer { try? FileManager.default.removeItem(at: temp) }
         let homeRoot = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".claude-stats-tests", isDirectory: true)
+            .appendingPathComponent(".codex-stats-tests", isDirectory: true)
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: homeRoot) }
 
@@ -72,8 +72,8 @@ struct TechnicalTermDictionaryTests {
         let globalURL = temp.appendingPathComponent("user_terms.json")
         let projectRoot = homeRoot.appendingPathComponent("parent", isDirectory: true)
         let childRoot = projectRoot.appendingPathComponent("child", isDirectory: true)
-        let parentTerms = projectRoot.appendingPathComponent(".claude-stats/terms.json")
-        let childTerms = childRoot.appendingPathComponent(".claude-stats/terms.json")
+        let parentTerms = projectRoot.appendingPathComponent(".codex-stats/terms.json")
+        let childTerms = childRoot.appendingPathComponent(".codex-stats/terms.json")
 
         try Self.writeDocument(
             TechnicalTermDocument(
@@ -204,7 +204,7 @@ struct TechnicalTermDictionaryTests {
         let temp = try TempDir.make()
         defer { try? FileManager.default.removeItem(at: temp) }
         let homeRoot = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".claude-stats-tests", isDirectory: true)
+            .appendingPathComponent(".codex-stats-tests", isDirectory: true)
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: homeRoot) }
 
@@ -212,7 +212,7 @@ struct TechnicalTermDictionaryTests {
         let globalURL = temp.appendingPathComponent("user_terms.json")
         let projectRoot = homeRoot.appendingPathComponent("project", isDirectory: true)
         let childRoot = projectRoot.appendingPathComponent("child", isDirectory: true)
-        let projectTerms = childRoot.appendingPathComponent(".claude-stats/terms.json")
+        let projectTerms = childRoot.appendingPathComponent(".codex-stats/terms.json")
 
         try Self.writeDocument(
             TechnicalTermDocument(terms: [
@@ -334,7 +334,7 @@ private final class BundleProbe: NSObject {}
 struct TranscriptTermExtractorTests {
     @Test("Extracts mixed Chinese English code paths commands and errors")
     func extractsMixedTranscriptTerms() async throws {
-        let session = Self.session(id: "claude::analysis", provider: .claude)
+        let session = Self.session(id: "claude::analysis", provider: .codex)
         let messages = [
             Self.message(
                 role: .user,
@@ -357,7 +357,7 @@ struct TranscriptTermExtractorTests {
 
     @Test("Skips natural-language extraction for code-heavy transcript text")
     func skipsNaturalLanguageForCodeHeavyText() async throws {
-        let session = Self.session(id: "claude::tool-heavy", provider: .claude)
+        let session = Self.session(id: "claude::tool-heavy", provider: .codex)
         let jsonLine = #"{"type":"tool_result","payload":{"path":"ClaudeStats/Services/SessionStore.swift","status":"ok","id":"abc-123"}}"#
         let messages = [
             Self.message(role: .tool, text: String(repeating: jsonLine + "\n", count: 80)),
@@ -420,7 +420,7 @@ struct TranscriptTFIDFAnalyzerTests {
             ]),
         ]
         let snapshot = TranscriptTFIDFAnalyzer().snapshot(
-            provider: .claude,
+            provider: .codex,
             sessions: sessions,
             sessionAnalyses: analyses,
             engine: Self.engine,
@@ -447,7 +447,7 @@ struct TranscriptTFIDFAnalyzerTests {
         Session(
             id: id,
             externalID: id,
-            provider: .claude,
+            provider: .codex,
             projectDirectoryName: "project",
             filePath: "/tmp/\(id).jsonl",
             cwd: "/tmp/project",
@@ -497,14 +497,14 @@ struct TranscriptAnalysisIndexTests {
         defer { try? FileManager.default.removeItem(at: root) }
         let index = TranscriptAnalysisIndex(url: root.appendingPathComponent("index.sqlite3"))
 
-        let session = Self.session(id: "claude::cache", provider: .claude, fileSize: 256)
+        let session = Self.session(id: "claude::cache", provider: .codex, fileSize: 256)
         let key = await index.key(for: session, tokenizerID: "tokenizer-a", dictionaryVersion: "dictionary-a")
         let analysis = Self.analysis(sessionID: session.id, terms: [
             Self.term("SwiftUI", kind: .framework, frequency: 2, weight: 1.7),
         ])
 
         let cold = try await index.lookup(
-            provider: .claude,
+            provider: .codex,
             sessions: [session],
             tokenizerID: "tokenizer-a",
             dictionaryVersion: "dictionary-a"
@@ -513,7 +513,7 @@ struct TranscriptAnalysisIndexTests {
 
         try await index.writeAnalyzed(analysis, for: key)
         let warm = try await index.lookup(
-            provider: .claude,
+            provider: .codex,
             sessions: [session],
             tokenizerID: "tokenizer-a",
             dictionaryVersion: "dictionary-a"
@@ -521,27 +521,27 @@ struct TranscriptAnalysisIndexTests {
         #expect(warm.first?.state == .hit)
 
         let dictionaryChanged = try await index.lookup(
-            provider: .claude,
+            provider: .codex,
             sessions: [session],
             tokenizerID: "tokenizer-a",
             dictionaryVersion: "dictionary-b"
         )
         #expect(dictionaryChanged.first?.state == .missChanged)
 
-        let emptySession = Self.session(id: "claude::empty", provider: .claude, fileSize: 1)
+        let emptySession = Self.session(id: "claude::empty", provider: .codex, fileSize: 1)
         let emptyKey = await index.key(for: emptySession, tokenizerID: "tokenizer-a", dictionaryVersion: "dictionary-a")
         try await index.writeEmpty(for: emptySession, key: emptyKey)
         let emptyLookup = try await index.lookup(
-            provider: .claude,
+            provider: .codex,
             sessions: [emptySession],
             tokenizerID: "tokenizer-a",
             dictionaryVersion: "dictionary-a"
         )
         #expect(emptyLookup.first?.state == .empty)
 
-        let changedEmpty = Self.session(id: "claude::empty", provider: .claude, fileSize: 2)
+        let changedEmpty = Self.session(id: "claude::empty", provider: .codex, fileSize: 2)
         let changedLookup = try await index.lookup(
-            provider: .claude,
+            provider: .codex,
             sessions: [changedEmpty],
             tokenizerID: "tokenizer-a",
             dictionaryVersion: "dictionary-a"
@@ -556,7 +556,7 @@ struct TranscriptAnalysisIndexTests {
         )
         #expect(codexScope.first?.state == .missNew)
 
-        let deleted = try await index.pruneDeleted(provider: .claude, liveSessionIDs: [])
+        let deleted = try await index.pruneDeleted(provider: .codex, liveSessionIDs: [])
         #expect(deleted == 2)
     }
 
@@ -565,7 +565,7 @@ struct TranscriptAnalysisIndexTests {
         let root = try TempDir.make()
         defer { try? FileManager.default.removeItem(at: root) }
         let url = root.appendingPathComponent("index.sqlite3")
-        let session = Self.session(id: "claude::v1", provider: .claude, fileSize: 128)
+        let session = Self.session(id: "claude::v1", provider: .codex, fileSize: 128)
         let key = await TranscriptAnalysisIndex(url: url).key(
             for: session,
             tokenizerID: "tokenizer-a",
@@ -576,7 +576,7 @@ struct TranscriptAnalysisIndexTests {
 
         let index = TranscriptAnalysisIndex(url: url)
         let migrated = try await index.lookup(
-            provider: .claude,
+            provider: .codex,
             sessions: [session],
             tokenizerID: "tokenizer-a",
             dictionaryVersion: "dictionary-a"
@@ -584,7 +584,7 @@ struct TranscriptAnalysisIndexTests {
         #expect(migrated.first?.state == .hit)
 
         let snapshot = try await index.materializedSnapshot(
-            provider: .claude,
+            provider: .codex,
             sessions: [session],
             keysBySessionID: [session.id: key],
             engine: Self.engine,
@@ -601,8 +601,8 @@ struct TranscriptAnalysisIndexTests {
         defer { try? FileManager.default.removeItem(at: root) }
         let index = TranscriptAnalysisIndex(url: root.appendingPathComponent("index.sqlite3"))
 
-        let first = Self.session(id: "claude::one", provider: .claude, fileSize: 256)
-        let second = Self.session(id: "claude::two", provider: .claude, fileSize: 512)
+        let first = Self.session(id: "claude::one", provider: .codex, fileSize: 256)
+        let second = Self.session(id: "claude::two", provider: .codex, fileSize: 512)
         let firstAnalysis = Self.analysis(sessionID: first.id, terms: [
             Self.term("common", kind: .general, frequency: 1, weight: 1.0, excerpt: "first common"),
             Self.term("ProjectTerm", kind: .typeName, frequency: 2, weight: 1.7, excerpt: "first project"),
@@ -631,7 +631,7 @@ struct TranscriptAnalysisIndexTests {
             analyses: [firstAnalysis, secondAnalysis]
         )
 
-        let third = Self.session(id: "claude::three", provider: .claude, fileSize: 768)
+        let third = Self.session(id: "claude::three", provider: .codex, fileSize: 768)
         let thirdAnalysis = Self.analysis(sessionID: third.id, terms: [
             Self.term("NewTerm", kind: .framework, frequency: 3, weight: 1.6, excerpt: "third new"),
             Self.term("common", kind: .general, frequency: 1, weight: 1.0, excerpt: "third common"),
@@ -645,7 +645,7 @@ struct TranscriptAnalysisIndexTests {
             analyses: [firstAnalysis, secondAnalysis, thirdAnalysis]
         )
 
-        let changedFirst = Self.session(id: first.id, provider: .claude, fileSize: 1_024)
+        let changedFirst = Self.session(id: first.id, provider: .codex, fileSize: 1_024)
         let changedFirstAnalysis = Self.analysis(sessionID: changedFirst.id, terms: [
             Self.term("ChangedTerm", kind: .framework, frequency: 2, weight: 1.8, excerpt: "changed first"),
             Self.term("common", kind: .general, frequency: 1, weight: 1.0, excerpt: "changed common"),
@@ -660,7 +660,7 @@ struct TranscriptAnalysisIndexTests {
             absentTerms: ["ProjectTerm"]
         )
 
-        let deleted = try await index.pruneDeleted(provider: .claude, liveSessionIDs: [second.id, third.id])
+        let deleted = try await index.pruneDeleted(provider: .codex, liveSessionIDs: [second.id, third.id])
         #expect(deleted == 1)
         let afterDelete = try await Self.expectMaterialized(
             index,
@@ -740,7 +740,7 @@ struct TranscriptAnalysisIndexTests {
         absentTerms: Set<String> = []
     ) async throws -> TranscriptAnalysisSnapshot {
         let materialized = try await index.materializedSnapshot(
-            provider: .claude,
+            provider: .codex,
             sessions: sessions,
             keysBySessionID: keys,
             engine: engine,
@@ -749,7 +749,7 @@ struct TranscriptAnalysisIndexTests {
             now: Date(timeIntervalSince1970: 2_000)
         )
         let expected = TranscriptTFIDFAnalyzer().snapshot(
-            provider: .claude,
+            provider: .codex,
             sessions: sessions,
             sessionAnalyses: analyses,
             engine: engine,
@@ -1096,7 +1096,7 @@ struct TranscriptAnalysisStoreTests {
         )
 
         #expect(store.isLoading(for: .codex))
-        #expect(!store.isLoading(for: .claude))
+        #expect(!store.isLoading(for: .codex))
         #expect(store.progress(for: .codex).phase == .loadingIndex)
 
         try await waitFor { await observation.didChange() }
@@ -1107,7 +1107,7 @@ struct TranscriptAnalysisStoreTests {
 
         let inFlightProgress = store.progress(for: .codex)
         #expect(inFlightProgress.currentSessionTitle != nil)
-        #expect(store.snapshot(for: .claude) == nil)
+        #expect(store.snapshot(for: .codex) == nil)
 
         try await waitFor {
             store.snapshot(for: .codex) != nil && !store.isLoading(for: .codex)

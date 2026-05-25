@@ -11,7 +11,7 @@ final class SessionStore {
     private(set) var isLoading = false
     private(set) var lastRefreshedAt: Date?
     /// Whether any provider's on-disk data directory exists — drives the
-    /// "no Claude Code data found" empty state.
+    /// "no Codex data found" empty state.
     private(set) var dataDirectoryExists: Bool
     @ObservationIgnored var onRefresh: (() -> Void)?
 

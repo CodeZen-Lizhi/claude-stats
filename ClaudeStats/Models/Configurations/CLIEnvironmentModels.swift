@@ -120,32 +120,18 @@ struct CLIEnvironmentSnapshot: Sendable, Hashable {
 
 extension APIProviderCLI {
     var commandName: String {
-        switch self {
-        case .claude: "claude"
-        case .codex: "codex"
-        }
+        "codex"
     }
 
     var installCommand: String {
-        switch self {
-        case .claude: "curl -fsSL https://claude.ai/install.sh | bash"
-        case .codex: "npm install -g @openai/codex"
-        }
+        "npm install -g @openai/codex"
     }
 
     var installURL: URL {
-        switch self {
-        case .claude:
-            URL(string: "https://code.claude.com/docs/en/quickstart")!
-        case .codex:
-            URL(string: "https://help.openai.com/en/articles/11096431-openai-codex-ligetting-started")!
-        }
+        URL(string: "https://help.openai.com/en/articles/11096431-openai-codex-ligetting-started")!
     }
 
     var npmPackageName: String {
-        switch self {
-        case .claude: "@anthropic-ai/claude-code"
-        case .codex: "@openai/codex"
-        }
+        "@openai/codex"
     }
 }

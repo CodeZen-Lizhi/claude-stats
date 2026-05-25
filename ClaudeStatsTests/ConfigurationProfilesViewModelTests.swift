@@ -9,25 +9,21 @@ struct ConfigurationProfilesViewModelTests {
     func scopeOptionsAreCachedByProvider() async {
         let vm = makeViewModel()
         let sessions = [
-            makeSession("claude-a", provider: .claude, cwd: "/work/alpha"),
+            makeSession("codex-alpha", provider: .codex, cwd: "/work/alpha"),
             makeSession("codex-a", provider: .codex, cwd: "/work/codex"),
-            makeSession("claude-duplicate", provider: .claude, cwd: "/work/alpha"),
-            makeSession("claude-empty", provider: .claude, cwd: ""),
-            makeSession("claude-b", provider: .claude, cwd: "/work/beta"),
+            makeSession("codex-duplicate", provider: .codex, cwd: "/work/alpha"),
+            makeSession("codex-empty", provider: .codex, cwd: ""),
+            makeSession("codex-beta", provider: .codex, cwd: "/work/beta"),
         ]
 
         await vm.refreshScopeOptions(from: sessions)
 
-        #expect(vm.scopeOptions(for: .claude) == [
+        #expect(vm.scopeOptions(for: .codex) == [
             .global,
             .project(path: "/work/alpha"),
             .project(path: "/work/beta"),
-        ])
-        #expect(vm.scopeOptions(for: .codex) == [
-            .global,
             .project(path: "/work/codex"),
         ])
-        #expect(vm.scopeOptions(for: .gemini) == [.global])
     }
 
     @Test("Loading the library rebuilds sorted profile and active-profile caches")
@@ -36,21 +32,19 @@ struct ConfigurationProfilesViewModelTests {
         defer { try? FileManager.default.removeItem(at: temp) }
 
         let store = ConfigurationProfileStore(rootDirectory: temp.appendingPathComponent("Profiles", isDirectory: true))
-        let older = makeProfile(provider: .claude, name: "Older", updatedAt: Date(timeIntervalSince1970: 10))
-        let newer = makeProfile(provider: .claude, name: "Newer", updatedAt: Date(timeIntervalSince1970: 20))
+        let older = makeProfile(provider: .codex, name: "Older", updatedAt: Date(timeIntervalSince1970: 10))
+        let newer = makeProfile(provider: .codex, name: "Newer", updatedAt: Date(timeIntervalSince1970: 20))
         let codex = makeProfile(provider: .codex, name: "Codex", updatedAt: Date(timeIntervalSince1970: 15))
         try await store.saveLibrary(ConfigurationProfileLibrary(
             profiles: [older, codex, newer],
-            activeProfileIDsByProvider: [.claude: older.id, .codex: codex.id]
+            activeProfileIDsByProvider: [.codex: older.id]
         ))
 
         let vm = makeViewModel(store: store)
         await vm.reload()
 
-        #expect(vm.profiles(for: .claude).map(\.id) == [newer.id, older.id])
-        #expect(vm.profiles(for: .codex).map(\.id) == [codex.id])
-        #expect(vm.activeProfile(for: .claude)?.id == older.id)
-        #expect(vm.activeProfile(for: .codex)?.id == codex.id)
+        #expect(vm.profiles(for: .codex).map(\.id) == [newer.id, codex.id, older.id])
+        #expect(vm.activeProfile(for: .codex)?.id == older.id)
     }
 
     @Test("Profile caches stay in sync after capture, duplicate, save, and delete")
@@ -58,24 +52,28 @@ struct ConfigurationProfilesViewModelTests {
         let temp = try TempDir.make()
         defer { try? FileManager.default.removeItem(at: temp) }
 
-        let claudeConfig = temp.appendingPathComponent("ClaudeConfig", isDirectory: true)
-        try FileManager.default.createDirectory(at: claudeConfig, withIntermediateDirectories: true)
-        let settingsURL = claudeConfig.appendingPathComponent("settings.json", isDirectory: false)
-        try #"{"theme":"dark"}"#.write(to: settingsURL, atomically: true, encoding: .utf8)
+        let codexHome = temp.appendingPathComponent("CodexConfig", isDirectory: true)
+        try FileManager.default.createDirectory(at: codexHome, withIntermediateDirectories: true)
+        let configURL = codexHome.appendingPathComponent("config.toml", isDirectory: false)
+        try #"model = "gpt-5""#.write(to: configURL, atomically: true, encoding: .utf8)
 
         let store = ConfigurationProfileStore(rootDirectory: temp.appendingPathComponent("Profiles", isDirectory: true))
-        let registry = ProviderRegistry(pricing: TestPricing.table, claudePaths: ClaudePaths(configDirectory: claudeConfig))
+        let registry = ProviderRegistry(
+            providers: [
+                CodexProvider(paths: CodexPaths(homeDirectory: codexHome), pricing: TestPricing.table),
+            ]
+        )
         let vm = ConfigurationProfilesViewModel(store: store, registry: registry)
 
         await vm.reload()
-        let capturedResult = await vm.captureCurrent(name: "Captured", provider: .claude, scope: .global)
+        let capturedResult = await vm.captureCurrent(name: "Captured", provider: .codex, scope: .global)
         let captured = try #require(capturedResult)
-        #expect(vm.profiles(for: .claude).map(\.id) == [captured.id])
-        #expect(vm.activeProfile(for: .claude)?.id == captured.id)
+        #expect(vm.profiles(for: .codex).map(\.id) == [captured.id])
+        #expect(vm.activeProfile(for: .codex)?.id == captured.id)
 
         let copyResult = await vm.duplicate(captured)
         let copy = try #require(copyResult)
-        #expect(vm.profiles(for: .claude).contains { $0.id == copy.id })
+        #expect(vm.profiles(for: .codex).contains { $0.id == copy.id })
 
         let snapshotID = try #require(copy.files.first?.id)
         let updatedResult = await vm.saveSnapshotToProfile(
@@ -84,11 +82,11 @@ struct ConfigurationProfilesViewModelTests {
             content: #"{"theme":"light"}"#
         )
         let updated = try #require(updatedResult)
-        #expect(vm.profiles(for: .claude).first { $0.id == copy.id }?.files.first?.content == #"{"theme":"light"}"#)
+        #expect(vm.profiles(for: .codex).first { $0.id == copy.id }?.files.first?.content == #"{"theme":"light"}"#)
 
         await vm.delete(updated)
-        #expect(vm.profiles(for: .claude).contains { $0.id == copy.id } == false)
-        #expect(vm.profiles(for: .claude).contains { $0.id == captured.id })
+        #expect(vm.profiles(for: .codex).contains { $0.id == copy.id } == false)
+        #expect(vm.profiles(for: .codex).contains { $0.id == captured.id })
     }
 
     private func makeViewModel(

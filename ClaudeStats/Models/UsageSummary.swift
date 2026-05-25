@@ -74,12 +74,10 @@ struct UsageSummary: Sendable, Hashable {
 
     /// Walk `sessions` and aggregate per-model token totals, cost, and the
     /// hourly timeline. When a session carries ``SessionStats/billableMessages``
-    /// (a Claude transcript), dedup turns by `(message.id, requestId)` across
-    /// every session in this call — Claude Code's Task tool writes each
-    /// subagent turn into both the parent and child JSONL, and naive summation
-    /// would count it twice. Sessions without billableMessages (e.g. Codex)
-    /// fall through to their pre-aggregated ``SessionStats/models`` and
-    /// ``SessionStats/timeline``.
+    /// (when a provider supplies detailed billable turns), dedup turns by
+    /// `(message.id, requestId)` across every session in this call. Sessions
+    /// without billableMessages fall through to their pre-aggregated
+    /// ``SessionStats/models`` and ``SessionStats/timeline``.
     private static func dedupedAggregate(
         sessions: [Session],
         pricing _: ModelPricing,

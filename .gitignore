@@ -17,6 +17,11 @@ xcuserdata/
 # ClaudeStats.xcodeproj is generated from project.yml via `xcodegen generate`.
 ClaudeStats.xcodeproj/
 
+# === Local tool/cache artifacts === #
+.tools/
+__pycache__/
+**/__pycache__/
+
 # === Swift Package Manager === #
 .build/
 .swiftpm/

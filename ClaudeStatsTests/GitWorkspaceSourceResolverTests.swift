@@ -4,20 +4,17 @@ import Testing
 
 @Suite("Git workspace source resolver")
 struct GitWorkspaceSourceResolverTests {
-    @Test("Session sources include enabled providers only")
-    func sessionSourcesRespectEnabledSources() {
+    @Test("Codex session source includes non-empty Codex working directories")
+    func codexSessionSourceIncludesNonEmptyCwds() {
         let resolver = GitWorkspaceSourceResolver(applicationSupportDirectory: URL(fileURLWithPath: "/tmp/unused"))
         let sessions = [
-            session("claude", provider: .claude, cwd: "/work/claude"),
-            session("codex", provider: .codex, cwd: "/work/codex"),
-            session("gemini", provider: .gemini, cwd: "/work/gemini"),
-            session("empty", provider: .claude, cwd: ""),
+            session("codex-a", provider: .codex, cwd: "/work/a"),
+            session("codex-b", provider: .codex, cwd: "/work/b"),
+            session("empty", provider: .codex, cwd: ""),
             session("nil", provider: .codex, cwd: nil),
         ]
 
-        #expect(resolver.cwds(sessions: sessions, enabledSources: [.claude]) == ["/work/claude"])
-        #expect(resolver.cwds(sessions: sessions, enabledSources: [.codex]) == ["/work/codex"])
-        #expect(resolver.cwds(sessions: sessions, enabledSources: [.claude, .codex]) == ["/work/claude", "/work/codex"])
+        #expect(resolver.cwds(sessions: sessions, enabledSources: [.codex]) == ["/work/a", "/work/b"])
     }
 
     @Test("Cursor-style workspace folder JSON resolves local folder URI")
@@ -122,8 +119,8 @@ struct GitWorkspaceSourceResolverTests {
 
         let resolver = GitWorkspaceSourceResolver(applicationSupportDirectory: appSupport)
         let cwds = resolver.cwds(
-            sessions: [session("claude", provider: .claude, cwd: subdir.path)],
-            enabledSources: [.claude, .cursor]
+            sessions: [session("claude", provider: .codex, cwd: subdir.path)],
+            enabledSources: [.codex, .cursor]
         )
         let repos = GitAnalyzer().repos(forCwds: cwds)
 

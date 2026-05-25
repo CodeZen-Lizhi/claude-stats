@@ -41,61 +41,61 @@ extension Session {
 
         return [
             Session(
-                id: "-Users-dev-projects-aurora::a1", externalID: "a1", provider: .claude,
+                id: "codex::a1", externalID: "a1", provider: .codex,
                 projectDirectoryName: "-Users-dev-projects-aurora",
-                filePath: "/Users/dev/.claude/projects/-Users-dev-projects-aurora/a1.jsonl",
+                filePath: "/Users/dev/.codex/sessions/2026/01/01/rollout-2026-01-01T09-00-00-a1.jsonl",
                 cwd: "/Users/dev/projects/aurora", lastModified: daysAgo(0), fileSize: 412_000,
                 stats: SessionStats(
                     title: "Wire up the websocket reconnect logic",
                     messageCount: 84, firstActivity: daysAgo(1), lastActivity: daysAgo(0),
                     models: [
-                        model("claude-opus-4-7", 41, usage(120_000, 38_000, 1_400_000, 90_000)),
-                        model("claude-haiku-4-5", 12, usage(8_000, 2_000, 50_000)),
+                        model("gpt-5.4", 41, usage(120_000, 38_000, 1_400_000, 90_000)),
+                        model("gpt-5-mini", 12, usage(8_000, 2_000, 50_000)),
                     ],
                     timeline: [
-                        bucket(1, 14, "claude-opus-4-7", usage(20_000, 6_000, 240_000, 15_000)),
-                        bucket(1, 15, "claude-opus-4-7", usage(28_000, 8_000, 300_000, 18_000)),
-                        bucket(1, 16, "claude-opus-4-7", usage(12_000, 4_000, 160_000, 12_000)),
-                        bucket(1, 15, "claude-haiku-4-5", usage(3_000, 800, 18_000)),
-                        bucket(0, 9, "claude-opus-4-7", usage(18_000, 6_000, 200_000, 12_000)),
-                        bucket(0, 10, "claude-opus-4-7", usage(30_000, 10_000, 320_000, 20_000)),
-                        bucket(0, 11, "claude-opus-4-7", usage(20_000, 6_000, 230_000, 13_000)),
-                        bucket(0, 9, "claude-haiku-4-5", usage(2_000, 600, 14_000)),
-                        bucket(0, 11, "claude-haiku-4-5", usage(3_000, 600, 18_000)),
+                        bucket(1, 14, "gpt-5.4", usage(20_000, 6_000, 240_000, 15_000)),
+                        bucket(1, 15, "gpt-5.4", usage(28_000, 8_000, 300_000, 18_000)),
+                        bucket(1, 16, "gpt-5.4", usage(12_000, 4_000, 160_000, 12_000)),
+                        bucket(1, 15, "gpt-5-mini", usage(3_000, 800, 18_000)),
+                        bucket(0, 9, "gpt-5.4", usage(18_000, 6_000, 200_000, 12_000)),
+                        bucket(0, 10, "gpt-5.4", usage(30_000, 10_000, 320_000, 20_000)),
+                        bucket(0, 11, "gpt-5.4", usage(20_000, 6_000, 230_000, 13_000)),
+                        bucket(0, 9, "gpt-5-mini", usage(2_000, 600, 14_000)),
+                        bucket(0, 11, "gpt-5-mini", usage(3_000, 600, 18_000)),
                     ]
                 )
             ),
             Session(
-                id: "-Users-dev-projects-ledger::b2", externalID: "b2", provider: .claude,
+                id: "codex::b2", externalID: "b2", provider: .codex,
                 projectDirectoryName: "-Users-dev-projects-ledger",
-                filePath: "/Users/dev/.claude/projects/-Users-dev-projects-ledger/b2.jsonl",
+                filePath: "/Users/dev/.codex/sessions/2026/01/02/rollout-2026-01-02T13-00-00-b2.jsonl",
                 cwd: "/Users/dev/projects/ledger", lastModified: daysAgo(2), fileSize: 96_000,
                 stats: SessionStats(
                     title: "Fix the off-by-one in pagination",
                     messageCount: 22, firstActivity: daysAgo(2), lastActivity: daysAgo(2),
-                    models: [model("claude-sonnet-4-6", 11, usage(34_000, 9_500, 210_000, 12_000))],
+                    models: [model("gpt-5.3", 11, usage(34_000, 9_500, 210_000, 12_000))],
                     timeline: [
-                        bucket(2, 13, "claude-sonnet-4-6", usage(16_000, 4_500, 100_000, 6_000)),
-                        bucket(2, 14, "claude-sonnet-4-6", usage(18_000, 5_000, 110_000, 6_000)),
+                        bucket(2, 13, "gpt-5.3", usage(16_000, 4_500, 100_000, 6_000)),
+                        bucket(2, 14, "gpt-5.3", usage(18_000, 5_000, 110_000, 6_000)),
                     ]
                 )
             ),
             Session(
-                id: "-Users-dev-projects-aurora::c3", externalID: "c3", provider: .claude,
+                id: "codex::c3", externalID: "c3", provider: .codex,
                 projectDirectoryName: "-Users-dev-projects-aurora",
-                filePath: "/Users/dev/.claude/projects/-Users-dev-projects-aurora/c3.jsonl",
+                filePath: "/Users/dev/.codex/sessions/2026/01/03/rollout-2026-01-03T10-00-00-c3.jsonl",
                 cwd: "/Users/dev/projects/aurora", lastModified: daysAgo(9), fileSize: 250_000,
                 stats: SessionStats(
                     title: "Migrate the settings screen to the new design",
                     messageCount: 53, firstActivity: daysAgo(10), lastActivity: daysAgo(9),
                     models: [
-                        model("claude-opus-4-7", 26, usage(70_000, 24_000, 880_000, 50_000)),
-                        model("claude-sonnet-4-6", 9, usage(12_000, 3_000, 60_000, 4_000)),
+                        model("gpt-5.4", 26, usage(70_000, 24_000, 880_000, 50_000)),
+                        model("gpt-5.3", 9, usage(12_000, 3_000, 60_000, 4_000)),
                     ],
                     timeline: [
-                        bucket(10, 17, "claude-opus-4-7", usage(30_000, 10_000, 380_000, 20_000)),
-                        bucket(10, 18, "claude-sonnet-4-6", usage(12_000, 3_000, 60_000, 4_000)),
-                        bucket(9, 10, "claude-opus-4-7", usage(40_000, 14_000, 500_000, 30_000)),
+                        bucket(10, 17, "gpt-5.4", usage(30_000, 10_000, 380_000, 20_000)),
+                        bucket(10, 18, "gpt-5.3", usage(12_000, 3_000, 60_000, 4_000)),
+                        bucket(9, 10, "gpt-5.4", usage(40_000, 14_000, 500_000, 30_000)),
                     ]
                 )
             ),

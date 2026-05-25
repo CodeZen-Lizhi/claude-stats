@@ -523,11 +523,8 @@ struct CLIEnvironmentChecker: CLIEnvironmentChecking {
         }
     }
 
-    private static func keywords(for cli: APIProviderCLI) -> [String] {
-        switch cli {
-        case .claude: ["ANTHROPIC"]
-        case .codex: ["OPENAI"]
-        }
+    private static func keywords(for _: APIProviderCLI) -> [String] {
+        ["OPENAI"]
     }
 
     private static func matches(_ variableName: String, keywords: [String]) -> Bool {

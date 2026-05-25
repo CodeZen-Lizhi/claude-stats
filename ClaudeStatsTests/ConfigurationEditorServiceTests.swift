@@ -14,7 +14,7 @@ struct ConfigurationEditorServiceTests {
         try original.write(to: target, atomically: true, encoding: .utf8)
 
         let snapshot = makeSnapshot(url: target, content: #"{"mode":"profile"}"#)
-        let profile = ConfigProfile(provider: .claude, scope: .global, name: "Test", files: [snapshot])
+        let profile = ConfigProfile(provider: .codex, scope: .global, name: "Test", files: [snapshot])
         let service = ConfigurationEditorService()
 
         let updated = try service.profileByUpdatingSnapshot(
@@ -39,7 +39,7 @@ struct ConfigurationEditorServiceTests {
         try original.write(to: target, atomically: true, encoding: .utf8)
 
         let snapshot = makeSnapshot(url: target, content: #"{"mode":"profile"}"#)
-        let profile = ConfigProfile(provider: .claude, scope: .global, name: "Test", files: [snapshot])
+        let profile = ConfigProfile(provider: .codex, scope: .global, name: "Test", files: [snapshot])
         let store = ConfigurationProfileStore(rootDirectory: temp.appendingPathComponent("Profiles", isDirectory: true))
         let service = ConfigurationEditorService(profileStore: store)
 
@@ -70,7 +70,7 @@ struct ConfigurationEditorServiceTests {
         try original.write(to: target, atomically: true, encoding: .utf8)
 
         let snapshot = makeSnapshot(url: target, content: #"{"mode":"profile"}"#)
-        let profile = ConfigProfile(provider: .claude, scope: .global, name: "Test", files: [snapshot])
+        let profile = ConfigProfile(provider: .codex, scope: .global, name: "Test", files: [snapshot])
         let store = ConfigurationProfileStore(rootDirectory: temp.appendingPathComponent("Profiles", isDirectory: true))
         let service = ConfigurationEditorService(profileStore: store)
 

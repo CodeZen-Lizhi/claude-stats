@@ -1,30 +1,20 @@
 import Foundation
 
 enum APIProviderCLI: String, Codable, CaseIterable, Identifiable, Sendable, Hashable {
-    case claude
     case codex
 
     var id: String { rawValue }
 
     var providerKind: ProviderKind {
-        switch self {
-        case .claude: .claude
-        case .codex: .codex
-        }
+        .codex
     }
 
     var displayName: String {
-        switch self {
-        case .claude: "Claude Code"
-        case .codex: "Codex"
-        }
+        "Codex"
     }
 
     var shortName: String {
-        switch self {
-        case .claude: "Claude"
-        case .codex: "Codex"
-        }
+        "Codex"
     }
 
     var assetName: String { providerKind.monochromeAssetName }
@@ -242,7 +232,9 @@ struct UniversalAPIProvider: Codable, Identifiable, Sendable, Hashable {
                 partial[cli] = entry.value
             }
         }
-        enabledCLIs = try container.decodeIfPresent(Set<APIProviderCLI>.self, forKey: .enabledCLIs) ?? Set(APIProviderCLI.allCases)
+        let rawEnabledCLIs = try container.decodeIfPresent(Set<String>.self, forKey: .enabledCLIs) ?? Set(APIProviderCLI.allCases.map(\.rawValue))
+        let decodedEnabledCLIs = rawEnabledCLIs.compactMap(APIProviderCLI.init(rawValue:))
+        enabledCLIs = decodedEnabledCLIs.isEmpty ? Set(APIProviderCLI.allCases) : Set(decodedEnabledCLIs)
         iconName = try container.decodeIfPresent(String.self, forKey: .iconName)
         iconColorHex = try container.decodeIfPresent(String.self, forKey: .iconColorHex)
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? .now
@@ -292,7 +284,8 @@ struct ConfigurationProviderLibrary: Codable, Sendable, Equatable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        cliProviders = try container.decodeIfPresent([CLIAPIProvider].self, forKey: .cliProviders) ?? []
+        let decodedProviders = try container.decodeIfPresent([DecodedCLIAPIProvider].self, forKey: .cliProviders) ?? []
+        cliProviders = decodedProviders.compactMap(\.provider)
         universalProviders = try container.decodeIfPresent([UniversalAPIProvider].self, forKey: .universalProviders) ?? []
         activeProviderIDs = Self.decodeCLIMap(
             try container.decodeIfPresent([String: String].self, forKey: .activeProviderIDs) ?? [:]
@@ -320,5 +313,50 @@ struct ConfigurationProviderLibrary: Codable, Sendable, Equatable {
 
     private static func encodeCLIMap(_ map: [APIProviderCLI: String]) -> [String: String] {
         Dictionary(uniqueKeysWithValues: map.map { ($0.key.rawValue, $0.value) })
+    }
+}
+
+private struct DecodedCLIAPIProvider: Decodable {
+    let provider: CLIAPIProvider?
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case cli
+        case origin
+        case name
+        case category
+        case baseURL
+        case apiKey
+        case model
+        case rawConfig
+        case iconName
+        case iconColorHex
+        case createdAt
+        case updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let rawCLI = try container.decode(String.self, forKey: .cli)
+        guard let cli = APIProviderCLI(rawValue: rawCLI) else {
+            provider = nil
+            return
+        }
+
+        provider = CLIAPIProvider(
+            id: try container.decode(String.self, forKey: .id),
+            cli: cli,
+            origin: try container.decodeIfPresent(APIProviderOrigin.self, forKey: .origin) ?? .appSpecific,
+            name: try container.decode(String.self, forKey: .name),
+            category: try container.decodeIfPresent(APIProviderCategory.self, forKey: .category) ?? .custom,
+            baseURL: try container.decodeIfPresent(String.self, forKey: .baseURL) ?? "",
+            apiKey: try container.decodeIfPresent(APIProviderSecret.self, forKey: .apiKey) ?? .none,
+            model: try container.decodeIfPresent(String.self, forKey: .model) ?? "",
+            rawConfig: try container.decodeIfPresent(String.self, forKey: .rawConfig) ?? "",
+            iconName: try container.decodeIfPresent(String.self, forKey: .iconName),
+            iconColorHex: try container.decodeIfPresent(String.self, forKey: .iconColorHex),
+            createdAt: try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? .now,
+            updatedAt: try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? .now
+        )
     }
 }

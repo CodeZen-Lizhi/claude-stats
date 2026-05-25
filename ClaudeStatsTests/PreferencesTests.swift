@@ -372,23 +372,23 @@ struct PreferencesTests {
         #expect(prefs.gitDiffBlockGranularity == .fine)
     }
 
-    @Test("Git workspace sources default to Claude and Codex")
+    @Test("Git workspace sources default to Codex")
     func gitWorkspaceSourcesDefault() {
         let defaults = makeDefaults()
         let prefs = Preferences(defaults: defaults)
 
-        #expect(prefs.gitWorkspaceSourceIDs == [.claude, .codex])
+        #expect(prefs.gitWorkspaceSourceIDs == [.codex])
     }
 
     @Test("Git workspace sources persist")
     func gitWorkspaceSourcesPersist() {
         let defaults = makeDefaults()
         let prefs = Preferences(defaults: defaults)
-        prefs.gitWorkspaceSourceIDs = [.claude, .cursor, .traeCN]
+        prefs.gitWorkspaceSourceIDs = [.codex, .cursor, .traeCN]
 
         let reloaded = Preferences(defaults: defaults)
-        #expect(reloaded.gitWorkspaceSourceIDs == [.claude, .cursor, .traeCN])
-        #expect(defaults.string(forKey: "gitWorkspaceSourceIDs") == "claude,cursor,traeCN")
+        #expect(reloaded.gitWorkspaceSourceIDs == [.codex, .cursor, .traeCN])
+        #expect(defaults.string(forKey: "gitWorkspaceSourceIDs") == "codex,cursor,traeCN")
     }
 
     @Test("Empty git workspace sources fall back to defaults")
@@ -397,7 +397,7 @@ struct PreferencesTests {
         let prefs = Preferences(defaults: defaults)
         prefs.gitWorkspaceSourceIDs = []
 
-        #expect(prefs.gitWorkspaceSourceIDs == [.claude, .codex])
+        #expect(prefs.gitWorkspaceSourceIDs == [.codex])
     }
 
     @Test("Invalid stored git workspace sources fall back to defaults")
@@ -406,7 +406,7 @@ struct PreferencesTests {
         defaults.set("claude,unknown", forKey: "gitWorkspaceSourceIDs")
 
         let prefs = Preferences(defaults: defaults)
-        #expect(prefs.gitWorkspaceSourceIDs == [.claude, .codex])
+        #expect(prefs.gitWorkspaceSourceIDs == [.codex])
     }
 
     @Test("Cost estimation mode defaults to API estimate")
@@ -429,90 +429,6 @@ struct PreferencesTests {
         defaults.set("invoice", forKey: "costEstimationMode")
         let invalid = Preferences(defaults: defaults)
         #expect(invalid.costEstimationMode == .standardAPI)
-    }
-
-    @Test("Claude Status preferences default to visible claude.ai and Claude Code without alerts")
-    func claudeStatusDefaults() {
-        let defaults = makeDefaults()
-        let prefs = Preferences(defaults: defaults)
-
-        #expect(prefs.claudeStatusVisibleComponentIDs == ClaudeStatusComponentCatalog.defaultVisibleComponentIDs)
-        #expect(prefs.claudeStatusNotificationsEnabled == false)
-        #expect(prefs.claudeStatusLastNotificationFingerprint == "")
-    }
-
-    @Test("Claude Status preferences persist and empty visible components fall back")
-    func claudeStatusPersists() {
-        let defaults = makeDefaults()
-        let prefs = Preferences(defaults: defaults)
-        prefs.claudeStatusVisibleComponentIDs = [ClaudeStatusComponentCatalog.claudeAPIID]
-        prefs.claudeStatusNotificationsEnabled = true
-        prefs.claudeStatusLastNotificationFingerprint = "component:degraded"
-
-        let reloaded = Preferences(defaults: defaults)
-        #expect(reloaded.claudeStatusVisibleComponentIDs == [ClaudeStatusComponentCatalog.claudeAPIID])
-        #expect(reloaded.claudeStatusNotificationsEnabled == true)
-        #expect(reloaded.claudeStatusLastNotificationFingerprint == "component:degraded")
-
-        reloaded.claudeStatusVisibleComponentIDs = []
-        #expect(reloaded.claudeStatusVisibleComponentIDs == ClaudeStatusComponentCatalog.defaultVisibleComponentIDs)
-    }
-
-    @Test("Claude Desktop usage capture preferences default to visible-only manual-safe mode")
-    func claudeDesktopUsageCaptureDefaults() {
-        let defaults = makeDefaults()
-        let prefs = Preferences(defaults: defaults)
-
-        #expect(prefs.claudeDesktopUsageAutoMode == .visibleOnly)
-        #expect(prefs.claudeDesktopUsageTimedCaptureEnabled == false)
-        #expect(prefs.claudeDesktopUsageTimedIntervalMinutes == 30)
-    }
-
-    @Test("Claude Desktop usage capture preferences persist and interval clamps")
-    func claudeDesktopUsageCapturePersists() {
-        let defaults = makeDefaults()
-        let prefs = Preferences(defaults: defaults)
-        prefs.claudeDesktopUsageAutoMode = .off
-        prefs.claudeDesktopUsageTimedCaptureEnabled = true
-        prefs.claudeDesktopUsageTimedIntervalMinutes = 1
-
-        let reloaded = Preferences(defaults: defaults)
-        #expect(reloaded.claudeDesktopUsageAutoMode == .off)
-        #expect(reloaded.claudeDesktopUsageTimedCaptureEnabled == true)
-        #expect(reloaded.claudeDesktopUsageTimedIntervalMinutes == 5)
-
-        defaults.set("always", forKey: "claudeDesktopUsageAutoMode")
-        defaults.set(999, forKey: "claudeDesktopUsageTimedIntervalMinutes")
-        let invalid = Preferences(defaults: defaults)
-        #expect(invalid.claudeDesktopUsageAutoMode == .visibleOnly)
-        #expect(invalid.claudeDesktopUsageTimedIntervalMinutes == 240)
-    }
-
-    @Test("Claude usage-limit visible windows default to core limits")
-    func claudeUsageLimitVisibleWindowsDefaultToCoreLimits() {
-        let defaults = makeDefaults()
-        let prefs = Preferences(defaults: defaults)
-
-        #expect(prefs.claudeUsageLimitVisibleWindowIDs == UsageLimitWindowCatalog.claudeDefaultVisibleWindowIDs)
-        #expect(!prefs.claudeUsageLimitVisibleWindowIDs.contains("weekly_claude_design"))
-        #expect(!prefs.claudeUsageLimitVisibleWindowIDs.contains("sonnet_only"))
-    }
-
-    @Test("Claude usage-limit visible windows persist optional rows and keep core limits")
-    func claudeUsageLimitVisibleWindowsPersistAndKeepCoreLimits() {
-        let defaults = makeDefaults()
-        let prefs = Preferences(defaults: defaults)
-        prefs.claudeUsageLimitVisibleWindowIDs = ["weekly_claude_design", "unknown"]
-
-        let reloaded = Preferences(defaults: defaults)
-        #expect(reloaded.claudeUsageLimitVisibleWindowIDs == [
-            "five_hour",
-            "seven_day",
-            "weekly_claude_design",
-        ])
-
-        reloaded.claudeUsageLimitVisibleWindowIDs = []
-        #expect(reloaded.claudeUsageLimitVisibleWindowIDs == UsageLimitWindowCatalog.claudeDefaultVisibleWindowIDs)
     }
 
     @Test("OpenAI Status preferences default to visible ChatGPT and Codex without alerts")
@@ -574,7 +490,7 @@ struct PreferencesTests {
     }
 
     private func makeDefaults() -> UserDefaults {
-        let suiteName = "com.claudestats.tests.\(UUID().uuidString)"
+        let suiteName = "com.codexstats.tests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName) ?? .standard
         defaults.removePersistentDomain(forName: suiteName)
         return defaults
