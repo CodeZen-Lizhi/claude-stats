@@ -50,7 +50,7 @@ struct SemanticVisualizationShowcase: View {
             String(analysis.sessionAnalyses.count),
             String(sessions.count),
             String(Int(latestSessionDate.rounded())),
-            analysis.dictionarySignature,
+            analysis.analysisSignature,
         ].joined(separator: "|")
     }
 

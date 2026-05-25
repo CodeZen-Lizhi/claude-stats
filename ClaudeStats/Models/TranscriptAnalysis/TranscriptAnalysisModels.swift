@@ -49,7 +49,6 @@ enum TranscriptTermKind: String, CaseIterable, Codable, Identifiable, Sendable, 
 }
 
 enum TranscriptTermSource: String, Codable, Sendable, Hashable {
-    case dictionary
     case naturalLanguage
     case jieba
     case code
@@ -78,7 +77,6 @@ struct TranscriptRoleCounts: Codable, Hashable, Sendable {
 }
 
 struct TranscriptSourceCounts: Codable, Hashable, Sendable {
-    var dictionary = 0
     var naturalLanguage = 0
     var jieba = 0
     var code = 0
@@ -89,7 +87,6 @@ struct TranscriptSourceCounts: Codable, Hashable, Sendable {
 
     mutating func add(_ source: TranscriptTermSource, count: Int = 1) {
         switch source {
-        case .dictionary: dictionary += count
         case .naturalLanguage: naturalLanguage += count
         case .jieba: jieba += count
         case .code: code += count
@@ -100,7 +97,7 @@ struct TranscriptSourceCounts: Codable, Hashable, Sendable {
         }
     }
 
-    var total: Int { dictionary + naturalLanguage + jieba + code + path + command + error + project }
+    var total: Int { naturalLanguage + jieba + code + path + command + error + project }
 }
 
 struct TranscriptTermExample: Codable, Hashable, Identifiable, Sendable {
@@ -190,7 +187,7 @@ enum EmbeddingMode: String, Codable, Sendable, Hashable {
 
 struct TranscriptAnalysisEngineInfo: Codable, Hashable, Sendable {
     let tokenizerID: String
-    let dictionaryVersion: String
+    let analysisVersion: String
     let displayName: String
     let embeddingStatus: EmbeddingModelStatus
 }
@@ -267,7 +264,7 @@ struct TranscriptAnalysisSnapshot: Codable, Hashable, Sendable {
     let terms: [TranscriptTermStats]
     let sessionAnalyses: [TranscriptSessionAnalysis]
     let engine: TranscriptAnalysisEngineInfo
-    let dictionarySignature: String
+    let analysisSignature: String
     let runSummary: TranscriptAnalysisRunSummary
 
     func sessionAnalysis(for sessionID: String) -> TranscriptSessionAnalysis? {

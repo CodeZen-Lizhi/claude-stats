@@ -2,33 +2,29 @@ import Foundation
 import NaturalLanguage
 
 struct TranscriptTermExtractor: Sendable {
+    static let analysisVersion = "generic-transcript-terms-v1"
+
     private let tokenizer: JiebaTokenizer
-    private let defaultDictionary: TechnicalTermDictionary
     private let regexCatalog: TranscriptRegexCatalog
 
-    init(
-        tokenizer: JiebaTokenizer = JiebaTokenizer(),
-        dictionary: TechnicalTermDictionary = TechnicalTermDictionary()
-    ) {
+    init(tokenizer: JiebaTokenizer = JiebaTokenizer()) {
         self.tokenizer = tokenizer
-        self.defaultDictionary = dictionary
         self.regexCatalog = .shared
     }
 
     var engineInfo: TranscriptAnalysisEngineInfo {
         get async {
-            await engineInfo(dictionaryVersion: defaultDictionary.dictionaryVersion)
+            await engineInfo()
         }
     }
 
     func engineInfo(
-        dictionaryVersion: String,
         embeddingStatus: EmbeddingModelStatus = UnconfiguredEmbeddingEngine().status
     ) async -> TranscriptAnalysisEngineInfo {
         let jiebaAvailable = await tokenizer.isAvailable
         return TranscriptAnalysisEngineInfo(
             tokenizerID: jiebaAvailable ? "cppjieba-natural-language-v1" : "fallback-natural-language-v1",
-            dictionaryVersion: dictionaryVersion,
+            analysisVersion: Self.analysisVersion,
             displayName: jiebaAvailable ? "Jieba + NaturalLanguage" : "NaturalLanguage fallback",
             embeddingStatus: embeddingStatus
         )
@@ -36,12 +32,10 @@ struct TranscriptTermExtractor: Sendable {
 
     func extract(
         session: Session,
-        messages: [SessionTranscriptMessage],
-        dictionary: TechnicalTermDictionary? = nil
+        messages: [SessionTranscriptMessage]
     ) async -> TranscriptSessionAnalysis {
-        let dictionary = dictionary ?? defaultDictionary
-        let projectTerms = projectTerms(for: session, dictionary: dictionary)
-        await tokenizer.insertUserWords(dictionary.jiebaUserWords + projectTerms.filter(containsCJK))
+        let projectTerms = projectTerms(for: session)
+        await tokenizer.insertUserWords(projectTerms.filter(containsCJK))
 
         var accumulator = SessionTermAccumulator(
             sessionID: session.id,
@@ -51,16 +45,15 @@ struct TranscriptTermExtractor: Sendable {
 
         for message in messages {
             let excerpt = excerpt(from: message.text)
-            extractDictionaryTerms(from: message, session: session, dictionary: dictionary, excerpt: excerpt, into: &accumulator)
-            extractStructuredTerms(from: message, session: session, dictionary: dictionary, excerpt: excerpt, into: &accumulator)
-            await extractLanguageTerms(from: message, session: session, dictionary: dictionary, excerpt: excerpt, into: &accumulator)
+            extractStructuredTerms(from: message, session: session, excerpt: excerpt, into: &accumulator)
+            await extractLanguageTerms(from: message, session: session, excerpt: excerpt, into: &accumulator)
         }
 
         for term in projectTerms.prefix(12) {
             accumulator.add(
                 canonical: term,
                 displayName: term,
-                kind: inferIdentifierKind(term, dictionary: dictionary),
+                kind: inferIdentifierKind(term),
                 role: .system,
                 source: .project,
                 weight: 1.2,
@@ -72,31 +65,9 @@ struct TranscriptTermExtractor: Sendable {
         return accumulator.build()
     }
 
-    private func extractDictionaryTerms(
-        from message: SessionTranscriptMessage,
-        session: Session,
-        dictionary: TechnicalTermDictionary,
-        excerpt: String,
-        into accumulator: inout SessionTermAccumulator
-    ) {
-        for entry in dictionary.matches(in: message.text) {
-            accumulator.add(
-                canonical: entry.canonical,
-                displayName: entry.canonical,
-                kind: entry.kind,
-                role: message.role,
-                source: .dictionary,
-                weight: entry.weight,
-                excerpt: excerpt,
-                timestamp: message.timestamp
-            )
-        }
-    }
-
     private func extractStructuredTerms(
         from message: SessionTranscriptMessage,
         session: Session,
-        dictionary: TechnicalTermDictionary,
         excerpt: String,
         into accumulator: inout SessionTermAccumulator
     ) {
@@ -104,11 +75,11 @@ struct TranscriptTermExtractor: Sendable {
 
         addMatches(regexCatalog.codeSpan, in: text, group: 1) { raw in
             let cleaned = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard shouldKeepStructuredTerm(cleaned, dictionary: dictionary) else { return }
+            guard shouldKeepStructuredTerm(cleaned) else { return }
             accumulator.add(
-                canonical: canonicalIdentifier(cleaned, dictionary: dictionary),
+                canonical: canonicalIdentifier(cleaned),
                 displayName: cleaned,
-                kind: inferStructuredKind(cleaned, dictionary: dictionary),
+                kind: inferStructuredKind(cleaned),
                 role: message.role,
                 source: .code,
                 weight: 2.2,
@@ -163,11 +134,11 @@ struct TranscriptTermExtractor: Sendable {
         }
 
         addMatches(regexCatalog.identifier, in: text) { raw in
-            guard shouldKeepIdentifier(raw, dictionary: dictionary) else { return }
+            guard shouldKeepIdentifier(raw) else { return }
             accumulator.add(
-                canonical: canonicalIdentifier(raw, dictionary: dictionary),
+                canonical: canonicalIdentifier(raw),
                 displayName: raw,
-                kind: inferIdentifierKind(raw, dictionary: dictionary),
+                kind: inferIdentifierKind(raw),
                 role: message.role,
                 source: .code,
                 weight: 1.7,
@@ -193,7 +164,6 @@ struct TranscriptTermExtractor: Sendable {
     private func extractLanguageTerms(
         from message: SessionTranscriptMessage,
         session: Session,
-        dictionary: TechnicalTermDictionary,
         excerpt: String,
         into accumulator: inout SessionTermAccumulator
     ) async {
@@ -203,35 +173,35 @@ struct TranscriptTermExtractor: Sendable {
             let search = await tokenizer.cut(cjkSpan, forSearch: true)
             for token in Array(Set(precise + search)) {
                 let cleaned = cleanedLanguageToken(token)
-                guard shouldKeepLanguageToken(cleaned, dictionary: dictionary) else { continue }
+                guard shouldKeepLanguageToken(cleaned) else { continue }
                 accumulator.add(
-                    canonical: TechnicalTermDictionary.normalized(cleaned),
+                    canonical: TermNormalizer.normalizedKey(cleaned),
                     displayName: cleaned,
-                    kind: dictionary.canonicalize(cleaned)?.kind ?? .general,
+                    kind: .general,
                     role: message.role,
                     source: .jieba,
-                    weight: dictionary.canonicalize(cleaned)?.weight ?? 1.0,
+                    weight: 1.0,
                     excerpt: excerpt,
                     timestamp: message.timestamp
                 )
             }
         }
 
-        for token in englishTerms(in: naturalLanguageText(from: text), dictionary: dictionary) {
+        for token in englishTerms(in: naturalLanguageText(from: text)) {
             accumulator.add(
-                canonical: TechnicalTermDictionary.normalized(token),
+                canonical: TermNormalizer.normalizedKey(token),
                 displayName: token,
-                kind: dictionary.canonicalize(token)?.kind ?? .general,
+                kind: .general,
                 role: message.role,
                 source: .naturalLanguage,
-                weight: dictionary.canonicalize(token)?.weight ?? 1.0,
+                weight: 1.0,
                 excerpt: excerpt,
                 timestamp: message.timestamp
             )
         }
     }
 
-    private func englishTerms(in text: String, dictionary: TechnicalTermDictionary) -> [String] {
+    private func englishTerms(in text: String) -> [String] {
         guard shouldRunNaturalLanguage(on: text) else { return [] }
         let tagger = NLTagger(tagSchemes: [.lemma])
         tagger.string = text
@@ -242,25 +212,16 @@ struct TranscriptTermExtractor: Sendable {
             let raw = String(text[tokenRange])
             let lemma = tag?.rawValue ?? raw
             let cleaned = cleanedLanguageToken(lemma)
-            if shouldKeepLanguageToken(cleaned, dictionary: dictionary) {
+            if shouldKeepLanguageToken(cleaned) {
                 out.append(cleaned)
             }
             return true
         }
 
-        let words = out
-        if words.count >= 2 {
-            for index in 0..<(words.count - 1) {
-                let phrase = "\(words[index]) \(words[index + 1])"
-                if dictionary.canonicalize(phrase) != nil {
-                    out.append(phrase)
-                }
-            }
-        }
         return out
     }
 
-    private func projectTerms(for session: Session, dictionary: TechnicalTermDictionary) -> [String] {
+    private func projectTerms(for session: Session) -> [String] {
         var terms: Set<String> = []
         if let cwd = session.cwd {
             let url = URL(fileURLWithPath: cwd)
@@ -271,7 +232,7 @@ struct TranscriptTermExtractor: Sendable {
         }
         terms.insert(session.projectDisplayName)
         terms.insert(session.projectDirectoryName)
-        return Array(terms).filter { shouldKeepIdentifier($0, dictionary: dictionary) || containsCJK($0) }
+        return Array(terms).filter { shouldKeepIdentifier($0) || containsCJK($0) }
     }
 
     private func addMatches(_ regex: NSRegularExpression, in text: String, group: Int = 0, handle: (String) -> Void) {
@@ -304,37 +265,35 @@ struct TranscriptTermExtractor: Sendable {
         token.trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters).union(.symbols))
     }
 
-    private func shouldKeepLanguageToken(_ token: String, dictionary: TechnicalTermDictionary) -> Bool {
+    private func shouldKeepLanguageToken(_ token: String) -> Bool {
         guard token.count >= 2, token.count <= 48 else { return false }
-        if dictionary.isStopword(token) { return false }
+        if isStopword(token) { return false }
         if token.allSatisfy(\.isNumber) { return false }
         return true
     }
 
-    private func shouldKeepStructuredTerm(_ term: String, dictionary: TechnicalTermDictionary) -> Bool {
-        term.count >= 2 && term.count <= 140 && !dictionary.isStopword(term)
+    private func shouldKeepStructuredTerm(_ term: String) -> Bool {
+        term.count >= 2 && term.count <= 140 && !isStopword(term)
     }
 
-    private func shouldKeepIdentifier(_ value: String, dictionary: TechnicalTermDictionary) -> Bool {
+    private func shouldKeepIdentifier(_ value: String) -> Bool {
         let cleaned = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard cleaned.count >= 3, cleaned.count <= 80 else { return false }
-        if dictionary.isStopword(cleaned) { return false }
+        if isStopword(cleaned) { return false }
         return cleaned.contains { $0.isLetter }
     }
 
-    private func canonicalIdentifier(_ value: String, dictionary: TechnicalTermDictionary) -> String {
-        if let entry = dictionary.canonicalize(value) { return entry.canonical }
+    private func canonicalIdentifier(_ value: String) -> String {
         return value.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func inferStructuredKind(_ value: String, dictionary: TechnicalTermDictionary) -> TranscriptTermKind {
+    private func inferStructuredKind(_ value: String) -> TranscriptTermKind {
         if value.contains("/") || value.contains(".") { return .filePath }
         if value.contains(" ") { return .command }
-        return inferIdentifierKind(value, dictionary: dictionary)
+        return inferIdentifierKind(value)
     }
 
-    private func inferIdentifierKind(_ value: String, dictionary: TechnicalTermDictionary) -> TranscriptTermKind {
-        if let entry = dictionary.canonicalize(value) { return entry.kind }
+    private func inferIdentifierKind(_ value: String) -> TranscriptTermKind {
         if value.hasSuffix("View") || value.hasSuffix("Store") || value.hasSuffix("Service")
             || value.hasSuffix("Model") || value.hasSuffix("Controller") || value.hasSuffix("Parser") {
             return .typeName
@@ -342,6 +301,10 @@ struct TranscriptTermExtractor: Sendable {
         if value.hasSuffix("()") { return .function }
         if value.contains("-") || value.contains("_") { return .workflow }
         return .api
+    }
+
+    private func isStopword(_ token: String) -> Bool {
+        Self.stopwords.contains(TermNormalizer.normalizedKey(token))
     }
 
     private func naturalLanguageText(from text: String) -> String {
@@ -403,6 +366,14 @@ struct TranscriptTermExtractor: Sendable {
             || (0x3400...0x4DBF).contains(Int(scalar.value))
             || (0xF900...0xFAFF).contains(Int(scalar.value))
     }
+
+    private static let stopwords: Set<String> = [
+        "a", "an", "and", "are", "as", "at", "be", "but", "by", "can", "do", "for", "from", "has",
+        "have", "i", "if", "in", "is", "it", "its", "let", "not", "of", "on", "or", "our", "should",
+        "that", "the", "their", "then", "there", "this", "to", "use", "var", "was", "we", "with", "you",
+        "一个", "一些", "不会", "不是", "以及", "他们", "使用", "可以", "因为", "如果", "就是", "我们",
+        "所以", "这个", "这些", "还是", "需要", "然后", "进行", "里面"
+    ].map(TermNormalizer.normalizedKey).reduce(into: Set<String>()) { $0.insert($1) }
 }
 
 private final class TranscriptRegexCatalog: @unchecked Sendable {
@@ -444,7 +415,7 @@ private struct SessionTermAccumulator {
     ) {
         let normalized = canonical.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { return }
-        let key = "\(kind.rawValue)|\(TechnicalTermDictionary.normalized(normalized))"
+        let key = "\(kind.rawValue)|\(TermNormalizer.normalizedKey(normalized))"
         var term = values[key] ?? MutableTerm(
             canonical: normalized,
             displayName: displayName,

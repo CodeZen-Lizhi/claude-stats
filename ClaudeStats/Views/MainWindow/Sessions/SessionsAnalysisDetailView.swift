@@ -3,7 +3,6 @@ import SwiftUI
 struct SessionsAnalysisDetailView: View {
     @Environment(AppEnvironment.self) private var env
     @State private var selectedKind: TranscriptTermKind?
-    @State private var latestDictionarySignature: String?
 
     private var provider: ProviderKind { env.preferences.selectedProvider }
     private var sessions: [Session] { env.store.sessions(for: provider) }
@@ -11,12 +10,7 @@ struct SessionsAnalysisDetailView: View {
     private var progress: TranscriptAnalysisProgress { env.transcriptAnalysis.progress(for: provider) }
 
     private var taskID: String {
-        "\(provider.rawValue)-\(sessions.count)-\(Int(env.store.lastRefreshedAt?.timeIntervalSince1970 ?? 0))-\(env.technicalTerms.revision)"
-    }
-
-    private var dictionaryNeedsRefresh: Bool {
-        guard let snapshot, let latestDictionarySignature else { return false }
-        return snapshot.dictionarySignature != latestDictionarySignature
+        "\(provider.rawValue)-\(sessions.count)-\(Int(env.store.lastRefreshedAt?.timeIntervalSince1970 ?? 0))"
     }
 
     private var filteredTerms: [TranscriptTermStats] {
@@ -39,9 +33,6 @@ struct SessionsAnalysisDetailView: View {
                     statsGrid(snapshot)
                     runSummaryCard(snapshot)
                     engineCard(snapshot)
-                    if dictionaryNeedsRefresh {
-                        dictionaryRefreshBanner
-                    }
                     SemanticVisualizationShowcase(analysis: snapshot, sessions: sessions)
                     kindFilters(snapshot)
                     termsSection(snapshot)
@@ -58,7 +49,6 @@ struct SessionsAnalysisDetailView: View {
                 sessions: sessions,
                 messageLoader: env.store.transcriptMessageLoader(for: provider)
             )
-            latestDictionarySignature = await env.technicalTerms.corpusSignature(for: sessions)
         }
     }
 
@@ -81,40 +71,6 @@ struct SessionsAnalysisDetailView: View {
                 .font(.sora(12))
                 .foregroundStyle(Color.stxMuted)
         }
-    }
-
-    private var dictionaryRefreshBanner: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "text.book.closed")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(provider.accentColor)
-                .frame(width: 24)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Dictionary changed.")
-                    .font(.sora(12, weight: .semibold))
-                Text("Refresh analysis to apply the updated technical terms.")
-                    .font(.sora(10))
-                    .foregroundStyle(Color.stxMuted)
-            }
-            Spacer(minLength: 0)
-            Button {
-                env.transcriptAnalysis.reload(
-                    provider: provider,
-                    sessions: sessions,
-                    messageLoader: env.store.transcriptMessageLoader(for: provider)
-                )
-                Task {
-                    latestDictionarySignature = await env.technicalTerms.corpusSignature(for: sessions)
-                }
-            } label: {
-                Label("Refresh Analysis", systemImage: "arrow.clockwise")
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(env.transcriptAnalysis.isLoading(for: provider))
-            .font(.sora(11))
-        }
-        .padding(12)
-        .appSurface(.compactCard(radius: 8), padding: nil)
     }
 
     private var loadingState: some View {
@@ -214,7 +170,7 @@ struct SessionsAnalysisDetailView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(snapshot.engine.displayName)
                     .font(.sora(12, weight: .semibold))
-                Text("Dictionary \(snapshot.engine.dictionaryVersion) - \(cacheStatus)")
+                Text("Analyzer \(snapshot.engine.analysisVersion) - \(cacheStatus)")
                     .font(.sora(10))
                     .foregroundStyle(Color.stxMuted)
             }

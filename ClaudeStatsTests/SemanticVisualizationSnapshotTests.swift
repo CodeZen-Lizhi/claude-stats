@@ -167,7 +167,7 @@ struct SemanticVisualizationSnapshotTests {
 
     private static let engine = TranscriptAnalysisEngineInfo(
         tokenizerID: "test-tokenizer",
-        dictionaryVersion: "test-dictionary",
+        analysisVersion: "test-analysis",
         displayName: "Test",
         embeddingStatus: .notConfigured
     )
@@ -184,7 +184,7 @@ struct SemanticVisualizationSnapshotTests {
             terms: terms,
             sessionAnalyses: analyses,
             engine: engine,
-            dictionarySignature: "test",
+            analysisSignature: "test",
             runSummary: .empty
         )
     }

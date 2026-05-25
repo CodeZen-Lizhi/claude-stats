@@ -6,7 +6,7 @@ import Testing
 @Suite("Jieba tokenizer")
 struct JiebaTokenizerTests {
     @Test("Chinese tokenizer uses bundled CppJieba dictionaries and custom words")
-    func bundledJiebaAndCustomDictionary() async {
+    func bundledJiebaAndCustomWords() async {
         let tokenizer = JiebaTokenizer()
         #expect(await tokenizer.isAvailable)
 
@@ -20,315 +20,6 @@ struct JiebaTokenizerTests {
         #expect(tokens.allSatisfy { !$0.isEmpty })
     }
 }
-
-@Suite("Technical term dictionary")
-struct TechnicalTermDictionaryTests {
-    @Test("Aliases normalize to canonical technical terms")
-    func aliasesNormalize() {
-        let dictionary = TechnicalTermDictionary()
-
-        #expect(dictionary.canonicalize("Swift UI")?.canonical == "SwiftUI")
-        #expect(dictionary.canonicalize("github actions")?.canonical == "GitHub Actions")
-        #expect(dictionary.isStopword("the"))
-        #expect(dictionary.matches(in: "Use Natural Language with SwiftUI").map(\.canonical).contains("NaturalLanguage"))
-    }
-
-    @Test("Normalizer handles UI vocabulary aliases and one-character typo phrases")
-    func normalizerHandlesTechnicalVocabulary() {
-        let dictionary = TechnicalTermDictionary()
-
-        #expect(TermNormalizer.normalizedKey("MenuBarExtra") == TermNormalizer.normalizedKey("menu bar extra"))
-        #expect(dictionary.canonicalize("mainWindow")?.canonical == "main window")
-        #expect(dictionary.canonicalize("main windows")?.canonical == "main window")
-        #expect(dictionary.canonicalize("mian windows")?.canonical == "main window")
-        #expect(dictionary.canonicalize("主窗口")?.canonical == "main window")
-        #expect(dictionary.canonicalize("zIndex")?.canonical == "z-index")
-        #expect(dictionary.canonicalize("z_index")?.canonical == "z-index")
-        #expect(dictionary.canonicalize("层级")?.canonical == "z-index")
-    }
-
-    @Test("Dictionary matching counts occurrences without overmatching generic words")
-    func dictionaryMatchingCountsOccurrences() {
-        let dictionary = TechnicalTermDictionary()
-        let matches = dictionary.matches(in: "MenuBarExtra and menu bar extra changed zIndex, z-index, and plain menu text.")
-        let menuCount = matches.filter { $0.canonical == "MenuBarExtra" }.count
-        let zIndexCount = matches.filter { $0.canonical == "z-index" }.count
-
-        #expect(menuCount == 2)
-        #expect(zIndexCount == 2)
-        #expect(dictionary.canonicalize("main menu") == nil)
-    }
-
-    @Test("Repository merges built-in global and project dictionaries with digest invalidation")
-    func repositoryMergePrecedenceAndDigest() async throws {
-        let temp = try TempDir.make()
-        defer { try? FileManager.default.removeItem(at: temp) }
-        let homeRoot = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".claude-stats-tests", isDirectory: true)
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: homeRoot) }
-
-        let builtInURL = temp.appendingPathComponent("technical_terms.json")
-        let globalURL = temp.appendingPathComponent("user_terms.json")
-        let projectRoot = homeRoot.appendingPathComponent("parent", isDirectory: true)
-        let childRoot = projectRoot.appendingPathComponent("child", isDirectory: true)
-        let parentTerms = projectRoot.appendingPathComponent(".claude-stats/terms.json")
-        let childTerms = childRoot.appendingPathComponent(".claude-stats/terms.json")
-
-        try Self.writeDocument(
-            TechnicalTermDocument(
-                terms: [
-                    TechnicalTermEntry(canonical: "MenuBarExtra", kind: .api, category: .applePlatform, aliases: ["menu bar extra"], weight: 1.0),
-                    TechnicalTermEntry(canonical: "OverrideMe", kind: .api, category: .architecture, aliases: ["built"], weight: 1.0, tags: ["built"]),
-                ],
-                stopwords: ["noise"]
-            ),
-            to: builtInURL
-        )
-        try Self.writeDocument(
-            TechnicalTermDocument(terms: [
-                TechnicalTermEntry(canonical: "MenuBarExtra", kind: .api, category: .uiUX, enabled: false),
-                TechnicalTermEntry(canonical: "OverrideMe", kind: .framework, category: .frontend, aliases: ["global"], weight: 2.0, tags: ["global"]),
-            ]),
-            to: globalURL
-        )
-        try Self.writeDocument(
-            TechnicalTermDocument(terms: [
-                TechnicalTermEntry(canonical: "ParentTerm", kind: .general, category: .general, aliases: ["parent term"], weight: 1.4),
-                TechnicalTermEntry(canonical: "OverrideMe", kind: .workflow, category: .backend, aliases: ["parent"], weight: 3.0, tags: ["parent"]),
-            ]),
-            to: parentTerms
-        )
-        try Self.writeDocument(
-            TechnicalTermDocument(terms: [
-                TechnicalTermEntry(canonical: "OverrideMe", kind: .typeName, category: .uiUX, aliases: ["child"], weight: 4.0, tags: ["child"]),
-            ]),
-            to: childTerms
-        )
-
-        let repository = TechnicalTermDictionaryRepository(builtInURL: builtInURL, globalURL: globalURL)
-        let session = Self.session(id: "codex::dictionary", cwd: childRoot.path)
-        let snapshot = await repository.snapshot(for: session)
-        let dictionary = snapshot.dictionary
-
-        #expect(dictionary.canonicalize("MenuBarExtra") == nil)
-        #expect(dictionary.canonicalize("parent term")?.canonical == "ParentTerm")
-        let override = try #require(dictionary.canonicalize("built"))
-        #expect(override.kind == TranscriptTermKind.typeName)
-        #expect(override.category == .uiUX)
-        #expect(override.weight == 4.0)
-        #expect(Set(override.aliases).isSuperset(of: ["built", "global", "parent", "child"]))
-        #expect(Set(override.tags).isSuperset(of: ["built", "global", "parent", "child"]))
-
-        let oldDigest = snapshot.digest
-        try await repository.saveEntry(
-            TechnicalTermEntry(canonical: "NewProjectTerm", kind: .api),
-            originalCanonical: nil,
-            scope: .project,
-            projectPath: childRoot.path
-        )
-        let changed = await repository.snapshot(for: session)
-        #expect(changed.digest != oldDigest)
-        #expect(changed.dictionary.canonicalize("NewProjectTerm")?.canonical == "NewProjectTerm")
-    }
-
-    @Test("Import accepts CSV and TXT rows and export round-trips JSON")
-    func importAndExportDictionaries() async throws {
-        let temp = try TempDir.make()
-        defer { try? FileManager.default.removeItem(at: temp) }
-
-        let repository = TechnicalTermDictionaryRepository(
-            builtInURL: temp.appendingPathComponent("missing.json"),
-            globalURL: temp.appendingPathComponent("user_terms.json")
-        )
-        let csv = temp.appendingPathComponent("terms.csv")
-        let txt = temp.appendingPathComponent("terms.txt")
-        let export = temp.appendingPathComponent("export.json")
-        try TempDir.write(
-            """
-            canonical,kind,category,aliases,weight,enabled,tags
-            Custom API,api,backend,custom api|自定义 API,2.1,true,ui|api
-            ,api,frontend,missing,1.0,true,bad
-            Custom API,framework,frontend,custom framework,2.5,true,merged
-            """,
-            to: csv
-        )
-        try TempDir.write(
-            """
-            # comments are skipped
-            Text Term
-            z-order
-            """,
-            to: txt
-        )
-
-        let csvReport = try await repository.importTerms(from: csv, scope: .global, projectPath: nil)
-        let txtReport = try await repository.importTerms(from: txt, scope: .global, projectPath: nil)
-        try await repository.exportTerms(to: export, scope: .global, projectPath: nil)
-        let exported = try JSONDecoder().decode(TechnicalTermDocument.self, from: Data(contentsOf: export))
-        let custom = try #require(exported.terms.first { $0.canonical == "Custom API" })
-
-        #expect(csvReport.imported == 2)
-        #expect(csvReport.skipped == 1)
-        #expect(txtReport.imported == 2)
-        #expect(custom.kind == .framework)
-        #expect(custom.category == .frontend)
-        #expect(custom.weight == 2.5)
-        #expect(Set(custom.aliases).isSuperset(of: ["custom api", "自定义 API", "custom framework"]))
-        #expect(exported.terms.contains { $0.canonical == "Text Term" })
-        #expect(exported.terms.first { $0.canonical == "Text Term" }?.category == .general)
-    }
-
-    @Test("Legacy JSON entries default to the general category")
-    func legacyJSONDefaultsCategory() throws {
-        let data = Data(
-            """
-            {
-              "canonical": "Legacy Term",
-              "kind": "api",
-              "aliases": ["legacy"],
-              "weight": 1.2,
-              "enabled": true,
-              "tags": ["legacy"]
-            }
-            """.utf8
-        )
-        let entry = try JSONDecoder().decode(TechnicalTermEntry.self, from: data)
-
-        #expect(entry.category == .general)
-    }
-
-    @MainActor
-    @Test("Dictionary store filters by scope category and query")
-    func dictionaryStoreFiltersByScopeCategoryAndQuery() async throws {
-        let temp = try TempDir.make()
-        defer { try? FileManager.default.removeItem(at: temp) }
-        let homeRoot = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".claude-stats-tests", isDirectory: true)
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: homeRoot) }
-
-        let builtInURL = temp.appendingPathComponent("technical_terms.json")
-        let globalURL = temp.appendingPathComponent("user_terms.json")
-        let projectRoot = homeRoot.appendingPathComponent("project", isDirectory: true)
-        let childRoot = projectRoot.appendingPathComponent("child", isDirectory: true)
-        let projectTerms = childRoot.appendingPathComponent(".claude-stats/terms.json")
-
-        try Self.writeDocument(
-            TechnicalTermDocument(terms: [
-                TechnicalTermEntry(canonical: "Design Token", kind: .api, category: .uiUX, aliases: ["token"], weight: 1.8),
-                TechnicalTermEntry(canonical: "Bounded Context", kind: .workflow, category: .architecture, aliases: ["context map"], weight: 1.8),
-            ]),
-            to: builtInURL
-        )
-        try Self.writeDocument(
-            TechnicalTermDocument(terms: [
-                TechnicalTermEntry(canonical: "git status", kind: .command, category: .commandLine, aliases: ["git status --short"], weight: 1.7),
-            ]),
-            to: globalURL
-        )
-        try Self.writeDocument(
-            TechnicalTermDocument(terms: [
-                TechnicalTermEntry(canonical: "service mesh", kind: .framework, category: .cloudDevOps, aliases: ["mesh"], weight: 1.8),
-            ]),
-            to: projectTerms
-        )
-
-        let repository = TechnicalTermDictionaryRepository(builtInURL: builtInURL, globalURL: globalURL)
-        let store = TechnicalTermDictionaryStore(repository: repository)
-        await store.load(sessions: [Self.session(id: "codex::filter", cwd: childRoot.path)])
-
-        let uiRows = store.filteredRows(scope: .global, category: .uiUX, query: "token")
-        let globalCommandRows = store.filteredRows(scope: .global, category: .commandLine, query: "git")
-        let projectCloudRows = store.filteredRows(scope: .project, category: .cloudDevOps, query: "mesh")
-        let hiddenProjectRows = store.filteredRows(scope: .global, category: .cloudDevOps, query: "mesh")
-        let aliasRows = store.filteredRows(scope: .project, category: .architecture, query: "context map")
-
-        #expect(uiRows.map(\.entry.canonical) == ["Design Token"])
-        #expect(globalCommandRows.map(\.entry.canonical) == ["git status"])
-        #expect(projectCloudRows.map(\.entry.canonical) == ["service mesh"])
-        #expect(hiddenProjectRows.isEmpty)
-        #expect(aliasRows.map(\.entry.canonical) == ["Bounded Context"])
-    }
-
-    @Test("Bundled technical term resource loads with category coverage")
-    func bundledTechnicalTermResourceHealth() throws {
-        let termsURL = try Self.bundledResourceURL(name: "technical_terms", extension: "json")
-        let attributionURL = try Self.bundledResourceURL(name: "technical_terms_attribution", extension: "md")
-        let document = try JSONDecoder().decode(TechnicalTermDocument.self, from: Data(contentsOf: termsURL))
-        let categories = Set(document.terms.map(\.category))
-        let canonicalKeys = document.terms.map { TermNormalizer.normalizedKey($0.canonical) }
-        let dictionary = TechnicalTermDictionary(
-            entries: document.terms,
-            stopwords: Set(document.stopwords.map(TermNormalizer.normalizedKey))
-        )
-
-        #expect(FileManager.default.fileExists(atPath: attributionURL.path))
-        #expect((1_450 ... 1_600).contains(document.terms.count))
-        #expect(categories == Set(TechnicalTermCategory.allCases))
-        #expect(Set(canonicalKeys).count == canonicalKeys.count)
-        #expect(document.terms.allSatisfy { !$0.canonical.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
-        #expect(document.terms.allSatisfy { $0.aliases.allSatisfy { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } })
-        #expect(document.terms.allSatisfy { $0.tags.allSatisfy { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } })
-        #expect(dictionary.canonicalize("git status")?.canonical == "git status")
-        #expect(dictionary.canonicalize("docker compose up")?.canonical == "docker compose up")
-        #expect(dictionary.canonicalize("design token")?.canonical == "design token")
-        #expect(dictionary.canonicalize("accessibility")?.canonical == "accessibility")
-        #expect(dictionary.canonicalize("bounded context")?.canonical == "bounded context")
-        #expect(dictionary.canonicalize("service mesh")?.canonical == "service mesh")
-    }
-
-    private static func session(id: String, cwd: String) -> Session {
-        Session(
-            id: id,
-            externalID: id,
-            provider: .codex,
-            projectDirectoryName: "project",
-            filePath: "/tmp/\(id).jsonl",
-            cwd: cwd,
-            lastModified: Date(timeIntervalSince1970: 1_000),
-            fileSize: 128,
-            stats: nil
-        )
-    }
-
-    private static func writeDocument(_ document: TechnicalTermDocument, to url: URL) throws {
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(document).write(to: url)
-    }
-
-    private static func bundledResourceURL(name: String, extension ext: String) throws -> URL {
-        for bundle in [Bundle.main, Bundle(for: BundleProbe.self)] {
-            if let url = bundle.url(forResource: name, withExtension: ext, subdirectory: "TranscriptAnalysis") {
-                return url
-            }
-            if let url = bundle.url(forResource: name, withExtension: ext) {
-                return url
-            }
-        }
-
-        let sourceURL = URL(fileURLWithPath: #filePath)
-        let repoURL = sourceURL
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let fallback = repoURL
-            .appendingPathComponent("ClaudeStats/Resources/TranscriptAnalysis", isDirectory: true)
-            .appendingPathComponent("\(name).\(ext)")
-        if FileManager.default.fileExists(atPath: fallback.path) {
-            return fallback
-        }
-
-        throw NSError(
-            domain: "TechnicalTermDictionaryTests",
-            code: 1,
-            userInfo: [NSLocalizedDescriptionKey: "Missing bundled resource \(name).\(ext)"]
-        )
-    }
-}
-
-private final class BundleProbe: NSObject {}
 
 @Suite("Transcript term extractor")
 struct TranscriptTermExtractorTests {
@@ -348,11 +39,11 @@ struct TranscriptTermExtractorTests {
 
         let analysis = await TranscriptTermExtractor().extract(session: session, messages: messages)
 
-        #expect(analysis.terms.contains { $0.canonical == "SwiftUI" && $0.kind == .framework })
+        #expect(analysis.terms.contains { $0.canonical == "SwiftUI" && $0.kind == .api })
         #expect(analysis.terms.contains { $0.displayName.contains("SessionDetailView.swift") && $0.kind == .filePath })
         #expect(analysis.terms.contains { $0.displayName.contains("bash scripts/run-debug.sh") && $0.kind == .command })
         #expect(analysis.terms.contains { $0.canonical == "build failed" && $0.kind == .error })
-        #expect(analysis.terms.contains { $0.canonical == "NaturalLanguage" && $0.kind == .framework })
+        #expect(analysis.terms.contains { $0.canonical == "NaturalLanguage" && $0.kind == .api })
     }
 
     @Test("Skips natural-language extraction for code-heavy transcript text")
@@ -438,7 +129,7 @@ struct TranscriptTFIDFAnalyzerTests {
 
     private static let engine = TranscriptAnalysisEngineInfo(
         tokenizerID: "test-tokenizer",
-        dictionaryVersion: "test-dictionary",
+        analysisVersion: "test-analysis",
         displayName: "Test",
         embeddingStatus: .notConfigured
     )
@@ -498,7 +189,7 @@ struct TranscriptAnalysisIndexTests {
         let index = TranscriptAnalysisIndex(url: root.appendingPathComponent("index.sqlite3"))
 
         let session = Self.session(id: "claude::cache", provider: .claude, fileSize: 256)
-        let key = await index.key(for: session, tokenizerID: "tokenizer-a", dictionaryVersion: "dictionary-a")
+        let key = await index.key(for: session, tokenizerID: "tokenizer-a", analysisVersion: "analysis-a")
         let analysis = Self.analysis(sessionID: session.id, terms: [
             Self.term("SwiftUI", kind: .framework, frequency: 2, weight: 1.7),
         ])
@@ -507,7 +198,7 @@ struct TranscriptAnalysisIndexTests {
             provider: .claude,
             sessions: [session],
             tokenizerID: "tokenizer-a",
-            dictionaryVersion: "dictionary-a"
+            analysisVersion: "analysis-a"
         )
         #expect(cold.first?.state == .missNew)
 
@@ -516,26 +207,26 @@ struct TranscriptAnalysisIndexTests {
             provider: .claude,
             sessions: [session],
             tokenizerID: "tokenizer-a",
-            dictionaryVersion: "dictionary-a"
+            analysisVersion: "analysis-a"
         )
         #expect(warm.first?.state == .hit)
 
-        let dictionaryChanged = try await index.lookup(
+        let analysisVersionChanged = try await index.lookup(
             provider: .claude,
             sessions: [session],
             tokenizerID: "tokenizer-a",
-            dictionaryVersion: "dictionary-b"
+            analysisVersion: "analysis-b"
         )
-        #expect(dictionaryChanged.first?.state == .missChanged)
+        #expect(analysisVersionChanged.first?.state == .missChanged)
 
         let emptySession = Self.session(id: "claude::empty", provider: .claude, fileSize: 1)
-        let emptyKey = await index.key(for: emptySession, tokenizerID: "tokenizer-a", dictionaryVersion: "dictionary-a")
+        let emptyKey = await index.key(for: emptySession, tokenizerID: "tokenizer-a", analysisVersion: "analysis-a")
         try await index.writeEmpty(for: emptySession, key: emptyKey)
         let emptyLookup = try await index.lookup(
             provider: .claude,
             sessions: [emptySession],
             tokenizerID: "tokenizer-a",
-            dictionaryVersion: "dictionary-a"
+            analysisVersion: "analysis-a"
         )
         #expect(emptyLookup.first?.state == .empty)
 
@@ -544,7 +235,7 @@ struct TranscriptAnalysisIndexTests {
             provider: .claude,
             sessions: [changedEmpty],
             tokenizerID: "tokenizer-a",
-            dictionaryVersion: "dictionary-a"
+            analysisVersion: "analysis-a"
         )
         #expect(changedLookup.first?.state == .missChanged)
 
@@ -552,7 +243,7 @@ struct TranscriptAnalysisIndexTests {
             provider: .codex,
             sessions: [Self.session(id: "claude::cache", provider: .codex, fileSize: 256)],
             tokenizerID: "tokenizer-a",
-            dictionaryVersion: "dictionary-a"
+            analysisVersion: "analysis-a"
         )
         #expect(codexScope.first?.state == .missNew)
 
@@ -569,7 +260,7 @@ struct TranscriptAnalysisIndexTests {
         let key = await TranscriptAnalysisIndex(url: url).key(
             for: session,
             tokenizerID: "tokenizer-a",
-            dictionaryVersion: "dictionary-a"
+            analysisVersion: "analysis-a"
         )
 
         try Self.createV1Database(at: url, key: key, session: session)
@@ -579,7 +270,7 @@ struct TranscriptAnalysisIndexTests {
             provider: .claude,
             sessions: [session],
             tokenizerID: "tokenizer-a",
-            dictionaryVersion: "dictionary-a"
+            analysisVersion: "analysis-a"
         )
         #expect(migrated.first?.state == .hit)
 
@@ -588,7 +279,7 @@ struct TranscriptAnalysisIndexTests {
             sessions: [session],
             keysBySessionID: [session.id: key],
             engine: Self.engine,
-            dictionarySignature: "dictionary-a",
+            analysisSignature: "analysis-a",
             runSummary: .empty
         )
         #expect(snapshot.analyzedSessionCount == 1)
@@ -612,8 +303,8 @@ struct TranscriptAnalysisIndexTests {
             Self.term("common", kind: .general, frequency: 1, weight: 1.0, excerpt: "second common"),
             Self.term("Shared API", displayName: "shared api", kind: .api, frequency: 1, weight: 1.2, excerpt: "second shared"),
         ])
-        let firstKey = await index.key(for: first, tokenizerID: "tokenizer-a", dictionaryVersion: "dictionary-a")
-        let secondKey = await index.key(for: second, tokenizerID: "tokenizer-a", dictionaryVersion: "dictionary-a")
+        let firstKey = await index.key(for: first, tokenizerID: "tokenizer-a", analysisVersion: "analysis-a")
+        let secondKey = await index.key(for: second, tokenizerID: "tokenizer-a", analysisVersion: "analysis-a")
         try await index.writeAnalyzed(firstAnalysis, for: firstKey)
         try await index.writeAnalyzed(secondAnalysis, for: secondKey)
 
@@ -636,7 +327,7 @@ struct TranscriptAnalysisIndexTests {
             Self.term("NewTerm", kind: .framework, frequency: 3, weight: 1.6, excerpt: "third new"),
             Self.term("common", kind: .general, frequency: 1, weight: 1.0, excerpt: "third common"),
         ])
-        let thirdKey = await index.key(for: third, tokenizerID: "tokenizer-a", dictionaryVersion: "dictionary-a")
+        let thirdKey = await index.key(for: third, tokenizerID: "tokenizer-a", analysisVersion: "analysis-a")
         try await index.writeAnalyzed(thirdAnalysis, for: thirdKey)
         try await Self.expectMaterialized(
             index,
@@ -650,7 +341,7 @@ struct TranscriptAnalysisIndexTests {
             Self.term("ChangedTerm", kind: .framework, frequency: 2, weight: 1.8, excerpt: "changed first"),
             Self.term("common", kind: .general, frequency: 1, weight: 1.0, excerpt: "changed common"),
         ])
-        let changedFirstKey = await index.key(for: changedFirst, tokenizerID: "tokenizer-a", dictionaryVersion: "dictionary-a")
+        let changedFirstKey = await index.key(for: changedFirst, tokenizerID: "tokenizer-a", analysisVersion: "analysis-a")
         try await index.writeAnalyzed(changedFirstAnalysis, for: changedFirstKey)
         try await Self.expectMaterialized(
             index,
@@ -681,7 +372,7 @@ struct TranscriptAnalysisIndexTests {
 
     private static let engine = TranscriptAnalysisEngineInfo(
         tokenizerID: "tokenizer-a",
-        dictionaryVersion: "dictionary-a",
+        analysisVersion: "analysis-a",
         displayName: "Test",
         embeddingStatus: .notConfigured
     )
@@ -744,7 +435,7 @@ struct TranscriptAnalysisIndexTests {
             sessions: sessions,
             keysBySessionID: keys,
             engine: engine,
-            dictionarySignature: "dictionary-a",
+            analysisSignature: "analysis-a",
             runSummary: .empty,
             now: Date(timeIntervalSince1970: 2_000)
         )
@@ -753,7 +444,7 @@ struct TranscriptAnalysisIndexTests {
             sessions: sessions,
             sessionAnalyses: analyses,
             engine: engine,
-            dictionarySignature: "dictionary-a",
+            analysisSignature: "analysis-a",
             now: Date(timeIntervalSince1970: 2_000)
         )
 
@@ -862,7 +553,7 @@ struct TranscriptAnalysisIndexTests {
         try insert.bind(key.schemaVersion, at: 2)
         try insert.bind(key.extractorVersion, at: 3)
         try insert.bind(key.tokenizerID, at: 4)
-        try insert.bind(key.dictionaryVersion, at: 5)
+        try insert.bind(key.analysisVersion, at: 5)
         try insert.bind(key.optionsDigest, at: 6)
         try insert.bind(key.provider.rawValue, at: 7)
         try insert.bind(key.sessionID, at: 8)
@@ -959,46 +650,6 @@ struct TranscriptAnalysisServiceTests {
         #expect(await loader.callCount(for: second.id) == 1)
     }
 
-    @Test("Dictionary digest changes invalidate cached session analyses")
-    func dictionaryDigestInvalidatesCache() async throws {
-        let root = try TempDir.make()
-        defer { try? FileManager.default.removeItem(at: root) }
-
-        let resolver = DictionarySnapshotSpy(snapshot: .make(
-            entries: [TechnicalTermEntry(canonical: "AlphaTerm", kind: .api, aliases: ["alpha term"], weight: 2.0)],
-            stopwords: []
-        ))
-        let index = TranscriptAnalysisIndex(url: root.appendingPathComponent("index.sqlite3"))
-        let service = TranscriptAnalysisService(
-            index: index,
-            maxConcurrentSessions: 1,
-            dictionaryResolver: resolver.resolver()
-        )
-        let session = Self.session(id: "codex::dict-cache", provider: .codex, fileSize: 512)
-        let loader = MessageLoaderSpy(messages: [
-            session.id: [
-                Self.message(role: .user, text: "AlphaTerm and BetaTerm were changed in the session."),
-            ],
-        ])
-
-        let first = try await service.analyze(provider: .codex, sessions: [session], messageLoader: loader.loader())
-        let warm = try await service.analyze(provider: .codex, sessions: [session], messageLoader: loader.loader())
-        #expect(first.runSummary.newCount == 1)
-        #expect(warm.runSummary.reused == 1)
-        #expect(await loader.callCount(for: session.id) == 1)
-
-        await resolver.set(.make(
-            entries: [
-                TechnicalTermEntry(canonical: "AlphaTerm", kind: .api, aliases: ["alpha term"], weight: 2.0),
-                TechnicalTermEntry(canonical: "BetaTerm", kind: .api, aliases: ["beta term"], weight: 2.0),
-            ],
-            stopwords: []
-        ))
-        let changed = try await service.analyze(provider: .codex, sessions: [session], messageLoader: loader.loader())
-        #expect(changed.runSummary.changed == 1)
-        #expect(changed.terms.contains { $0.canonical == "BetaTerm" })
-        #expect(await loader.callCount(for: session.id) == 2)
-    }
 
     static func session(id: String, provider: ProviderKind, fileSize: Int64) -> Session {
         Session(
@@ -1032,27 +683,6 @@ struct TranscriptAnalysisServiceTests {
     }
 }
 
-private actor DictionarySnapshotSpy {
-    private var snapshot: TechnicalTermDictionarySnapshot
-
-    init(snapshot: TechnicalTermDictionarySnapshot) {
-        self.snapshot = snapshot
-    }
-
-    nonisolated func resolver() -> TranscriptDictionaryResolver {
-        { _ in
-            await self.current()
-        }
-    }
-
-    func set(_ snapshot: TechnicalTermDictionarySnapshot) {
-        self.snapshot = snapshot
-    }
-
-    private func current() -> TechnicalTermDictionarySnapshot {
-        snapshot
-    }
-}
 
 @Suite("Transcript analysis store")
 struct TranscriptAnalysisStoreTests {

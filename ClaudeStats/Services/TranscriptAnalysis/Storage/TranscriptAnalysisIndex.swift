@@ -5,7 +5,7 @@ struct TranscriptAnalysisKey: Codable, Hashable, Sendable {
     let schemaVersion: Int
     let extractorVersion: String
     let tokenizerID: String
-    let dictionaryVersion: String
+    let analysisVersion: String
     let optionsDigest: String
     let provider: ProviderKind
     let sessionID: String
@@ -18,7 +18,7 @@ struct TranscriptAnalysisKey: Codable, Hashable, Sendable {
             "\(schemaVersion)",
             extractorVersion,
             tokenizerID,
-            dictionaryVersion,
+            analysisVersion,
             optionsDigest,
             provider.rawValue,
             sessionID,
@@ -63,7 +63,7 @@ actor TranscriptAnalysisIndex {
     func key(
         for session: Session,
         tokenizerID: String,
-        dictionaryVersion: String,
+        analysisVersion: String,
         extractorVersion: String = TranscriptAnalysisService.extractorVersion,
         optionsDigest: String = TranscriptAnalysisIndex.defaultOptionsDigest
     ) -> TranscriptAnalysisKey {
@@ -71,7 +71,7 @@ actor TranscriptAnalysisIndex {
             schemaVersion: schemaVersion,
             extractorVersion: extractorVersion,
             tokenizerID: tokenizerID,
-            dictionaryVersion: dictionaryVersion,
+            analysisVersion: analysisVersion,
             optionsDigest: optionsDigest,
             provider: session.provider,
             sessionID: session.id,
@@ -85,8 +85,8 @@ actor TranscriptAnalysisIndex {
         provider: ProviderKind,
         sessions: [Session],
         tokenizerID: String,
-        dictionaryVersion: String,
-        dictionaryVersionsBySessionID: [String: String] = [:],
+        analysisVersion: String,
+        analysisVersionsBySessionID: [String: String] = [:],
         extractorVersion: String = TranscriptAnalysisService.extractorVersion,
         optionsDigest: String = TranscriptAnalysisIndex.defaultOptionsDigest,
         forceRefresh: Bool = false
@@ -98,7 +98,7 @@ actor TranscriptAnalysisIndex {
                 key: key(
                     for: session,
                     tokenizerID: tokenizerID,
-                    dictionaryVersion: dictionaryVersionsBySessionID[session.id] ?? dictionaryVersion,
+                    analysisVersion: analysisVersionsBySessionID[session.id] ?? analysisVersion,
                     extractorVersion: extractorVersion,
                     optionsDigest: optionsDigest
                 )
@@ -218,7 +218,7 @@ actor TranscriptAnalysisIndex {
         sessions: [Session],
         keysBySessionID: [String: TranscriptAnalysisKey],
         engine: TranscriptAnalysisEngineInfo,
-        dictionarySignature: String,
+        analysisSignature: String,
         runSummary: TranscriptAnalysisRunSummary,
         extractorVersion: String = TranscriptAnalysisService.extractorVersion,
         optionsDigest: String = TranscriptAnalysisIndex.defaultOptionsDigest,
@@ -252,7 +252,7 @@ actor TranscriptAnalysisIndex {
                 tokenizerID: engine.tokenizerID,
                 optionsDigest: optionsDigest,
                 sessionSetDigest: sessionSetDigest,
-                dictionarySignature: dictionarySignature,
+                analysisSignature: analysisSignature,
                 sessionCount: sessions.count,
                 analyzedSessionCount: activeMembers.count,
                 updatedAt: now.timeIntervalSince1970,
@@ -278,7 +278,7 @@ actor TranscriptAnalysisIndex {
             terms: terms,
             sessionAnalyses: analyses,
             engine: engine,
-            dictionarySignature: dictionarySignature,
+            analysisSignature: analysisSignature,
             runSummary: runSummary
         )
     }
@@ -457,7 +457,6 @@ actor TranscriptAnalysisIndex {
                     system: statement.columnInt(10)
                 )
                 let sourceCounts = TranscriptSourceCounts(
-                    dictionary: statement.columnInt(11),
                     naturalLanguage: statement.columnInt(12),
                     jieba: statement.columnInt(13),
                     code: statement.columnInt(14),
@@ -547,7 +546,7 @@ actor TranscriptAnalysisIndex {
         try statement.bind(key.schemaVersion, at: 2)
         try statement.bind(key.extractorVersion, at: 3)
         try statement.bind(key.tokenizerID, at: 4)
-        try statement.bind(key.dictionaryVersion, at: 5)
+        try statement.bind(key.analysisVersion, at: 5)
         try statement.bind(key.optionsDigest, at: 6)
         try statement.bind(key.provider.rawValue, at: 7)
         try statement.bind(key.sessionID, at: 8)
@@ -582,7 +581,7 @@ actor TranscriptAnalysisIndex {
         try statement.bind(keyDigest, at: 1)
         try statement.bind(ordinal, at: 2)
         try statement.bind(term.canonical, at: 3)
-        try statement.bind(TechnicalTermDictionary.normalized(term.canonical), at: 4)
+        try statement.bind(TermNormalizer.normalizedKey(term.canonical), at: 4)
         try statement.bind(term.displayName, at: 5)
         try statement.bind(term.kind.rawValue, at: 6)
         try statement.bind(term.frequency, at: 7)
@@ -591,7 +590,7 @@ actor TranscriptAnalysisIndex {
         try statement.bind(term.roleCounts.assistant, at: 10)
         try statement.bind(term.roleCounts.tool, at: 11)
         try statement.bind(term.roleCounts.system, at: 12)
-        try statement.bind(term.sourceCounts.dictionary, at: 13)
+        try statement.bind(0, at: 13)
         try statement.bind(term.sourceCounts.naturalLanguage, at: 14)
         try statement.bind(term.sourceCounts.jieba, at: 15)
         try statement.bind(term.sourceCounts.code, at: 16)
@@ -832,7 +831,6 @@ actor TranscriptAnalysisIndex {
                     system: statement.columnInt(9)
                 ),
                 sourceCounts: TranscriptSourceCounts(
-                    dictionary: statement.columnInt(10),
                     naturalLanguage: statement.columnInt(11),
                     jieba: statement.columnInt(12),
                     code: statement.columnInt(13),
@@ -916,7 +914,7 @@ actor TranscriptAnalysisIndex {
             try statement.bind(contribution.roleCounts.assistant, at: 4)
             try statement.bind(contribution.roleCounts.tool, at: 5)
             try statement.bind(contribution.roleCounts.system, at: 6)
-            try statement.bind(contribution.sourceCounts.dictionary, at: 7)
+            try statement.bind(0, at: 7)
             try statement.bind(contribution.sourceCounts.naturalLanguage, at: 8)
             try statement.bind(contribution.sourceCounts.jieba, at: 9)
             try statement.bind(contribution.sourceCounts.code, at: 10)
@@ -960,7 +958,7 @@ actor TranscriptAnalysisIndex {
         try statement.bind(contribution.roleCounts.assistant, at: 10)
         try statement.bind(contribution.roleCounts.tool, at: 11)
         try statement.bind(contribution.roleCounts.system, at: 12)
-        try statement.bind(contribution.sourceCounts.dictionary, at: 13)
+        try statement.bind(0, at: 13)
         try statement.bind(contribution.sourceCounts.naturalLanguage, at: 14)
         try statement.bind(contribution.sourceCounts.jieba, at: 15)
         try statement.bind(contribution.sourceCounts.code, at: 16)
@@ -1209,7 +1207,6 @@ actor TranscriptAnalysisIndex {
                     system: statement.columnInt(10)
                 ),
                 sourceCounts: TranscriptSourceCounts(
-                    dictionary: statement.columnInt(11),
                     naturalLanguage: statement.columnInt(12),
                     jieba: statement.columnInt(13),
                     code: statement.columnInt(14),
@@ -1306,7 +1303,7 @@ actor TranscriptAnalysisIndex {
         tokenizerID: String,
         optionsDigest: String,
         sessionSetDigest: String,
-        dictionarySignature: String,
+        analysisSignature: String,
         sessionCount: Int,
         analyzedSessionCount: Int,
         updatedAt: TimeInterval,
@@ -1337,7 +1334,7 @@ actor TranscriptAnalysisIndex {
         try statement.bind(tokenizerID, at: 4)
         try statement.bind(optionsDigest, at: 5)
         try statement.bind(sessionSetDigest, at: 6)
-        try statement.bind(dictionarySignature, at: 7)
+        try statement.bind(analysisSignature, at: 7)
         try statement.bind(sessionCount, at: 8)
         try statement.bind(analyzedSessionCount, at: 9)
         try statement.bind(updatedAt, at: 10)

@@ -156,7 +156,6 @@ Current settings families include:
 - Notch Island
 - Platforms
 - Tracking
-- Dictionary
 - Local AI
 - Leaderboards
 - GitHub
@@ -174,6 +173,10 @@ Requirements:
 - Sparkle-powered update checks.
 - Clear "Check for Updates" action in Settings.
 - Support packaged releases without changing the in-app product flow.
+
+## Fork-Specific Omissions
+
+This fork intentionally does not include the upstream Dictionary / Technical Terms feature. User-managed transcript terminology, its settings page, bundled term resources, and import/export workflow are out of scope for this project. Future upstream changes in that area should not be followed by default; reconsider only if this fork explicitly needs user-maintained terminology again.
 
 ## Non-Functional Requirements
 

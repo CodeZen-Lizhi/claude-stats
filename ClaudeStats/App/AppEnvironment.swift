@@ -13,7 +13,6 @@ final class AppEnvironment {
     let preferences: Preferences
     let providerRegistry: ProviderRegistry
     let store: SessionStore
-    let technicalTerms: TechnicalTermDictionaryStore
     let localAI: LocalAIStore
     let transcriptAnalysis: TranscriptAnalysisStore
     let updater = UpdaterController()
@@ -57,15 +56,10 @@ final class AppEnvironment {
         self.preferences = preferences
         self.providerRegistry = providerRegistry
         self.store = store
-        let technicalTermRepository = TechnicalTermDictionaryRepository()
-        self.technicalTerms = TechnicalTermDictionaryStore(repository: technicalTermRepository)
         let localAI = LocalAIStore()
         self.localAI = localAI
         self.transcriptAnalysis = TranscriptAnalysisStore(
             service: TranscriptAnalysisService(
-                dictionaryResolver: { session in
-                    await technicalTermRepository.snapshot(for: session)
-                },
                 embeddingStatusResolver: {
                     await MainActor.run {
                         localAI.selectedEmbeddingStatus

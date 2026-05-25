@@ -3,7 +3,6 @@ import Foundation
 
 typealias TranscriptMessageLoader = @Sendable (Session) async -> [SessionTranscriptMessage]
 typealias TranscriptAnalysisProgressHandler = @Sendable (TranscriptAnalysisProgress) async -> Void
-typealias TranscriptDictionaryResolver = @Sendable (Session) async -> TechnicalTermDictionarySnapshot
 typealias TranscriptEmbeddingStatusResolver = @Sendable () async -> EmbeddingModelStatus
 
 struct TranscriptAnalysisService: Sendable {
@@ -12,20 +11,17 @@ struct TranscriptAnalysisService: Sendable {
     private let extractor: TranscriptTermExtractor
     private let index: TranscriptAnalysisIndex
     private let maxConcurrentSessions: Int
-    private let dictionaryResolver: TranscriptDictionaryResolver
     private let embeddingStatusResolver: TranscriptEmbeddingStatusResolver
 
     init(
         extractor: TranscriptTermExtractor = TranscriptTermExtractor(),
         index: TranscriptAnalysisIndex = TranscriptAnalysisIndex(),
         maxConcurrentSessions: Int = 4,
-        dictionaryResolver: @escaping TranscriptDictionaryResolver = { _ in TechnicalTermDictionarySnapshot.fallback },
         embeddingStatusResolver: @escaping TranscriptEmbeddingStatusResolver = { .notConfigured }
     ) {
         self.extractor = extractor
         self.index = index
         self.maxConcurrentSessions = max(1, maxConcurrentSessions)
-        self.dictionaryResolver = dictionaryResolver
         self.embeddingStatusResolver = embeddingStatusResolver
     }
 
@@ -37,17 +33,9 @@ struct TranscriptAnalysisService: Sendable {
         onProgress: TranscriptAnalysisProgressHandler? = nil
     ) async throws -> TranscriptAnalysisSnapshot {
         let started = Date()
-        let dictionarySnapshots = await resolveDictionaries(for: sessions)
-        let dictionaryVersionsBySessionID = Dictionary(
-            uniqueKeysWithValues: dictionarySnapshots.map { ($0.key, $0.value.digest) }
-        )
-        let dictionarySignature = Self.dictionarySignature(
-            for: sessions,
-            snapshotsBySessionID: dictionarySnapshots
-        )
+        let analysisSignature = Self.analysisSignature(for: sessions)
         let embeddingStatus = await embeddingStatusResolver()
         let engine = await extractor.engineInfo(
-            dictionaryVersion: dictionarySignature,
             embeddingStatus: embeddingStatus
         )
 
@@ -71,8 +59,7 @@ struct TranscriptAnalysisService: Sendable {
             provider: provider,
             sessions: sessions,
             tokenizerID: engine.tokenizerID,
-            dictionaryVersion: engine.dictionaryVersion,
-            dictionaryVersionsBySessionID: dictionaryVersionsBySessionID,
+            analysisVersion: engine.analysisVersion,
             forceRefresh: forceRefresh
         )
         let lookupDuration = Date().timeIntervalSince(lookupStarted)
@@ -100,17 +87,11 @@ struct TranscriptAnalysisService: Sendable {
             }
         }
         if !pendingJobs.isEmpty {
-            let runtimeDictionaries = Self.runtimeDictionaries(from: dictionarySnapshots)
             jobs = pendingJobs.map { pending in
                 AnalysisJob(
                     session: pending.lookup.session,
                     key: pending.lookup.key,
-                    mode: pending.mode,
-                    dictionary: Self.runtimeDictionary(
-                        for: pending.lookup.session,
-                        snapshotsBySessionID: dictionarySnapshots,
-                        runtimeDictionariesByDigest: runtimeDictionaries
-                    )
+                    mode: pending.mode
                 )
             }
         }
@@ -161,8 +142,7 @@ struct TranscriptAnalysisService: Sendable {
                         let extractStarted = Date()
                         let analysis = await extractor.extract(
                             session: job.session,
-                            messages: messages,
-                            dictionary: job.dictionary
+                            messages: messages
                         )
                         return .analyzed(
                             job: job,
@@ -246,7 +226,7 @@ struct TranscriptAnalysisService: Sendable {
             sessions: sessions,
             keysBySessionID: keysBySessionID,
             engine: engine,
-            dictionarySignature: dictionarySignature,
+            analysisSignature: analysisSignature,
             runSummary: summary
         )
         let tfidfDuration = Date().timeIntervalSince(tfidfStarted)
@@ -279,50 +259,8 @@ struct TranscriptAnalysisService: Sendable {
             .joined(separator: "|")
     }
 
-    private func resolveDictionaries(for sessions: [Session]) async -> [String: TechnicalTermDictionarySnapshot] {
-        var snapshots: [String: TechnicalTermDictionarySnapshot] = [:]
-        snapshots.reserveCapacity(sessions.count)
-        for session in sessions {
-            snapshots[session.id] = await dictionaryResolver(session)
-        }
-        return snapshots
-    }
-
-    private static func dictionarySignature(
-        for sessions: [Session],
-        snapshotsBySessionID: [String: TechnicalTermDictionarySnapshot]
-    ) -> String {
-        let rows = sessions
-            .map { session in
-                "\(session.id):\(snapshotsBySessionID[session.id]?.digest ?? TechnicalTermDictionarySnapshot.fallback.digest)"
-            }
-            .sorted()
-            .joined(separator: "|")
-        return "dictionary-corpus-\(sha256(rows))"
-    }
-
-    private static func runtimeDictionaries(
-        from snapshotsBySessionID: [String: TechnicalTermDictionarySnapshot]
-    ) -> [String: TechnicalTermDictionary] {
-        var dictionaries: [String: TechnicalTermDictionary] = [:]
-        dictionaries.reserveCapacity(Set(snapshotsBySessionID.values.map(\.digest)).count + 1)
-        for snapshot in snapshotsBySessionID.values where dictionaries[snapshot.digest] == nil {
-            dictionaries[snapshot.digest] = snapshot.dictionary
-        }
-        let fallback = TechnicalTermDictionarySnapshot.fallback
-        if dictionaries[fallback.digest] == nil {
-            dictionaries[fallback.digest] = fallback.dictionary
-        }
-        return dictionaries
-    }
-
-    private static func runtimeDictionary(
-        for session: Session,
-        snapshotsBySessionID: [String: TechnicalTermDictionarySnapshot],
-        runtimeDictionariesByDigest: [String: TechnicalTermDictionary]
-    ) -> TechnicalTermDictionary {
-        let snapshot = snapshotsBySessionID[session.id] ?? .fallback
-        return runtimeDictionariesByDigest[snapshot.digest] ?? snapshot.dictionary
+    private static func analysisSignature(for sessions: [Session]) -> String {
+        "analysis-corpus-\(sha256(corpusSignature(for: sessions)))"
     }
 
     private func publish(
@@ -352,7 +290,6 @@ private struct AnalysisJob: Sendable {
     let session: Session
     let key: TranscriptAnalysisKey
     let mode: Mode
-    let dictionary: TechnicalTermDictionary
 }
 
 private enum AnalysisJobResult: Sendable {

@@ -6,7 +6,7 @@ struct TranscriptTFIDFAnalyzer: Sendable {
         sessions: [Session],
         sessionAnalyses: [TranscriptSessionAnalysis],
         engine: TranscriptAnalysisEngineInfo,
-        dictionarySignature: String = TechnicalTermDictionarySnapshot.fallback.digest,
+        analysisSignature: String = TranscriptTermExtractor.analysisVersion,
         runSummary: TranscriptAnalysisRunSummary = .empty,
         now: Date = .now
     ) -> TranscriptAnalysisSnapshot {
@@ -76,7 +76,7 @@ struct TranscriptTFIDFAnalyzer: Sendable {
             terms: terms,
             sessionAnalyses: sessionAnalyses,
             engine: engine,
-            dictionarySignature: dictionarySignature,
+            analysisSignature: analysisSignature,
             runSummary: runSummary
         )
     }
@@ -108,7 +108,6 @@ private extension TranscriptRoleCounts {
 
 private extension TranscriptSourceCounts {
     mutating func merge(_ other: TranscriptSourceCounts) {
-        dictionary += other.dictionary
         naturalLanguage += other.naturalLanguage
         jieba += other.jieba
         code += other.code
