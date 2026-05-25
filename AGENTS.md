@@ -15,6 +15,14 @@ the same bundle id cause Launch Services conflicts and the menu-bar item silentl
 fails to appear. Always use `/tmp/Codex-stats-build` as the `-derivedDataPath` and
 launch by full path (the script does this).
 
+Because the app is intended to stay resident in the menu bar even when no normal
+window is open, launch code must keep AppKit Automatic Termination disabled
+(`ProcessInfo.processInfo.disableAutomaticTermination(...)`). AppKit can
+temporarily re-enable termination while finishing launch/window-restoration
+bookkeeping, so the app reasserts this policy after the first launch pass. Do
+not remove that lifecycle policy unless the replacement is proven to keep the
+packaged `LSUIElement` app alive while idle.
+
 After every round that changes code, run `bash scripts/run-debug.sh` before
 responding so the latest build is compiled and launched from the canonical
 DerivedData path.

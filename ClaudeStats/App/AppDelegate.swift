@@ -25,6 +25,8 @@ final class AppDelegate: GhosttyEmbed.AppDelegate {
         UNUserNotificationCenter.current().delegate = linuxDoNotificationDelegate
         MainActor.assumeIsolated {
             Theme.registerFonts()
+            AppLifecyclePolicy.configureAutomaticTermination()
+            AppLifecyclePolicy.reassertAfterLaunchRestoration()
             env.start()
             requestMainWindowOnLaunchIfNeeded()
         }
