@@ -3,6 +3,18 @@
 extension ReleaseHistoryCatalog {
     static let generatedEntries: [ReleaseHistoryEntry] = [
         ReleaseHistoryEntry(
+            version: "1.7.5",
+            date: "May 25, 2026",
+            headline: "新增GitDiff交互点击测试模块与配套测试",
+            changes: [
+                "新增diff文本测量、概览布局计算模块",
+                "新增侧边概览栏显示差异块",
+                "重构渲染调色板支持选中状态样式",
+                "重构diff布局计算支持自适应容器宽度",
+                "新增代码行自动换行适配窄宽度",
+            ]
+        ),
+        ReleaseHistoryEntry(
             version: "1.7.4",
             date: "May 24, 2026",
             headline: "新增了完整的Sparkle增量更新自动化流程，包括delta生成、签名和appcast更新；同时扩展了调试符号清理脚本，新增对对象文件和CMake构建产物的清理，并在代码签名脚本中跳过这些无用工件；新增了对应的单元测试，完善了CI发布流程的注释与步骤调整。",
