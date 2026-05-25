@@ -2,9 +2,9 @@ import SwiftUI
 import Charts
 import AppKit
 
-/// The "Git" view: the commit activity of the repositories you've used Claude
-/// Code in (resolved from each session's `cwd`), and how it lines up with your
-/// Claude usage. Shells out to `git` — see ``GitAnalyzer``.
+/// The "Git" view: commit activity from repositories remembered by the
+/// configured Git workspace sources, and how session-backed sources line up
+/// with AI usage. Shells out to `git` — see ``GitAnalyzer``.
 ///
 /// Shown either as a pane inside the menu panel or in its own window, depending
 /// on `Preferences.gitOpensInWindow`. Unlike the other panes it has no export
@@ -40,7 +40,7 @@ struct GitActivityView: View {
     private struct ReloadKey: Equatable {
         let token: UInt64
         let lastRefreshed: Date?
-        let provider: ProviderKind
+        let sourceIDs: String
     }
 
     private var activityModel: GitActivityViewModel {
@@ -58,8 +58,12 @@ struct GitActivityView: View {
     private var overviewBody: some View {
         let model = activityModel
         @Bindable var vm = model
-        let provider = env.preferences.selectedProvider
-        let key = ReloadKey(token: vm.reloadToken, lastRefreshed: env.store.lastRefreshedAt, provider: provider)
+        let sourceIDs = env.preferences.gitWorkspaceSourceIDs
+        let key = ReloadKey(
+            token: vm.reloadToken,
+            lastRefreshed: env.store.lastRefreshedAt,
+            sourceIDs: GitWorkspaceSourceCatalog.storageString(for: sourceIDs)
+        )
         return AppScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 headerRow
@@ -69,7 +73,7 @@ struct GitActivityView: View {
                            "Couldn't run the `git` command. Install the Xcode command-line tools (`xcode-select --install`) and refresh.")
                 } else if !vm.hasData {
                     notice("NO GIT ACTIVITY",
-                           "None of the projects you've used Claude Code in are git repositories with commits in this window — or the window is too short. Try a wider range.")
+                           "None of the configured Git sources have repositories with commits in this window — or the window is too short. Try a wider range.")
                 } else {
                     recentCommitsPanel
                     summaryGrid
@@ -83,8 +87,8 @@ struct GitActivityView: View {
         .task(id: key) {
             if isPreview { return }
             await vm.reloadIfNeeded(
-                sessions: env.store.sessions(for: provider),
-                provider: provider,
+                sessions: env.store.sessions,
+                sourceIDs: sourceIDs,
                 lastRefreshedAt: env.store.lastRefreshedAt
             )
         }
@@ -167,7 +171,7 @@ struct GitActivityView: View {
         let points = vm.correlationPoints
         let hasTokens = points.contains { $0.claudeTokens > 0 }
         return VStack(alignment: .leading, spacing: 10) {
-            Text("CLAUDE USAGE vs COMMITS")
+            Text("AI USAGE vs COMMITS")
                 .font(.sora(13, weight: .semibold))
                 .tracking(1.5)
                 .foregroundStyle(.primary)
@@ -180,7 +184,7 @@ struct GitActivityView: View {
                 emptyChartNote("Nothing to plot for this range.")
             } else {
                 StxRule()
-                Text("CLAUDE TOKENS").font(.sora(8)).tracking(0.6).foregroundStyle(Color.stxMuted)
+                Text("AI TOKENS").font(.sora(8)).tracking(0.6).foregroundStyle(Color.stxMuted)
                 tokensChart(points, hasTokens: hasTokens)
                 Text("COMMITS").font(.sora(8)).tracking(0.6).foregroundStyle(Color.stxMuted)
                 commitsChart(points)

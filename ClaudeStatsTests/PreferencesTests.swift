@@ -15,6 +15,24 @@ struct PreferencesTests {
         #expect(prefs.floatingTabAnchor == 0.5)
     }
 
+    @Test("Main window opens on launch by default")
+    func mainWindowLaunchDefault() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+
+        #expect(prefs.openMainWindowOnLaunch == true)
+    }
+
+    @Test("Main window launch preference persists")
+    func mainWindowLaunchPersists() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+        prefs.openMainWindowOnLaunch = false
+
+        let reloaded = Preferences(defaults: defaults)
+        #expect(reloaded.openMainWindowOnLaunch == false)
+    }
+
     @Test("Floating tab preferences persist")
     func floatingTabPersists() {
         let defaults = makeDefaults()
@@ -352,6 +370,43 @@ struct PreferencesTests {
 
         let prefs = Preferences(defaults: defaults)
         #expect(prefs.gitDiffBlockGranularity == .fine)
+    }
+
+    @Test("Git workspace sources default to Claude and Codex")
+    func gitWorkspaceSourcesDefault() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+
+        #expect(prefs.gitWorkspaceSourceIDs == [.claude, .codex])
+    }
+
+    @Test("Git workspace sources persist")
+    func gitWorkspaceSourcesPersist() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+        prefs.gitWorkspaceSourceIDs = [.claude, .cursor, .traeCN]
+
+        let reloaded = Preferences(defaults: defaults)
+        #expect(reloaded.gitWorkspaceSourceIDs == [.claude, .cursor, .traeCN])
+        #expect(defaults.string(forKey: "gitWorkspaceSourceIDs") == "claude,cursor,traeCN")
+    }
+
+    @Test("Empty git workspace sources fall back to defaults")
+    func emptyGitWorkspaceSourcesFallBack() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+        prefs.gitWorkspaceSourceIDs = []
+
+        #expect(prefs.gitWorkspaceSourceIDs == [.claude, .codex])
+    }
+
+    @Test("Invalid stored git workspace sources fall back to defaults")
+    func invalidGitWorkspaceSourcesFallBack() {
+        let defaults = makeDefaults()
+        defaults.set("claude,unknown", forKey: "gitWorkspaceSourceIDs")
+
+        let prefs = Preferences(defaults: defaults)
+        #expect(prefs.gitWorkspaceSourceIDs == [.claude, .codex])
     }
 
     @Test("Cost estimation mode defaults to API estimate")

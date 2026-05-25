@@ -69,6 +69,11 @@ final class Preferences {
     var menuBarIncludesCache: Bool {
         didSet { defaults.set(menuBarIncludesCache, forKey: Keys.menuBarIncludesCache) }
     }
+    /// Whether launching Claude Stats should present the main window. On by
+    /// default so double-clicking the app behaves like a normal windowed app.
+    var openMainWindowOnLaunch: Bool {
+        didSet { defaults.set(openMainWindowOnLaunch, forKey: Keys.openMainWindowOnLaunch) }
+    }
     /// Optional floating edge tab used as a backup entry point when the macOS
     /// menu bar is crowded.
     var floatingTabEnabled: Bool {
@@ -252,6 +257,21 @@ final class Preferences {
     /// (button next to the panel title); `false` shows it as a pane in the panel.
     var gitOpensInWindow: Bool {
         didSet { defaults.set(gitOpensInWindow, forKey: Keys.gitOpensInWindow) }
+    }
+    /// Sources whose remembered workspaces feed the Git view. Defaults to
+    /// Claude Code + Codex sessions, with AI editor workspace histories opt-in.
+    var gitWorkspaceSourceIDs: Set<GitWorkspaceSourceID> {
+        didSet {
+            let normalized = GitWorkspaceSourceCatalog.normalized(gitWorkspaceSourceIDs)
+            guard normalized == gitWorkspaceSourceIDs else {
+                gitWorkspaceSourceIDs = normalized
+                return
+            }
+            defaults.set(
+                GitWorkspaceSourceCatalog.storageString(for: normalized),
+                forKey: Keys.gitWorkspaceSourceIDs
+            )
+        }
     }
     /// Which tree the repo language/SLOC inspector uses.
     var gitStatsScope: GitStatsScope {
@@ -458,6 +478,7 @@ final class Preferences {
         includeCacheInTokens = (defaults.object(forKey: Keys.includeCacheInTokens) as? Bool) ?? true
         costEstimationMode = CostEstimationMode(rawValue: defaults.string(forKey: Keys.costEstimationMode) ?? "") ?? .standardAPI
         menuBarIncludesCache = (defaults.object(forKey: Keys.menuBarIncludesCache) as? Bool) ?? true
+        openMainWindowOnLaunch = (defaults.object(forKey: Keys.openMainWindowOnLaunch) as? Bool) ?? true
         floatingTabEnabled = (defaults.object(forKey: Keys.floatingTabEnabled) as? Bool) ?? true
         floatingTabEdge = FloatingPanelEdge(rawValue: defaults.string(forKey: Keys.floatingTabEdge) ?? "") ?? .right
         floatingTabAnchor = (defaults.object(forKey: Keys.floatingTabAnchor) as? Double) ?? 0.5
@@ -517,6 +538,9 @@ final class Preferences {
         aiActivityAnalysisEnabled = defaults.bool(forKey: Keys.aiActivityAnalysisEnabled)
         gitTrackingEnabled = defaults.bool(forKey: Keys.gitTrackingEnabled)
         gitOpensInWindow = defaults.bool(forKey: Keys.gitOpensInWindow)
+        gitWorkspaceSourceIDs = GitWorkspaceSourceCatalog.decodeStoredSourceIDs(
+            defaults.string(forKey: Keys.gitWorkspaceSourceIDs)
+        )
         gitStatsScope = GitStatsScope(rawValue: defaults.string(forKey: Keys.gitStatsScope) ?? "") ?? .head
         gitDiffBlockGranularity = GitDiffBlockGranularity(
             rawValue: defaults.string(forKey: Keys.gitDiffBlockGranularity) ?? ""
@@ -664,6 +688,7 @@ final class Preferences {
         static let includeCacheInTokens = "includeCacheInTokens"
         static let costEstimationMode = "costEstimationMode"
         static let menuBarIncludesCache = "menuBarIncludesCache"
+        static let openMainWindowOnLaunch = "openMainWindowOnLaunch"
         static let floatingTabEnabled = "floatingTabEnabled"
         static let floatingTabEdge = "floatingTabEdge"
         static let floatingTabAnchor = "floatingTabAnchor"
@@ -700,6 +725,7 @@ final class Preferences {
         static let aiActivityAnalysisEnabled = "aiActivityAnalysisEnabled"
         static let gitTrackingEnabled = "gitTrackingEnabled"
         static let gitOpensInWindow = "gitOpensInWindow"
+        static let gitWorkspaceSourceIDs = "gitWorkspaceSourceIDs"
         static let gitStatsScope = "gitStatsScope"
         static let gitDiffBlockGranularity = "gitDiffBlockGranularity"
         static let codingSurfaceBundleIDsAdded = "codingSurfaceBundleIDsAdded"

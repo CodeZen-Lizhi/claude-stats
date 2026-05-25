@@ -11,7 +11,11 @@ struct ClaudeStatsApp: App {
         } label: {
             MenuBarLabel()
                 .appEnvironment(appDelegate.env)
-                .background(FloatingStatsCommandBridge())
+                .background {
+                    FloatingStatsCommandBridge()
+                    MainWindowLaunchBridge()
+                        .appEnvironment(appDelegate.env)
+                }
         }
         .menuBarExtraStyle(.window)
 

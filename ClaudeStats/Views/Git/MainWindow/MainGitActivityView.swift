@@ -40,7 +40,7 @@ struct MainGitActivityView: View {
     private struct ReloadKey: Equatable {
         let token: UInt64
         let lastRefreshed: Date?
-        let provider: ProviderKind
+        let sourceIDs: String
     }
 
     private var currentSelection: String {
@@ -59,8 +59,12 @@ struct MainGitActivityView: View {
     var body: some View {
         let model = activityModel
         @Bindable var vm = model
-        let provider = env.preferences.selectedProvider
-        let key = ReloadKey(token: vm.reloadToken, lastRefreshed: env.store.lastRefreshedAt, provider: provider)
+        let sourceIDs = env.preferences.gitWorkspaceSourceIDs
+        let key = ReloadKey(
+            token: vm.reloadToken,
+            lastRefreshed: env.store.lastRefreshedAt,
+            sourceIDs: GitWorkspaceSourceCatalog.storageString(for: sourceIDs)
+        )
 
         return VStack(spacing: 0) {
             header(model: vm)
@@ -91,8 +95,8 @@ struct MainGitActivityView: View {
         .task(id: key) {
             if isPreview { return }
             await vm.reloadIfNeeded(
-                sessions: env.store.sessions(for: provider),
-                provider: provider,
+                sessions: env.store.sessions,
+                sourceIDs: sourceIDs,
                 lastRefreshedAt: env.store.lastRefreshedAt
             )
             reconcileSelection()
@@ -112,7 +116,7 @@ struct MainGitActivityView: View {
                 Text("Repository workspace")
                     .font(.sora(24, weight: .semibold))
                     .lineLimit(1)
-                Text("Commits from projects where Claude sessions ran.")
+                Text("Commits from repositories opened or used by configured AI coding tools.")
                     .font(.sora(12))
                     .foregroundStyle(Color.stxMuted)
                     .lineLimit(1)
@@ -142,7 +146,7 @@ struct MainGitActivityView: View {
         } else if !vm.hasData {
             GitWorkspaceNotice(
                 title: "No git activity",
-                message: "No Claude-used projects have git commits in this range. Try a wider window or disable My Commits."
+                message: "No configured Git sources have commits in this range. Try a wider window or disable My Commits."
             )
         } else if let activity = selectedActivity {
             #if DEBUG
@@ -432,7 +436,7 @@ private struct GitCorrelationPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
-                Text("CLAUDE USAGE VS COMMITS")
+                Text("AI USAGE VS COMMITS")
                     .font(.sora(13, weight: .semibold))
                     .tracking(1.0)
                 Spacer()
@@ -443,7 +447,7 @@ private struct GitCorrelationPanel: View {
             if correlation.points.isEmpty {
                 GitInlineEmptyState("Nothing to plot for this range.")
             } else {
-                Text("CLAUDE TOKENS")
+                Text("AI TOKENS")
                     .font(.sora(9, weight: .medium))
                     .foregroundStyle(Color.stxMuted)
                 GitTokenOverviewChart(correlation: correlation)
