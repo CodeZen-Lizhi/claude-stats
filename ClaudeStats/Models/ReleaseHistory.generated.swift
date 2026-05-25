@@ -3,6 +3,18 @@
 extension ReleaseHistoryCatalog {
     static let generatedEntries: [ReleaseHistoryEntry] = [
         ReleaseHistoryEntry(
+            version: "1.7.6",
+            date: "May 25, 2026",
+            headline: "替换了原有的系统图标，为Cursor、Windsurf、Trae、Qoder等Git工作区源添加了专属的自定义logo资源，更新了相关的数据模型和视图显示逻辑。",
+            changes: [
+                "新增GitWorkspaceSourceID枚举与相关工具类，支持Claude、Codex、Cursor等多源配置",
+                "新增偏好设置项gitWorkspaceSourceIDs，可自定义启用的仓库数据来源",
+                "在设置界面添加仓库源配置卡片，支持切换会话来源和编辑器工作区来源",
+                "重构Git活动视图，改用配置的源ID过滤会话和工作区数据",
+                "新增完整的测试用例覆盖源解析、工作区路径读取等逻辑",
+            ]
+        ),
+        ReleaseHistoryEntry(
             version: "1.7.5",
             date: "May 25, 2026",
             headline: "新增GitDiff交互点击测试模块与配套测试",
