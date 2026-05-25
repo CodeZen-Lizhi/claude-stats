@@ -21,6 +21,7 @@ struct GitWorkspaceSourceDescriptor: Sendable, Identifiable, Hashable {
     let id: GitWorkspaceSourceID
     let displayName: String
     let detail: String
+    let assetName: String
     let kind: GitWorkspaceSourceKind
 
     var isSessionBacked: Bool {
@@ -37,12 +38,14 @@ enum GitWorkspaceSourceCatalog {
             id: .claude,
             displayName: "Claude Code",
             detail: "Repos from Claude Code transcript working directories.",
+            assetName: "claudecode-logo",
             kind: .sessionProvider(.claude)
         ),
         GitWorkspaceSourceDescriptor(
             id: .codex,
             displayName: "OpenAI Codex",
             detail: "Repos from Codex session working directories.",
+            assetName: "codex-logo",
             kind: .sessionProvider(.codex)
         ),
     ]
@@ -52,30 +55,35 @@ enum GitWorkspaceSourceCatalog {
             id: .cursor,
             displayName: "Cursor",
             detail: "Repos from Cursor workspace history.",
+            assetName: "cursor-logo",
             kind: .vscodeWorkspaceStorage(appSupportDirectoryName: "Cursor")
         ),
         GitWorkspaceSourceDescriptor(
             id: .windsurf,
             displayName: "Windsurf",
             detail: "Repos from Windsurf workspace history.",
+            assetName: "windsurf-logo",
             kind: .vscodeWorkspaceStorage(appSupportDirectoryName: "Windsurf")
         ),
         GitWorkspaceSourceDescriptor(
             id: .trae,
             displayName: "Trae",
             detail: "Repos from Trae workspace history.",
+            assetName: "trae-logo",
             kind: .vscodeWorkspaceStorage(appSupportDirectoryName: "Trae")
         ),
         GitWorkspaceSourceDescriptor(
             id: .traeCN,
             displayName: "Trae CN",
             detail: "Repos from Trae CN workspace history.",
+            assetName: "trae-logo",
             kind: .vscodeWorkspaceStorage(appSupportDirectoryName: "Trae CN")
         ),
         GitWorkspaceSourceDescriptor(
             id: .qoder,
             displayName: "Qoder",
             detail: "Repos from Qoder workspace history.",
+            assetName: "qoder-logo",
             kind: .vscodeWorkspaceStorage(appSupportDirectoryName: "Qoder")
         ),
     ]

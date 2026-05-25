@@ -331,10 +331,13 @@ struct TrackingSettingsView: View {
         let isOn = prefs.gitWorkspaceSourceIDs.contains(source.id)
         let isLastEnabled = isOn && prefs.gitWorkspaceSourceIDs.count == 1
         return HStack(spacing: 12) {
-            Image(systemName: gitWorkspaceSourceIcon(source.id))
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(isOn ? Color.stxAccent : Color.stxMuted)
-                .frame(width: 18)
+            Image(source.assetName)
+                .resizable()
+                .renderingMode(.original)
+                .scaledToFit()
+                .frame(width: 22, height: 22)
+                .opacity(isOn ? 1 : 0.45)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(source.displayName)
                     .font(.sora(13, weight: .medium))
@@ -363,17 +366,6 @@ struct TrackingSettingsView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-    }
-
-    private func gitWorkspaceSourceIcon(_ id: GitWorkspaceSourceID) -> String {
-        switch id {
-        case .claude: "sparkles"
-        case .codex: "chevron.left.forwardslash.chevron.right"
-        case .cursor: "cursorarrow"
-        case .windsurf: "wind"
-        case .trae, .traeCN: "sparkle.magnifyingglass"
-        case .qoder: "q.square"
-        }
     }
 }
 
