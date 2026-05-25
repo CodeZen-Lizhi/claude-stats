@@ -26,8 +26,10 @@ Re-running for a version that's already in the appcast is a no-op.
 """
 import argparse
 import email.utils
+import html
 import json
 import os
+import re
 import sys
 import time
 
@@ -62,6 +64,82 @@ ITEM_TEMPLATE = """    <item>
 DELTA_ENCLOSURE_TEMPLATE = """        <enclosure url="{url}" sparkle:deltaFrom="{delta_from}" {enclosure_attrs} type="application/octet-stream"/>
 """
 
+LENGTH_ATTRIBUTE_RE = re.compile(r'(?:^|\s)length="(?P<length>\d+)"')
+
+
+def enclosure_length(enclosure_attrs: str) -> int | None:
+    match = LENGTH_ATTRIBUTE_RE.search(enclosure_attrs)
+    if match is None:
+        return None
+    return int(match.group("length"))
+
+
+def format_byte_count(byte_count: int) -> str:
+    if byte_count == 1:
+        return "1 byte"
+    if byte_count < 1000:
+        return f"{byte_count} bytes"
+
+    value = float(byte_count)
+    for unit in ("KB", "MB", "GB", "TB"):
+        value /= 1000.0
+        if value < 1000.0 or unit == "TB":
+            places = 0 if value >= 100 else 1
+            text = f"{value:.{places}f}".rstrip("0").rstrip(".")
+            return f"{text} {unit}"
+
+    return f"{byte_count} bytes"
+
+
+def delta_display_name(delta: dict[str, str]) -> str:
+    display = delta.get("deltaFromDisplay")
+    build = delta["deltaFrom"]
+    if display:
+        return f"{display} (build {build})"
+    return f"build {build}"
+
+
+def render_download_size_notes(enclosure_attrs: str, deltas: list[dict[str, str]]) -> str:
+    full_length = enclosure_length(enclosure_attrs)
+    if full_length is None:
+        raise ValueError("full enclosureAttrs must include length")
+
+    items: list[str] = []
+    for delta in deltas:
+        delta_length = enclosure_length(delta["enclosureAttrs"])
+        if delta_length is None:
+            continue
+        from_display = html.escape(delta_display_name(delta))
+        size = format_byte_count(delta_length)
+        items.append(f"  <li>Incremental update from {from_display}: {size}</li>")
+
+    full_size = format_byte_count(full_length)
+    if deltas:
+        items.append(f"  <li>Full download fallback: {full_size}</li>")
+    else:
+        items.append(f"  <li>Full download: {full_size}</li>")
+
+    return "\n".join(
+        [
+            "<hr/>",
+            "<p><strong>Download size</strong></p>",
+            "<ul>",
+            *items,
+            "</ul>",
+        ]
+    )
+
+
+def append_download_size_notes(
+    notes_html: str,
+    enclosure_attrs: str,
+    deltas: list[dict[str, str]],
+) -> str:
+    size_notes = render_download_size_notes(enclosure_attrs, deltas)
+    if not notes_html:
+        return size_notes
+    return f"{notes_html}\n{size_notes}"
+
 
 def load_deltas(path: str | None) -> list[dict[str, str]]:
     if not path:
@@ -81,6 +159,9 @@ def load_deltas(path: str | None) -> list[dict[str, str]]:
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"delta entry {index} is missing non-empty {key}")
             normalized[key] = value.strip()
+        display = entry.get("deltaFromDisplay")
+        if isinstance(display, str) and display.strip():
+            normalized["deltaFromDisplay"] = display.strip()
         attrs = normalized["enclosureAttrs"]
         if "sparkle:edSignature" not in attrs or "length=" not in attrs:
             raise ValueError(f"delta entry {index} enclosureAttrs must include signature and length")
@@ -139,8 +220,12 @@ def main() -> int:
         return 1
     try:
         deltas = load_deltas(args.deltas_file)
+        notes_html = append_download_size_notes(notes_html, args.enclosure_attrs.strip(), deltas)
     except (OSError, ValueError, json.JSONDecodeError) as error:
-        print("error: invalid deltas file: {}".format(error), file=sys.stderr)
+        print("error: invalid appcast metadata: {}".format(error), file=sys.stderr)
+        return 1
+    if "]]>" in notes_html:
+        print("error: release notes contain ']]>' which would break CDATA", file=sys.stderr)
         return 1
 
     item = ITEM_TEMPLATE.format(

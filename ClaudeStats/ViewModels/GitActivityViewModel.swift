@@ -53,8 +53,8 @@ final class GitActivityViewModel {
     private var lastLoadedIdentity: ReloadIdentity?
 
     private struct ReloadIdentity: Equatable, Sendable {
-        let provider: ProviderKind
         let lastRefreshedAt: Date?
+        let sourceIDs: Set<GitWorkspaceSourceID>
         let range: GitRange
         let onlyMyCommits: Bool
         let reloadToken: UInt64
@@ -68,10 +68,14 @@ final class GitActivityViewModel {
         return calendar.date(byAdding: .day, value: -(range.dayCount - 1), to: today) ?? today
     }
 
-    func reloadIfNeeded(sessions: [Session], provider: ProviderKind, lastRefreshedAt: Date?) async {
+    func reloadIfNeeded(
+        sessions: [Session],
+        sourceIDs: Set<GitWorkspaceSourceID>,
+        lastRefreshedAt: Date?
+    ) async {
         let identity = ReloadIdentity(
-            provider: provider,
             lastRefreshedAt: lastRefreshedAt,
+            sourceIDs: GitWorkspaceSourceCatalog.normalized(sourceIDs),
             range: range,
             onlyMyCommits: onlyMyCommits,
             reloadToken: reloadToken
@@ -84,19 +88,27 @@ final class GitActivityViewModel {
             Log.git.debug("Git activity reload skipped: matching request already loading")
             return
         }
-        await reload(sessions: sessions, identity: identity)
+        await reload(sessions: sessions, sourceIDs: sourceIDs, identity: identity)
     }
 
     func reload(sessions: [Session]) async {
-        await reload(sessions: sessions, identity: nil)
+        await reload(sessions: sessions, sourceIDs: GitWorkspaceSourceCatalog.defaultEnabled)
     }
 
-    private func reload(sessions: [Session], identity: ReloadIdentity?) async {
+    func reload(sessions: [Session], sourceIDs: Set<GitWorkspaceSourceID>) async {
+        await reload(sessions: sessions, sourceIDs: sourceIDs, identity: nil)
+    }
+
+    private func reload(
+        sessions: [Session],
+        sourceIDs: Set<GitWorkspaceSourceID>,
+        identity: ReloadIdentity?
+    ) async {
         activeReloadIdentity = identity
         isLoading = true
         let startedAt = Date()
 
-        let cwds = Array(Set(sessions.compactMap(\.cwd)))
+        let normalizedSourceIDs = GitWorkspaceSourceCatalog.normalized(sourceIDs)
         let since = windowStart
         let onlyMine = onlyMyCommits
         let unit = range.bucketUnit
@@ -104,17 +116,23 @@ final class GitActivityViewModel {
         let endExclusive = cal.dateInterval(of: .day, for: .now)?.end ?? Date.now
 
         let result = await Task.detached(priority: .userInitiated) {
-            () -> (repos: [RepoActivity], email: String?, available: Bool, correlation: [CorrelationPoint], overview: OverviewSnapshot) in
+            () -> (repos: [RepoActivity], email: String?, available: Bool, correlation: [CorrelationPoint], overview: OverviewSnapshot, cwdCount: Int) in
             let git = GitAnalyzer()
-            guard git.isAvailable else { return ([], nil, false, [], .empty) }
+            guard git.isAvailable else { return ([], nil, false, [], .empty, 0) }
             let email = git.currentUserEmail()
+            let resolver = GitWorkspaceSourceResolver()
+            let cwds = resolver.cwds(sessions: sessions, enabledSources: normalizedSourceIDs)
             let reposList = git.repos(forCwds: cwds)
             let activity = git.activity(for: reposList, since: since, authorEmail: onlyMine ? email : nil)
             let sorted = activity.sorted {
                 $0.churn != $1.churn ? $0.churn > $1.churn : $0.commitCount > $1.commitCount
             }
+            let correlationSessions = GitWorkspaceSourceResolver.sessionBackedSources(
+                from: sessions,
+                enabledSources: normalizedSourceIDs
+            )
             let correlation = Self.makeCorrelationPoints(
-                sessions: sessions,
+                sessions: correlationSessions,
                 repos: sorted,
                 unit: unit,
                 since: since,
@@ -122,7 +140,7 @@ final class GitActivityViewModel {
                 calendar: cal
             )
             let overview = Self.makeOverviewSnapshot(repos: sorted, correlation: correlation)
-            return (sorted, email, true, correlation, overview)
+            return (sorted, email, true, correlation, overview, cwds.count)
         }.value
 
         guard activeReloadIdentity == identity else { return }
@@ -135,7 +153,7 @@ final class GitActivityViewModel {
         activeReloadIdentity = nil
         isLoading = false
         let duration = Date().timeIntervalSince(startedAt)
-        Log.git.info("Git activity loaded \(result.repos.count, privacy: .public) repos from \(cwds.count, privacy: .public) cwds in \(String(format: "%.2f", duration), privacy: .public)s")
+        Log.git.info("Git activity loaded \(result.repos.count, privacy: .public) repos from \(result.cwdCount, privacy: .public) cwds in \(String(format: "%.2f", duration), privacy: .public)s")
     }
 
     // MARK: - Derived data

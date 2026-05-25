@@ -200,7 +200,7 @@ struct TrackingSettingsView: View {
         @Bindable var prefs = prefs
         SettingGroup(
             title: "Git Tracking",
-            caption: "Reads commit history of repos you've used Claude Code in (via the `git` command) and compares it with your Claude activity — churn, recent commits, and a usage-vs-commits timeline."
+            caption: "Reads commit history from repositories opened or used by configured AI coding tools via the `git` command."
         ) {
             if !prefs.gitTrackingEnabled {
                 FeatureDisabledNotice(
@@ -210,6 +210,9 @@ struct TrackingSettingsView: View {
                     onSelectSection(.features)
                 }
             }
+
+            repositorySourcesCard(prefs: prefs)
+                .disabledSettingsBlock(!prefs.gitTrackingEnabled)
 
             VStack(spacing: 0) {
                 SettingRow(title: "Open git view in") {
@@ -262,6 +265,114 @@ struct TrackingSettingsView: View {
             }
             .settingCard()
             .disabledSettingsBlock(!prefs.gitTrackingEnabled)
+        }
+    }
+
+    private func repositorySourcesCard(prefs: Preferences) -> some View {
+        @Bindable var prefs = prefs
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Repository sources")
+                    .font(.sora(13, weight: .medium))
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 8)
+
+            SettingRowDivider()
+
+            gitWorkspaceSourceSection(
+                title: "Session sources",
+                caption: "Transcript working directories.",
+                sources: GitWorkspaceSourceCatalog.sessionSources,
+                prefs: prefs
+            )
+
+            SettingRowDivider()
+
+            gitWorkspaceSourceSection(
+                title: "AI editor workspace history",
+                caption: "Workspace folders remembered by each editor.",
+                sources: GitWorkspaceSourceCatalog.editorSources,
+                prefs: prefs
+            )
+        }
+        .settingCard()
+    }
+
+    private func gitWorkspaceSourceSection(
+        title: String,
+        caption: String,
+        sources: [GitWorkspaceSourceDescriptor],
+        prefs: Preferences
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.sora(12, weight: .semibold))
+                    .foregroundStyle(.primary)
+                Text(caption)
+                    .font(.sora(10))
+                    .foregroundStyle(Color.stxMuted)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+
+            let rows = Array(sources.enumerated())
+            ForEach(rows, id: \.element.id) { index, source in
+                if index > 0 { SettingRowDivider() }
+                gitWorkspaceSourceRow(source, prefs: prefs)
+            }
+        }
+    }
+
+    private func gitWorkspaceSourceRow(_ source: GitWorkspaceSourceDescriptor, prefs: Preferences) -> some View {
+        let isOn = prefs.gitWorkspaceSourceIDs.contains(source.id)
+        let isLastEnabled = isOn && prefs.gitWorkspaceSourceIDs.count == 1
+        return HStack(spacing: 12) {
+            Image(systemName: gitWorkspaceSourceIcon(source.id))
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(isOn ? Color.stxAccent : Color.stxMuted)
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(source.displayName)
+                    .font(.sora(13, weight: .medium))
+                Text(source.detail)
+                    .font(.sora(11))
+                    .foregroundStyle(Color.stxMuted)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 12)
+            Toggle("", isOn: Binding(
+                get: { prefs.gitWorkspaceSourceIDs.contains(source.id) },
+                set: { enabled in
+                    var ids = prefs.gitWorkspaceSourceIDs
+                    if enabled {
+                        ids.insert(source.id)
+                    } else {
+                        ids.remove(source.id)
+                    }
+                    prefs.gitWorkspaceSourceIDs = ids
+                }
+            ))
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .disabled(isLastEnabled)
+            .help(isLastEnabled ? "At least one repository source must stay enabled." : source.detail)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private func gitWorkspaceSourceIcon(_ id: GitWorkspaceSourceID) -> String {
+        switch id {
+        case .claude: "sparkles"
+        case .codex: "chevron.left.forwardslash.chevron.right"
+        case .cursor: "cursorarrow"
+        case .windsurf: "wind"
+        case .trae, .traeCN: "sparkle.magnifyingglass"
+        case .qoder: "q.square"
         }
     }
 }

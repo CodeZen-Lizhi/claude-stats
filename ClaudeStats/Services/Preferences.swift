@@ -258,6 +258,21 @@ final class Preferences {
     var gitOpensInWindow: Bool {
         didSet { defaults.set(gitOpensInWindow, forKey: Keys.gitOpensInWindow) }
     }
+    /// Sources whose remembered workspaces feed the Git view. Defaults to
+    /// Claude Code + Codex sessions, with AI editor workspace histories opt-in.
+    var gitWorkspaceSourceIDs: Set<GitWorkspaceSourceID> {
+        didSet {
+            let normalized = GitWorkspaceSourceCatalog.normalized(gitWorkspaceSourceIDs)
+            guard normalized == gitWorkspaceSourceIDs else {
+                gitWorkspaceSourceIDs = normalized
+                return
+            }
+            defaults.set(
+                GitWorkspaceSourceCatalog.storageString(for: normalized),
+                forKey: Keys.gitWorkspaceSourceIDs
+            )
+        }
+    }
     /// Which tree the repo language/SLOC inspector uses.
     var gitStatsScope: GitStatsScope {
         didSet { defaults.set(gitStatsScope.rawValue, forKey: Keys.gitStatsScope) }
@@ -523,6 +538,9 @@ final class Preferences {
         aiActivityAnalysisEnabled = defaults.bool(forKey: Keys.aiActivityAnalysisEnabled)
         gitTrackingEnabled = defaults.bool(forKey: Keys.gitTrackingEnabled)
         gitOpensInWindow = defaults.bool(forKey: Keys.gitOpensInWindow)
+        gitWorkspaceSourceIDs = GitWorkspaceSourceCatalog.decodeStoredSourceIDs(
+            defaults.string(forKey: Keys.gitWorkspaceSourceIDs)
+        )
         gitStatsScope = GitStatsScope(rawValue: defaults.string(forKey: Keys.gitStatsScope) ?? "") ?? .head
         gitDiffBlockGranularity = GitDiffBlockGranularity(
             rawValue: defaults.string(forKey: Keys.gitDiffBlockGranularity) ?? ""
@@ -707,6 +725,7 @@ final class Preferences {
         static let aiActivityAnalysisEnabled = "aiActivityAnalysisEnabled"
         static let gitTrackingEnabled = "gitTrackingEnabled"
         static let gitOpensInWindow = "gitOpensInWindow"
+        static let gitWorkspaceSourceIDs = "gitWorkspaceSourceIDs"
         static let gitStatsScope = "gitStatsScope"
         static let gitDiffBlockGranularity = "gitDiffBlockGranularity"
         static let codingSurfaceBundleIDsAdded = "codingSurfaceBundleIDsAdded"

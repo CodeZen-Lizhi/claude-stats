@@ -159,17 +159,21 @@ delta_safety_problem() {
 append_delta_json() {
     local json_file="$1"
     local delta_from="$2"
-    local url="$3"
-    local attrs="$4"
+    local delta_from_display="$3"
+    local url="$4"
+    local attrs="$5"
 
-    python3 - "$json_file" "$delta_from" "$url" "$attrs" <<'PY'
+    python3 - "$json_file" "$delta_from" "$delta_from_display" "$url" "$attrs" <<'PY'
 import json
 import sys
 
-path, delta_from, url, attrs = sys.argv[1:5]
+path, delta_from, delta_from_display, url, attrs = sys.argv[1:6]
 with open(path, encoding="utf-8") as fh:
     data = json.load(fh)
-data.append({"deltaFrom": delta_from, "url": url, "enclosureAttrs": attrs})
+entry = {"deltaFrom": delta_from, "url": url, "enclosureAttrs": attrs}
+if delta_from_display:
+    entry["deltaFromDisplay"] = delta_from_display
+data.append(entry)
 with open(path, "w", encoding="utf-8") as fh:
     json.dump(data, fh, indent=2)
     fh.write("\n")
@@ -299,6 +303,7 @@ while IFS=$'\t' read -r OLD_BUILD OLD_DISPLAY OLD_URL; do
     append_delta_json \
         "$DELTAS_JSON" \
         "$OLD_BUILD" \
+        "$OLD_DISPLAY" \
         "https://github.com/$REPO/releases/download/$TAG/$DELTA_NAME" \
         "$DELTA_ATTRS"
 done < "$PREVIOUS_RELEASES"
