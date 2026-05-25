@@ -99,46 +99,107 @@ def delta_display_name(delta: dict[str, str]) -> str:
     return f"build {build}"
 
 
+def render_size_row(label: str, detail: str, size: str) -> str:
+    escaped_label = html.escape(label)
+    escaped_detail = html.escape(detail)
+    escaped_size = html.escape(size)
+    return "\n".join(
+        [
+            '      <tr style="border-top: 1px solid #d7deea;">',
+            f'        <td style="padding: 8px 0; color: #2f3b52;">{escaped_label}</td>',
+            (
+                '        <td style="padding: 8px 12px; color: #697386; '
+                f'font-size: 12px;">{escaped_detail}</td>'
+            ),
+            (
+                '        <td style="padding: 8px 0; color: #172033; font-weight: 700; '
+                f'text-align: right; white-space: nowrap;">{escaped_size}</td>'
+            ),
+            "      </tr>",
+        ]
+    )
+
+
 def render_download_size_notes(enclosure_attrs: str, deltas: list[dict[str, str]]) -> str:
     full_length = enclosure_length(enclosure_attrs)
     if full_length is None:
         raise ValueError("full enclosureAttrs must include length")
 
-    items: list[str] = []
+    rows: list[str] = []
     for delta in deltas:
         delta_length = enclosure_length(delta["enclosureAttrs"])
         if delta_length is None:
             continue
-        from_display = html.escape(delta_display_name(delta))
+        from_display = delta_display_name(delta)
         size = format_byte_count(delta_length)
-        items.append(f"  <li>Incremental update from {from_display}: {size}</li>")
+        rows.append(render_size_row("增量更新包", f"从 {from_display} 更新", size))
 
     full_size = format_byte_count(full_length)
     if deltas:
-        items.append(f"  <li>Full download fallback: {full_size}</li>")
+        rows.append(render_size_row("完整安装包", "较旧版本会自动回退下载", full_size))
+        hint = "如果当前版本匹配可用增量包，将优先下载较小的增量更新；否则 Sparkle 会下载完整安装包。"
     else:
-        items.append(f"  <li>Full download: {full_size}</li>")
+        rows.append(render_size_row("完整安装包", "本次更新下载内容", full_size))
+        hint = "本次更新将下载完整安装包。"
 
     return "\n".join(
         [
-            "<hr/>",
-            "<p><strong>Download size</strong></p>",
-            "<ul>",
-            *items,
-            "</ul>",
+            (
+                '<div style="margin: 0 0 18px; padding: 14px 16px; border: 1px solid #cdd9ed; '
+                'border-radius: 12px; background: #f6f9ff;">'
+            ),
+            (
+                '  <p style="margin: 0 0 4px; color: #172033; font-size: 15px; '
+                'font-weight: 700;">下载大小</p>'
+            ),
+            (
+                '  <p style="margin: 0 0 12px; color: #53627c; font-size: 12px; '
+                f'line-height: 1.5;">{html.escape(hint)}</p>'
+            ),
+            '  <table style="width: 100%; border-collapse: collapse; font-size: 13px; line-height: 1.35;">',
+            *rows,
+            "  </table>",
+            "</div>",
         ]
     )
 
 
-def append_download_size_notes(
+def render_release_notes_section(notes_html: str) -> str:
+    if not notes_html:
+        return ""
+    return "\n".join(
+        [
+            '<div style="margin: 0; color: #1f2937; font-size: 13px; line-height: 1.55;">',
+            (
+                '  <p style="margin: 0 0 10px; color: #172033; font-size: 15px; '
+                'font-weight: 700;">更新内容</p>'
+            ),
+            '  <div style="margin: 0; padding: 0;">',
+            notes_html,
+            "  </div>",
+            "</div>",
+        ]
+    )
+
+
+def render_appcast_notes_html(
     notes_html: str,
     enclosure_attrs: str,
     deltas: list[dict[str, str]],
 ) -> str:
     size_notes = render_download_size_notes(enclosure_attrs, deltas)
-    if not notes_html:
-        return size_notes
-    return f"{notes_html}\n{size_notes}"
+    release_notes = render_release_notes_section(notes_html)
+    body = "\n".join(part for part in (size_notes, release_notes) if part)
+    return "\n".join(
+        [
+            (
+                '<div style="font-family: -apple-system, BlinkMacSystemFont, Helvetica, Arial, '
+                'sans-serif; color: #1f2937;">'
+            ),
+            body,
+            "</div>",
+        ]
+    )
 
 
 def load_deltas(path: str | None) -> list[dict[str, str]]:
@@ -220,7 +281,7 @@ def main() -> int:
         return 1
     try:
         deltas = load_deltas(args.deltas_file)
-        notes_html = append_download_size_notes(notes_html, args.enclosure_attrs.strip(), deltas)
+        notes_html = render_appcast_notes_html(notes_html, args.enclosure_attrs.strip(), deltas)
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print("error: invalid appcast metadata: {}".format(error), file=sys.stderr)
         return 1
