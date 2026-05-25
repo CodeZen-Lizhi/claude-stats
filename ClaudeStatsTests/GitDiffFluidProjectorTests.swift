@@ -159,7 +159,8 @@ struct GitDiffFluidProjectorTests {
         GitDiffRenderColumns(
             leftPane: CGRect(x: 0, y: 0, width: 120, height: 300),
             gutter: CGRect(x: 120, y: 0, width: 80, height: 300),
-            rightPane: CGRect(x: 200, y: 0, width: 120, height: 300)
+            rightPane: CGRect(x: 200, y: 0, width: 120, height: 300),
+            overviewLane: CGRect(x: 328, y: 0, width: 28, height: 300)
         )
     }
 

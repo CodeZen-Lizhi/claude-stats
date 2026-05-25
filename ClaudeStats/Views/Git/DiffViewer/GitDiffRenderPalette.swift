@@ -1,5 +1,10 @@
 import AppKit
 
+enum GitDiffBlockVisualState: Hashable {
+    case normal
+    case selected
+}
+
 struct GitDiffRenderPalette {
     let background: NSColor
     let paneBackground: NSColor
@@ -8,10 +13,17 @@ struct GitDiffRenderPalette {
     let primaryText: NSColor
     let secondaryText: NSColor
     let additionFill: NSColor
+    let additionSelectedFill: NSColor
+    let additionStroke: NSColor
     let deletionFill: NSColor
+    let deletionSelectedFill: NSColor
+    let deletionStroke: NSColor
     let modificationFill: NSColor
+    let modificationSelectedFill: NSColor
+    let modificationStroke: NSColor
     let hunkHeaderFill: NSColor
     let hunkHeaderHoverFill: NSColor
+    let overviewTrackFill: NSColor
     let inlineAdditionFill: NSColor
     let inlineDeletionFill: NSColor
 
@@ -22,11 +34,18 @@ struct GitDiffRenderPalette {
         lineNumber: .secondaryLabelColor,
         primaryText: .labelColor,
         secondaryText: .secondaryLabelColor,
-        additionFill: hexColor(0xEEFFEA),
-        deletionFill: hexColor(0xFFDFDE),
-        modificationFill: hexColor(0xE6F4FF),
+        additionFill: hexColor(0xF7FFF5),
+        additionSelectedFill: hexColor(0xEEFFEA),
+        additionStroke: hexColor(0xBFE8B8),
+        deletionFill: hexColor(0xFFF0EF),
+        deletionSelectedFill: hexColor(0xFFDFDE),
+        deletionStroke: hexColor(0xF2B6B4),
+        modificationFill: hexColor(0xF2FAFF),
+        modificationSelectedFill: hexColor(0xE6F4FF),
+        modificationStroke: hexColor(0xA8D8FF),
         hunkHeaderFill: hexColor(0xF4F4F4),
         hunkHeaderHoverFill: hexColor(0xECECEC),
+        overviewTrackFill: hexColor(0xF3F3F3),
         inlineAdditionFill: hexColor(0xEEFFEA),
         inlineDeletionFill: hexColor(0xFFDFDE)
     )
@@ -40,12 +59,12 @@ struct GitDiffRenderPalette {
         )
     }
 
-    func rowFill(for kind: DiffLine.Kind) -> NSColor {
+    func rowFill(for kind: DiffLine.Kind, state: GitDiffBlockVisualState = .normal) -> NSColor {
         switch kind {
         case .addition:
-            return additionFill
+            return blockFill(for: .addition, state: state)
         case .deletion:
-            return deletionFill
+            return blockFill(for: .deletion, state: state)
         case .hunkHeader:
             return hunkHeaderFill
         default:
@@ -53,14 +72,14 @@ struct GitDiffRenderPalette {
         }
     }
 
-    func blockFill(for kind: GitDiffVisualKind) -> NSColor {
+    func blockFill(for kind: GitDiffVisualKind, state: GitDiffBlockVisualState = .normal) -> NSColor {
         switch kind {
         case .addition:
-            return additionFill
+            return state == .selected ? additionSelectedFill : additionFill
         case .deletion:
-            return deletionFill
+            return state == .selected ? deletionSelectedFill : deletionFill
         case .modification:
-            return modificationFill
+            return state == .selected ? modificationSelectedFill : modificationFill
         case .hunkHeader:
             return hunkHeaderFill
         case .context:
@@ -68,8 +87,27 @@ struct GitDiffRenderPalette {
         }
     }
 
-    func connectorFill(for kind: GitDiffVisualKind) -> NSColor {
-        blockFill(for: kind)
+    func connectorFill(for kind: GitDiffVisualKind, state: GitDiffBlockVisualState = .normal) -> NSColor {
+        blockFill(for: kind, state: state)
+    }
+
+    func overviewFill(for kind: GitDiffVisualKind, state: GitDiffBlockVisualState = .normal) -> NSColor {
+        blockFill(for: kind, state: state)
+    }
+
+    func blockStroke(for kind: GitDiffVisualKind) -> NSColor {
+        switch kind {
+        case .addition:
+            return additionStroke
+        case .deletion:
+            return deletionStroke
+        case .modification:
+            return modificationStroke
+        case .hunkHeader:
+            return hunkHeaderHoverFill
+        case .context:
+            return .clear
+        }
     }
 
     func textColor(for kind: DiffLine.Kind) -> NSColor {

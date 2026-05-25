@@ -42,11 +42,41 @@ struct GitDiffRenderLayoutTests {
     @Test("Diff kind fills use the shared requested palette")
     func diffKindFillsUseRequestedPalette() {
         let palette = GitDiffRenderPalette.standard
-        #expect(sameColor(palette.blockFill(for: .modification), hexColor(0xE6F4FF)))
-        #expect(sameColor(palette.blockFill(for: .deletion), hexColor(0xFFDFDE)))
-        #expect(sameColor(palette.blockFill(for: .addition), hexColor(0xEEFFEA)))
+        #expect(sameColor(palette.blockFill(for: .modification), hexColor(0xF2FAFF)))
+        #expect(sameColor(palette.blockFill(for: .deletion), hexColor(0xFFF0EF)))
+        #expect(sameColor(palette.blockFill(for: .addition), hexColor(0xF7FFF5)))
         #expect(sameColor(palette.rowFill(for: .deletion), palette.blockFill(for: .deletion)))
         #expect(sameColor(palette.rowFill(for: .addition), palette.blockFill(for: .addition)))
+        #expect(sameColor(palette.blockFill(for: .modification, state: .selected), hexColor(0xE6F4FF)))
+        #expect(sameColor(palette.blockFill(for: .deletion, state: .selected), hexColor(0xFFDFDE)))
+        #expect(sameColor(palette.blockFill(for: .addition, state: .selected), hexColor(0xEEFFEA)))
+    }
+
+    @Test("Selected fills sit between normal fills and hover strokes")
+    func selectedFillsSitBetweenNormalAndStroke() {
+        let palette = GitDiffRenderPalette.standard
+        for kind in [GitDiffVisualKind.modification, .deletion, .addition] {
+            let normal = luminance(palette.blockFill(for: kind))
+            let selected = luminance(palette.blockFill(for: kind, state: .selected))
+            let stroke = luminance(palette.blockStroke(for: kind))
+
+            #expect(selected < normal)
+            #expect(stroke < selected)
+        }
+    }
+
+    @Test("Overview lane spacing is fixed to six points")
+    func overviewLaneSpacingIsFixedToSixPoints() {
+        let metrics = GitDiffRenderMetrics.standard
+        for width in [CGFloat(320), CGFloat(260)] {
+            let columns = GitDiffRenderLayout.columns(
+                in: CGRect(x: 0, y: 0, width: width, height: 200),
+                metrics: metrics
+            )
+
+            #expect(close(columns.overviewLane.minX - columns.rightPane.maxX, 6))
+            #expect(close(width - columns.overviewLane.maxX, 6))
+        }
     }
 
     @Test("Insertion anchors use the fixed anchor height")
@@ -128,6 +158,49 @@ struct GitDiffRenderLayoutTests {
         let columns = layout.columns(in: CGRect(x: 0, y: 0, width: 320, height: 200))
 
         #expect(close(columns.leftPane.minX, 0))
+        #expect(columns.rightPane.maxX < columns.overviewLane.minX)
+    }
+
+    @Test("Text measurement wraps long lines and long tokens")
+    func textMeasurementWrapsLongContent() {
+        var metrics = GitDiffRenderMetrics.standard
+        metrics.lineHeight = 10
+        let measurement = GitDiffTextMeasurement(font: GitDiffTextMeasurement.standardCodeFont(), metrics: metrics)
+
+        #expect(close(measurement.height(for: "let short = true", width: 400), metrics.lineHeight))
+        #expect(measurement.height(for: "let value = \(String(repeating: "wrapped ", count: 12))", width: 42) > metrics.lineHeight)
+        #expect(measurement.height(for: String(repeating: "x", count: 80), width: 42) > metrics.lineHeight)
+    }
+
+    @Test("Blocks mode uses equal wrapped row height for paired lines")
+    func blocksModeUsesEqualWrappedRowHeight() throws {
+        let layout = narrowLayout("""
+        @@ -1,1 +1,1 @@
+        -let value = short
+        +let value = \(String(repeating: "veryLongName", count: 8))
+        """, mode: .blocks)
+        let block = try #require(layout.blocks.first)
+        let oldLine = try #require(layout.oldLines.first { $0.kind == .deletion })
+        let newLine = try #require(layout.newLines.first { $0.kind == .addition })
+
+        #expect(newLine.height > layout.metrics.lineHeight)
+        #expect(close(oldLine.height, newLine.height))
+        #expect(close(block.oldContentRect.height, newLine.height))
+        #expect(close(block.newContentRect.height, newLine.height))
+    }
+
+    @Test("Fluid mode uses wrapped side heights in segment projection")
+    func fluidModeUsesWrappedSideHeights() throws {
+        let layout = narrowLayout("""
+        @@ -1,1 +1,1 @@
+        -let value = short
+        +let value = \(String(repeating: "veryLongName", count: 8))
+        """, mode: .fluid)
+        let segment = try #require(layout.segments.first { $0.kind == .change })
+
+        #expect(close(segment.oldHeight, layout.metrics.lineHeight))
+        #expect(segment.newHeight > segment.oldHeight)
+        #expect(close(segment.virtualHeight, segment.newHeight))
     }
 
     @Test("Coarse granularity keeps a mixed change in one modification block")
@@ -188,7 +261,8 @@ struct GitDiffRenderLayoutTests {
         GitDiffRenderColumns(
             leftPane: CGRect(x: 0, y: 0, width: 120, height: 300),
             gutter: CGRect(x: 120, y: 0, width: 80, height: 300),
-            rightPane: CGRect(x: 200, y: 0, width: 120, height: 300)
+            rightPane: CGRect(x: 200, y: 0, width: 120, height: 300),
+            overviewLane: CGRect(x: 328, y: 0, width: 28, height: 300)
         )
     }
 
@@ -205,7 +279,8 @@ struct GitDiffRenderLayoutTests {
     private func layout(
         for diff: StructuredFileDiff,
         mode: DiffViewMode,
-        granularity: GitDiffBlockGranularity
+        granularity: GitDiffBlockGranularity,
+        containerWidth: CGFloat = 1200
     ) -> GitDiffRenderLayout {
         var metrics = GitDiffRenderMetrics.standard
         metrics.lineHeight = 10
@@ -213,7 +288,20 @@ struct GitDiffRenderLayoutTests {
             from: diff,
             mode: mode,
             metrics: metrics,
-            granularity: granularity
+            granularity: granularity,
+            containerWidth: containerWidth
+        )
+    }
+
+    private func narrowLayout(_ patch: String, mode: DiffViewMode) -> GitDiffRenderLayout {
+        var metrics = GitDiffRenderMetrics.standard
+        metrics.lineHeight = 10
+        return GitDiffRenderLayout.build(
+            from: StructuredFileDiff.build(from: fileDiff(patch)),
+            mode: mode,
+            metrics: metrics,
+            granularity: .coarse,
+            containerWidth: 500
         )
     }
 
@@ -288,6 +376,11 @@ struct GitDiffRenderLayoutTests {
             && close(left.greenComponent, right.greenComponent, tolerance: tolerance)
             && close(left.blueComponent, right.blueComponent, tolerance: tolerance)
             && close(left.alphaComponent, right.alphaComponent, tolerance: tolerance)
+    }
+
+    private func luminance(_ color: NSColor) -> CGFloat {
+        guard let rgb = color.usingColorSpace(.deviceRGB) else { return 0 }
+        return rgb.redComponent * 0.299 + rgb.greenComponent * 0.587 + rgb.blueComponent * 0.114
     }
 
     private func hexColor(_ hex: Int) -> NSColor {

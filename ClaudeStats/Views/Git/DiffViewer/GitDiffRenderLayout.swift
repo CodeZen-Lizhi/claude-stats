@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import Foundation
 
@@ -20,6 +21,10 @@ struct GitDiffRenderMetrics: Hashable {
     var lineNumberWidth: CGFloat = 46
     var horizontalPadding: CGFloat = 0
     var textLeftPadding: CGFloat = 8
+    var textRightPadding: CGFloat = 8
+    var overviewWidth: CGFloat = 28
+    var overviewGap: CGFloat = 6
+    var overviewRightPadding: CGFloat = 6
     var bottomPadding: CGFloat = 24
 
     var anchorHeight: CGFloat { lineHeight }
@@ -32,6 +37,7 @@ struct GitDiffRenderColumns: Hashable {
     let leftPane: CGRect
     let gutter: CGRect
     let rightPane: CGRect
+    let overviewLane: CGRect
 }
 
 struct GitDiffRenderLine: Identifiable {
@@ -101,35 +107,89 @@ struct GitDiffRenderLayout {
         mode: DiffViewMode,
         metrics: GitDiffRenderMetrics = .standard,
         granularity: GitDiffBlockGranularity = .fine,
-        hunkHeaderExpansion: [String: CGFloat] = [:]
+        hunkHeaderExpansion: [String: CGFloat] = [:],
+        containerWidth: CGFloat = 1200,
+        codeFont: NSFont = GitDiffTextMeasurement.standardCodeFont()
     ) -> GitDiffRenderLayout {
+        let measurement = GitDiffTextMeasurement(font: codeFont, metrics: metrics)
+        let columns = Self.columns(in: CGRect(x: 0, y: 0, width: containerWidth, height: metrics.lineHeight), metrics: metrics)
+        let oldTextWidth = splitTextWidth(in: columns.leftPane, metrics: metrics)
+        let newTextWidth = splitTextWidth(in: columns.rightPane, metrics: metrics)
+        let unifiedTextWidth = unifiedTextWidth(in: columns, metrics: metrics)
+
         switch mode {
         case .fluid:
             return buildFluid(
                 from: diff,
                 metrics: metrics,
                 granularity: granularity,
-                hunkHeaderExpansion: hunkHeaderExpansion
+                hunkHeaderExpansion: hunkHeaderExpansion,
+                textMeasurement: measurement,
+                oldTextWidth: oldTextWidth,
+                newTextWidth: newTextWidth
             )
         case .blocks:
             return buildBlocks(
                 from: diff,
                 metrics: metrics,
                 granularity: granularity,
-                hunkHeaderExpansion: hunkHeaderExpansion
+                hunkHeaderExpansion: hunkHeaderExpansion,
+                textMeasurement: measurement,
+                oldTextWidth: oldTextWidth,
+                newTextWidth: newTextWidth
             )
         case .unified:
-            return buildUnified(from: diff, metrics: metrics, hunkHeaderExpansion: hunkHeaderExpansion)
+            return buildUnified(
+                from: diff,
+                metrics: metrics,
+                hunkHeaderExpansion: hunkHeaderExpansion,
+                textMeasurement: measurement,
+                textWidth: unifiedTextWidth
+            )
         }
     }
 
     func columns(in bounds: CGRect) -> GitDiffRenderColumns {
-        let available = max(bounds.width - metrics.horizontalPadding * 2 - metrics.gutterWidth, 100)
-        let paneWidth = floor(available / 2)
-        let leftPane = CGRect(
-            x: metrics.horizontalPadding,
+        Self.columns(in: bounds, metrics: metrics)
+    }
+
+    func unifiedContentRect(in bounds: CGRect) -> CGRect {
+        let columns = columns(in: bounds)
+        return CGRect(
+            x: columns.leftPane.minX,
             y: bounds.minY,
-            width: paneWidth,
+            width: max(columns.rightPane.maxX - columns.leftPane.minX, 1),
+            height: bounds.height
+        )
+    }
+
+    static func columns(in bounds: CGRect, metrics: GitDiffRenderMetrics) -> GitDiffRenderColumns {
+        let leftEdge = bounds.minX + metrics.horizontalPadding
+        let rightEdge = bounds.maxX - metrics.horizontalPadding
+        let maxOverviewWidth = max(
+            bounds.width
+                - metrics.horizontalPadding * 2
+                - metrics.gutterWidth
+                - 100
+                - metrics.overviewGap
+                - metrics.overviewRightPadding,
+            0
+        )
+        let overviewWidth = min(metrics.overviewWidth, maxOverviewWidth)
+        let overviewMaxX = rightEdge - metrics.overviewRightPadding
+        let overviewLane = CGRect(
+            x: overviewMaxX - overviewWidth,
+            y: bounds.minY,
+            width: overviewWidth,
+            height: bounds.height
+        )
+        let splitMaxX = max(leftEdge + metrics.gutterWidth + 100, overviewLane.minX - metrics.overviewGap)
+        let available = max(splitMaxX - leftEdge - metrics.gutterWidth, 100)
+        let leftPaneWidth = floor(available / 2)
+        let leftPane = CGRect(
+            x: leftEdge,
+            y: bounds.minY,
+            width: leftPaneWidth,
             height: bounds.height
         )
         let gutter = CGRect(
@@ -141,10 +201,19 @@ struct GitDiffRenderLayout {
         let rightPane = CGRect(
             x: gutter.maxX,
             y: bounds.minY,
-            width: paneWidth,
+            width: max(splitMaxX - gutter.maxX, 0),
             height: bounds.height
         )
-        return GitDiffRenderColumns(leftPane: leftPane, gutter: gutter, rightPane: rightPane)
+        return GitDiffRenderColumns(leftPane: leftPane, gutter: gutter, rightPane: rightPane, overviewLane: overviewLane)
+    }
+
+    static func splitTextWidth(in pane: CGRect, metrics: GitDiffRenderMetrics) -> CGFloat {
+        max(pane.width - metrics.lineNumberWidth - metrics.textLeftPadding - metrics.textRightPadding, 20)
+    }
+
+    static func unifiedTextWidth(in columns: GitDiffRenderColumns, metrics: GitDiffRenderMetrics) -> CGFloat {
+        let contentWidth = max(columns.rightPane.maxX - columns.leftPane.minX, 1)
+        return max(contentWidth - metrics.lineNumberWidth * 2 - 24 - metrics.textRightPadding, 20)
     }
 
     func linearLines(_ lines: [GitDiffRenderLine], visible: CGRect, overscan: CGFloat = 80) -> ArraySlice<GitDiffRenderLine> {
@@ -194,7 +263,9 @@ struct GitDiffRenderLayout {
     private static func buildUnified(
         from diff: StructuredFileDiff,
         metrics: GitDiffRenderMetrics,
-        hunkHeaderExpansion: [String: CGFloat]
+        hunkHeaderExpansion: [String: CGFloat],
+        textMeasurement: GitDiffTextMeasurement,
+        textWidth: CGFloat
     ) -> GitDiffRenderLayout {
         var inlineQueues = unifiedInlineSpanQueues(for: diff)
         var y: CGFloat = 0
@@ -210,7 +281,7 @@ struct GitDiffRenderLayout {
                 hunkIndex += 1
             } else {
                 id = "unified-\(index)"
-                height = metrics.lineHeight
+                height = textMeasurement.height(for: line.text, width: textWidth)
             }
             let renderLine = GitDiffRenderLine(
                 id: id,
@@ -248,7 +319,10 @@ struct GitDiffRenderLayout {
         from diff: StructuredFileDiff,
         metrics: GitDiffRenderMetrics,
         granularity: GitDiffBlockGranularity,
-        hunkHeaderExpansion: [String: CGFloat]
+        hunkHeaderExpansion: [String: CGFloat],
+        textMeasurement: GitDiffTextMeasurement,
+        oldTextWidth: CGFloat,
+        newTextWidth: CGFloat
     ) -> GitDiffRenderLayout {
         var builder = SplitLayoutBuilder(mode: .blocks, metrics: metrics)
         var displayY: CGFloat = 0
@@ -265,8 +339,12 @@ struct GitDiffRenderLayout {
                     let segmentIndex = builder.reserveSegmentIndex()
                     let start = displayY
                     for line in segment.contextLines {
-                        builder.appendContextLine(line, oldY: displayY, newY: displayY, segmentIndex: segmentIndex)
-                        displayY += metrics.lineHeight
+                        let rowHeight = max(
+                            textMeasurement.height(for: line.text, width: oldTextWidth),
+                            textMeasurement.height(for: line.text, width: newTextWidth)
+                        )
+                        builder.appendContextLine(line, oldY: displayY, newY: displayY, height: rowHeight, segmentIndex: segmentIndex)
+                        displayY += rowHeight
                     }
                     builder.commitReservedSegment(
                         id: segment.id,
@@ -284,18 +362,21 @@ struct GitDiffRenderLayout {
                     let bands = changeBands(for: change, granularity: granularity)
                     for band in bands {
                         let start = displayY
-                        let rowCount = max(band.linePairs.count, 1)
-                        let height = CGFloat(rowCount) * metrics.lineHeight
+                        var rowY = start
                         let segmentIndex = builder.reserveSegmentIndex()
-                        for (index, pair) in band.linePairs.enumerated() {
-                            let rowY = start + CGFloat(index) * metrics.lineHeight
+                        for pair in band.linePairs {
+                            let oldHeight = pair.oldLine.map { textMeasurement.height(for: $0.text, width: oldTextWidth) } ?? 0
+                            let newHeight = pair.newLine.map { textMeasurement.height(for: $0.text, width: newTextWidth) } ?? 0
+                            let rowHeight = max(oldHeight, newHeight, metrics.lineHeight)
                             if let oldLine = pair.oldLine {
-                                builder.appendOldLine(oldLine, y: rowY, segmentIndex: segmentIndex, visualKind: band.visualKind)
+                                builder.appendOldLine(oldLine, y: rowY, height: rowHeight, segmentIndex: segmentIndex, visualKind: band.visualKind)
                             }
                             if let newLine = pair.newLine {
-                                builder.appendNewLine(newLine, y: rowY, segmentIndex: segmentIndex, visualKind: band.visualKind)
+                                builder.appendNewLine(newLine, y: rowY, height: rowHeight, segmentIndex: segmentIndex, visualKind: band.visualKind)
                             }
+                            rowY += rowHeight
                         }
+                        let height = band.linePairs.isEmpty ? metrics.lineHeight : rowY - start
                         builder.appendBlock(
                             id: blockID(for: change, band: band, totalBandCount: bands.count),
                             segmentIndex: segmentIndex,
@@ -329,7 +410,10 @@ struct GitDiffRenderLayout {
         from diff: StructuredFileDiff,
         metrics: GitDiffRenderMetrics,
         granularity: GitDiffBlockGranularity,
-        hunkHeaderExpansion: [String: CGFloat]
+        hunkHeaderExpansion: [String: CGFloat],
+        textMeasurement: GitDiffTextMeasurement,
+        oldTextWidth: CGFloat,
+        newTextWidth: CGFloat
     ) -> GitDiffRenderLayout {
         var builder = SplitLayoutBuilder(mode: .fluid, metrics: metrics)
         var virtualY: CGFloat = 0
@@ -352,10 +436,14 @@ struct GitDiffRenderLayout {
                     let newStart = newY
                     let virtualStart = virtualY
                     for line in segment.contextLines {
-                        builder.appendContextLine(line, oldY: oldY, newY: newY, segmentIndex: segmentIndex)
-                        oldY += metrics.lineHeight
-                        newY += metrics.lineHeight
-                        virtualY += metrics.lineHeight
+                        let rowHeight = max(
+                            textMeasurement.height(for: line.text, width: oldTextWidth),
+                            textMeasurement.height(for: line.text, width: newTextWidth)
+                        )
+                        builder.appendContextLine(line, oldY: oldY, newY: newY, height: rowHeight, segmentIndex: segmentIndex)
+                        oldY += rowHeight
+                        newY += rowHeight
+                        virtualY += rowHeight
                     }
                     builder.commitReservedSegment(
                         id: segment.id,
@@ -375,19 +463,23 @@ struct GitDiffRenderLayout {
                         let oldStart = oldY
                         let newStart = newY
                         let virtualStart = virtualY
-                        let oldHeight = CGFloat(band.oldLines.count) * metrics.lineHeight
-                        let newHeight = CGFloat(band.newLines.count) * metrics.lineHeight
-                        let virtualHeight = max(oldHeight, newHeight, metrics.lineHeight)
+                        var oldHeight: CGFloat = 0
+                        var newHeight: CGFloat = 0
                         let segmentIndex = builder.reserveSegmentIndex()
 
                         for oldLine in band.oldLines {
-                            builder.appendOldLine(oldLine, y: oldY, segmentIndex: segmentIndex, visualKind: band.visualKind)
-                            oldY += metrics.lineHeight
+                            let height = textMeasurement.height(for: oldLine.text, width: oldTextWidth)
+                            builder.appendOldLine(oldLine, y: oldY, height: height, segmentIndex: segmentIndex, visualKind: band.visualKind)
+                            oldY += height
+                            oldHeight += height
                         }
                         for newLine in band.newLines {
-                            builder.appendNewLine(newLine, y: newY, segmentIndex: segmentIndex, visualKind: band.visualKind)
-                            newY += metrics.lineHeight
+                            let height = textMeasurement.height(for: newLine.text, width: newTextWidth)
+                            builder.appendNewLine(newLine, y: newY, height: height, segmentIndex: segmentIndex, visualKind: band.visualKind)
+                            newY += height
+                            newHeight += height
                         }
+                        let virtualHeight = max(oldHeight, newHeight, metrics.lineHeight)
 
                         builder.appendBlock(
                             id: blockID(for: change, band: band, totalBandCount: bands.count),
@@ -685,17 +777,17 @@ private struct SplitLayoutBuilder {
         )
     }
 
-    mutating func appendContextLine(_ line: DiffTextLine, oldY: CGFloat, newY: CGFloat, segmentIndex: Int) {
-        appendOldLine(line, y: oldY, segmentIndex: segmentIndex, visualKind: .context)
-        appendNewLine(line, y: newY, segmentIndex: segmentIndex, visualKind: .context)
+    mutating func appendContextLine(_ line: DiffTextLine, oldY: CGFloat, newY: CGFloat, height: CGFloat, segmentIndex: Int) {
+        appendOldLine(line, y: oldY, height: height, segmentIndex: segmentIndex, visualKind: .context)
+        appendNewLine(line, y: newY, height: height, segmentIndex: segmentIndex, visualKind: .context)
     }
 
-    mutating func appendOldLine(_ line: DiffTextLine, y: CGFloat, segmentIndex: Int, visualKind: GitDiffVisualKind) {
-        oldLines.append(renderLine(from: line, side: .old, y: y, segmentIndex: segmentIndex, visualKind: visualKind))
+    mutating func appendOldLine(_ line: DiffTextLine, y: CGFloat, height: CGFloat, segmentIndex: Int, visualKind: GitDiffVisualKind) {
+        oldLines.append(renderLine(from: line, side: .old, y: y, height: height, segmentIndex: segmentIndex, visualKind: visualKind))
     }
 
-    mutating func appendNewLine(_ line: DiffTextLine, y: CGFloat, segmentIndex: Int, visualKind: GitDiffVisualKind) {
-        newLines.append(renderLine(from: line, side: .new, y: y, segmentIndex: segmentIndex, visualKind: visualKind))
+    mutating func appendNewLine(_ line: DiffTextLine, y: CGFloat, height: CGFloat, segmentIndex: Int, visualKind: GitDiffVisualKind) {
+        newLines.append(renderLine(from: line, side: .new, y: y, height: height, segmentIndex: segmentIndex, visualKind: visualKind))
     }
 
     mutating func appendBlock(
@@ -743,6 +835,7 @@ private struct SplitLayoutBuilder {
         from line: DiffTextLine,
         side: GitDiffRenderSide,
         y: CGFloat,
+        height: CGFloat,
         segmentIndex: Int,
         visualKind: GitDiffVisualKind
     ) -> GitDiffRenderLine {
@@ -751,7 +844,7 @@ private struct SplitLayoutBuilder {
             segmentIndex: segmentIndex,
             side: side,
             contentY: y,
-            height: metrics.lineHeight,
+            height: height,
             text: line.text,
             oldLine: side == .old ? line.oldLine : nil,
             newLine: side == .new ? line.newLine : nil,

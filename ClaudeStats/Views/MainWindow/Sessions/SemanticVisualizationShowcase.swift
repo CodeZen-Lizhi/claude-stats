@@ -1,6 +1,14 @@
 import Charts
 import SwiftUI
 
+private enum SemanticVisualizationMotion {
+    static let plotInset: CGFloat = 14
+    static let selection = Animation.timingCurve(0.22, 0.61, 0.36, 1.0, duration: 0.28)
+    static var selectionTransition: AnyTransition {
+        .opacity.combined(with: .move(edge: .top))
+    }
+}
+
 private enum SemanticVisualizationMode: String, CaseIterable, Identifiable {
     case atlas
     case bubbles
@@ -80,7 +88,10 @@ struct SemanticVisualizationShowcase: View {
         .onAppear { rebuildIfNeeded() }
         .onChange(of: currentCacheKey) { _, _ in rebuildIfNeeded() }
         .onChange(of: mode) { _, _ in
-            hoveredTermID = nil
+            withAnimation(SemanticVisualizationMotion.selection) {
+                selectedTermID = nil
+                hoveredTermID = nil
+            }
         }
     }
 
@@ -170,21 +181,35 @@ private struct SemanticSelectionSummary: View {
         visualization.node(for: selectedTermID) ?? visualization.node(for: hoveredTermID)
     }
 
+    private var activeID: String {
+        activeNode?.id ?? "placeholder"
+    }
+
     var body: some View {
-        if let activeNode {
-            termSummary(activeNode)
-        } else {
-            HStack(spacing: 8) {
-                Image(systemName: "cursorarrow.motionlines")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color.stxMuted)
-                Text("Select or hover a term to inspect frequency, score, and examples.")
-                    .font(.sora(10))
-                    .foregroundStyle(Color.stxMuted)
-                Spacer(minLength: 0)
+        Group {
+            if let activeNode {
+                termSummary(activeNode)
+                    .transition(SemanticVisualizationMotion.selectionTransition)
+            } else {
+                placeholder
+                    .transition(SemanticVisualizationMotion.selectionTransition)
             }
-            .padding(.vertical, 2)
         }
+        .id(activeID)
+        .animation(SemanticVisualizationMotion.selection, value: activeID)
+    }
+
+    private var placeholder: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "cursorarrow.motionlines")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color.stxMuted)
+            Text("Select or hover a term to inspect frequency, score, and examples.")
+                .font(.sora(10))
+                .foregroundStyle(Color.stxMuted)
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 2)
     }
 
     private func termSummary(_ node: SemanticTermNode) -> some View {
@@ -225,6 +250,22 @@ private struct SemanticSelectionSummary: View {
     }
 }
 
+private struct SemanticPlotSpace {
+    let outerSize: CGSize
+    var inset: CGFloat = SemanticVisualizationMotion.plotInset
+
+    var rect: CGRect {
+        CGRect(
+            x: inset,
+            y: inset,
+            width: max(1, outerSize.width - inset * 2),
+            height: max(1, outerSize.height - inset * 2)
+        )
+    }
+
+    var size: CGSize { rect.size }
+}
+
 private struct SemanticAtlasView: View {
     let visualization: SemanticVisualizationSnapshot
     @Binding var selectedTermID: String?
@@ -234,31 +275,39 @@ private struct SemanticAtlasView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            ZStack {
-                SemanticNetworkEdgesCanvas(
-                    visualization: visualization,
-                    positionedNodes: visualization.atlasNodes,
-                    activeTermID: activeID
-                )
-                ForEach(visualization.atlasNodes) { positioned in
-                    if let node = visualization.node(for: positioned.nodeID) {
-                        SemanticNodeButton(
-                            node: node,
-                            positioned: positioned,
-                            canvasSize: geometry.size,
-                            selected: selectedTermID == node.id,
-                            highlighted: isHighlighted(node.id),
-                            alwaysShowsLabel: node.score > 0.78
-                        ) {
-                            selectedTermID = selectedTermID == node.id ? nil : node.id
-                        } hover: { hovering in
-                            hoveredTermID = hovering ? node.id : nil
+            let plot = SemanticPlotSpace(outerSize: geometry.size)
+            ZStack(alignment: .topLeading) {
+                SemanticVisualizationBackground()
+                ZStack {
+                    SemanticNetworkEdgesCanvas(
+                        visualization: visualization,
+                        positionedNodes: visualization.atlasNodes,
+                        activeTermID: activeID
+                    )
+                    ForEach(visualization.atlasNodes) { positioned in
+                        if let node = visualization.node(for: positioned.nodeID) {
+                            SemanticNodeButton(
+                                node: node,
+                                positioned: positioned,
+                                canvasSize: plot.size,
+                                selected: selectedTermID == node.id,
+                                highlighted: isHighlighted(node.id),
+                                alwaysShowsLabel: node.score > 0.78
+                            ) {
+                                withAnimation(SemanticVisualizationMotion.selection) {
+                                    selectedTermID = selectedTermID == node.id ? nil : node.id
+                                }
+                            } hover: { hovering in
+                                withAnimation(SemanticVisualizationMotion.selection) {
+                                    hoveredTermID = hovering ? node.id : nil
+                                }
+                            }
                         }
                     }
                 }
+                .frame(width: plot.size.width, height: plot.size.height)
+                .position(x: plot.rect.midX, y: plot.rect.midY)
             }
-            .padding(14)
-            .background(SemanticVisualizationBackground())
         }
     }
 
@@ -278,28 +327,36 @@ private struct SemanticBubbleAtlasView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            ZStack {
+            let plot = SemanticPlotSpace(outerSize: geometry.size)
+            ZStack(alignment: .topLeading) {
                 SemanticVisualizationBackground()
-                bubbleGroupLabels(size: geometry.size)
+                ZStack {
+                    bubbleGroupLabels(size: plot.size)
 
-                ForEach(visualization.bubbleNodes) { positioned in
-                    if let node = visualization.node(for: positioned.nodeID) {
-                        SemanticNodeButton(
-                            node: node,
-                            positioned: positioned,
-                            canvasSize: geometry.size,
-                            selected: selectedTermID == node.id,
-                            highlighted: hoveredTermID == node.id,
-                            alwaysShowsLabel: node.score > 0.62
-                        ) {
-                            selectedTermID = selectedTermID == node.id ? nil : node.id
-                        } hover: { hovering in
-                            hoveredTermID = hovering ? node.id : nil
+                    ForEach(visualization.bubbleNodes) { positioned in
+                        if let node = visualization.node(for: positioned.nodeID) {
+                            SemanticNodeButton(
+                                node: node,
+                                positioned: positioned,
+                                canvasSize: plot.size,
+                                selected: selectedTermID == node.id,
+                                highlighted: hoveredTermID == node.id,
+                                alwaysShowsLabel: node.score > 0.62
+                            ) {
+                                withAnimation(SemanticVisualizationMotion.selection) {
+                                    selectedTermID = selectedTermID == node.id ? nil : node.id
+                                }
+                            } hover: { hovering in
+                                withAnimation(SemanticVisualizationMotion.selection) {
+                                    hoveredTermID = hovering ? node.id : nil
+                                }
+                            }
                         }
                     }
                 }
+                .frame(width: plot.size.width, height: plot.size.height)
+                .position(x: plot.rect.midX, y: plot.rect.midY)
             }
-            .padding(14)
         }
     }
 
@@ -332,7 +389,9 @@ private struct SemanticWordCloudView: View {
             SemanticWordCloudFlowLayout(spacing: 10, rowSpacing: 10) {
                 ForEach(visualization.wordCloudItems) { item in
                     Button {
-                        selectedTermID = selectedTermID == item.nodeID ? nil : item.nodeID
+                        withAnimation(SemanticVisualizationMotion.selection) {
+                            selectedTermID = selectedTermID == item.nodeID ? nil : item.nodeID
+                        }
                     } label: {
                         Text(item.text)
                             .font(.sora(item.fontSize, weight: selectedTermID == item.nodeID ? .semibold : .regular))
@@ -349,7 +408,11 @@ private struct SemanticWordCloudView: View {
                     }
                     .buttonStyle(.plain)
                     .help(visualization.node(for: item.nodeID)?.helpText ?? item.text)
-                    .onHover { hovering in hoveredTermID = hovering ? item.nodeID : nil }
+                    .onHover { hovering in
+                        withAnimation(SemanticVisualizationMotion.selection) {
+                            hoveredTermID = hovering ? item.nodeID : nil
+                        }
+                    }
                 }
             }
             .padding(22)
