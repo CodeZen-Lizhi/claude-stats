@@ -3,6 +3,18 @@
 extension ReleaseHistoryCatalog {
     static let generatedEntries: [ReleaseHistoryEntry] = [
         ReleaseHistoryEntry(
+            version: "1.7.7",
+            date: "May 26, 2026",
+            headline: "将Claude桌面自动捕获和定时捕获的配置移到设置页面，简化使用面板，统一权限按钮命名",
+            changes: [
+                "新增UsageLimitStatus.cached状态与本地化文案",
+                "重构Claude/Codex使用限制加载逻辑，过期缓存返回cached状态",
+                "重构多处列表选择器为统一的AppSelect组件，统一UI风格",
+                "更新相关测试用例适配新的状态逻辑",
+                "重构appcast生成脚本，更新下载大小展示样式",
+            ]
+        ),
+        ReleaseHistoryEntry(
             version: "1.7.6",
             date: "May 25, 2026",
             headline: "替换了原有的系统图标，为Cursor、Windsurf、Trae、Qoder等Git工作区源添加了专属的自定义logo资源，更新了相关的数据模型和视图显示逻辑。",
