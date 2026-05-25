@@ -12,6 +12,7 @@ struct GitDiffRenderPalette {
     let lineNumber: NSColor
     let primaryText: NSColor
     let secondaryText: NSColor
+    let gutterFill: NSColor
     let additionFill: NSColor
     let additionSelectedFill: NSColor
     let additionStroke: NSColor
@@ -34,6 +35,7 @@ struct GitDiffRenderPalette {
         lineNumber: .secondaryLabelColor,
         primaryText: .labelColor,
         secondaryText: .secondaryLabelColor,
+        gutterFill: hexColor(0xF4F4F4),
         additionFill: hexColor(0xF7FFF5),
         additionSelectedFill: hexColor(0xEEFFEA),
         additionStroke: hexColor(0xBFE8B8),

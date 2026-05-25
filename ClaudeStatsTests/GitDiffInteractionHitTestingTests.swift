@@ -21,6 +21,31 @@ struct GitDiffInteractionHitTestingTests {
         #expect(GitDiffInteractionHitTesting.hitTest([region], at: CGPoint(x: 160, y: 34)) == nil)
     }
 
+    @Test("Blocks span rect connects both panes through the gutter")
+    func blocksSpanRectConnectsPanesThroughGutter() {
+        let columns = GitDiffRenderColumns(
+            leftPane: CGRect(x: 0, y: 0, width: 120, height: 200),
+            gutter: CGRect(x: 120, y: 0, width: 40, height: 200),
+            rightPane: CGRect(x: 160, y: 0, width: 120, height: 200),
+            overviewLane: CGRect(x: 300, y: 0, width: 20, height: 200)
+        )
+        let block = GitDiffRenderBlock(
+            id: "block-change",
+            segmentIndex: 0,
+            visualKind: .addition,
+            oldContentRect: CGRect(x: 0, y: 20, width: 0, height: 54),
+            newContentRect: CGRect(x: 0, y: 20, width: 0, height: 54),
+            oldIsAnchor: false,
+            newIsAnchor: false
+        )
+        let rect = GitDiffBlockGeometry.linearSpanRect(for: block, columns: columns)
+        let region = GitDiffInteractionRegion(id: block.id, visualKind: block.visualKind, rects: [rect])
+
+        #expect(rect.minX == columns.leftPane.minX)
+        #expect(rect.maxX == columns.rightPane.maxX)
+        #expect(GitDiffInteractionHitTesting.hitTest([region], at: CGPoint(x: columns.gutter.midX, y: 40)) == block.id)
+    }
+
     @Test("Fluid connector rect hits the same change block")
     func fluidConnectorRectHitsChangeBlock() {
         let region = GitDiffInteractionRegion(

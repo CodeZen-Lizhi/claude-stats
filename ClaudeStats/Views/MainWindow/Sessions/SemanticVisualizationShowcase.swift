@@ -1,19 +1,14 @@
-import Charts
 import SwiftUI
 
 private enum SemanticVisualizationMotion {
     static let plotInset: CGFloat = 14
-    static let selection = Animation.timingCurve(0.22, 0.61, 0.36, 1.0, duration: 0.28)
-    static var selectionTransition: AnyTransition {
-        .opacity.combined(with: .move(edge: .top))
-    }
+    static let textSwitch = Animation.stxNumericValueChange
 }
 
 private enum SemanticVisualizationMode: String, CaseIterable, Identifiable {
     case atlas
     case bubbles
     case cloud
-    case timeline
 
     var id: String { rawValue }
 
@@ -22,7 +17,6 @@ private enum SemanticVisualizationMode: String, CaseIterable, Identifiable {
         case .atlas: "Atlas"
         case .bubbles: "Bubbles"
         case .cloud: "Cloud"
-        case .timeline: "Timeline"
         }
     }
 
@@ -31,7 +25,6 @@ private enum SemanticVisualizationMode: String, CaseIterable, Identifiable {
         case .atlas: "point.3.connected.trianglepath.dotted"
         case .bubbles: "circle.grid.3x3.circle"
         case .cloud: "textformat"
-        case .timeline: "chart.xyaxis.line"
         }
     }
 }
@@ -72,7 +65,7 @@ struct SemanticVisualizationShowcase: View {
                     placeholder
                 }
             }
-            .frame(height: 420)
+            .frame(maxWidth: .infinity, minHeight: 420, maxHeight: 420)
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.stxStroke.opacity(0.75), lineWidth: 1))
 
@@ -88,10 +81,8 @@ struct SemanticVisualizationShowcase: View {
         .onAppear { rebuildIfNeeded() }
         .onChange(of: currentCacheKey) { _, _ in rebuildIfNeeded() }
         .onChange(of: mode) { _, _ in
-            withAnimation(SemanticVisualizationMotion.selection) {
-                selectedTermID = nil
-                hoveredTermID = nil
-            }
+            selectedTermID = nil
+            hoveredTermID = nil
         }
     }
 
@@ -109,15 +100,19 @@ struct SemanticVisualizationShowcase: View {
 
             Spacer(minLength: 12)
 
-            Picker("Visualization", selection: $mode) {
-                ForEach(SemanticVisualizationMode.allCases) { mode in
-                    Label(mode.title, systemImage: mode.symbol).tag(mode)
-                }
+            PillSegmentedBar(
+                SemanticVisualizationMode.allCases,
+                selection: $mode,
+                style: .toolbarModeSwitch,
+                help: { "Show \($0.title) semantic view" },
+                accessibilityLabel: { "\($0.title) semantic view" }
+            ) { mode, _ in
+                Label(mode.title, systemImage: mode.symbol)
+                    .labelStyle(.titleAndIcon)
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(maxWidth: 560)
+            .frame(width: 304, alignment: .trailing)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
@@ -140,11 +135,6 @@ struct SemanticVisualizationShowcase: View {
                 visualization: visualization,
                 selectedTermID: $selectedTermID,
                 hoveredTermID: $hoveredTermID
-            )
-        case .timeline:
-            SemanticTimelineBubbleChart(
-                visualization: visualization,
-                selectedTermID: $selectedTermID
             )
         }
     }
@@ -178,7 +168,7 @@ private struct SemanticSelectionSummary: View {
     let hoveredTermID: String?
 
     private var activeNode: SemanticTermNode? {
-        visualization.node(for: selectedTermID) ?? visualization.node(for: hoveredTermID)
+        visualization.node(for: hoveredTermID) ?? visualization.node(for: selectedTermID)
     }
 
     private var activeID: String {
@@ -189,64 +179,90 @@ private struct SemanticSelectionSummary: View {
         Group {
             if let activeNode {
                 termSummary(activeNode)
-                    .transition(SemanticVisualizationMotion.selectionTransition)
             } else {
                 placeholder
-                    .transition(SemanticVisualizationMotion.selectionTransition)
             }
         }
         .id(activeID)
-        .animation(SemanticVisualizationMotion.selection, value: activeID)
+        .transition(.opacity)
+        .contentTransition(.opacity)
+        .animation(SemanticVisualizationMotion.textSwitch, value: activeID)
+        .frame(height: 28, alignment: .center)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .clipped()
     }
 
     private var placeholder: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 9) {
             Image(systemName: "cursorarrow.motionlines")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Color.stxMuted)
-            Text("Select or hover a term to inspect frequency, score, and examples.")
+                .frame(width: 20, alignment: .leading)
+            Text("Select or hover a term to inspect frequency, sessions, and score.")
                 .font(.sora(10))
                 .foregroundStyle(Color.stxMuted)
+                .lineLimit(1)
+                .contentTransition(.opacity)
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 2)
     }
 
     private func termSummary(_ node: SemanticTermNode) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Label(node.displayName, systemImage: node.kind.symbol)
+        HStack(alignment: .center, spacing: 10) {
+            HStack(alignment: .center, spacing: 9) {
+                Image(systemName: node.kind.symbol)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .frame(width: 20, alignment: .leading)
+                    .contentTransition(.opacity)
+                Text(node.displayName)
                     .font(.sora(12, weight: .semibold))
                     .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .contentTransition(.opacity)
                 Text(node.kind.displayName)
                     .font(.sora(9, weight: .medium))
                     .foregroundStyle(SemanticVisualizationPalette.color(for: node.kind))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
+                    .lineLimit(1)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
                     .background(SemanticVisualizationPalette.color(for: node.kind).opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
-                Spacer(minLength: 0)
-                Text("freq \(node.frequency) - sessions \(node.documentFrequency) - score \(String(format: "%.1f", node.tfidf))")
-                    .font(.sora(10).monospacedDigit())
-                    .foregroundStyle(Color.stxMuted)
+                    .contentTransition(.opacity)
             }
+            .layoutPriority(1)
 
-            if !node.examples.isEmpty {
-                ForEach(Array(node.examples.prefix(2))) { example in
-                    HStack(alignment: .top, spacing: 8) {
-                        Text(example.sessionTitle)
-                            .font(.sora(10, weight: .medium))
-                            .lineLimit(1)
-                            .frame(width: 150, alignment: .leading)
-                        Text(example.excerpt)
-                            .font(.sora(10))
-                            .foregroundStyle(Color.stxMuted)
-                            .lineLimit(1)
-                    }
-                }
-            }
+            Spacer(minLength: 12)
+
+            metricSummary(node)
+                .layoutPriority(2)
         }
-        .padding(10)
-        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func metricSummary(_ node: SemanticTermNode) -> some View {
+        HStack(spacing: 0) {
+            Text("freq ")
+            Text(groupedInteger(node.frequency))
+                .stxNumericValueTransition(value: node.frequency)
+            Text(" - sessions ")
+            Text(groupedInteger(node.documentFrequency))
+                .stxNumericValueTransition(value: node.documentFrequency)
+            Text(" - score ")
+            Text(scoreText(node.tfidf))
+                .stxNumericValueTransition(value: scoreText(node.tfidf))
+        }
+        .font(.sora(10).monospacedDigit())
+        .foregroundStyle(Color.stxMuted)
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private func groupedInteger(_ value: Int) -> String {
+        value.formatted(.number.grouping(.automatic))
+    }
+
+    private func scoreText(_ value: Double) -> String {
+        String(format: "%.1f", value)
     }
 }
 
@@ -294,13 +310,9 @@ private struct SemanticAtlasView: View {
                                 highlighted: isHighlighted(node.id),
                                 alwaysShowsLabel: node.score > 0.78
                             ) {
-                                withAnimation(SemanticVisualizationMotion.selection) {
-                                    selectedTermID = selectedTermID == node.id ? nil : node.id
-                                }
+                                selectedTermID = selectedTermID == node.id ? nil : node.id
                             } hover: { hovering in
-                                withAnimation(SemanticVisualizationMotion.selection) {
-                                    hoveredTermID = hovering ? node.id : nil
-                                }
+                                hoveredTermID = hovering ? node.id : nil
                             }
                         }
                     }
@@ -343,13 +355,9 @@ private struct SemanticBubbleAtlasView: View {
                                 highlighted: hoveredTermID == node.id,
                                 alwaysShowsLabel: node.score > 0.62
                             ) {
-                                withAnimation(SemanticVisualizationMotion.selection) {
-                                    selectedTermID = selectedTermID == node.id ? nil : node.id
-                                }
+                                selectedTermID = selectedTermID == node.id ? nil : node.id
                             } hover: { hovering in
-                                withAnimation(SemanticVisualizationMotion.selection) {
-                                    hoveredTermID = hovering ? node.id : nil
-                                }
+                                hoveredTermID = hovering ? node.id : nil
                             }
                         }
                     }
@@ -389,9 +397,7 @@ private struct SemanticWordCloudView: View {
             SemanticWordCloudFlowLayout(spacing: 10, rowSpacing: 10) {
                 ForEach(visualization.wordCloudItems) { item in
                     Button {
-                        withAnimation(SemanticVisualizationMotion.selection) {
-                            selectedTermID = selectedTermID == item.nodeID ? nil : item.nodeID
-                        }
+                        selectedTermID = selectedTermID == item.nodeID ? nil : item.nodeID
                     } label: {
                         Text(item.text)
                             .font(.sora(item.fontSize, weight: selectedTermID == item.nodeID ? .semibold : .regular))
@@ -409,115 +415,13 @@ private struct SemanticWordCloudView: View {
                     .buttonStyle(.plain)
                     .help(visualization.node(for: item.nodeID)?.helpText ?? item.text)
                     .onHover { hovering in
-                        withAnimation(SemanticVisualizationMotion.selection) {
-                            hoveredTermID = hovering ? item.nodeID : nil
-                        }
+                        hoveredTermID = hovering ? item.nodeID : nil
                     }
                 }
             }
             .padding(22)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
-    }
-}
-
-private struct SemanticTimelineBubbleChart: View {
-    let visualization: SemanticVisualizationSnapshot
-    @Binding var selectedTermID: String?
-
-    var body: some View {
-        ZStack {
-            SemanticVisualizationBackground()
-            if visualization.timelinePoints.isEmpty {
-                Text("No dated semantic activity to chart.")
-                    .font(.sora(12))
-                    .foregroundStyle(Color.stxMuted)
-            } else {
-                chart
-                    .padding(16)
-            }
-        }
-    }
-
-    private var chart: some View {
-        let unit: Calendar.Component = {
-            switch visualization.timelineGranularity {
-            case .day: return .day
-            case .week: return .weekOfYear
-            case .month: return .month
-            }
-        }()
-
-        return Chart(visualization.timelinePoints) { point in
-            PointMark(
-                x: .value(visualization.timelineGranularity.displayName, point.date, unit: unit),
-                y: .value("Kind", point.kind.displayName)
-            )
-            .foregroundStyle(by: .value("Kind", point.kind.displayName))
-            .symbolSize(CGFloat(80 + point.score * 1_320))
-            .opacity(0.78)
-            .annotation(position: .top, alignment: .center) {
-                if point.score > 0.74, let node = visualization.node(for: point.topTermID) {
-                    Text(node.displayName)
-                        .font(.sora(8, weight: .medium))
-                        .foregroundStyle(Color.stxMuted)
-                        .lineLimit(1)
-                }
-            }
-            .accessibilityLabel("\(point.kind.displayName), \(Format.day(point.date))")
-            .accessibilityValue(String(format: "%.1f", point.value))
-        }
-        .chartForegroundStyleScale(
-            domain: TranscriptTermKind.allCases.map(\.displayName),
-            range: TranscriptTermKind.allCases.map(SemanticVisualizationPalette.color(for:))
-        )
-        .chartXAxis {
-            AxisMarks { value in
-                AxisGridLine().foregroundStyle(Color.stxStroke.opacity(0.8))
-                AxisValueLabel {
-                    if let date = value.as(Date.self) {
-                        Text(Format.day(date))
-                            .font(.sora(9))
-                            .foregroundStyle(Color.stxMuted)
-                    }
-                }
-            }
-        }
-        .chartYAxis {
-            AxisMarks(position: .leading) { value in
-                AxisGridLine().foregroundStyle(Color.stxStroke.opacity(0.55))
-                AxisValueLabel {
-                    if let label = value.as(String.self) {
-                        Text(label)
-                            .font(.sora(9, weight: .medium))
-                            .foregroundStyle(Color.stxMuted)
-                    }
-                }
-            }
-        }
-        .chartLegend(.hidden)
-        .overlay(alignment: .topTrailing) {
-            SemanticSizeLegend()
-                .padding(8)
-        }
-    }
-}
-
-private struct SemanticSizeLegend: View {
-    var body: some View {
-        HStack(spacing: 7) {
-            ForEach([10.0, 15.0, 22.0], id: \.self) { size in
-                Circle()
-                    .strokeBorder(Color.stxMuted.opacity(0.55), lineWidth: 1)
-                    .frame(width: size, height: size)
-            }
-            Text("importance")
-                .font(.sora(8))
-                .foregroundStyle(Color.stxMuted)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(Color.stxBackground.opacity(0.72), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 }
 
@@ -540,12 +444,28 @@ private struct SemanticNetworkEdgesCanvas: View {
                 var path = Path()
                 path.move(to: source)
                 path.addLine(to: target)
+                let hasActiveTerm = activeTermID != nil
                 let connected = activeTermID == nil || activeTermID == edge.sourceID || activeTermID == edge.targetID
-                let opacity = connected ? 0.12 + edge.strength * 0.33 : 0.045
+                let lineWidth: CGFloat
+                let opacity: Double
+                let dash: [CGFloat]
+                if !hasActiveTerm {
+                    lineWidth = 0.65 + CGFloat(edge.strength) * 1.2
+                    opacity = 0.11 + edge.strength * 0.28
+                    dash = []
+                } else if connected {
+                    lineWidth = 1.15 + CGFloat(edge.strength) * 2.0
+                    opacity = 0.24 + edge.strength * 0.42
+                    dash = []
+                } else {
+                    lineWidth = 0.55
+                    opacity = 0.085
+                    dash = [4, 5]
+                }
                 context.stroke(
                     path,
                     with: .color(SemanticVisualizationPalette.color(for: sourceNode.kind).opacity(opacity)),
-                    lineWidth: connected ? 0.7 + edge.strength * 1.4 : 0.5
+                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round, dash: dash)
                 )
             }
         }
@@ -693,18 +613,38 @@ private struct SemanticWordCloudFlowLayout: Layout {
 private enum SemanticVisualizationPalette {
     static func color(for kind: TranscriptTermKind) -> Color {
         switch kind {
-        case .language: Color(red: 0.20, green: 0.63, blue: 0.86)
-        case .framework: Color(red: 0.96, green: 0.44, blue: 0.13)
-        case .api: Color(red: 0.58, green: 0.42, blue: 0.92)
-        case .typeName: Color(red: 0.22, green: 0.48, blue: 0.90)
-        case .function: Color(red: 0.20, green: 0.68, blue: 0.42)
-        case .filePath: Color(red: 0.18, green: 0.62, blue: 0.58)
-        case .command: Color(red: 0.93, green: 0.66, blue: 0.12)
-        case .configKey: Color(red: 0.86, green: 0.38, blue: 0.68)
-        case .error: Color(red: 0.91, green: 0.21, blue: 0.13)
-        case .workflow: Color(red: 0.48, green: 0.72, blue: 0.24)
-        case .general: Color.stxMuted
+        case .language: aiIro
+        case .framework: yamabukiIro
+        case .api: sumireIro
+        case .typeName: asagiIro
+        case .function: moegiIro
+        case .filePath: usuasagi
+        case .command: daidaiIro
+        case .configKey: kakitsubata
+        case .error: akaneIro
+        case .workflow: tokiwaIro
+        case .general: yamabatoIro
         }
+    }
+
+    private static let aiIro = rgb(0x004C71)
+    private static let asagiIro = rgb(0x00A5BF)
+    private static let usuasagi = rgb(0xA2D7DD)
+    private static let yamabukiIro = rgb(0xF8B400)
+    private static let daidaiIro = rgb(0xEE7800)
+    private static let moegiIro = rgb(0x86B81B)
+    private static let tokiwaIro = rgb(0x006428)
+    private static let sumireIro = rgb(0x7065A3)
+    private static let kakitsubata = rgb(0x5E3862)
+    private static let akaneIro = rgb(0xB7282E)
+    private static let yamabatoIro = rgb(0x767C6B)
+
+    private static func rgb(_ hex: UInt32) -> Color {
+        Color(
+            red: Double((hex >> 16) & 0xFF) / 255,
+            green: Double((hex >> 8) & 0xFF) / 255,
+            blue: Double(hex & 0xFF) / 255
+        )
     }
 }
 

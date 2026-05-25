@@ -120,6 +120,23 @@ extension PillSegmentedBarStyle {
         unselectedForeground: Color.stxMuted,
         selectionAnimation: .easeOut(duration: 0.18)
     )
+
+    static let toolbarModeSwitch = PillSegmentedBarStyle(
+        itemSpacing: 2,
+        outerPadding: 3,
+        outerCornerRadius: 8,
+        selectedCornerRadius: 6,
+        itemHorizontalPadding: 10,
+        itemHeight: 28,
+        font: .sora(12, weight: .medium),
+        background: Color.primary.opacity(0.06),
+        selectedBackground: Color.stxAccent.opacity(0.92),
+        selectedBorder: Color.stxAccent.opacity(0.35),
+        selectedBorderWidth: 1,
+        selectedForeground: .white,
+        unselectedForeground: Color.stxMuted,
+        selectionAnimation: .easeOut(duration: 0.16)
+    )
 }
 
 private extension View {

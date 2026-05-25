@@ -47,6 +47,7 @@ struct GitDiffRenderLayoutTests {
         #expect(sameColor(palette.blockFill(for: .addition), hexColor(0xF7FFF5)))
         #expect(sameColor(palette.rowFill(for: .deletion), palette.blockFill(for: .deletion)))
         #expect(sameColor(palette.rowFill(for: .addition), palette.blockFill(for: .addition)))
+        #expect(sameColor(palette.gutterFill, hexColor(0xF4F4F4)))
         #expect(sameColor(palette.blockFill(for: .modification, state: .selected), hexColor(0xE6F4FF)))
         #expect(sameColor(palette.blockFill(for: .deletion, state: .selected), hexColor(0xFFDFDE)))
         #expect(sameColor(palette.blockFill(for: .addition, state: .selected), hexColor(0xEEFFEA)))

@@ -82,7 +82,7 @@ struct GitFileDiffViewer: View {
             PillSegmentedBar(
                 DiffViewMode.allCases,
                 selection: $mode,
-                style: .gitDiffViewer,
+                style: .toolbarModeSwitch,
                 help: { "Show \( $0.title ) diff" },
                 accessibilityLabel: { "\($0.title) diff mode" }
             ) { option, _ in
@@ -169,25 +169,6 @@ private struct GitDiffViewerEmptyState: View {
             .foregroundStyle(Color.stxMuted.opacity(0.82))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-}
-
-private extension PillSegmentedBarStyle {
-    static let gitDiffViewer = PillSegmentedBarStyle(
-        itemSpacing: 2,
-        outerPadding: 3,
-        outerCornerRadius: 8,
-        selectedCornerRadius: 6,
-        itemHorizontalPadding: 10,
-        itemHeight: 28,
-        font: .sora(12, weight: .medium),
-        background: Color.primary.opacity(0.06),
-        selectedBackground: Color.stxAccent.opacity(0.92),
-        selectedBorder: Color.stxAccent.opacity(0.35),
-        selectedBorderWidth: 1,
-        selectedForeground: .white,
-        unselectedForeground: Color.stxMuted,
-        selectionAnimation: .easeOut(duration: 0.16)
-    )
 }
 
 #if DEBUG

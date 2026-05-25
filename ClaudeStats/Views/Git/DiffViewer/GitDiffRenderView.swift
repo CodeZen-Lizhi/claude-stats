@@ -309,20 +309,7 @@ final class GitDiffRenderView: NSView {
             GitDiffInteractionRegion(
                 id: block.id,
                 visualKind: block.visualKind,
-                rects: [
-                    CGRect(
-                        x: columns.leftPane.minX,
-                        y: block.oldContentRect.minY,
-                        width: columns.leftPane.width,
-                        height: block.oldContentRect.height
-                    ),
-                    CGRect(
-                        x: columns.rightPane.minX,
-                        y: block.newContentRect.minY,
-                        width: columns.rightPane.width,
-                        height: block.newContentRect.height
-                    )
-                ]
+                rects: [GitDiffBlockGeometry.linearSpanRect(for: block, columns: columns)]
             )
         }
         return GitDiffInteractionHitTesting.hitTest(regions, at: CGPoint(x: point.x, y: sourceY))
@@ -458,8 +445,8 @@ final class GitDiffRenderView: NSView {
     }
 
     private func drawColumnChrome(_ columns: GitDiffRenderColumns, visible: CGRect) {
-        palette.separator.setFill()
-        CGRect(x: columns.gutter.midX - 0.5, y: visible.minY, width: 1, height: visible.height).fill()
+        palette.gutterFill.setFill()
+        CGRect(x: columns.gutter.minX, y: visible.minY, width: columns.gutter.width, height: visible.height).fill()
     }
 
     private func drawOverview(columns: GitDiffRenderColumns, visible: CGRect) {
@@ -484,16 +471,13 @@ final class GitDiffRenderView: NSView {
         scrollY: CGFloat
     ) {
         for block in renderLayout.blocks {
-            let oldSourceRect = CGRect(x: columns.leftPane.minX, y: block.oldContentRect.minY, width: columns.leftPane.width, height: block.oldContentRect.height)
-            let newSourceRect = CGRect(x: columns.rightPane.minX, y: block.newContentRect.minY, width: columns.rightPane.width, height: block.newContentRect.height)
-            guard oldSourceRect.intersects(sourceVisible) || newSourceRect.intersects(sourceVisible) else { continue }
-            let oldRect = oldSourceRect.offsetBy(dx: 0, dy: -scrollY)
-            let newRect = newSourceRect.offsetBy(dx: 0, dy: -scrollY)
-            guard oldRect.intersects(visible) || newRect.intersects(visible) else { continue }
+            let sourceRect = GitDiffBlockGeometry.linearSpanRect(for: block, columns: columns)
+            guard sourceRect.intersects(sourceVisible) else { continue }
+            let rect = sourceRect.offsetBy(dx: 0, dy: -scrollY)
+            guard rect.intersects(visible) else { continue }
             palette.blockFill(for: block.visualKind, state: blockVisualState(for: block.id)).setFill()
-            oldRect.fill()
-            newRect.fill()
-            drawHoveredBlockStrokeIfNeeded(id: block.id, kind: block.visualKind, rects: [oldRect, newRect])
+            rect.fill()
+            drawHoveredBlockStrokeIfNeeded(id: block.id, kind: block.visualKind, rects: [rect])
         }
     }
 

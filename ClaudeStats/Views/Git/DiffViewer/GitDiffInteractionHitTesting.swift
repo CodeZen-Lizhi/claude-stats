@@ -17,3 +17,16 @@ enum GitDiffInteractionHitTesting {
         return nil
     }
 }
+
+enum GitDiffBlockGeometry {
+    static func linearSpanRect(for block: GitDiffRenderBlock, columns: GitDiffRenderColumns) -> CGRect {
+        let minY = min(block.oldContentRect.minY, block.newContentRect.minY)
+        let maxY = max(block.oldContentRect.maxY, block.newContentRect.maxY)
+        return CGRect(
+            x: columns.leftPane.minX,
+            y: minY,
+            width: max(columns.rightPane.maxX - columns.leftPane.minX, 0),
+            height: max(maxY - minY, 0)
+        )
+    }
+}
