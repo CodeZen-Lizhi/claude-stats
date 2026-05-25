@@ -69,6 +69,11 @@ final class Preferences {
     var menuBarIncludesCache: Bool {
         didSet { defaults.set(menuBarIncludesCache, forKey: Keys.menuBarIncludesCache) }
     }
+    /// Whether launching Claude Stats should present the main window. On by
+    /// default so double-clicking the app behaves like a normal windowed app.
+    var openMainWindowOnLaunch: Bool {
+        didSet { defaults.set(openMainWindowOnLaunch, forKey: Keys.openMainWindowOnLaunch) }
+    }
     /// Optional floating edge tab used as a backup entry point when the macOS
     /// menu bar is crowded.
     var floatingTabEnabled: Bool {
@@ -458,6 +463,7 @@ final class Preferences {
         includeCacheInTokens = (defaults.object(forKey: Keys.includeCacheInTokens) as? Bool) ?? true
         costEstimationMode = CostEstimationMode(rawValue: defaults.string(forKey: Keys.costEstimationMode) ?? "") ?? .standardAPI
         menuBarIncludesCache = (defaults.object(forKey: Keys.menuBarIncludesCache) as? Bool) ?? true
+        openMainWindowOnLaunch = (defaults.object(forKey: Keys.openMainWindowOnLaunch) as? Bool) ?? true
         floatingTabEnabled = (defaults.object(forKey: Keys.floatingTabEnabled) as? Bool) ?? true
         floatingTabEdge = FloatingPanelEdge(rawValue: defaults.string(forKey: Keys.floatingTabEdge) ?? "") ?? .right
         floatingTabAnchor = (defaults.object(forKey: Keys.floatingTabAnchor) as? Double) ?? 0.5
@@ -664,6 +670,7 @@ final class Preferences {
         static let includeCacheInTokens = "includeCacheInTokens"
         static let costEstimationMode = "costEstimationMode"
         static let menuBarIncludesCache = "menuBarIncludesCache"
+        static let openMainWindowOnLaunch = "openMainWindowOnLaunch"
         static let floatingTabEnabled = "floatingTabEnabled"
         static let floatingTabEdge = "floatingTabEdge"
         static let floatingTabAnchor = "floatingTabAnchor"

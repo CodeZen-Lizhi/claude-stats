@@ -15,6 +15,24 @@ struct PreferencesTests {
         #expect(prefs.floatingTabAnchor == 0.5)
     }
 
+    @Test("Main window opens on launch by default")
+    func mainWindowLaunchDefault() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+
+        #expect(prefs.openMainWindowOnLaunch == true)
+    }
+
+    @Test("Main window launch preference persists")
+    func mainWindowLaunchPersists() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+        prefs.openMainWindowOnLaunch = false
+
+        let reloaded = Preferences(defaults: defaults)
+        #expect(reloaded.openMainWindowOnLaunch == false)
+    }
+
     @Test("Floating tab preferences persist")
     func floatingTabPersists() {
         let defaults = makeDefaults()

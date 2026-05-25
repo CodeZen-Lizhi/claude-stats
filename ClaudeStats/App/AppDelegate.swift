@@ -26,6 +26,15 @@ final class AppDelegate: GhosttyEmbed.AppDelegate {
         MainActor.assumeIsolated {
             Theme.registerFonts()
             env.start()
+            requestMainWindowOnLaunchIfNeeded()
+        }
+    }
+
+    @MainActor
+    private func requestMainWindowOnLaunchIfNeeded() {
+        guard env.preferences.openMainWindowOnLaunch else { return }
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .openMainWindowOnAppLaunch, object: nil)
         }
     }
 

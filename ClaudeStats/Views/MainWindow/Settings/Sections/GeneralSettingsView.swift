@@ -20,6 +20,13 @@ struct GeneralSettingsView: View {
                             .toggleStyle(.switch)
                     }
                     .onChange(of: launchAtLogin) { _, newValue in LaunchAtLogin.setEnabled(newValue) }
+                    SettingRowDivider()
+                    SettingRow(title: "Open main window on launch",
+                               description: "Show the main window when Claude Stats starts, including when you double-click the app.") {
+                        Toggle("", isOn: $prefs.openMainWindowOnLaunch)
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                    }
                 }
                 .settingCard()
             }
