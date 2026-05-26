@@ -9,7 +9,7 @@ and republishes it to the gh-pages branch.
 Usage:
   update-appcast.py \
       --version 1.2.0 --build 42 \
-      --url https://github.com/1pitaph/claude-stats-releases/releases/download/v1.2.0/ClaudeStats-1.2.0.zip \
+      --url https://github.com/1pitaph/claude-stats/releases/download/v1.2.0/ClaudeStats-1.2.0.zip \
       --enclosure-attrs 'sparkle:edSignature="..." length="12345"' \
       --release-notes-file release_notes.html \
       --min-system-version 14.0.0 \
@@ -33,7 +33,7 @@ import re
 import sys
 import time
 
-FEED_URL = "https://1pitaph.github.io/claude-stats-releases/appcast.xml"
+FEED_URL = "https://1pitaph.github.io/claude-stats/appcast.xml"
 
 SKELETON = """<?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">

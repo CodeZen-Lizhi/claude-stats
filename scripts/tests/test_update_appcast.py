@@ -40,6 +40,8 @@ class UpdateAppcastTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             xml = out.read_text(encoding="utf-8")
+            self.assertIn("<link>https://1pitaph.github.io/claude-stats/appcast.xml</link>", xml)
+            self.assertNotIn("claude-stats-releases", xml)
             self.assertIn("<sparkle:minimumSystemVersion>14.0.0</sparkle:minimumSystemVersion>", xml)
             self.assertIn("<sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>", xml)
 

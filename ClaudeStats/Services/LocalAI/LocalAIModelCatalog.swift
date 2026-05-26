@@ -1,7 +1,7 @@
 import Foundation
 
 enum LocalAIModelCatalog {
-    static let githubReleaseBaseURL = URL(string: "https://github.com/1pitaph/Codex-stats-releases/releases/download/local-models-v1")!
+    static let githubReleaseBaseURL = URL(string: "https://github.com/1pitaph/claude-stats/releases/download/local-models-v1")!
 
     static let builtInModels: [LocalAIModelManifest] = [
         LocalAIModelManifest(

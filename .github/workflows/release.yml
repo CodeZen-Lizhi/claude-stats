@@ -15,14 +15,13 @@ name: Release
 #   3. If SPARKLE_PRIVATE_ED_KEY is set, EdDSA-signs the archive, creates delta
 #      updates from recent appcast releases when possible, and writes an updated
 #      appcast.xml for GitHub Pages.
-#   4. Creates GitHub Releases for the tag in both this source repo and the
-#      PUBLIC releases repo (1pitaph/claude-stats-releases), with the same
-#      artifact(s), including deltas, attached. The source repo release is for
-#      internal/project history; the public repo release keeps the binaries
-#      downloadable by anyone.
-#   5. Publishes the updated appcast.xml to the gh-pages branch of the public
-#      releases repo (served at SUFeedURL by GitHub Pages) so existing installs
-#      can auto-update.
+#   4. Creates a GitHub Release for the tag in this public source repo, with the
+#      packaged app and any Sparkle deltas attached.
+#   5. Publishes the updated appcast.xml to this repo's gh-pages branch (served
+#      at SUFeedURL by GitHub Pages) so installs can auto-update.
+#      During the migration away from 1pitaph/claude-stats-releases, the same
+#      appcast is also mirrored to that legacy repo's gh-pages branch when
+#      RELEASES_REPO_TOKEN is present. No binaries are uploaded there.
 #   6. Commits the bumped project.yml and release history files back to master.
 #
 # Optional repository secrets (Settings ▸ Secrets and variables ▸ Actions) — set
@@ -38,12 +37,12 @@ name: Release
 #   NOTARY_APPLE_ID           Apple ID email used for notarization
 #   NOTARY_PASSWORD           app-specific password for that Apple ID (appleid.apple.com)
 #
-# Required secret for publishing to the public releases repo:
+# Optional migration secret:
 #   RELEASES_REPO_TOKEN       fine-grained PAT scoped to 1pitaph/claude-stats-releases
-#                             with Contents: Read and write. The built-in
-#                             GITHUB_TOKEN writes the source repo Release, so a
-#                             cross-repo token is only required for the public
-#                             Release upload and the gh-pages deploy.
+#                             with Contents: Read and write. When present, the
+#                             workflow mirrors appcast.xml to the legacy Pages
+#                             branch so old builds can discover the migration
+#                             release. This token is not used for release assets.
 #
 # Auto-update secret (independent of the signing secrets above):
 #   SPARKLE_PRIVATE_ED_KEY    base64 EdDSA private key from Sparkle's
@@ -51,8 +50,8 @@ name: Release
 #                             key goes in Info.plist as SUPublicEDKey. Without
 #                             this secret the appcast step is skipped (releases
 #                             still publish, but installed apps won't see them).
-#                             Requires GitHub Pages enabled for the gh-pages
-#                             branch on the public releases repo.
+#                             Requires GitHub Pages enabled for this repo's
+#                             gh-pages branch.
 #
 # Git language stats runtime:
 #   The workflow builds a relocatable GitTools runtime from pinned Ruby,
@@ -250,11 +249,9 @@ jobs:
           bash scripts/release-build.sh "${{ steps.version.outputs.version }}"
 
       - name: Generate release notes from source commits
-        # GitHub's auto-generated notes come from the *target* repo's history,
-        # which on `claude-stats-releases` is just the README — useless. Build
-        # the notes here from the private source repo's commits between this tag
-        # and the previous semver tag (or from the start if this is the first
-        # release). `actions/checkout` with fetch-depth: 0 above fetched all tags.
+        # Build notes from source commits between this tag and the previous semver
+        # tag (or from the start if this is the first release). `actions/checkout`
+        # with fetch-depth: 0 above fetched all tags.
         #
         # We emit two files tuned for different surfaces:
         #   • release_notes.md   → full GitHub Release body from commit subjects + bodies
@@ -285,29 +282,20 @@ jobs:
           files: dist/*
           body_path: release_notes.md
 
-      - name: Create GitHub Release (in public releases repo)
-        uses: softprops/action-gh-release@v3
-        with:
-          repository: 1pitaph/claude-stats-releases
-          token: ${{ secrets.RELEASES_REPO_TOKEN }}
-          tag_name: ${{ github.ref_name }}
-          files: dist/*
-          body_path: release_notes.md
-
-      - name: Deploy appcast to GitHub Pages (public releases repo)
+      - name: Deploy appcast to GitHub Pages
         if: steps.sparkle.outputs.enabled == 'true'
         env:
-          RELEASES_REPO_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
+          PAGES_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
-          if [[ -z "$RELEASES_REPO_TOKEN" ]]; then
-            echo "::error::RELEASES_REPO_TOKEN is required to publish the appcast."
+          if [[ -z "$PAGES_TOKEN" ]]; then
+            echo "::error::GITHUB_TOKEN is required to publish the appcast."
             exit 1
           fi
 
-          PAGES_REPO="https://x-access-token:${RELEASES_REPO_TOKEN}@github.com/1pitaph/claude-stats-releases.git"
-          PAGES_DIR="$RUNNER_TEMP/claude-stats-releases-pages"
+          PAGES_REPO="https://x-access-token:${PAGES_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          PAGES_DIR="$RUNNER_TEMP/claude-stats-pages"
           rm -rf "$PAGES_DIR"
 
           if git ls-remote --exit-code --heads "$PAGES_REPO" gh-pages >/dev/null 2>&1; then
@@ -332,6 +320,46 @@ jobs:
           fi
 
           git commit -m "chore: publish appcast for $GITHUB_REF_NAME"
+          git push origin gh-pages
+
+      - name: Mirror transitional appcast to legacy GitHub Pages
+        if: steps.sparkle.outputs.enabled == 'true'
+        env:
+          RELEASES_REPO_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$RELEASES_REPO_TOKEN" ]]; then
+            echo "::warning::RELEASES_REPO_TOKEN is not set — skipping legacy appcast mirror. Older builds that still use the old SUFeedURL will not see this migration release."
+            exit 0
+          fi
+
+          PAGES_REPO="https://x-access-token:${RELEASES_REPO_TOKEN}@github.com/1pitaph/claude-stats-releases.git"
+          PAGES_DIR="$RUNNER_TEMP/claude-stats-releases-pages"
+          rm -rf "$PAGES_DIR"
+
+          if git ls-remote --exit-code --heads "$PAGES_REPO" gh-pages >/dev/null 2>&1; then
+            git clone --depth 1 --branch gh-pages "$PAGES_REPO" "$PAGES_DIR"
+          else
+            git clone --depth 1 "$PAGES_REPO" "$PAGES_DIR"
+            cd "$PAGES_DIR"
+            git checkout --orphan gh-pages
+            git rm -rf . >/dev/null 2>&1 || true
+          fi
+
+          cd "$PAGES_DIR"
+          rsync -a --checksum "$GITHUB_WORKSPACE/_site/" "$PAGES_DIR/"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+
+          if [[ -z "$(git status --porcelain)" ]]; then
+            echo "No legacy GitHub Pages changes to publish."
+            exit 0
+          fi
+
+          git commit -m "chore: mirror appcast for $GITHUB_REF_NAME"
           git push origin gh-pages
 
       - name: Commit version bump back to master

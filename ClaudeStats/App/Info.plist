@@ -104,7 +104,7 @@
 	  below after running `generate_keys` — see CLAUDE.md ▸ Releasing.
 	-->
 	<key>SUFeedURL</key>
-	<string>https://1pitaph.github.io/claude-stats-releases/appcast.xml</string>
+	<string>https://1pitaph.github.io/claude-stats/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>q08NR2AvmmN/WuX7o7jQmYMsaL/5bPmiX/xlo3flCZY=</string>
 	<key>SUEnableAutomaticChecks</key>

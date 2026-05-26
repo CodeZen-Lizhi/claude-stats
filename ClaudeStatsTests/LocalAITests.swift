@@ -14,6 +14,7 @@ struct LocalAIModelCatalogTests {
         #expect(decoded.runtime == .llamaGGUF)
         #expect(decoded.dimensions == 384)
         #expect(decoded.pooling == .mean)
+        #expect(decoded.artifact.url?.absoluteString.hasPrefix("https://github.com/1pitaph/claude-stats/releases/download/local-models-v1/") == true)
     }
 
     @Test("Recommendation keeps low-memory Apple Silicon Macs on small model")

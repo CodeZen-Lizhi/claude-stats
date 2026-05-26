@@ -145,10 +145,10 @@ Screenshots and GIF demos live in [`docs/assets/screens`](docs/assets/screens), 
 
 ## Install
 
-Packaged builds are published through the public release mirror:
+Packaged builds are published from this repository:
 
-- [GitHub Releases](https://github.com/1pitaph/claude-stats-releases/releases)
-- [Sparkle appcast](https://1pitaph.github.io/claude-stats-releases/appcast.xml)
+- [GitHub Releases](https://github.com/1pitaph/claude-stats/releases)
+- [Sparkle appcast](https://1pitaph.github.io/claude-stats/appcast.xml)
 
 Release packaging supports both signed/notarized builds and unsigned fallback builds. If you use an unsigned build, macOS Gatekeeper may require opening it with right-click, then **Open**.
 
@@ -156,7 +156,7 @@ Release packaging supports both signed/notarized builds and unsigned fallback bu
 
 Current packaged releases support Apple Silicon Macs running macOS 15 or later. The app bundle still carries a macOS 14 deployment target for the main app shell, but packaged releases include runtime components whose practical floor is macOS 15.
 
-Intel Macs are not supported by current releases. The last public universal build with both `x86_64` and `arm64` slices was [v1.3.9](https://github.com/1pitaph/claude-stats-releases/releases/tag/v1.3.9); releases from v1.3.11 onward ship an `arm64` main executable.
+Intel Macs are not supported by current releases. The last public universal build with both `x86_64` and `arm64` slices was [v1.3.9](https://github.com/1pitaph/claude-stats/releases/tag/v1.3.9); releases from v1.3.11 onward ship an `arm64` main executable.
 
 ## Privacy & Data
 
