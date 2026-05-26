@@ -28,7 +28,6 @@ final class AppEnvironment {
     let apiProviders: APIProviderSwitcherViewModel
     let cliEnvironment: CLIEnvironmentViewModel
     let aiConfigs: AIConfigsViewModel
-    let skills: SkillsStore
     let systemMonitor: SystemMonitorViewModel
     let ops: OpsStore
 
@@ -57,7 +56,6 @@ final class AppEnvironment {
         self.configurationProfiles = ConfigurationProfilesViewModel(registry: providerRegistry)
         self.apiProviders = APIProviderSwitcherViewModel()
         self.aiConfigs = AIConfigsViewModel(scanner: AIConfigScanner(registry: providerRegistry))
-        self.skills = SkillsStore()
     }
 
     convenience init() {

@@ -44,7 +44,6 @@ struct SidebarColumn: View {
                 onOpenConfigs()
             }
             if env.preferences.gitTrackingEnabled { navRow(.git) }
-            navRow(.skills)
             SidebarRow(
                 title: "Ops",
                 symbol: "wrench.and.screwdriver",

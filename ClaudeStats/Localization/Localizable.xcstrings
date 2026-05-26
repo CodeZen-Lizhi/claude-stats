@@ -849,16 +849,6 @@
         }
       }
     },
-    "Browse local SKILL.md directories and inspect skills.sh metadata." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "浏览本地 SKILL.md 目录并查看 skills.sh 元数据。"
-          }
-        }
-      }
-    },
     "BY MODEL" : {
       "localizations" : {
         "en" : {
@@ -5090,26 +5080,6 @@
         }
       }
     },
-    "Skills" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "技能"
-          }
-        }
-      }
-    },
-    "SKILLS" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "技能"
-          }
-        }
-      }
-    },
     "Sort" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -8808,16 +8778,6 @@
         }
       }
     },
-    "Refresh current Skills view" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "刷新当前技能视图"
-          }
-        }
-      }
-    },
     "Refresh now" : {
       "localizations" : {
         "zh-Hans" : {
@@ -9034,16 +8994,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "作用域"
-          }
-        }
-      }
-    },
-    "Search skills.sh" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "搜索 skills.sh"
           }
         }
       }
@@ -9548,16 +9498,6 @@
         }
       }
     },
-    "Choose a local or market skill to inspect its SKILL.md, files, and metadata." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择本地或市场技能以查看其 SKILL.md、文件与元数据。"
-          }
-        }
-      }
-    },
     "Colour scheme used by the Overlap heatmap on the Dashboard." : {
       "localizations" : {
         "zh-Hans" : {
@@ -9838,16 +9778,6 @@
         }
       }
     },
-    "No skill selected" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未选择技能"
-          }
-        }
-      }
-    },
     "Notifications" : {
       "localizations" : {
         "zh-Hans" : {
@@ -9928,16 +9858,6 @@
         }
       }
     },
-    "Refresh or adjust filters to inspect local SKILL.md directories." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "刷新或调整筛选以查看本地 SKILL.md 目录。"
-          }
-        }
-      }
-    },
     "Refresh or adjust the search query to inspect configs." : {
       "localizations" : {
         "zh-Hans" : {
@@ -9968,16 +9888,6 @@
         }
       }
     },
-    "Save a skills.sh API key from the top-right key control to browse curated skills." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "从右上角密钥控件保存一个 skills.sh API 密钥，以浏览精选技能。"
-          }
-        }
-      }
-    },
     "Saved" : {
       "localizations" : {
         "zh-Hans" : {
@@ -9994,26 +9904,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "选择一个文件"
-          }
-        }
-      }
-    },
-    "Select a skill to inspect metadata, files, and SKILL.md." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择一个技能以查看元数据、文件与 SKILL.md。"
-          }
-        }
-      }
-    },
-    "Select a skills.sh result in Discover or Curated to inspect remote metadata and audits." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在“发现”或“精选”中选择一个 skills.sh 结果，以查看远程元数据与审计。"
           }
         }
       }
@@ -10244,16 +10134,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "macOS 温度压力"
-          }
-        }
-      }
-    },
-    "skills.sh returns audits after partner scans are available." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "当合作方扫描可用后，skills.sh 会返回审计结果。"
           }
         }
       }

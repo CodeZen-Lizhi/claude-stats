@@ -4,7 +4,7 @@ import SwiftUI
 /// Top-level page shown in the main window's detail column. Settings live in
 /// their own main-window mode, not as a `MainPage`.
 enum MainPage: String, CaseIterable, Identifiable, Sendable {
-    case dashboard, configurations, usage, activity, git, system, skills
+    case dashboard, configurations, usage, activity, git, system
     var id: String { rawValue }
 
     var title: String {
@@ -15,7 +15,6 @@ enum MainPage: String, CaseIterable, Identifiable, Sendable {
         case .activity: L10n.string("main_page.activity", defaultValue: "Activity")
         case .git: L10n.string("main_page.git", defaultValue: "Git")
         case .system: L10n.string("main_page.system", defaultValue: "System")
-        case .skills: "Skills"
         }
     }
 
@@ -27,7 +26,6 @@ enum MainPage: String, CaseIterable, Identifiable, Sendable {
         case .activity: "waveform"
         case .git: "arrow.triangle.branch"
         case .system: "cpu"
-        case .skills: "sparkles"
         }
     }
 }
@@ -66,7 +64,6 @@ struct MainWindowView: View {
         if env.preferences.aiActivityAnalysisEnabled { pages.append(.activity) }
         if env.preferences.gitTrackingEnabled { pages.append(.git) }
         if env.preferences.systemMonitorEnabled { pages.append(.system) }
-        pages.append(.skills)
         return pages
     }
 
@@ -295,8 +292,6 @@ struct MainWindowView: View {
             MainGitActivityView()
         case .system:
             MainSystemMonitorView()
-        case .skills:
-            SkillsWorkspaceView(store: env.skills)
         }
     }
 
