@@ -320,3 +320,42 @@ Diagnosed packaged Claude Stats exiting while idle, added a resident menu-bar li
 ### Next Steps
 
 - None - task complete
+
+
+## Session 10: 删除活动和配置功能
+
+**Date**: 2026-05-26
+**Task**: 删除活动和配置功能
+**Package**: ClaudeStats
+**Branch**: `codex/dev`
+
+### Summary
+
+删除 Activity 与 Configs 产品入口、主窗口模式、相关模型/服务/ViewModel/测试和 Provider 配置扫描接口；脚本测试通过，Xcode 验证因本机仅配置 CommandLineTools 阻塞。
+
+### Main Changes
+
+- Removed Activity and Configs from main-window navigation, mode shell, settings, menu panel, and share/export surfaces.
+- Deleted AI Activity and Configs models, services, view models, views, localization entries, and dedicated tests.
+- Removed Provider and CodexProvider configuration-scanning APIs, including the final unused `ProviderConfigFileKind` residue.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `651cedd` | (see git log) |
+
+### Testing
+
+- [OK] `python3 -B -m unittest discover scripts/tests` — 22 tests passed.
+- [OK] `python3 -m json.tool ClaudeStats/Localization/Localizable.xcstrings`
+- [OK] `git diff --check`
+- [WARN] `bash scripts/run-tests.sh` and `bash scripts/run-debug.sh` reached Xcode build/debug, then stopped because this machine's active developer directory is `/Library/Developer/CommandLineTools` rather than a full Xcode install.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

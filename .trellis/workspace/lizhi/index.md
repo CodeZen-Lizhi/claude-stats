@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 9
+- **Total Sessions**: 10
 - **Last Active**: 2026-05-26
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~317 | Active |
+| `journal-1.md` | ~356 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 10 | 2026-05-26 | 删除活动和配置功能 | `651cedd` | `codex/dev` |
 | 9 | 2026-05-26 | 修复 Codex 会话项目归属 | `fd41713` | `codex/dev` |
 | 8 | 2026-05-26 | 清理已删除功能残留 | `9858cc9` | `codex/release-ci-fix` |
 | 7 | 2026-05-26 | 删除 API 服务商切换器 | `88feb72` | `codex/release-ci-fix` |
