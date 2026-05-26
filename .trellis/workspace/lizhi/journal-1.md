@@ -359,3 +359,42 @@ Diagnosed packaged Claude Stats exiting while idle, added a resident menu-bar li
 ### Next Steps
 
 - None - task complete
+
+
+## Session 11: 同步上游分支
+
+**Date**: 2026-05-26
+**Task**: 同步上游分支
+**Package**: ThirdParty/Atoll
+**Branch**: `codex/dev`
+
+### Summary
+
+将 master 和 origin/master 对齐 upstream/master；把 upstream/master 与远端 Codex Statistics 改名提交同步到 codex/dev，并完成无 Xcode 环境下的生成与 Python 测试验证。
+
+### Main Changes
+
+- Forced local and fork `master` to match `upstream/master` exactly.
+- Merged upstream changes into `codex/dev` while preserving the fork-only product direction.
+- Merged the remote `codex/dev` Codex Statistics rename commit and pushed the final dev branch.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `eb0b50f` | (see git log) |
+| `05f7199` | (see git log) |
+
+### Testing
+
+- [OK] `bash scripts/generate.sh`
+- [OK] `python3 -B -m unittest discover scripts/tests` — 22 tests passed
+- [WARN] Xcode build/debug checks skipped because this machine does not have Xcode installed.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
