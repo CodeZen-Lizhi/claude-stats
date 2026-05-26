@@ -4,7 +4,6 @@ import SwiftUI
 /// Secondary main-window sidebar for browsing provider-scoped sessions.
 struct SessionSidebarColumn: View {
     @Binding var destination: SessionsDestination
-    var onExit: () -> Void
 
     @Environment(AppEnvironment.self) private var env
     @State private var sessionsVM = SessionListViewModel()
@@ -22,14 +21,7 @@ struct SessionSidebarColumn: View {
         @Bindable var vm = sessionsVM
 
         VStack(alignment: .leading, spacing: 0) {
-            Color.clear.frame(height: 44)
-
-            SidebarRow(
-                title: "Back to App",
-                symbol: "chevron.left",
-                isSelected: false,
-                action: close
-            )
+            Color.clear.frame(height: 22)
 
             statusCard(vm: vm)
                 .padding(.horizontal, 8)
@@ -233,11 +225,6 @@ struct SessionSidebarColumn: View {
         )
     }
 
-    private func close() {
-        clearSearchFocus()
-        onExit()
-    }
-
     private func clearSearchFocus() {
         searchFieldFocused = false
         NSApp.keyWindow?.makeFirstResponder(nil)
@@ -384,7 +371,7 @@ private struct HeaderIconButton: View {
 #Preview("Sessions sidebar") {
     @Previewable @State var destination: SessionsDestination = .overview
 
-    return SessionSidebarColumn(destination: $destination, onExit: {})
+    return SessionSidebarColumn(destination: $destination)
         .environment(AppEnvironment.preview())
         .frame(width: 240, height: 640)
         .background(VisualEffectBackground())

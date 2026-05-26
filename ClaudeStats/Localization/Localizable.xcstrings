@@ -1303,6 +1303,40 @@
         }
       }
     },
+    "count.request.one": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d request"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d 次请求"
+          }
+        }
+      }
+    },
+    "count.request.other": {
+      "extractionState": "stale",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d requests"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d 次请求"
+          }
+        }
+      }
+    },
     "count.session.one": {
       "extractionState": "stale",
       "localizations": {

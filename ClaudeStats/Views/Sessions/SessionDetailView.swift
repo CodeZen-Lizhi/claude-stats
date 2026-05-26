@@ -76,7 +76,7 @@ struct SessionDetailView: View {
                          value: Format.tokens(stats.totalTokens(includingCacheRead: includeCache)))
                 StatCard(label: L10n.string("session.stat.estimated_cost", defaultValue: "ESTIMATED COST"),
                          value: Format.cost(stats.totalCost(for: env.preferences.costEstimationMode)))
-                StatCard(label: L10n.string("session.stat.messages", defaultValue: "MESSAGES"),
+                StatCard(label: L10n.string("usage.stat.requests", defaultValue: "REQUESTS"),
                          value: "\(stats.messageCount)")
                 StatCard(label: L10n.string("session.stat.last_activity", defaultValue: "LAST ACTIVITY"),
                          value: Format.relativeDate(stats.lastActivity ?? session.lastModified),
@@ -119,7 +119,7 @@ struct SessionDetailView: View {
                         .controlSize(.small)
                         .scaleEffect(0.72)
                 } else if !transcriptMessages.isEmpty {
-                    Text(L10n.messageCount(transcriptMessages.count))
+                    Text(L10n.requestCount(session.stats?.messageCount ?? transcriptMessages.count))
                         .font(.sora(10))
                         .foregroundStyle(Color.stxMuted)
                 }

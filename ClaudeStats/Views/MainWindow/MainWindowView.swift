@@ -4,12 +4,13 @@ import SwiftUI
 /// Top-level page shown in the main window's detail column. Settings live in
 /// their own main-window mode, not as a `MainPage`.
 enum MainPage: String, CaseIterable, Identifiable, Sendable {
-    case dashboard, usage, git, system
+    case dashboard, sessions, usage, git, system
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .dashboard: L10n.string("main_page.dashboard", defaultValue: "Dashboard")
+        case .sessions: L10n.string("main_page.sessions", defaultValue: "Sessions")
         case .usage: L10n.string("main_page.usage", defaultValue: "Usage")
         case .git: L10n.string("main_page.git", defaultValue: "Git")
         case .system: L10n.string("main_page.system", defaultValue: "System")
@@ -19,6 +20,7 @@ enum MainPage: String, CaseIterable, Identifiable, Sendable {
     var symbol: String {
         switch self {
         case .dashboard: "square.grid.2x2"
+        case .sessions: "text.bubble"
         case .usage: "chart.bar.xaxis"
         case .git: "arrow.triangle.branch"
         case .system: "cpu"
@@ -51,17 +53,10 @@ struct MainWindowView: View {
     @State private var trafficLights = TrafficLightPositioner()
 
     private var availablePages: [MainPage] {
-        var pages: [MainPage] = [.dashboard, .usage]
+        var pages: [MainPage] = [.dashboard, .sessions, .usage]
         if env.preferences.gitTrackingEnabled { pages.append(.git) }
         if env.preferences.systemMonitorEnabled { pages.append(.system) }
         return pages
-    }
-
-    /// Resolves the currently selected session against the store. Returns nil
-    /// if the id was set but the session has since been removed.
-    private var selectedSession: Session? {
-        guard case .session(let id) = sessionsDestination else { return nil }
-        return env.store.sessions(for: env.preferences.selectedProvider).first { $0.id == id }
     }
 
     private var sessionsDestination: SessionsDestination {
@@ -102,20 +97,12 @@ struct MainWindowView: View {
                 SidebarColumn(
                     page: $page,
                     availablePages: availablePages,
-                    onOpenSettings: openSettings,
-                    onOpenSessions: openSessions
-                )
-            } sessionsSidebar: {
-                SessionSidebarColumn(
-                    destination: sessionsDestinationBinding,
-                    onExit: closeSessions
+                    onOpenSettings: openSettings
                 )
             } settingsSidebar: {
                 SettingsSidebarColumn(section: settingsSectionBinding, onExit: closeSettings)
             } appDetail: {
                 detail
-            } sessionsDetail: {
-                sessionsDetail
             } settingsDetail: {
                 SettingsDetailView(section: settingsSection, onSelectSection: selectSettingsSection)
             }
@@ -125,7 +112,7 @@ struct MainWindowView: View {
                     .onTapGesture { clearTextFocus() }
             }
 
-            if mode == .app || mode == .sessions {
+            if mode == .app {
                 sidebarToggle
                     .padding(.leading, 81)
                     .padding(.top, 11)
@@ -143,7 +130,7 @@ struct MainWindowView: View {
         })
         .onAppear {
             normalizeNavigationState()
-            if mode == .sessions { clearInvalidSessionSelection() }
+            if page == .sessions { clearInvalidSessionSelection() }
             DockVisibilityCoordinator.shared.acquire()
             Log.app.info("Main window opened on page \(page.rawValue, privacy: .public)")
         }
@@ -160,10 +147,10 @@ struct MainWindowView: View {
             pageRaw = new.rawValue
         }
         .onChange(of: env.store.lastRefreshedAt) { _, _ in
-            if mode == .sessions { clearInvalidSessionSelection() }
+            if page == .sessions { clearInvalidSessionSelection() }
         }
         .onChange(of: env.preferences.selectedProvider) { _, _ in
-            if mode == .sessions, case .session = sessionsDestination {
+            if page == .sessions, case .session = sessionsDestination {
                 sessionsDestinationRaw = SessionsDestination.overviewRawValue
             }
         }
@@ -232,26 +219,14 @@ struct MainWindowView: View {
         switch page {
         case .dashboard:
             DashboardView()
+        case .sessions:
+            SessionsWorkspaceView(destination: sessionsDestinationBinding)
         case .usage:
             MainUsageView()
         case .git:
             MainGitActivityView()
         case .system:
             MainSystemMonitorView()
-        }
-    }
-
-    @ViewBuilder
-    private var sessionsDetail: some View {
-        switch sessionsDestination {
-        case .overview:
-            SessionsOverviewDetailView()
-        case .session:
-            if let session = selectedSession {
-                CenteredPaneContainer { SessionDetailView(session: session) }
-            } else {
-                SessionsOverviewDetailView()
-            }
         }
     }
 
@@ -274,16 +249,7 @@ struct MainWindowView: View {
         settingsSectionRaw = section.rawValue
     }
 
-    private func openSessions() {
-        sessionsDestinationRaw = SessionsDestination.overviewRawValue
-        transition(to: .sessions)
-    }
-
     private func closeSettings() {
-        transition(to: .app)
-    }
-
-    private func closeSessions() {
         transition(to: .app)
     }
 

@@ -11,7 +11,6 @@ struct SidebarColumn: View {
     @Binding var page: MainPage
     var availablePages: [MainPage]
     var onOpenSettings: () -> Void
-    var onOpenSessions: () -> Void
 
     @Environment(AppEnvironment.self) private var env
 
@@ -21,8 +20,7 @@ struct SidebarColumn: View {
             Color.clear.frame(height: 44)
 
             navRow(.dashboard)
-            sessionsEntryRow
-
+            navRow(.sessions)
             navRow(.usage)
             if env.preferences.systemMonitorEnabled { navRow(.system) }
             if showsGitTool { navRow(.git) }
@@ -47,29 +45,16 @@ struct SidebarColumn: View {
     @ViewBuilder
     private func navRow(_ p: MainPage) -> some View {
         if availablePages.contains(p) {
+            let count = p == .sessions ? env.store.sessions(for: env.preferences.selectedProvider).count : 0
             SidebarRow(
                 title: p.title,
                 symbol: p.symbol,
-                isSelected: page == p
+                isSelected: page == p,
+                trailingText: count > 0 ? "\(count)" : nil
             ) {
                 clearTextFocus()
                 page = p
             }
-        }
-    }
-
-    private var sessionsEntryRow: some View {
-        let count = env.store.sessions(for: env.preferences.selectedProvider).count
-        return SidebarRow(
-            title: L10n.string("main_page.sessions", defaultValue: "Sessions"),
-            symbol: "text.bubble",
-            isSelected: false,
-            trailingText: count > 0 ? "\(count)" : nil,
-            trailingSymbol: "chevron.right",
-            showsTrailingOnHover: true
-        ) {
-            clearTextFocus()
-            onOpenSessions()
         }
     }
 
@@ -159,9 +144,8 @@ struct SidebarRow: View {
     @Previewable @State var page: MainPage = .dashboard
     return SidebarColumn(
         page: $page,
-        availablePages: [.dashboard, .usage, .git],
-        onOpenSettings: {},
-        onOpenSessions: {}
+        availablePages: [.dashboard, .sessions, .usage, .git],
+        onOpenSettings: {}
     )
     .environment(AppEnvironment.preview())
     .frame(width: 240, height: 600)

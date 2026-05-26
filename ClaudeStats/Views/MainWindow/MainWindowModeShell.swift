@@ -2,13 +2,11 @@ import SwiftUI
 
 enum MainWindowMode: String, Sendable {
     case app
-    case sessions
     case settings
 }
 
 enum MainWindowMotion {
     static let appSidebarWidth: CGFloat = 240
-    static let sessionsSidebarWidth: CGFloat = 240
     static let settingsSidebarWidth: CGFloat = 220
 
     private static let detailOffset: CGFloat = 10
@@ -44,30 +42,19 @@ enum MainWindowMotion {
             removal: .offset(x: detailOffset).combined(with: .opacity)
         )
     }
-
-    static var sessionsDetailTransition: AnyTransition {
-        .asymmetric(
-            insertion: .offset(x: detailOffset).combined(with: .opacity),
-            removal: .offset(x: detailOffset).combined(with: .opacity)
-        )
-    }
-
-
 }
 
-/// Stable two-column shell for the main window. The sidebar column transitions
-/// directly between app, sessions, and settings navigation while the detail
-/// panel stays mounted so its leading boundary can move with the sidebar width.
-struct MainWindowModeShell<AppSidebar: View, SessionsSidebar: View, SettingsSidebar: View, AppDetail: View, SessionsDetail: View, SettingsDetail: View>: View {
+/// Stable two-column shell for the main window. The app sidebar remains stable
+/// while normal pages swap inside the detail panel; settings uses its own
+/// sidebar mode.
+struct MainWindowModeShell<AppSidebar: View, SettingsSidebar: View, AppDetail: View, SettingsDetail: View>: View {
     let mode: MainWindowMode
     let sidebarVisible: Bool
     let boundaryFalloffEnabled: Bool
 
     private let appSidebar: AppSidebar
-    private let sessionsSidebar: SessionsSidebar
     private let settingsSidebar: SettingsSidebar
     private let appDetail: AppDetail
-    private let sessionsDetail: SessionsDetail
     private let settingsDetail: SettingsDetail
 
     init(
@@ -75,20 +62,16 @@ struct MainWindowModeShell<AppSidebar: View, SessionsSidebar: View, SettingsSide
         sidebarVisible: Bool,
         boundaryFalloffEnabled: Bool,
         @ViewBuilder appSidebar: () -> AppSidebar,
-        @ViewBuilder sessionsSidebar: () -> SessionsSidebar,
         @ViewBuilder settingsSidebar: () -> SettingsSidebar,
         @ViewBuilder appDetail: () -> AppDetail,
-        @ViewBuilder sessionsDetail: () -> SessionsDetail,
         @ViewBuilder settingsDetail: () -> SettingsDetail
     ) {
         self.mode = mode
         self.sidebarVisible = sidebarVisible
         self.boundaryFalloffEnabled = boundaryFalloffEnabled
         self.appSidebar = appSidebar()
-        self.sessionsSidebar = sessionsSidebar()
         self.settingsSidebar = settingsSidebar()
         self.appDetail = appDetail()
-        self.sessionsDetail = sessionsDetail()
         self.settingsDetail = settingsDetail()
     }
 
@@ -111,8 +94,6 @@ struct MainWindowModeShell<AppSidebar: View, SessionsSidebar: View, SettingsSide
         switch mode {
         case .app:
             sidebarVisible ? MainWindowMotion.appSidebarWidth : 0
-        case .sessions:
-            sidebarVisible ? MainWindowMotion.sessionsSidebarWidth : 0
         case .settings:
             MainWindowMotion.settingsSidebarWidth
         }
@@ -122,8 +103,6 @@ struct MainWindowModeShell<AppSidebar: View, SessionsSidebar: View, SettingsSide
         switch mode {
         case .app:
             return sidebarVisible
-        case .sessions:
-            return sidebarVisible
         case .settings:
             return true
         }
@@ -131,10 +110,6 @@ struct MainWindowModeShell<AppSidebar: View, SessionsSidebar: View, SettingsSide
 
     private var appSidebarIsActive: Bool {
         mode == .app && sidebarVisible
-    }
-
-    private var sessionsSidebarIsActive: Bool {
-        mode == .sessions && sidebarVisible
     }
 
     private var settingsSidebarIsActive: Bool {
@@ -151,13 +126,6 @@ struct MainWindowModeShell<AppSidebar: View, SessionsSidebar: View, SettingsSide
                     .allowsHitTesting(appSidebarIsActive)
                     .accessibilityHidden(!appSidebarIsActive)
                     .transition(MainWindowMotion.appSidebarTransition)
-            case .sessions:
-                sessionsSidebar
-                    .frame(width: MainWindowMotion.sessionsSidebarWidth)
-                    .opacity(sidebarVisible ? 1 : 0)
-                    .allowsHitTesting(sessionsSidebarIsActive)
-                    .accessibilityHidden(!sessionsSidebarIsActive)
-                    .transition(MainWindowMotion.secondarySidebarTransition)
             case .settings:
                 settingsSidebar
                     .frame(width: MainWindowMotion.settingsSidebarWidth)
@@ -175,10 +143,6 @@ struct MainWindowModeShell<AppSidebar: View, SessionsSidebar: View, SettingsSide
             case .app:
                 appDetail
                     .transition(MainWindowMotion.appDetailTransition)
-                    .zIndex(1)
-            case .sessions:
-                sessionsDetail
-                    .transition(MainWindowMotion.sessionsDetailTransition)
                     .zIndex(1)
             case .settings:
                 settingsDetail
@@ -199,13 +163,6 @@ struct MainWindowModeShell<AppSidebar: View, SessionsSidebar: View, SettingsSide
             Text("Settings")
         }
         .padding()
-    } sessionsSidebar: {
-        VStack(alignment: .leading) {
-            Text("Back")
-            Text("Sessions")
-            Spacer()
-        }
-        .padding()
     } settingsSidebar: {
         VStack(alignment: .leading) {
             Text("Back")
@@ -215,8 +172,6 @@ struct MainWindowModeShell<AppSidebar: View, SessionsSidebar: View, SettingsSide
         .padding()
     } appDetail: {
         Color.stxBackground.overlay(Text("App Detail"))
-    } sessionsDetail: {
-        Color.stxBackground.overlay(Text("Sessions Detail"))
     } settingsDetail: {
         Color.stxBackground.overlay(Text("Settings Detail"))
     }
