@@ -27,8 +27,10 @@ struct SidebarColumn: View {
             navRow(.usage)
             if env.preferences.systemMonitorEnabled { navRow(.system) }
 
-            sectionHeader("TOOLS")
-            if env.preferences.gitTrackingEnabled { navRow(.git) }
+            if showsGitTool {
+                sectionHeader("TOOLS")
+                navRow(.git)
+            }
 
             Spacer(minLength: 0)
 
@@ -74,6 +76,10 @@ struct SidebarColumn: View {
             clearTextFocus()
             onOpenSessions()
         }
+    }
+
+    private var showsGitTool: Bool {
+        env.preferences.gitTrackingEnabled && availablePages.contains(.git)
     }
 
     private func sectionHeader(_ title: String) -> some View {

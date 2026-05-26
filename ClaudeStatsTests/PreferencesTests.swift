@@ -227,6 +227,24 @@ struct PreferencesTests {
         #expect(prefs.gitStatsScope == .head)
     }
 
+    @Test("Git tracking defaults to visible")
+    func gitTrackingDefault() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+
+        #expect(prefs.gitTrackingEnabled == true)
+    }
+
+    @Test("Git tracking visibility preference persists")
+    func gitTrackingPersists() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+        prefs.gitTrackingEnabled = false
+
+        let reloaded = Preferences(defaults: defaults)
+        #expect(reloaded.gitTrackingEnabled == false)
+    }
+
     @Test("Git language stats scope preference persists")
     func gitStatsScopePersists() {
         let defaults = makeDefaults()

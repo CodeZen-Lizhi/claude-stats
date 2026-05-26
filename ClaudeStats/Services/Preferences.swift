@@ -176,8 +176,10 @@ final class Preferences {
         [.codex]
     }
 
-    /// Opt-in to git tracking — adds a view that correlates Codex usage with the
-    /// commit activity of the repos you've used Claude in. Off by default.
+    /// Adds a view that correlates Codex usage with the commit activity of the
+    /// repos you've used Codex in. On by default so the main Tools section keeps
+    /// its primary workspace entry visible; users can still hide it from
+    /// Settings > Features.
     var gitTrackingEnabled: Bool {
         didSet { defaults.set(gitTrackingEnabled, forKey: Keys.gitTrackingEnabled) }
     }
@@ -293,7 +295,7 @@ final class Preferences {
         systemMonitorVisibleModules = storedSystemMonitorModules.isEmpty
             ? SystemMonitorModule.defaultVisible
             : Set(storedSystemMonitorModules)
-        gitTrackingEnabled = defaults.bool(forKey: Keys.gitTrackingEnabled)
+        gitTrackingEnabled = (defaults.object(forKey: Keys.gitTrackingEnabled) as? Bool) ?? true
         gitOpensInWindow = defaults.bool(forKey: Keys.gitOpensInWindow)
         gitWorkspaceSourceIDs = GitWorkspaceSourceCatalog.decodeStoredSourceIDs(
             defaults.string(forKey: Keys.gitWorkspaceSourceIDs)
