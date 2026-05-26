@@ -10,12 +10,9 @@ struct SessionAgentInfo: Sendable, Hashable, Codable {
     var path: String?
 
     var displayTitle: String {
-        let parts = [nickname, role].compactMap { value in
-            guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !trimmed.isEmpty else {
-                return nil
-            }
-            return trimmed
+        let parts = [nickname, role].reduce(into: [String]()) { result, value in
+            guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return }
+            result.append(trimmed)
         }
         return parts.isEmpty ? "Subagent" : parts.joined(separator: " / ")
     }

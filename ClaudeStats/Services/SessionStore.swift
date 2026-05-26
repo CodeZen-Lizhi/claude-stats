@@ -1,6 +1,8 @@
 import Foundation
 import Observation
 
+typealias TranscriptMessageLoader = @Sendable (Session) async -> [SessionTranscriptMessage]
+
 /// The app's source of truth for sessions and aggregate usage. Owns the
 /// scan/parse pipeline and a parse cache keyed by transcript metadata
 /// so a refresh only re-parses transcripts that actually changed.
