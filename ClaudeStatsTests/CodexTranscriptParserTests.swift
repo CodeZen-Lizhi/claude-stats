@@ -96,6 +96,16 @@ struct CodexTranscriptParserTests {
         #expect(stats.title == CodexSampleTranscript.threadName)
     }
 
+    @Test("Uses fallback title when transcript has no thread name or user title")
+    func fallbackTitleWhenTranscriptHasNoDisplayTitle() async throws {
+        let stats = try await parseLines([
+            #"{"timestamp":"2026-01-10T09:00:00.000Z","type":"session_meta","payload":{"id":"agent-session","cwd":"/tmp"}}"#,
+            #"{"timestamp":"2026-01-10T09:00:01.000Z","type":"event_msg","payload":{"type":"agent_message","message":"working"}}"#,
+        ], pricing: CodexSampleTranscript.pricing)
+
+        #expect(stats.title == "fallback")
+    }
+
     @Test("Extracts displayable conversation messages")
     func displayMessages() async throws {
         let root = try TempDir.make()

@@ -21,7 +21,7 @@ struct CodexProvider: Provider {
     func parse(_ session: Session) async -> SessionStats? {
         await CodexTranscriptParser(pricing: pricing)
             .parse(transcriptAt: URL(fileURLWithPath: session.filePath),
-                   fallbackTitle: session.projectDisplayName,
+                   fallbackTitle: session.titleFallback ?? session.projectDisplayName,
                    sessionID: session.id)
     }
 

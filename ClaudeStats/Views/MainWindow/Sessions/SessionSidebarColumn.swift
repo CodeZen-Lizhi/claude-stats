@@ -296,6 +296,7 @@ private struct SessionSidebarRow: View {
 
     private var title: String {
         if let title = session.stats?.title, !title.isEmpty { return title }
+        if let fallback = session.titleFallback, !fallback.isEmpty { return fallback }
         return session.externalID
     }
 
@@ -306,10 +307,19 @@ private struct SessionSidebarRow: View {
                     .font(.sora(11))
                     .foregroundStyle(isSelected ? .primary : Color.stxMuted.opacity(0.95))
                     .lineLimit(1)
-                Text(Format.relativeDate(session.stats?.lastActivity ?? session.lastModified))
-                    .font(.sora(9))
-                    .foregroundStyle(Color.stxMuted.opacity(0.7))
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(Format.relativeDate(session.stats?.lastActivity ?? session.lastModified))
+                        .font(.sora(9))
+                        .foregroundStyle(Color.stxMuted.opacity(0.7))
+                        .lineLimit(1)
+
+                    if let badge = session.sourceBadge {
+                        Text(badge)
+                            .font(.sora(8, weight: .semibold))
+                            .foregroundStyle(Color.stxMuted.opacity(0.8))
+                            .lineLimit(1)
+                    }
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 10)
