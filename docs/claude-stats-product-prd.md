@@ -31,7 +31,7 @@ Claude Stats 是一个原生 macOS 菜单栏应用，面向每天长时间使用
 - `Provider` 协议、`ProviderRegistry`、`SessionStore`、`UsageLimitStore` 等共享抽象继续存在。
 - `ProviderRegistry` 只注册 `CodexProvider`。
 - App 内部继续通过 `CodexProvider` 读取 Codex sessions、统计、配置和用量限制，避免把 Codex 文件扫描和解析逻辑散落到 UI。
-- Git、System Monitor、Notch Island、Atoll、Ops 等非 AI session provider 功能不属于 Codex-only provider 删除范围。已删除的实验功能、社区功能、云同步排行和上游术语管理功能不属于当前产品范围。
+- Git、System Monitor、Ops 等非 AI session provider 功能不属于 Codex-only provider 删除范围。已删除的实验功能、社区功能、云同步排行和上游术语管理功能不属于当前产品范围。
 
 以后同步原项目或上游更新时的规则：
 
@@ -139,15 +139,14 @@ Claude Stats 是一个原生 macOS 菜单栏应用，面向每天长时间使用
 - 运维工具
 - AI 配置浏览
 
-### 9. Notch Island 与悬浮统计
+### 9. 悬浮统计
 
-产品包含两个用于被动监控的快速入口。
+产品包含用于被动监控的快速入口。
 
 需求：
 
-- 提供 Notch Island，用于展示实时会话上下文。
 - 提供悬浮统计，方便快速查看状态。
-- 这些入口必须是可选功能，并由应用偏好设置控制。
+- 该入口必须是可选功能，并由应用偏好设置控制。
 
 ### 10. 设置
 
@@ -158,7 +157,6 @@ Claude Stats 是一个原生 macOS 菜单栏应用，面向每天长时间使用
 - 通用
 - 功能
 - 菜单栏
-- Notch Island
 - 跟踪
 - GitHub
 - 系统监控

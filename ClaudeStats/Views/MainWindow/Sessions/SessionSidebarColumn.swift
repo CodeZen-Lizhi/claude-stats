@@ -40,8 +40,12 @@ struct SessionSidebarColumn: View {
                 .padding(.horizontal, 12)
                 .padding(.bottom, 8)
 
+            sortPicker(vm: vm)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
+
             SidebarRow(
-                title: "Overview",
+                title: L10n.string("sessions.overview", defaultValue: "Overview"),
                 symbol: "chart.bar.xaxis",
                 isSelected: destination == .overview
             ) {
@@ -134,6 +138,20 @@ struct SessionSidebarColumn: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private func sortPicker(vm: SessionListViewModel) -> some View {
+        @Bindable var vm = vm
+
+        return Picker("", selection: $vm.sortOrder) {
+            ForEach(SessionListViewModel.SortOrder.allCases) { order in
+                Text(order.displayName).tag(order)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .controlSize(.small)
+        .help(L10n.string("sessions.sort.help", defaultValue: "Sort sessions"))
     }
 
     @ViewBuilder

@@ -237,11 +237,14 @@ struct GitRepoWorkspaceView: View {
 }
 
 private struct GitCommitInspector: View {
+    @Environment(AppEnvironment.self) private var env
+
     let repo: GitRepo
     @Bindable var vm: GitRepoGraphViewModel
 
     @Binding var mode: GitInspectorMode
     @State private var diffRequest: GitFileDiffRequest?
+    @State private var currentUserEmail: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -268,6 +271,11 @@ private struct GitCommitInspector: View {
         .task(id: "\(repo.id)|\(mode.rawValue)|\(vm.statsScope.rawValue)|\(vm.statsRefreshGeneration)") {
             guard mode == .repo else { return }
             await vm.loadRepoStats(repo: repo)
+        }
+        .task(id: repo.id) {
+            currentUserEmail = await Task.detached(priority: .utility) {
+                GitAnalyzer().currentUserEmail()
+            }.value
         }
     }
 
@@ -321,7 +329,7 @@ private struct GitCommitInspector: View {
                         commitSummary(commit)
                         if let detail = vm.commitDetail {
                             commitMessage(detail)
-                            changedFiles(detail)
+                            commitUsage(commit)
                         } else if vm.isDetailLoading {
                             GitWorkspaceInlineEmptyState("Loading commit detail.")
                         } else {
@@ -444,6 +452,97 @@ private struct GitCommitInspector: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .gitWorkspaceCard()
+    }
+
+    private func commitUsage(_ commit: GraphCommit) -> some View {
+        let attribution = CommitUsageAttribution.make(
+            commit: commit,
+            graph: vm.graph,
+            sessions: env.store.sessions(for: env.preferences.selectedProvider),
+            repo: repo,
+            currentUserEmail: currentUserEmail
+        )
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(L10n.string("git.commit.ai_usage", defaultValue: "AI USAGE"))
+                    .font(.sora(10, weight: .semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(Color.stxMuted)
+                Spacer()
+                Text(attribution.windowLabel)
+                    .font(.sora(9))
+                    .foregroundStyle(Color.stxMuted)
+                    .lineLimit(1)
+            }
+
+            if attribution.isEligible {
+                ViewThatFits(in: .horizontal) {
+                    Grid(horizontalSpacing: 10, verticalSpacing: 10) {
+                        GridRow {
+                            usageMetric(L10n.string("usage.stat.requests", defaultValue: "REQUESTS"), Format.tokens(attribution.requestCount))
+                            usageMetric(L10n.string("usage.stat.tokens", defaultValue: "TOKENS"), Format.tokens(attribution.usage.total(includingCacheRead: env.preferences.includeCacheInTokens)))
+                        }
+                        GridRow {
+                            usageMetric(L10n.string("usage.stat.input", defaultValue: "INPUT"), Format.tokens(attribution.usage.inputTokens))
+                            usageMetric(L10n.string("usage.stat.output", defaultValue: "OUTPUT"), Format.tokens(attribution.usage.outputTokens))
+                        }
+                        GridRow {
+                            usageMetric(L10n.string("usage.stat.cached", defaultValue: "CACHED"), Format.tokens(attribution.usage.cacheReadTokens))
+                            usageMetric(L10n.string("usage.stat.estimated_cost", defaultValue: "EST. COST"), Format.cost(attribution.cost))
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        usageMetric(L10n.string("usage.stat.requests", defaultValue: "REQUESTS"), Format.tokens(attribution.requestCount))
+                        usageMetric(L10n.string("usage.stat.tokens", defaultValue: "TOKENS"), Format.tokens(attribution.usage.total(includingCacheRead: env.preferences.includeCacheInTokens)))
+                        usageMetric(L10n.string("usage.stat.input", defaultValue: "INPUT"), Format.tokens(attribution.usage.inputTokens))
+                        usageMetric(L10n.string("usage.stat.output", defaultValue: "OUTPUT"), Format.tokens(attribution.usage.outputTokens))
+                        usageMetric(L10n.string("usage.stat.estimated_cost", defaultValue: "EST. COST"), Format.cost(attribution.cost))
+                    }
+                }
+
+                if attribution.models.isEmpty {
+                    GitWorkspaceInlineEmptyState(L10n.string("git.commit.ai_usage.empty", defaultValue: "No billable AI requests found in this commit window."))
+                } else {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(attribution.models) { model in
+                            HStack(spacing: 8) {
+                                Text(model.name)
+                                    .font(.sora(10, weight: .medium))
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Spacer(minLength: 8)
+                                Text(Format.tokens(model.usage.total(includingCacheRead: env.preferences.includeCacheInTokens)))
+                                    .font(.sora(10).monospacedDigit())
+                                    .foregroundStyle(Color.stxMuted)
+                            }
+                        }
+                    }
+                }
+            } else {
+                GitWorkspaceInlineEmptyState(attribution.ineligibleMessage)
+            }
+        }
+        .padding(12)
+        .gitWorkspaceCard()
+    }
+
+    private func usageMetric(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label)
+                .font(.sora(8, weight: .medium))
+                .tracking(0.4)
+                .foregroundStyle(Color.stxMuted)
+            Text(value)
+                .font(.sora(14, weight: .semibold).monospacedDigit())
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 8)
+        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
     }
 
     @ViewBuilder
@@ -633,6 +732,129 @@ private enum GitInspectorMode: String, CaseIterable, Identifiable {
 
     static func modes(hasWorkingTree: Bool) -> [GitInspectorMode] {
         hasWorkingTree ? [.commit, .workingTree, .repo] : [.commit, .repo]
+    }
+}
+
+private struct CommitUsageAttribution {
+    struct Model: Identifiable {
+        let name: String
+        let usage: TokenUsage
+        let cost: CostEstimate
+
+        var id: String { name }
+    }
+
+    let isEligible: Bool
+    let ineligibleMessage: String
+    let requestCount: Int
+    let usage: TokenUsage
+    let cost: Double
+    let models: [Model]
+    let windowLabel: String
+
+    static func make(
+        commit: GraphCommit,
+        graph: GitGraph?,
+        sessions: [Session],
+        repo: GitRepo,
+        currentUserEmail: String?
+    ) -> CommitUsageAttribution {
+        guard let currentUserEmail, !currentUserEmail.isEmpty else {
+            return CommitUsageAttribution(
+                isEligible: false,
+                ineligibleMessage: L10n.string("git.commit.ai_usage.no_email", defaultValue: "Set git user.email to attribute AI usage to your commits."),
+                requestCount: 0,
+                usage: .zero,
+                cost: 0,
+                models: [],
+                windowLabel: L10n.string("git.commit.ai_usage.my_commits_only", defaultValue: "my commits only")
+            )
+        }
+        guard commit.authorEmail.caseInsensitiveCompare(currentUserEmail) == .orderedSame else {
+            return CommitUsageAttribution(
+                isEligible: false,
+                ineligibleMessage: L10n.format(
+                    "git.commit.ai_usage.not_mine",
+                    defaultValue: "AI usage is attributed only to commits authored by %@.",
+                    currentUserEmail
+                ),
+                requestCount: 0,
+                usage: .zero,
+                cost: 0,
+                models: [],
+                windowLabel: L10n.string("git.commit.ai_usage.my_commits_only", defaultValue: "my commits only")
+            )
+        }
+
+        let previousDate = previousCommitDate(for: commit, in: graph, email: currentUserEmail)
+        let lowerLabel = previousDate.map { Format.shortDate($0) } ?? L10n.string("git.commit.ai_usage.repo_start", defaultValue: "repo start")
+        let windowLabel = "\(lowerLabel) -> \(Format.shortDate(commit.date))"
+        var perModel: [String: (requests: Int, usage: TokenUsage, cost: CostEstimate)] = [:]
+        var seenHashes = Set<String>()
+
+        for session in sessions where belongsToRepo(session, repo: repo) {
+            guard let stats = session.stats else { continue }
+            if stats.billableMessages.isEmpty {
+                let activity = stats.lastActivity ?? session.lastModified
+                guard contains(activity, lowerBound: previousDate, upperBound: commit.date) else { continue }
+                for model in stats.models {
+                    var acc = perModel[model.model] ?? (0, .zero, .zero)
+                    acc.requests += model.messageCount
+                    acc.usage += model.usage
+                    acc.cost += model.costEstimate
+                    perModel[model.model] = acc
+                }
+            } else {
+                for bill in stats.billableMessages {
+                    guard let timestamp = bill.timestamp,
+                          contains(timestamp, lowerBound: previousDate, upperBound: commit.date) else { continue }
+                    if let hash = bill.hash {
+                        guard seenHashes.insert(hash).inserted else { continue }
+                    }
+                    var acc = perModel[bill.model] ?? (0, .zero, .zero)
+                    acc.requests += 1
+                    acc.usage += bill.usage
+                    acc.cost += bill.cost
+                    perModel[bill.model] = acc
+                }
+            }
+        }
+
+        let models = perModel.map { model, value in
+            Model(name: model, usage: value.usage, cost: value.cost)
+        }
+        .sorted { lhs, rhs in
+            if lhs.usage.total != rhs.usage.total { return lhs.usage.total > rhs.usage.total }
+            return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+        }
+
+        return CommitUsageAttribution(
+            isEligible: true,
+            ineligibleMessage: "",
+            requestCount: perModel.values.reduce(0) { $0 + $1.requests },
+            usage: perModel.values.reduce(.zero) { $0 + $1.usage },
+            cost: perModel.values.reduce(0) { $0 + $1.cost.standardAPI },
+            models: models,
+            windowLabel: windowLabel
+        )
+    }
+
+    private static func previousCommitDate(for commit: GraphCommit, in graph: GitGraph?, email: String) -> Date? {
+        guard let commits = graph?.commits else { return nil }
+        return commits
+            .filter { $0.hash != commit.hash && $0.authorEmail.caseInsensitiveCompare(email) == .orderedSame && $0.date < commit.date }
+            .map(\.date)
+            .max()
+    }
+
+    private static func belongsToRepo(_ session: Session, repo: GitRepo) -> Bool {
+        guard let cwd = session.cwd, !cwd.isEmpty else { return false }
+        return cwd == repo.rootPath || cwd.hasPrefix(repo.rootPath + "/")
+    }
+
+    private static func contains(_ date: Date, lowerBound: Date?, upperBound: Date) -> Bool {
+        if let lowerBound, date <= lowerBound { return false }
+        return date <= upperBound
     }
 }
 

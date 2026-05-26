@@ -1,15 +1,13 @@
 import SwiftUI
 
-/// Three small "7d / 30d / All" chips at the top-right of the Dashboard.
+/// Small "Today / 7d / 30d / All" chips at the top-right of the Dashboard.
 /// Scopes the 8 stat cards only — the heatmap below them stays fixed at the
 /// 3-month rolling window regardless of selection.
 struct RangeChips: View {
     @Binding var period: StatsPeriod
 
-    /// The chips we surface here, in display order. `.today` is intentionally
-    /// omitted — the Dashboard story is "what does my recent activity look
-    /// like", not "what happened today".
-    static let supported: [StatsPeriod] = [.last7Days, .last30Days, .allTime]
+    /// The chips we surface here, in display order.
+    static let supported: [StatsPeriod] = [.today, .last7Days, .last30Days, .allTime]
 
     var body: some View {
         PillSegmentedBar(

@@ -131,6 +131,11 @@ struct MainWindowView: View {
                     .padding(.top, 11)
                     .transition(.opacity)
             }
+
+            appearanceToggle
+                .padding(.top, 12)
+                .padding(.trailing, 16)
+                .frame(maxWidth: .infinity, alignment: .topTrailing)
         }
         .ignoresSafeArea()
         .background(WindowAccessor { window in
@@ -178,6 +183,26 @@ struct MainWindowView: View {
     }
 
     // MARK: - Sidebar toggle
+
+    private var appearanceToggle: some View {
+        Button {
+            env.preferences.appearancePreference =
+                env.preferences.appearancePreference == .dark ? .light : .dark
+        } label: {
+            Image(systemName: env.preferences.appearancePreference == .dark ? "sun.max" : "moon")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color.stxMuted)
+                .frame(width: 28, height: 26)
+                .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .strokeBorder(Color.stxStroke.opacity(0.75), lineWidth: 1)
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(L10n.string("appearance.toggle", defaultValue: "Toggle light/dark mode"))
+    }
 
     private var sidebarToggle: some View {
         Button {

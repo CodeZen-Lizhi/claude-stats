@@ -160,7 +160,7 @@ struct DashboardView: View {
         return Grid(horizontalSpacing: 12, verticalSpacing: 12) {
             GridRow {
                 StatCard(label: L10n.string("dashboard.stat.sessions", defaultValue: "SESSIONS"), value: "\(s.sessions)")
-                StatCard(label: L10n.string("dashboard.stat.messages", defaultValue: "MESSAGES"), value: Format.tokens(s.messages))
+                StatCard(label: L10n.string("usage.stat.requests", defaultValue: "REQUESTS"), value: Format.tokens(s.messages))
                 StatCard(label: L10n.string("dashboard.stat.total_tokens", defaultValue: "TOTAL TOKENS"), value: Format.tokens(s.totalTokens))
                 StatCard(label: L10n.string("dashboard.stat.active_days", defaultValue: "ACTIVE DAYS"), value: "\(s.activeDays)")
             }

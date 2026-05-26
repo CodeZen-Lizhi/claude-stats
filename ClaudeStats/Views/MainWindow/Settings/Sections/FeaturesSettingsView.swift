@@ -17,7 +17,6 @@ struct FeaturesSettingsView: View {
             systemMonitorCard(prefs: prefs)
             githubCard(prefs: prefs)
             floatingTabCard(prefs: prefs)
-            notchIslandCard(prefs: prefs)
         }
     }
 
@@ -26,8 +25,8 @@ struct FeaturesSettingsView: View {
         return FeatureControlCard(
             title: "Git Tracking",
             symbol: "arrow.triangle.branch",
-            description: "Reads local commit history for repos used with Claude and correlates code churn with sessions.",
-            status: prefs.gitTrackingEnabled ? gitTrackingStatus(prefs: prefs) : "Hidden from Tools",
+            description: "Reads local commit history for repos used with AI sessions and correlates code churn with usage.",
+            status: prefs.gitTrackingEnabled ? gitTrackingStatus(prefs: prefs) : "Hidden",
             isOn: $prefs.gitTrackingEnabled,
             onConfigure: { onSelectSection(.tracking) }
         ) {
@@ -41,7 +40,7 @@ struct FeaturesSettingsView: View {
             title: "System Monitor",
             symbol: "cpu",
             description: "Shows read-only CPU, memory, disk, network, battery, GPU, and thermal sampling on demand.",
-            status: prefs.systemMonitorEnabled ? systemMonitorStatus(prefs: prefs) : "Hidden from Stats",
+            status: prefs.systemMonitorEnabled ? systemMonitorStatus(prefs: prefs) : "Hidden",
             isOn: $prefs.systemMonitorEnabled,
             onConfigure: { onSelectSection(.systemMonitor) }
         ) {
@@ -69,25 +68,13 @@ struct FeaturesSettingsView: View {
             title: "Floating Edge Tab",
             symbol: "rectangle.on.rectangle",
             description: "Keeps Codex Statistics reachable from a small screen-edge tab when the menu bar is crowded.",
-            status: prefs.floatingTabEnabled ? "Docked on \(prefs.floatingTabEdge.rawValue.capitalized)" : "Off",
+            status: prefs.floatingTabEnabled
+                ? L10n.format("floating_tab.status.docked", defaultValue: "Docked on %@", prefs.floatingTabEdge.rawValue.capitalized)
+                : L10n.string("status.off", defaultValue: "Off"),
             isOn: $prefs.floatingTabEnabled,
             onConfigure: { onSelectSection(.menuBar) }
         ) {
             FloatingTabFeaturePreview()
-        }
-    }
-
-    private func notchIslandCard(prefs: Preferences) -> some View {
-        @Bindable var prefs = prefs
-        return FeatureControlCard(
-            title: "Notch Island",
-            symbol: "capsule.portrait.tophalf.filled",
-            description: "Adds an Atoll-backed Dynamic Island surface around the camera notch while keeping existing app entry points.",
-            status: prefs.notchIslandEnabled ? notchIslandStatus(prefs: prefs) : "Off",
-            isOn: $prefs.notchIslandEnabled,
-            onConfigure: { onSelectSection(.notchIsland) }
-        ) {
-            NotchIslandFeaturePreview()
         }
     }
 
@@ -97,11 +84,12 @@ struct FeaturesSettingsView: View {
 
     private func systemMonitorStatus(prefs: Preferences) -> String {
         let count = prefs.systemMonitorVisibleModules.count
-        return "\(prefs.systemMonitorRefreshRate.displayName) - \(count) modules"
-    }
-
-    private func notchIslandStatus(prefs: Preferences) -> String {
-        "\(prefs.notchIslandSizePreset.displayName) - \(prefs.notchIslandEnabledModules.count) modules"
+        return L10n.format(
+            "system_monitor.status.modules",
+            defaultValue: "%@ - %@ modules",
+            prefs.systemMonitorRefreshRate.displayName,
+            "\(count)"
+        )
     }
 
     private var githubStatus: String {
@@ -256,39 +244,6 @@ private struct FloatingTabFeaturePreview: View {
             }
             .frame(width: 92)
         }
-    }
-}
-
-private struct NotchIslandFeaturePreview: View {
-    var body: some View {
-        VStack(spacing: 12) {
-            UnevenRoundedRectangle(
-                topLeadingRadius: 6,
-                bottomLeadingRadius: 14,
-                bottomTrailingRadius: 14,
-                topTrailingRadius: 6,
-                style: .continuous
-            )
-            .fill(Color.black)
-            .frame(width: 188, height: 34)
-            .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
-
-            HStack(spacing: 24) {
-                ForEach(["house.fill", "tray.fill", "timer", "chart.xyaxis.line"], id: \.self) { symbol in
-                    Image(systemName: symbol)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(symbol == "house.fill" ? Color.primary : Color.stxMuted)
-                        .frame(width: 26, height: 26)
-                        .background {
-                            if symbol == "house.fill" {
-                                Capsule()
-                                    .fill(Color.primary.opacity(0.12))
-                            }
-                        }
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

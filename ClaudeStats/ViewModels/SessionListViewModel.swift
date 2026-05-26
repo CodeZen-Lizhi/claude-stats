@@ -44,6 +44,8 @@ final class SessionListViewModel {
         let displayName: String
         let sessions: [Session]
         let lastActivity: Date
+        let totalTokens: Int
+        let totalCost: Double
         var count: Int { sessions.count }
     }
 
@@ -91,15 +93,26 @@ final class SessionListViewModel {
             let lastActivity = value
                 .map { $0.stats?.lastActivity ?? $0.lastModified }
                 .max() ?? .distantPast
+            let totalTokens = value.reduce(0) { $0 + ($1.stats?.totalTokens ?? 0) }
+            let totalCost = value.reduce(0) { $0 + ($1.stats?.totalCost(for: costMode) ?? 0) }
             return ProjectGroup(
                 id: key,
                 displayName: sorted.first?.projectDisplayName ?? key,
                 sessions: sorted,
-                lastActivity: lastActivity
+                lastActivity: lastActivity,
+                totalTokens: totalTokens,
+                totalCost: totalCost
             )
         }
         groups.sort {
-            if $0.lastActivity != $1.lastActivity { return $0.lastActivity > $1.lastActivity }
+            switch sortOrder {
+            case .recent:
+                if $0.lastActivity != $1.lastActivity { return $0.lastActivity > $1.lastActivity }
+            case .tokens:
+                if $0.totalTokens != $1.totalTokens { return $0.totalTokens > $1.totalTokens }
+            case .cost:
+                if $0.totalCost != $1.totalCost { return $0.totalCost > $1.totalCost }
+            }
             return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
         }
         return groups

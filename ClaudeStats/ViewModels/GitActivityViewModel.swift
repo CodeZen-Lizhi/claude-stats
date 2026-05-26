@@ -29,7 +29,7 @@ final class GitActivityViewModel {
     var range: GitRange = .last7Days {
         didSet { if range != oldValue { reloadToken &+= 1 } }
     }
-    var onlyMyCommits: Bool = true {
+    var onlyMyCommits: Bool = false {
         didSet { if onlyMyCommits != oldValue { reloadToken &+= 1 } }
     }
     private(set) var repos: [RepoActivity] = []

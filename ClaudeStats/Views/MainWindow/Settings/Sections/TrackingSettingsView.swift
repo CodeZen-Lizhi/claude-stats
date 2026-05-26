@@ -89,7 +89,7 @@ struct TrackingSettingsView: View {
         @Bindable var prefs = prefs
         return VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Repository sources")
+                Text(LocalizedStringKey("Repository sources"))
                     .font(.sora(13, weight: .medium))
                 Spacer()
             }
@@ -126,10 +126,10 @@ struct TrackingSettingsView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(title)
+                Text(LocalizedStringKey(title))
                     .font(.sora(12, weight: .semibold))
                     .foregroundStyle(.primary)
-                Text(caption)
+                Text(LocalizedStringKey(caption))
                     .font(.sora(10))
                     .foregroundStyle(Color.stxMuted)
             }
@@ -179,7 +179,7 @@ struct TrackingSettingsView: View {
             .labelsHidden()
             .toggleStyle(.switch)
             .disabled(isLastEnabled)
-            .help(isLastEnabled ? "At least one repository source must stay enabled." : source.detail)
+            .help(isLastEnabled ? L10n.string("git.sources.minimum_one", defaultValue: "At least one repository source must stay enabled.") : source.detail)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 /// The main window's left column. Two regions stacked vertically:
-///   - Top nav (Dashboard, STATS for usage/system, then TOOLS for Git).
+///   - Top nav (Dashboard, sessions, usage, optional system/git).
 /// Settings stays pinned at the bottom.
 ///
 /// Lives over a window-level `NSVisualEffectView` (`.sidebar` material), so
@@ -23,18 +23,13 @@ struct SidebarColumn: View {
             navRow(.dashboard)
             sessionsEntryRow
 
-            sectionHeader("STATS")
             navRow(.usage)
             if env.preferences.systemMonitorEnabled { navRow(.system) }
-
-            if showsGitTool {
-                sectionHeader("TOOLS")
-                navRow(.git)
-            }
+            if showsGitTool { navRow(.git) }
 
             Spacer(minLength: 0)
 
-            SidebarRow(title: "Settings", symbol: "gearshape", isSelected: false) {
+            SidebarRow(title: L10n.string("settings.title", defaultValue: "Settings"), symbol: "gearshape", isSelected: false) {
                 clearTextFocus()
                 onOpenSettings()
             }
@@ -66,7 +61,7 @@ struct SidebarColumn: View {
     private var sessionsEntryRow: some View {
         let count = env.store.sessions(for: env.preferences.selectedProvider).count
         return SidebarRow(
-            title: "Sessions",
+            title: L10n.string("main_page.sessions", defaultValue: "Sessions"),
             symbol: "text.bubble",
             isSelected: false,
             trailingText: count > 0 ? "\(count)" : nil,
@@ -80,16 +75,6 @@ struct SidebarColumn: View {
 
     private var showsGitTool: Bool {
         env.preferences.gitTrackingEnabled && availablePages.contains(.git)
-    }
-
-    private func sectionHeader(_ title: String) -> some View {
-        Text(LocalizedStringKey(title))
-            .font(.sora(10, weight: .semibold))
-            .tracking(1.0)
-            .foregroundStyle(Color.stxMuted)
-            .padding(.horizontal, 14)
-            .padding(.top, 14)
-            .padding(.bottom, 4)
     }
 
     private func clearTextFocus() {

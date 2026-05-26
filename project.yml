@@ -15,33 +15,6 @@ packages:
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
     from: "2.9.1"
-  Defaults:
-    url: https://github.com/sindresorhus/Defaults
-    from: "9.0.2"
-  KeyboardShortcuts:
-    url: https://github.com/sindresorhus/KeyboardShortcuts
-    from: "2.2.4"
-  SwiftUIIntrospect:
-    url: https://github.com/siteline/swiftui-introspect
-    from: "1.3.0"
-  LottieUI:
-    url: https://github.com/jasudev/LottieUI.git
-    branch: main
-  Lottie:
-    url: https://github.com/airbnb/lottie-spm.git
-    branch: main
-  MacroVisionKit:
-    url: https://github.com/TheBoredTeam/MacroVisionKit
-    from: "0.1.0"
-  SkyLightWindow:
-    url: https://github.com/Lakr233/SkyLightWindow
-    branch: main
-  AtollExtensionKit:
-    url: https://github.com/Ebullioscopic/AtollExtensionKit
-    branch: main
-  SwiftCollections:
-    url: https://github.com/apple/swift-collections.git
-    from: "1.1.0"
 
 settings:
   base:
@@ -53,86 +26,6 @@ settings:
     MARKETING_VERSION: "1.7.7"
     CURRENT_PROJECT_VERSION: "76"
 targets:
-  AtollEmbed:
-    type: framework
-    platform: macOS
-    sources:
-      - path: AtollEmbed
-      - path: ThirdParty/Atoll/DynamicIsland
-        excludes:
-          - DynamicIslandApp.swift
-          - Info.plist
-          - DynamicIsland.entitlements
-          - menu
-          - "Preview Content"
-          - components/Settings
-          - components/Onboarding
-          - components/TestView.swift
-          - components/Notch/NotchTerminalView.swift
-          - audio/AudioTap.swift
-          - managers/TerminalManager.swift
-          - observers/FullscreenMediaDetection.swift
-      - path: ThirdParty/Atoll/LottieAnimations
-        type: folder
-        buildPhase: resources
-    dependencies:
-      - package: Defaults
-      - package: KeyboardShortcuts
-      - package: SwiftUIIntrospect
-      - package: LottieUI
-      - package: MacroVisionKit
-      - package: SkyLightWindow
-      - package: AtollExtensionKit
-      - package: SwiftCollections
-        product: Collections
-      - framework: ThirdParty/Atoll/Frameworks/MediaRemoteAdapter.framework
-      - sdk: Accelerate.framework
-      - sdk: AppKit.framework
-      - sdk: ApplicationServices.framework
-      - sdk: AudioToolbox.framework
-      - sdk: AVFoundation.framework
-      - sdk: Carbon.framework
-      - sdk: CoreAudio.framework
-      - sdk: CoreBluetooth.framework
-      - sdk: CoreImage.framework
-      - sdk: CoreLocation.framework
-      - sdk: CoreMediaIO.framework
-      - sdk: CoreServices.framework
-      - sdk: EventKit.framework
-      - sdk: IOBluetooth.framework
-      - sdk: IOKit.framework
-      - sdk: MusicKit.framework
-      - sdk: Network.framework
-      - sdk: PDFKit.framework
-      - sdk: QuickLook.framework
-      - sdk: QuickLookThumbnailing.framework
-      - sdk: QuickLookUI.framework
-      - sdk: QuartzCore.framework
-      - sdk: UniformTypeIdentifiers.framework
-      - sdk: Vision.framework
-      - sdk: WebKit.framework
-      - sdk: libc++.tbd
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.claudestats.AtollEmbed
-        PRODUCT_NAME: AtollEmbed
-        PRODUCT_MODULE_NAME: AtollEmbed
-        GENERATE_INFOPLIST_FILE: YES
-        SWIFT_VERSION: "5.0"
-        SWIFT_STRICT_CONCURRENCY: minimal
-        SWIFT_SUPPRESS_WARNINGS: YES
-        SWIFT_OBJC_BRIDGING_HEADER: ThirdParty/Atoll/DynamicIsland/DynamicIsland-Bridging-Header.h
-        HEADER_SEARCH_PATHS: "$(inherited) ThirdParty/Atoll/DynamicIsland"
-        CLANG_CXX_LANGUAGE_STANDARD: gnu++20
-        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks @loader_path/Frameworks @loader_path/../Frameworks"
-      configs:
-        ReleaseSigned:
-          CODE_SIGN_STYLE: Manual
-          CODE_SIGN_IDENTITY: "$(SIGN_IDENTITY)"
-          DEVELOPMENT_TEAM: "$(APPLE_TEAM_ID)"
-          ENABLE_HARDENED_RUNTIME: YES
-          OTHER_CODE_SIGN_FLAGS: "--timestamp"
-
   ClaudeStats:
     type: application
     platform: macOS
@@ -145,13 +38,6 @@ targets:
         buildPhase: resources
     dependencies:
       - package: Sparkle
-      - target: AtollEmbed
-      - package: Lottie
-      - package: SwiftCollections
-        product: Collections
-      - framework: ThirdParty/Atoll/Frameworks/MediaRemoteAdapter.framework
-        embed: true
-        codeSign: true
       - sdk: ApplicationServices.framework
       - sdk: Accelerate.framework
       - sdk: ScreenCaptureKit.framework
@@ -162,45 +48,6 @@ targets:
       - sdk: WebKit.framework
       - sdk: libc++.tbd
       - sdk: libsqlite3.tbd
-    postBuildScripts:
-      - name: Copy Atoll MediaRemote Runtime Resources
-        inputFiles:
-          - "$(SRCROOT)/ThirdParty/Atoll/mediaremote-adapter/mediaremote-adapter.pl"
-          - "$(SRCROOT)/ThirdParty/Atoll/Contents/Helpers/NowPlayingTestClient"
-        outputFiles:
-          - "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/mediaremote-adapter.pl"
-          - "$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/NowPlayingTestClient"
-        script: |
-          set -euo pipefail
-
-          RESOURCES_DIR="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}"
-          HELPERS_DIR="${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Helpers"
-
-          /bin/mkdir -p "$RESOURCES_DIR" "$HELPERS_DIR"
-          /usr/bin/install -m 755 \
-            "${SRCROOT}/ThirdParty/Atoll/mediaremote-adapter/mediaremote-adapter.pl" \
-            "${RESOURCES_DIR}/mediaremote-adapter.pl"
-          /usr/bin/install -m 755 \
-            "${SRCROOT}/ThirdParty/Atoll/Contents/Helpers/NowPlayingTestClient" \
-            "${HELPERS_DIR}/NowPlayingTestClient"
-
-          if [ "${CODE_SIGNING_ALLOWED:-NO}" != "NO" ] \
-            && [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ] \
-            && [ "${EXPANDED_CODE_SIGN_IDENTITY}" != "-" ]; then
-            CODESIGN_OPTIONS=""
-            if [ "${ENABLE_HARDENED_RUNTIME:-NO}" = "YES" ]; then
-              CODESIGN_OPTIONS="--options runtime"
-            fi
-
-            CODESIGN_TIMESTAMP=""
-            case " ${OTHER_CODE_SIGN_FLAGS:-} " in
-              *" --timestamp "*) CODESIGN_TIMESTAMP="--timestamp" ;;
-            esac
-
-          /usr/bin/codesign --force $CODESIGN_OPTIONS $CODESIGN_TIMESTAMP \
-            --sign "${EXPANDED_CODE_SIGN_IDENTITY}" \
-            "${HELPERS_DIR}/NowPlayingTestClient"
-          fi
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.claudestats.CodexStatistics
@@ -241,7 +88,6 @@ targets:
       - path: ClaudeStatsTests
     dependencies:
       - target: ClaudeStats
-      - target: AtollEmbed
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.claudestats.CodexStatisticsTests

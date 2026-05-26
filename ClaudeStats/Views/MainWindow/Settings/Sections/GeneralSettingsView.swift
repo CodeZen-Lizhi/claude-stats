@@ -59,6 +59,23 @@ struct GeneralSettingsView: View {
                 .settingCard()
             }
 
+            SettingGroup(title: "Appearance") {
+                VStack(spacing: 0) {
+                    SettingRow(title: "Color mode",
+                               description: "Choose whether Codex Statistics follows macOS or uses a fixed light/dark appearance.") {
+                        AppSelect(
+                            .localized("Color mode"),
+                            selection: $prefs.appearancePreference,
+                            options: AppAppearancePreference.allCases.map { mode in
+                                AppSelectOption(value: mode, title: .verbatim(mode.displayName))
+                            },
+                            width: 150
+                        )
+                    }
+                }
+                .settingCard()
+            }
+
             SettingGroup(title: "Refresh") {
                 VStack(spacing: 0) {
                     SettingRow(title: "Refresh every",

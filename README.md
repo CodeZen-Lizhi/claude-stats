@@ -5,7 +5,7 @@
 <h1 align="center">Claude Stats</h1>
 
 <p align="center">
-  Native macOS menu-bar stats and Notch Island for AI coding work.
+  Native macOS menu-bar stats for AI coding work.
 </p>
 
 <p align="center">
@@ -19,7 +19,7 @@
 
 Claude Stats is an open-source native macOS app for people who work in AI coding tools all day. It runs from the menu bar, reads local usage and activity data, and turns it into quick answers about sessions, tokens, cost, limits, repository activity, local status, and debugging context.
 
-The app began as a focused macOS take on the open-source [Claude Statistics](https://github.com/sj719045032/claude-statistics) project. It is now a Codex-only product with a provider abstraction kept internally for clean session, usage, and configuration boundaries, plus a Notch Island surface.
+The app began as a focused macOS take on the open-source [Claude Statistics](https://github.com/sj719045032/claude-statistics) project. It is now a Codex-only product with a provider abstraction kept internally for clean session, usage, and configuration boundaries.
 
 ## Reference Notes
 
@@ -32,7 +32,6 @@ The app began as a focused macOS take on the open-source [Claude Statistics](htt
 - Codex session log discovery, parsing, usage stats, estimated cost, usage limits, and OpenAI service status.
 - API provider switcher for Codex CLI configuration.
 - Git and repository activity views, including optional bundled Git tooling for release builds.
-- An Atoll-backed Notch Island surface for optional media, timer, stats, clipboard, and related modules.
 - Ops tools for Homebrew packages and developer environment checks.
 - Sparkle-based automatic updates for packaged releases.
 
@@ -189,7 +188,7 @@ bash scripts/run-tests.sh  # generate + build test dependencies + run unit tests
 ```
 ClaudeStats/
   App/          @main entry point, app environment, Info.plist, entitlements
-  Features/     feature-specific app integrations such as Notch Island
+  Features/     feature-specific app integrations
   Models/       Sendable value types and generated release history
   Providers/    provider protocol, registry, and Codex scanner/parser
   Resources/    pricing data, Git tools placeholder, app resources
@@ -197,8 +196,6 @@ ClaudeStats/
   ViewModels/   per-screen and feature view models
   Views/        menu bar, main window, settings, ops, and activity UI
   Utilities/    formatters, logging, shared helpers
-AtollEmbed/       app-side wrapper for the Atoll/DynamicIsland integration
-ThirdParty/       git submodules for Atoll
 ClaudeStatsTests/ parser, scanner, settings, integration, and feature tests
 docs/assets/      README images, icons, screenshots, and GIFs
 scripts/          project generation, local run/test, release, appcast tooling
@@ -206,13 +203,7 @@ scripts/          project generation, local run/test, release, appcast tooling
 
 ## Open Source & Third-Party Modules
 
-Claude Stats is released under the [GNU Affero General Public License v3.0](LICENSE). The app also embeds and adapts several major open-source projects:
-
-| Project | License | How Claude Stats uses it |
-| --- | --- | --- |
-| [Atoll / DynamicIsland](https://github.com/1pitaph/Atoll) | GPL-3.0 | Integrated through `AtollEmbed` for the optional Notch Island surface and modules. Its [`NOTICE`](ThirdParty/Atoll/NOTICE) and [`COPYRIGHT_ASSETS`](ThirdParty/Atoll/COPYRIGHT_ASSETS) files remain part of the attribution trail. |
-
-Additional Swift Package Manager dependencies include Sparkle, Defaults, KeyboardShortcuts, SwiftUIIntrospect, Lottie, MacroVisionKit, SkyLightWindow, AtollExtensionKit, and Swift Collections. Those packages keep their upstream licenses and notices.
+Claude Stats is released under the [GNU Affero General Public License v3.0](LICENSE). Swift Package Manager dependencies are declared in [`project.yml`](project.yml); release builds currently embed Sparkle for automatic updates.
 
 ## Contributing
 
@@ -228,4 +219,4 @@ For app behavior changes, also run:
 bash scripts/run-debug.sh
 ```
 
-Keep Swift 6 strict concurrency warning-free. When changing Atoll integration code, make the source changes in the relevant submodule/fork first, then update the submodule pointer in this repo.
+Keep Swift 6 strict concurrency warning-free.
