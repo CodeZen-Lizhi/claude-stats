@@ -4,13 +4,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 DERIVED=/tmp/Codex-stats-build-tests
-TEST_APP="$DERIVED/Build/Products/Debug/Claude Stats.app"
-APP_PROCESS_PATTERN="Claude Stats.app/Contents/MacOS/Claude Stats"
+TEST_APP="$DERIVED/Build/Products/Debug/Codex Statistics.app"
+APP_PROCESS_PATTERN="Codex Statistics.app/Contents/MacOS/Codex Statistics"
 LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
 require_apple_silicon() {
     if [[ "$(uname -m)" != "arm64" ]]; then
-        echo "error: Claude Stats now supports Apple Silicon Macs only." >&2
+        echo "error: Codex Statistics now supports Apple Silicon Macs only." >&2
         exit 1
     fi
 }
@@ -39,7 +39,7 @@ stop_running_app() {
         return 0
     fi
 
-    echo "==> Stopping existing Claude Stats process(es): $(echo "$pids" | tr '\n' ' ')"
+    echo "==> Stopping existing Codex Statistics process(es): $(echo "$pids" | tr '\n' ' ')"
     kill -TERM $pids 2>/dev/null || true
     if wait_until_stopped 30; then
         return 0
@@ -55,8 +55,8 @@ cleanup_test_bundle_registration() {
     if [[ -d "$TEST_APP" ]]; then
         "$LSREGISTER" -u "$TEST_APP" 2>/dev/null || true
     fi
-    if [[ -d "/tmp/claude-stats-build/Build/Products/Debug/Claude Stats.app" ]]; then
-        "$LSREGISTER" -u "/tmp/claude-stats-build/Build/Products/Debug/Claude Stats.app" 2>/dev/null || true
+    if [[ -d "/tmp/claude-stats-build/Build/Products/Debug/Codex Statistics.app" ]]; then
+        "$LSREGISTER" -u "/tmp/claude-stats-build/Build/Products/Debug/Codex Statistics.app" 2>/dev/null || true
     fi
 }
 

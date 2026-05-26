@@ -8,7 +8,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Claude Stats"
+            "value" : "Codex Statistics"
           }
         }
       }
@@ -121,13 +121,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Claude Stats may request contacts access for enabled Notch Island modules."
+            "value" : "Codex Statistics may request contacts access for enabled Notch Island modules."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Claude Stats 可能会为已启用的 Notch Island 模块请求通讯录访问权限。"
+            "value" : "Codex Statistics 可能会为已启用的 Notch Island 模块请求通讯录访问权限。"
           }
         }
       }
@@ -150,13 +150,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Claude Stats may request location access for enabled Notch Island modules."
+            "value" : "Codex Statistics may request location access for enabled Notch Island modules."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Claude Stats 可能会为已启用的 Notch Island 模块请求位置访问权限。"
+            "value" : "Codex Statistics 可能会为已启用的 Notch Island 模块请求位置访问权限。"
           }
         }
       }
@@ -184,13 +184,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Claude Stats may request photo library access for enabled Notch Island modules."
+            "value" : "Codex Statistics may request photo library access for enabled Notch Island modules."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Claude Stats 可能会为已启用的 Notch Island 模块请求照片图库访问权限。"
+            "value" : "Codex Statistics 可能会为已启用的 Notch Island 模块请求照片图库访问权限。"
           }
         }
       }
@@ -218,13 +218,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Claude Stats can use screen recording for Notch Island recording indicators and screen assistant modules when enabled."
+            "value" : "Codex Statistics can use screen recording for Notch Island recording indicators and screen assistant modules when enabled."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Claude Stats 可在启用 Notch Island 录制指示器和屏幕辅助模块时使用屏幕录制。"
+            "value" : "Codex Statistics 可在启用 Notch Island 录制指示器和屏幕辅助模块时使用屏幕录制。"
           }
         }
       }
@@ -235,13 +235,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Claude Stats may request speech recognition access for enabled Notch Island modules."
+            "value" : "Codex Statistics may request speech recognition access for enabled Notch Island modules."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Claude Stats 可能会为已启用的 Notch Island 模块请求语音识别访问权限。"
+            "value" : "Codex Statistics 可能会为已启用的 Notch Island 模块请求语音识别访问权限。"
           }
         }
       }
@@ -252,13 +252,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Claude Stats may request elevated privileges for helper tools when explicitly enabled."
+            "value" : "Codex Statistics may request elevated privileges for helper tools when explicitly enabled."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "明确启用辅助工具时，Claude Stats 可能会请求提升权限。"
+            "value" : "明确启用辅助工具时，Codex Statistics 可能会请求提升权限。"
           }
         }
       }

@@ -7,7 +7,7 @@ name: Release
 #   1. Writes the tag's version into project.yml (MARKETING_VERSION) and uses the
 #      workflow run number as the build number (CURRENT_PROJECT_VERSION). The app's
 #      Settings ▸ About reads these from the bundle at runtime, so it updates itself.
-#   2. Builds a Release Claude Stats.app and packages it:
+#   2. Builds a Release Codex Statistics.app and packages it:
 #        • if the Developer ID signing secrets below are configured -> a SIGNED +
 #          NOTARIZED + stapled DMG;
 #        • otherwise -> an ad-hoc-signed (un-notarized) DMG *and* a .zip. Gatekeeper
@@ -228,7 +228,7 @@ jobs:
           LINGUIST_RUNTIME_SOURCE: ${{ runner.temp }}/gittools-runtime
         run: |
           if [[ "$(uname -m)" != "arm64" ]]; then
-            echo "::error::Claude Stats releases must run on Apple Silicon runners."
+            echo "::error::Codex Statistics releases must run on Apple Silicon runners."
             exit 1
           fi
           # Defensive: actool talks to these XPC agents and they can be left in a

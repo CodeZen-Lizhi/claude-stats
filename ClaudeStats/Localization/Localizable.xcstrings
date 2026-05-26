@@ -878,19 +878,19 @@
         }
       }
     },
-    "Choose the language Claude Stats uses after the next restart." : {
+    "Choose the language Codex Statistics uses after the next restart." : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Choose the language Claude Stats uses after the next restart."
+            "value" : "Choose the language Codex Statistics uses after the next restart."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "选择 Claude Stats 下次重启后使用的语言。"
+            "value" : "选择 Codex Statistics 下次重启后使用的语言。"
           }
         }
       }
@@ -915,19 +915,19 @@
         }
       }
     },
-    "Claude Stats" : {
+    "Codex Statistics" : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Claude Stats"
+            "value" : "Codex Statistics"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Claude Stats"
+            "value" : "Codex Statistics"
           }
         }
       }
@@ -2307,19 +2307,19 @@
         }
       }
     },
-    "How often Claude Stats re-scans your session logs in the background." : {
+    "How often Codex Statistics re-scans your session logs in the background." : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "How often Claude Stats re-scans your session logs in the background."
+            "value" : "How often Codex Statistics re-scans your session logs in the background."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Claude Stats 在后台重新扫描会话日志的频率。"
+            "value" : "Codex Statistics 在后台重新扫描会话日志的频率。"
           }
         }
       }
@@ -3294,19 +3294,19 @@
         }
       }
     },
-    "Open Claude Stats automatically when you log in to your Mac." : {
+    "Open Codex Statistics automatically when you log in to your Mac." : {
       "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open Claude Stats automatically when you log in to your Mac."
+            "value" : "Open Codex Statistics automatically when you log in to your Mac."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "登录 Mac 时自动打开 Claude Stats。"
+            "value" : "登录 Mac 时自动打开 Codex Statistics。"
           }
         }
       }
@@ -4630,13 +4630,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Restart Claude Stats to apply this language."
+            "value" : "Restart Codex Statistics to apply this language."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "重启 Claude Stats 后将应用此语言。"
+            "value" : "重启 Codex Statistics 后将应用此语言。"
           }
         }
       }
@@ -7452,12 +7452,12 @@
         }
       }
     },
-    "Claude Stats floating tab" : {
+    "Codex Statistics floating tab" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Claude Stats 浮动标签页"
+            "value" : "Codex Statistics 浮动标签页"
           }
         }
       }
@@ -9242,12 +9242,12 @@
         }
       }
     },
-    "Keeps Claude Stats reachable from a small screen-edge tab when the menu bar is crowded." : {
+    "Keeps Codex Statistics reachable from a small screen-edge tab when the menu bar is crowded." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "当菜单栏拥挤时，通过屏幕边缘的小标签保持对 Claude Stats 的访问。"
+            "value" : "当菜单栏拥挤时，通过屏幕边缘的小标签保持对 Codex Statistics 的访问。"
           }
         }
       }
@@ -9702,12 +9702,12 @@
         }
       }
     },
-    "Connect Codex's status line to let Claude Stats capture 5h and weekly limits." : {
+    "Connect Codex's status line to let Codex Statistics capture 5h and weekly limits." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "连接 Codex 的状态行，让 Claude Stats 抓取 5 小时与每周限额。"
+            "value" : "连接 Codex 的状态行，让 Codex Statistics 抓取 5 小时与每周限额。"
           }
         }
       }

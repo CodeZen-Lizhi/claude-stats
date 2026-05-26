@@ -139,7 +139,7 @@ final class FloatingStatsPanelController {
         panel.backgroundColor = .clear
         panel.hasShadow = false
         panel.isMovable = false
-        panel.title = "Claude Stats Floating Tab"
+        panel.title = "Codex Statistics Floating Tab"
 
         let rootView = FloatingStatsPanelView(
             state: state,

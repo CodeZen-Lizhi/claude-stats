@@ -19,7 +19,7 @@ struct FloatingStatsPanelView: View {
         .animation(.easeOut(duration: 0.16), value: state.edge)
         .animation(.easeOut(duration: 0.14), value: state.edgeReleaseProgress)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Claude Stats floating tab")
+        .accessibilityLabel("Codex Statistics floating tab")
     }
 
     private func panelSurface(edge: FloatingPanelEdge, visibleSize: CGSize) -> some View {

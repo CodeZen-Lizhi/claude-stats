@@ -26,7 +26,7 @@ class UpdateAppcastTests(unittest.TestCase):
                     "--build",
                     "80",
                     "--url",
-                    "https://example.com/ClaudeStats-1.8.0.zip",
+                    "https://example.com/CodexStatistics-1.8.0.zip",
                     "--enclosure-attrs",
                     'sparkle:edSignature="abc" length="123"',
                     "--release-notes-file",
@@ -59,7 +59,7 @@ class UpdateAppcastTests(unittest.TestCase):
                     "--build",
                     "81",
                     "--url",
-                    "https://example.com/ClaudeStats-1.8.1.zip",
+                    "https://example.com/CodexStatistics-1.8.1.zip",
                     "--enclosure-attrs",
                     'sparkle:edSignature="abc" length="123"',
                     "--release-notes-file",
@@ -92,12 +92,12 @@ class UpdateAppcastTests(unittest.TestCase):
                         {
                             "deltaFrom": "78",
                             "deltaFromDisplay": "1.8.0",
-                            "url": "https://example.com/ClaudeStats-82-from-78.delta",
+                            "url": "https://example.com/CodexStatistics-82-from-78.delta",
                             "enclosureAttrs": 'sparkle:edSignature="delta-a" length="456"',
                         },
                         {
                             "deltaFrom": "79",
-                            "url": "https://example.com/ClaudeStats-82-from-79.delta",
+                            "url": "https://example.com/CodexStatistics-82-from-79.delta",
                             "enclosureAttrs": 'sparkle:edSignature="delta-b" length="789"',
                         },
                     ]
@@ -114,7 +114,7 @@ class UpdateAppcastTests(unittest.TestCase):
                     "--build",
                     "82",
                     "--url",
-                    "https://example.com/ClaudeStats-1.8.2.zip",
+                    "https://example.com/CodexStatistics-1.8.2.zip",
                     "--enclosure-attrs",
                     'sparkle:edSignature="full" length="123"',
                     "--release-notes-file",
@@ -136,7 +136,7 @@ class UpdateAppcastTests(unittest.TestCase):
             self.assertIn('sparkle:edSignature="delta-a" length="456"', xml)
             self.assertIn('sparkle:edSignature="delta-b" length="789"', xml)
             self.assertIn(
-                '<enclosure url="https://example.com/ClaudeStats-1.8.2.zip" sparkle:edSignature="full" length="123" type="application/octet-stream"/>',
+                '<enclosure url="https://example.com/CodexStatistics-1.8.2.zip" sparkle:edSignature="full" length="123" type="application/octet-stream"/>',
                 xml,
             )
             self.assertIn("下载大小", xml)
@@ -161,7 +161,7 @@ class UpdateAppcastTests(unittest.TestCase):
                         {
                             "deltaFrom": "84",
                             "deltaFromDisplay": "1.8.4",
-                            "url": "https://example.com/ClaudeStats-85-from-84.delta",
+                            "url": "https://example.com/CodexStatistics-85-from-84.delta",
                             "enclosureAttrs": 'sparkle:edSignature="delta" length="2156350"',
                         }
                     ]
@@ -178,7 +178,7 @@ class UpdateAppcastTests(unittest.TestCase):
                     "--build",
                     "85",
                     "--url",
-                    "https://example.com/ClaudeStats-1.8.5.zip",
+                    "https://example.com/CodexStatistics-1.8.5.zip",
                     "--enclosure-attrs",
                     'sparkle:edSignature="full" length="101037424"',
                     "--release-notes-file",
@@ -215,7 +215,7 @@ class UpdateAppcastTests(unittest.TestCase):
                     "--build",
                     "83",
                     "--url",
-                    "https://example.com/ClaudeStats-1.8.3.zip",
+                    "https://example.com/CodexStatistics-1.8.3.zip",
                     "--enclosure-attrs",
                     'sparkle:edSignature="full" length="123"',
                     "--release-notes-file",
@@ -242,7 +242,7 @@ class UpdateAppcastTests(unittest.TestCase):
                     [
                         {
                             "deltaFrom": "80",
-                            "url": "https://example.com/ClaudeStats-84-from-80.delta",
+                            "url": "https://example.com/CodexStatistics-84-from-80.delta",
                             "enclosureAttrs": 'sparkle:edSignature="delta" length="456"',
                         }
                     ]
@@ -270,7 +270,7 @@ class UpdateAppcastTests(unittest.TestCase):
                     "--build",
                     "84",
                     "--url",
-                    "https://example.com/ClaudeStats-1.8.4.zip",
+                    "https://example.com/CodexStatistics-1.8.4.zip",
                     "--enclosure-attrs",
                     'sparkle:edSignature="full" length="123"',
                     "--release-notes-file",

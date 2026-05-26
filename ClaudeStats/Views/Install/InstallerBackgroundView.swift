@@ -63,7 +63,7 @@ private struct InstallerIconPair: View {
                 .shadow(color: .black.opacity(0.18), radius: 12, x: 0, y: 8)
                 .position(appPosition)
 
-            Text(verbatim: "Claude Stats")
+            Text(verbatim: "Codex Statistics")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
@@ -172,7 +172,7 @@ private struct FinderTitleBar: View {
                 Image(systemName: "arrow.down.app.fill")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(.secondary)
-                Text(verbatim: "Claude Stats")
+                Text(verbatim: "Codex Statistics")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(Color(red: 0.73, green: 0.69, blue: 0.70))
             }
@@ -195,14 +195,14 @@ private struct FinderPathBar: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "arrow.down.app.fill")
-            Text(verbatim: "Claude Stats")
+            Text(verbatim: "Codex Statistics")
             Image(systemName: "chevron.right")
                 .font(.system(size: 12, weight: .bold))
             Image(nsImage: NSImage(named: NSImage.applicationIconName) ?? NSApplication.shared.applicationIconImage)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 18, height: 18)
-            Text(verbatim: "Claude Stats")
+            Text(verbatim: "Codex Statistics")
             Spacer()
         }
         .font(.system(size: 14, weight: .semibold))

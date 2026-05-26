@@ -39,21 +39,21 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Notch Island can show camera privacy indicators when enabled.</string>
 	<key>NSContactsUsageDescription</key>
-	<string>Claude Stats may request contacts access for enabled Notch Island modules.</string>
+	<string>Codex Statistics may request contacts access for enabled Notch Island modules.</string>
 	<key>NSLocationUsageDescription</key>
-	<string>Claude Stats may request location access for enabled Notch Island modules.</string>
+	<string>Codex Statistics may request location access for enabled Notch Island modules.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Notch Island can show microphone privacy indicators when enabled.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Claude Stats may request photo library access for enabled Notch Island modules.</string>
+	<string>Codex Statistics may request photo library access for enabled Notch Island modules.</string>
 	<key>NSRemindersUsageDescription</key>
 	<string>Notch Island can show reminders alongside calendar previews when enabled.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Claude Stats may request speech recognition access for enabled Notch Island modules.</string>
+	<string>Codex Statistics may request speech recognition access for enabled Notch Island modules.</string>
 	<key>NSSystemAdministrationUsageDescription</key>
-	<string>Claude Stats may request elevated privileges for helper tools when explicitly enabled.</string>
+	<string>Codex Statistics may request elevated privileges for helper tools when explicitly enabled.</string>
 	<key>NSScreenCaptureUsageDescription</key>
-	<string>Claude Stats can use screen recording for Notch Island recording indicators and screen assistant modules when enabled.</string>
+	<string>Codex Statistics can use screen recording for Notch Island recording indicators and screen assistant modules when enabled.</string>
 	<!--
 	  Sparkle auto-update. SUPublicEDKey is the EdDSA *public* key produced by
 	  Sparkle's `generate_keys` (the matching private key lives only in the

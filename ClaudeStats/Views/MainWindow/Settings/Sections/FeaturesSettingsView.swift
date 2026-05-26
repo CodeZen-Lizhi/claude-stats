@@ -68,7 +68,7 @@ struct FeaturesSettingsView: View {
         return FeatureControlCard(
             title: "Floating Edge Tab",
             symbol: "rectangle.on.rectangle",
-            description: "Keeps Claude Stats reachable from a small screen-edge tab when the menu bar is crowded.",
+            description: "Keeps Codex Statistics reachable from a small screen-edge tab when the menu bar is crowded.",
             status: prefs.floatingTabEnabled ? "Docked on \(prefs.floatingTabEdge.rawValue.capitalized)" : "Off",
             isOn: $prefs.floatingTabEnabled,
             onConfigure: { onSelectSection(.menuBar) }

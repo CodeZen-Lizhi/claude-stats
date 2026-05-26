@@ -82,7 +82,7 @@ private struct RuntimeResourceFixture {
         let fileManager = FileManager.default
         let rootURL = fileManager.temporaryDirectory
             .appendingPathComponent("AtollRuntimeResourceLocatorTests-\(UUID().uuidString)", isDirectory: true)
-        let appURL = rootURL.appendingPathComponent("Claude Stats.app", isDirectory: true)
+        let appURL = rootURL.appendingPathComponent("Codex Statistics.app", isDirectory: true)
         let contentsURL = appURL.appendingPathComponent("Contents", isDirectory: true)
         let resourceURL = contentsURL.appendingPathComponent("Resources", isDirectory: true)
         let frameworksURL = contentsURL.appendingPathComponent("Frameworks", isDirectory: true)

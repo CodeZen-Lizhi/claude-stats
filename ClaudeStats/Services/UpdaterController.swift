@@ -5,7 +5,7 @@ import Sparkle
 /// ``AppEnvironment``, started once AppKit has finished launching via
 /// ``AppEnvironment/start()``).
 ///
-/// Claude Stats runs as a menu-bar (`LSUIElement`) app, so it has no Dock icon
+/// Codex Statistics runs as a menu-bar (`LSUIElement`) app, so it has no Dock icon
 /// and its windows don't normally come to the front. While Sparkle's update
 /// windows are on screen we route through ``DockVisibilityCoordinator`` to
 /// promote the app to a regular, Dock-visible app, then release back to
