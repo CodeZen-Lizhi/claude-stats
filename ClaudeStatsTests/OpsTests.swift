@@ -207,6 +207,37 @@ struct OpsServiceBrewTests {
         #expect(git?.status == .available)
     }
 
+    @Test("environment loader fronts resolved executable directory for version commands")
+    func environmentLoaderFrontsResolvedExecutableDirectoryForVersionCommands() async throws {
+        let temp = try makeTempDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let executable = temp.appendingPathComponent("tool")
+
+        let environment = OpsService.environmentForResolvedExecutable(
+            base: ["PATH": "/usr/bin:/bin:\(temp.path)"],
+            executablePath: executable.path
+        )
+        let pathParts = environment["PATH"]?.split(separator: ":").map(String.init) ?? []
+
+        #expect(pathParts.first == temp.path)
+        #expect(pathParts.filter { $0 == temp.path }.count == 1)
+    }
+
+    @Test("environment loader searches common user tool directories")
+    func environmentLoaderSearchesCommonUserToolDirectories() async throws {
+        let home = try makeTempDirectory()
+        defer { try? FileManager.default.removeItem(at: home) }
+
+        let paths = OpsService.executableSearchPaths(
+            environment: ["PATH": "/usr/bin:/bin"],
+            homeDirectory: home
+        ).map(\.path)
+
+        #expect(paths.contains(home.appendingPathComponent(".orbstack/bin", isDirectory: true).path))
+        #expect(paths.contains(home.appendingPathComponent(".local/bin", isDirectory: true).path))
+        #expect(paths.contains(home.appendingPathComponent(".volta/bin", isDirectory: true).path))
+    }
+
     private func makeTempDirectory() throws -> URL {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("claude-stats-ops-tests-\(UUID().uuidString)", isDirectory: true)

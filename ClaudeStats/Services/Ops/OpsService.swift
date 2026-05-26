@@ -173,6 +173,21 @@ struct OpsService: OpsServicing {
             brewPrefix.appendingPathComponent("bin", isDirectory: true).path,
             brewPrefix.appendingPathComponent("sbin", isDirectory: true).path,
         ]
+        return pathByFronting(preferredPaths, existingPath: existingPath)
+    }
+
+    private func environmentForResolvedExecutable(_ executablePath: String) -> [String: String] {
+        Self.environmentForResolvedExecutable(base: environment, executablePath: executablePath)
+    }
+
+    static func environmentForResolvedExecutable(base environment: [String: String], executablePath: String) -> [String: String] {
+        var next = environment
+        let executableDirectory = URL(fileURLWithPath: executablePath).deletingLastPathComponent().path
+        next["PATH"] = Self.pathByFronting([executableDirectory], existingPath: environment["PATH"])
+        return next
+    }
+
+    private static func pathByFronting(_ preferredPaths: [String], existingPath: String?) -> String {
         let fallbackPaths = ["/usr/bin", "/bin", "/usr/sbin", "/sbin"]
         let existingPaths = existingPath?
             .split(separator: ":")
@@ -181,7 +196,7 @@ struct OpsService: OpsServicing {
         var seen = Set<String>()
         return (preferredPaths + existingPaths + fallbackPaths)
             .filter { path in
-                guard !path.isEmpty, !seen.contains(path) else { return false }
+                guard !path.isEmpty, path.hasPrefix("/"), !seen.contains(path) else { return false }
                 seen.insert(path)
                 return true
             }
@@ -206,13 +221,59 @@ struct OpsService: OpsServicing {
     }
 
     private func searchPaths() -> [URL] {
+        Self.executableSearchPaths(environment: environment)
+    }
+
+    static func executableSearchPaths(
+        environment: [String: String],
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> [URL] {
         let pathValue = environment["PATH"] ?? ""
         let pathURLs = pathValue
             .split(separator: ":")
             .map(String.init)
             .filter { $0.hasPrefix("/") }
             .map { URL(fileURLWithPath: $0, isDirectory: true) }
-        return Self.trustedExecutableDirectories + pathURLs
+        return Self.deduplicatedPaths(
+            Self.trustedExecutableDirectories
+                + Self.userExecutableDirectories(homeDirectory: homeDirectory)
+                + pathURLs
+        )
+    }
+
+    private static func userExecutableDirectories(homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser) -> [URL] {
+        var paths = [
+            homeDirectory.appendingPathComponent(".orbstack/bin", isDirectory: true),
+            homeDirectory.appendingPathComponent(".local/bin", isDirectory: true),
+            homeDirectory.appendingPathComponent(".npm-global/bin", isDirectory: true),
+            homeDirectory.appendingPathComponent("n/bin", isDirectory: true),
+            homeDirectory.appendingPathComponent(".volta/bin", isDirectory: true),
+        ]
+
+        paths += nodeVersionManagerBinDirectories(
+            under: homeDirectory.appendingPathComponent(".local/state/fnm_multishells", isDirectory: true)
+        )
+        paths += nodeVersionManagerBinDirectories(
+            under: homeDirectory.appendingPathComponent(".nvm/versions/node", isDirectory: true)
+        )
+        return paths
+    }
+
+    private static func nodeVersionManagerBinDirectories(under directory: URL) -> [URL] {
+        guard let entries = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else {
+            return []
+        }
+        return entries.map { $0.appendingPathComponent("bin", isDirectory: true) }
+    }
+
+    private static func deduplicatedPaths(_ paths: [URL]) -> [URL] {
+        var seen = Set<String>()
+        return paths.filter { url in
+            let path = url.standardizedFileURL.path
+            guard !seen.contains(path) else { return false }
+            seen.insert(path)
+            return true
+        }
     }
 
     private static let trustedExecutableDirectories: [URL] = [
@@ -277,7 +338,7 @@ struct OpsService: OpsServicing {
         let result = await runner.run(OpsCommandInvocation(
             executablePath: resolved.path,
             arguments: definition.versionArguments,
-            environment: environment,
+            environment: environmentForResolvedExecutable(resolved.path),
             timeout: 6
         ))
         if result.isSuccess {
