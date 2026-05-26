@@ -23,7 +23,9 @@ name: Release
 #   5. Publishes the updated appcast.xml to the gh-pages branch of the public
 #      releases repo (served at SUFeedURL by GitHub Pages) so existing installs
 #      can auto-update.
-#   6. Commits the bumped project.yml and release history files back to master.
+#   6. When the tag points at master history, commits the bumped project.yml and
+#      release history files back to master. Tags from feature/dev branches skip
+#      this write-back so branch builds do not accidentally advance master.
 #
 # Optional repository secrets (Settings ▸ Secrets and variables ▸ Actions) — set
 # ALL of these to get a notarized DMG; leave them unset for the zip/un-notarized DMG path:
@@ -77,12 +79,26 @@ jobs:
     # that preinstalls 26.4.1 stable.
     runs-on: macos-26
     steps:
-      - name: Checkout master
+      - name: Checkout release ref
         uses: actions/checkout@v6
         with:
-          ref: master
+          ref: ${{ github.ref }}
           fetch-depth: 0
           submodules: recursive
+
+      - name: Detect whether release ref is on master
+        id: release_source
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin master
+          TAG_COMMIT="$(git rev-list -n 1 "$GITHUB_REF_NAME")"
+          if git merge-base --is-ancestor "$TAG_COMMIT" origin/master; then
+            echo "on_master=true" >> "$GITHUB_OUTPUT"
+            echo "Release tag is on master; version write-back is enabled."
+          else
+            echo "on_master=false" >> "$GITHUB_OUTPUT"
+            echo "Release tag is not on master; version write-back will be skipped."
+          fi
 
       - name: Select Xcode
         # Pinned, NOT `latest-stable`: the macos-26 image also preinstalls 26.5
@@ -306,6 +322,7 @@ jobs:
           git push origin gh-pages
 
       - name: Commit version bump back to master
+        if: steps.release_source.outputs.on_master == 'true'
         run: |
           if git diff --quiet -- project.yml ClaudeStats/Models/ReleaseHistory.generated.swift release-notes/history; then
             echo "project.yml, release history, and release history JSON unchanged — nothing to commit."
