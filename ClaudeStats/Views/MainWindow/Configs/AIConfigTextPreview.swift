@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-struct ConfigurationTextEditor: NSViewRepresentable {
+struct AIConfigTextPreview: NSViewRepresentable {
     @Binding var text: String
     var fileKind: ProviderConfigFileKind
     var isEditable: Bool
@@ -88,7 +88,7 @@ struct ConfigurationTextEditor: NSViewRepresentable {
 
     @MainActor
     final class Coordinator: NSObject, NSTextViewDelegate {
-        var parent: ConfigurationTextEditor
+        var parent: AIConfigTextPreview
         private var isProgrammaticChange = false
         private var textRevision = 0
         private var highlightGeneration = 0
@@ -115,13 +115,13 @@ struct ConfigurationTextEditor: NSViewRepresentable {
             HighlightRule(pattern: #"\b(true|false)\b"#, color: .systemPurple),
         ]
 
-        init(parent: ConfigurationTextEditor) {
+        init(parent: AIConfigTextPreview) {
             self.parent = parent
         }
 
         var baseAttributes: [NSAttributedString.Key: Any] {
             [
-                .font: ConfigurationTextEditor.editorFont,
+                .font: AIConfigTextPreview.editorFont,
                 .foregroundColor: NSColor.labelColor,
             ]
         }

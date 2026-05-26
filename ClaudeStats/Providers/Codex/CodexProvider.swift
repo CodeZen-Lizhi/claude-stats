@@ -21,12 +21,23 @@ struct CodexProvider: Provider {
     func parse(_ session: Session) async -> SessionStats? {
         await CodexTranscriptParser(pricing: pricing)
             .parse(transcriptAt: URL(fileURLWithPath: session.filePath),
-                   fallbackTitle: session.projectDisplayName)
+                   fallbackTitle: session.projectDisplayName,
+                   sessionID: session.id)
+    }
+
+    func parseUsageAppend(_ session: Session, from state: UsageLedgerParseState) async -> UsageLedgerAppendResult? {
+        await CodexTranscriptParser(pricing: pricing)
+            .parseUsageAppend(transcriptAt: URL(fileURLWithPath: session.filePath), session: session, state: state)
     }
 
     func transcriptMessages(for session: Session) async -> [SessionTranscriptMessage] {
         await CodexTranscriptParser(pricing: pricing)
             .messages(transcriptAt: URL(fileURLWithPath: session.filePath))
+    }
+
+    func taskIntervals(for session: Session) async -> [SessionTaskInterval] {
+        await CodexTranscriptParser(pricing: pricing)
+            .taskIntervals(transcriptAt: URL(fileURLWithPath: session.filePath))
     }
 
     func cacheHitRate(for usage: TokenUsage) -> Double? {
@@ -35,34 +46,6 @@ struct CodexProvider: Provider {
 
     func usageLimitReport(now: Date) async -> UsageLimitReport {
         CodexUsageLimitLoader(paths: paths).report(now: now)
-    }
-
-    func globalConfigurationLocations() -> [ProviderConfigLocation] {
-        [
-            ProviderConfigLocation(
-                provider: kind,
-                title: "config.toml",
-                url: paths.homeDirectory.appendingPathComponent("config.toml", isDirectory: false),
-                fileKind: .toml
-            ),
-            ProviderConfigLocation(
-                provider: kind,
-                title: "AGENTS.md",
-                url: paths.homeDirectory.appendingPathComponent("AGENTS.md", isDirectory: false),
-                fileKind: .markdown
-            ),
-        ]
-    }
-
-    func projectConfigurationLocations(for projectURL: URL) -> [ProviderConfigLocation] {
-        [
-            ProviderConfigLocation(
-                provider: kind,
-                title: "Project AGENTS.md",
-                url: projectURL.appendingPathComponent("AGENTS.md", isDirectory: false),
-                fileKind: .markdown
-            ),
-        ]
     }
 
     func globalAIConfigSources() -> [AIConfigSource] {

@@ -8641,7 +8641,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "读取 Claude 桌面端"
+            "value" : "读取 Codex"
           }
         }
       }
@@ -10001,7 +10001,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Claude 桌面端自动抓取"
+            "value" : "桌面端自动抓取"
           }
         }
       }

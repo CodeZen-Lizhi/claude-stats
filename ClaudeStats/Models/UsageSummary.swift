@@ -25,13 +25,66 @@ struct UsageSummary: Sendable, Hashable {
         UsageSummary(period: period, sessionCount: 0, models: [], messageCount: 0, timeline: [])
     }
 
+    static func make(
+        period: StatsPeriod,
+        events: [UsageLedgerEvent],
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) -> UsageSummary {
+        let inPeriod = events.filter { period.contains($0.timestamp, now: now, calendar: calendar) }
+        return make(period: period, eventsInPeriod: inPeriod, calendar: calendar)
+    }
+
+    static func makeCustom(start: Date, end: Date, events: [UsageLedgerEvent], calendar: Calendar = .current) -> UsageSummary {
+        let lo = calendar.startOfDay(for: min(start, end))
+        guard let hiExclusive = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: max(start, end))) else {
+            return .empty(period: .allTime)
+        }
+        let inRange = events.filter { $0.timestamp >= lo && $0.timestamp < hiExclusive }
+        return make(period: .allTime, eventsInPeriod: inRange, calendar: calendar)
+    }
+
+    private static func make(period: StatsPeriod, eventsInPeriod: [UsageLedgerEvent], calendar: Calendar) -> UsageSummary {
+        var perModel: [String: (count: Int, usage: TokenUsage, cost: CostEstimate)] = [:]
+        var perModelHourly: [String: [Date: TokenUsage]] = [:]
+        var sessions: Set<String> = []
+
+        for event in eventsInPeriod {
+            sessions.insert(event.parentSessionID ?? event.sessionID)
+            var acc = perModel[event.model] ?? (0, .zero, .zero)
+            acc.count += 1
+            acc.usage += event.usage
+            acc.cost += event.cost
+            perModel[event.model] = acc
+
+            let hour = calendar.dateInterval(of: .hour, for: event.timestamp)?.start
+                ?? calendar.startOfDay(for: event.timestamp)
+            perModelHourly[event.model, default: [:]][hour, default: .zero] += event.usage
+        }
+
+        let models = perModel
+            .map { ModelUsage(model: $0.key, messageCount: $0.value.count, usage: $0.value.usage, costEstimate: $0.value.cost) }
+            .sorted { $0.usage.total > $1.usage.total }
+        let timeline = perModelHourly
+            .flatMap { model, byHour in byHour.map { ModelBucket(model: model, start: $0.key, usage: $0.value) } }
+            .sorted { $0.start < $1.start }
+
+        return UsageSummary(
+            period: period,
+            sessionCount: sessions.count,
+            models: models,
+            messageCount: eventsInPeriod.count,
+            timeline: timeline
+        )
+    }
+
     /// Build a summary from already-parsed sessions.
     ///
     /// A session is attributed to the period by its last activity (an
     /// approximation: a session straddling the boundary is counted whole).
     /// The timeline buckets come from the sessions that count, clipped to the
     /// period's lower bound. Sessions that carry ``SessionStats/billableMessages``
-    /// (Claude transcripts) are deduped across files by message hash — see
+    /// are deduped across files by message hash — see
     /// ``BillableMessage``.
     static func make(
         period: StatsPeriod,

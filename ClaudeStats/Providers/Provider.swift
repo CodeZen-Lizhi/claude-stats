@@ -26,9 +26,18 @@ protocol Provider: Sendable {
     /// or unreadable.
     func parse(_ session: Session) async -> SessionStats?
 
+    /// Parse usage events appended after a previously parsed byte offset.
+    /// Providers can keep the default `nil` result when they do not support
+    /// byte-range parsing; callers should fall back to a full parse.
+    func parseUsageAppend(_ session: Session, from state: UsageLedgerParseState) async -> UsageLedgerAppendResult?
+
     /// Parse one transcript into displayable conversation entries. Providers
     /// decide which provider-specific events are useful enough to show.
     func transcriptMessages(for session: Session) async -> [SessionTranscriptMessage]
+
+    /// Parse lightweight parent-task windows for agent-session attribution.
+    /// Providers with no subagent concept can keep the default empty result.
+    func taskIntervals(for session: Session) async -> [SessionTaskInterval]
 
     /// Pretty label for a canonical model id. Used wherever a model surfaces
     /// to the user (Dashboard breakdown, "Favorite model" stat, …). Default
@@ -39,14 +48,6 @@ protocol Provider: Sendable {
     /// Cache percentage shown in the Usage panel. Providers can override when
     /// their transcript format reports cache fields with different semantics.
     func cacheHitRate(for usage: TokenUsage) -> Double?
-
-    /// Global configuration files owned by this CLI. Providers decide their own
-    /// path conventions so shared UI never switches on provider names.
-    func globalConfigurationLocations() -> [ProviderConfigLocation]
-
-    /// Project-local configuration files owned by this CLI for a given working
-    /// directory.
-    func projectConfigurationLocations(for projectURL: URL) -> [ProviderConfigLocation]
 
     /// Read-only AI configuration sources surfaced by the Configs page.
     /// Providers own path conventions; the shared scanner owns parsing,
@@ -64,11 +65,11 @@ protocol Provider: Sendable {
 
 extension Provider {
     var dataDirectoryPath: String? { nil }
+    func parseUsageAppend(_ session: Session, from state: UsageLedgerParseState) async -> UsageLedgerAppendResult? { nil }
     func transcriptMessages(for session: Session) async -> [SessionTranscriptMessage] { [] }
+    func taskIntervals(for session: Session) async -> [SessionTaskInterval] { [] }
     func displayName(forModel id: String) -> String { id }
     func cacheHitRate(for usage: TokenUsage) -> Double? { usage.cacheHitRate }
-    func globalConfigurationLocations() -> [ProviderConfigLocation] { [] }
-    func projectConfigurationLocations(for projectURL: URL) -> [ProviderConfigLocation] { [] }
     func globalAIConfigSources() -> [AIConfigSource] { [] }
     func projectAIConfigSources(for projectURL: URL) -> [AIConfigSource] { [] }
     func usageLimitReport(now: Date) async -> UsageLimitReport { .unsupported(provider: kind) }

@@ -276,22 +276,71 @@ struct AIConfigScanner: Sendable {
         kind: ProviderConfigFileKind,
         sourceID: String
     ) -> [AIConfigDiagnostic] {
-        ConfigurationEditorService.diagnosticsSync(for: content, kind: kind).map { diagnostic in
-            let severity: AIConfigDiagnostic.Severity
-            switch diagnostic.severity {
-            case .warning:
-                severity = .warning
-            case .error:
-                severity = .error
-            }
-            return AIConfigDiagnostic(
-                id: "\(sourceID):\(diagnostic.id)",
-                severity: severity,
-                message: diagnostic.message,
-                line: diagnostic.line,
-                column: diagnostic.column
-            )
+        switch kind {
+        case .json:
+            return jsonDiagnostics(for: content, sourceID: sourceID)
+        case .markdown:
+            return markdownDiagnostics(for: content, sourceID: sourceID)
+        case .toml, .text:
+            return []
         }
+    }
+
+    private static func jsonDiagnostics(for content: String, sourceID: String) -> [AIConfigDiagnostic] {
+        guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
+        do {
+            _ = try JSONSerialization.jsonObject(with: Data(content.utf8), options: [.fragmentsAllowed])
+            return []
+        } catch {
+            let location = jsonErrorLocation(from: error.localizedDescription)
+            let message = error.localizedDescription
+            return [
+                AIConfigDiagnostic(
+                    id: "\(sourceID):json:\(location.line ?? 0):\(location.column ?? 0):\(message)",
+                    severity: .error,
+                    message: message,
+                    line: location.line,
+                    column: location.column
+                ),
+            ]
+        }
+    }
+
+    private static func markdownDiagnostics(for content: String, sourceID: String) -> [AIConfigDiagnostic] {
+        var fenceCount = 0
+        var lastFenceLine: Int?
+
+        for (offset, line) in content.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+            if String(line).trimmingCharacters(in: .whitespaces).hasPrefix("```") {
+                fenceCount += 1
+                lastFenceLine = offset + 1
+            }
+        }
+
+        guard !fenceCount.isMultiple(of: 2), let lastFenceLine else { return [] }
+        return [
+            AIConfigDiagnostic(
+                id: "\(sourceID):markdown:fence:\(lastFenceLine)",
+                severity: .warning,
+                message: "Code fence is not closed.",
+                line: lastFenceLine,
+                column: nil
+            ),
+        ]
+    }
+
+    private static func jsonErrorLocation(from message: String) -> (line: Int?, column: Int?) {
+        guard let regex = try? NSRegularExpression(pattern: #"line\s+(\d+),\s+column\s+(\d+)"#, options: [.caseInsensitive]) else {
+            return (nil, nil)
+        }
+        let nsMessage = message as NSString
+        let range = NSRange(location: 0, length: nsMessage.length)
+        guard let match = regex.firstMatch(in: message, range: range), match.numberOfRanges >= 3 else {
+            return (nil, nil)
+        }
+        let line = Int(nsMessage.substring(with: match.range(at: 1)))
+        let column = Int(nsMessage.substring(with: match.range(at: 2)))
+        return (line, column)
     }
 
     private static func assignedProjectPath(

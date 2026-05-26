@@ -15,12 +15,14 @@ struct CodexTranscriptParser: Sendable {
     /// when no `turn_context` has been seen yet.
     private static let defaultModel = "gpt-5"
 
-    func parse(transcriptAt url: URL, fallbackTitle: String) async -> SessionStats? {
+    func parse(transcriptAt url: URL, fallbackTitle: String, sessionID: String? = nil) async -> SessionStats? {
         guard let data = try? Data(contentsOf: url) else { return nil }
 
         var currentModel = Self.defaultModel
         var perModel: [String: (count: Int, usage: TokenUsage, cost: CostEstimate)] = [:]
         var perModelHourly: [String: [Date: TokenUsage]] = [:]
+        var billableMessages: [BillableMessage] = []
+        var tokenEventIndex = 0
         var messageCount = 0
         var firstActivity: Date?
         var lastActivity: Date?
@@ -69,8 +71,22 @@ struct CodexTranscriptParser: Sendable {
                     usage: usage,
                     contextInputTokens: delta.rawInputTokens
                 )
-                acc.cost += CostEstimate(standardAPI: cost)
+                let costEstimate = CostEstimate(standardAPI: cost)
+                acc.cost += costEstimate
                 perModel[currentModel] = acc
+                let eventKey = Self.billableEventKey(
+                    sessionID: sessionID ?? url.deletingPathExtension().lastPathComponent,
+                    sequenceIndex: tokenEventIndex,
+                    timestamp: date
+                )
+                billableMessages.append(BillableMessage(
+                    hash: eventKey,
+                    model: currentModel,
+                    usage: usage,
+                    cost: costEstimate,
+                    timestamp: date
+                ))
+                tokenEventIndex += 1
                 if let date {
                     let hour = calendar.dateInterval(of: .hour, for: date)?.start ?? calendar.startOfDay(for: date)
                     perModelHourly[currentModel, default: [:]][hour, default: .zero] += usage
@@ -98,7 +114,130 @@ struct CodexTranscriptParser: Sendable {
             lastActivity: lastActivity,
             models: models,
             timeline: timeline,
-            activityIntervals: Self.coalesceBursts(messageTimestamps)
+            activityIntervals: Self.coalesceBursts(messageTimestamps),
+            billableMessages: billableMessages,
+            lastModel: currentModel
+        )
+    }
+
+    func parseUsageAppend(transcriptAt url: URL, session: Session, state: UsageLedgerParseState) async -> UsageLedgerAppendResult? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+
+        do {
+            try handle.seek(toOffset: state.lastParsedByteOffset)
+        } catch {
+            return nil
+        }
+
+        guard let data = try? handle.readToEnd(), !data.isEmpty else {
+            return UsageLedgerAppendResult(
+                events: [],
+                lastParsedByteOffset: state.lastParsedByteOffset,
+                messageCountDelta: 0,
+                firstActivity: nil,
+                lastActivity: nil,
+                title: nil,
+                lastModel: state.lastModel
+            )
+        }
+
+        let parseData: Data.SubSequence
+        let parsedByteCount: UInt64
+        if data.last == 0x0A {
+            parseData = data[...]
+            parsedByteCount = UInt64(data.count)
+        } else if let lastNewline = data.lastIndex(of: 0x0A) {
+            parseData = data.prefix(through: lastNewline)
+            parsedByteCount = UInt64(parseData.count)
+        } else {
+            return UsageLedgerAppendResult(
+                events: [],
+                lastParsedByteOffset: state.lastParsedByteOffset,
+                messageCountDelta: 0,
+                firstActivity: nil,
+                lastActivity: nil,
+                title: nil,
+                lastModel: state.lastModel
+            )
+        }
+
+        var currentModel = state.lastModel ?? Self.defaultModel
+        var events: [UsageLedgerEvent] = []
+        var tokenEventIndex = state.eventCount
+        var messageCountDelta = 0
+        var firstActivity: Date?
+        var lastActivity: Date?
+        var threadName: String?
+        var firstUserTitle: String?
+        let decoder = JSONDecoder()
+
+        for lineBytes in parseData.split(separator: 0x0A /* \n */, omittingEmptySubsequences: true) {
+            guard let line = try? decoder.decode(CodexLine.self, from: Data(lineBytes)) else { continue }
+            let date = ISO8601.parse(line.timestamp)
+            track(date, &firstActivity, &lastActivity)
+            guard let payload = line.payload else { continue }
+
+            switch (line.type, payload.type) {
+            case ("turn_context", _):
+                if let m = payload.model, !m.isEmpty { currentModel = m }
+                else if let m = payload.collaborationMode?.settings?.model, !m.isEmpty { currentModel = m }
+
+            case ("event_msg", "thread_name_updated"):
+                if let t = payload.threadName?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty {
+                    threadName = t
+                }
+
+            case ("event_msg", "agent_message"):
+                messageCountDelta += 1
+
+            case ("event_msg", "user_message"):
+                messageCountDelta += 1
+                if firstUserTitle == nil, let raw = payload.message, let cleaned = TitleSanitizer.sanitize(raw) {
+                    firstUserTitle = cleaned
+                }
+
+            case ("event_msg", "token_count"):
+                guard let delta = payload.info?.lastTokenUsage else { break }
+                let usage = delta.tokenUsage
+                guard usage.total > 0, let date else { break }
+                let cost = pricing.cost(
+                    model: currentModel,
+                    usage: usage,
+                    contextInputTokens: delta.rawInputTokens
+                )
+                let eventKey = Self.billableEventKey(
+                    sessionID: session.id,
+                    sequenceIndex: tokenEventIndex,
+                    timestamp: date
+                )
+                events.append(UsageLedgerEvent(
+                    eventKey: eventKey,
+                    sessionID: session.id,
+                    provider: session.provider,
+                    model: currentModel,
+                    timestamp: date,
+                    usage: usage,
+                    cost: CostEstimate(standardAPI: cost),
+                    sourcePath: session.filePath,
+                    sequenceIndex: tokenEventIndex,
+                    parentSessionID: session.agentInfo?.parentSessionID
+                ))
+                tokenEventIndex += 1
+
+            default:
+                break
+            }
+        }
+
+        return UsageLedgerAppendResult(
+            events: events,
+            lastParsedByteOffset: state.lastParsedByteOffset + parsedByteCount,
+            messageCountDelta: messageCountDelta,
+            firstActivity: firstActivity,
+            lastActivity: lastActivity,
+            title: threadName ?? firstUserTitle,
+            lastModel: currentModel
         )
     }
 
@@ -137,6 +276,44 @@ struct CodexTranscriptParser: Sendable {
         return messages
     }
 
+    func taskIntervals(transcriptAt url: URL) async -> [SessionTaskInterval] {
+        guard let data = try? Data(contentsOf: url) else { return [] }
+
+        struct Started {
+            let id: String
+            let start: Date
+        }
+
+        var open: [String: Started] = [:]
+        var intervals: [SessionTaskInterval] = []
+        let decoder = JSONDecoder()
+        for lineBytes in data.split(separator: 0x0A /* \n */, omittingEmptySubsequences: true) {
+            guard let line = try? decoder.decode(CodexLine.self, from: Data(lineBytes)),
+                  line.type == "event_msg",
+                  let payload = line.payload,
+                  let turnID = payload.turnID else { continue }
+
+            switch payload.type {
+            case "task_started":
+                let start = payload.startedAt.map { Date(timeIntervalSince1970: TimeInterval($0)) }
+                    ?? ISO8601.parse(line.timestamp)
+                if let start {
+                    open[turnID] = Started(id: turnID, start: start)
+                }
+            case "task_complete":
+                guard let started = open.removeValue(forKey: turnID) else { continue }
+                let end = payload.completedAt.map { Date(timeIntervalSince1970: TimeInterval($0)) }
+                    ?? ISO8601.parse(line.timestamp)
+                    ?? started.start
+                intervals.append(SessionTaskInterval(id: started.id, start: started.start, end: max(end, started.start)))
+            default:
+                continue
+            }
+        }
+
+        return intervals
+    }
+
     private func track(_ date: Date?, _ first: inout Date?, _ last: inout Date?) {
         guard let date else { return }
         if first == nil || date < first! { first = date }
@@ -172,6 +349,11 @@ struct CodexTranscriptParser: Sendable {
             ? DateInterval(start: start, end: end)
             : DateInterval(start: start, duration: minBurst)
     }
+
+    private static func billableEventKey(sessionID: String, sequenceIndex: Int, timestamp: Date?) -> String {
+        let millis = timestamp.map { Int(($0.timeIntervalSince1970 * 1_000).rounded()) } ?? -1
+        return "codex|\(sessionID)|\(sequenceIndex)|\(millis)"
+    }
 }
 
 // MARK: - JSONL line shapes (only the fields we read)
@@ -188,11 +370,17 @@ private struct CodexLine: Decodable {
         let threadName: String?    // `thread_name_updated`
         let message: String?       // `user_message` / `agent_message`
         let info: TokenInfo?       // `token_count` (may be null)
+        let turnID: String?
+        let startedAt: Int?
+        let completedAt: Int?
 
         enum CodingKeys: String, CodingKey {
             case type, model, message, info
             case collaborationMode = "collaboration_mode"
             case threadName = "thread_name"
+            case turnID = "turn_id"
+            case startedAt = "started_at"
+            case completedAt = "completed_at"
         }
     }
 

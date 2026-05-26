@@ -1,6 +1,6 @@
 import Foundation
 
-enum CostEstimationMode: String, CaseIterable, Sendable, Identifiable, Hashable {
+enum CostEstimationMode: String, CaseIterable, Codable, Sendable, Identifiable, Hashable {
     case standardAPI
     case detailedBilling
 
@@ -14,7 +14,7 @@ enum CostEstimationMode: String, CaseIterable, Sendable, Identifiable, Hashable 
     }
 }
 
-struct CostEstimate: Sendable, Hashable {
+struct CostEstimate: Sendable, Hashable, Codable {
     var standardAPI: Double
     var detailedBilling: Double
 

@@ -22,8 +22,8 @@ Claude Stats 是一个原生 macOS 菜单栏应用，面向每天长时间使用
 
 已删除并不再作为主线维护的 provider 范围：
 
-- Claude provider 实现、Claude transcript parser、Claude usage limit bridge、Claude Desktop 用量采集和 Claude status UI。
-- Gemini、Kimi、MiniMax 的 provider 空壳、UI 入口和测试占位。
+- 非 Codex provider 实现、transcript parser、usage limit bridge、桌面用量采集和服务状态 UI。
+- 非 Codex provider 空壳、UI 入口和测试占位。
 - 平台设置页、菜单栏多 provider 选择 UI，以及面向多 AI session provider 的选择控件。
 
 必须保留的边界：
@@ -31,13 +31,13 @@ Claude Stats 是一个原生 macOS 菜单栏应用，面向每天长时间使用
 - `Provider` 协议、`ProviderRegistry`、`SessionStore`、`UsageLimitStore` 等共享抽象继续存在。
 - `ProviderRegistry` 只注册 `CodexProvider`。
 - App 内部继续通过 `CodexProvider` 读取 Codex sessions、统计、配置和用量限制，避免把 Codex 文件扫描和解析逻辑散落到 UI。
-- Git、System Monitor、Notch Island、Atoll、Ops 等非 AI session provider 功能不属于 Codex-only provider 删除范围。Skills、内嵌终端、LinuxDo、Local AI、CloudKit 排行榜和上游 Dictionary / Technical Terms 功能不属于当前产品范围。
+- Git、System Monitor、Notch Island、Atoll、Ops 等非 AI session provider 功能不属于 Codex-only provider 删除范围。已删除的实验功能、社区功能、云同步排行和上游术语管理功能不属于当前产品范围。
 
 以后同步原项目或上游更新时的规则：
 
-- 可以跳过 Claude、Gemini、Kimi、MiniMax provider 实现、provider UI、provider 测试和 provider 文案的新增或修改。
+- 可以跳过非 Codex provider 实现、provider UI、provider 测试和 provider 文案的新增或修改。
 - 如果上游改动同时触碰共享抽象和其他 provider，只同步对 `Provider` 协议、Codex 数据口、共享统计、共享配置、共享 UI 结构真正有用的部分。
-- 不要为了兼容上游多 provider 改动重新加入多 provider 选择 UI、平台设置页、Claude Desktop capture 或 Claude status。
+- 不要为了兼容上游多 provider 改动重新加入多 provider 选择 UI、平台设置页、桌面用量采集或服务状态 UI。
 - 只有当产品重新决定支持第二个 AI session provider 时，才通过新 provider 目录、`Provider` 协议实现和 `ProviderRegistry` 注册接入；否则默认拒绝非 Codex provider 改动。
 
 ## 核心产品区域
@@ -62,7 +62,7 @@ Claude Stats 是一个原生 macOS 菜单栏应用，面向每天长时间使用
 
 - Codex 通过 `~/.codex/sessions/` 读取本地 session transcript。
 - 应用内部仍保留 `Provider` 协议和 `CodexProvider` 数据口，方便会话、统计、配置、用量限制走统一链路。
-- 旧用户偏好或配置里出现的 Claude、Gemini、Kimi、MiniMax provider 值会被忽略或收敛到 Codex。
+- 旧用户偏好或配置里出现的非 Codex provider 值会被忽略或收敛到 Codex。
 - 本地文件变化后，会话数据应该能自动刷新。
 
 ### 3. 会话列表
@@ -176,7 +176,7 @@ Claude Stats 是一个原生 macOS 菜单栏应用，面向每天长时间使用
 
 ## Fork 专属删减
 
-本 fork 明确不包含 Skills 库、内嵌终端、LinuxDo、Local AI、CloudKit 排行榜，以及上游 Dictionary / Technical Terms 功能。用户自维护 transcript 术语、对应设置页、内置术语资源以及导入导出流程都不属于当前产品范围。以后同步上游时，默认不跟进这类改动；只有本 fork 明确重新需要对应能力时再评估。
+本 fork 明确不包含已删除的实验功能、社区功能、云同步排行和上游术语管理功能。用户自维护 transcript 术语、对应设置页、内置术语资源以及导入导出流程都不属于当前产品范围。以后同步上游时，默认不跟进这类改动；只有本 fork 明确重新需要对应能力时再评估。
 
 ## 非功能需求
 

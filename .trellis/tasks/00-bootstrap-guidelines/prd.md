@@ -22,7 +22,6 @@ the rest conversationally.
 ## Status (update the checkboxes as you complete each item)
 
 - [ ] Fill guidelines for ThirdParty/Atoll
-- [ ] Fill guidelines for ThirdParty/CppJieba
 - [ ] Add code examples
 
 ---
@@ -34,12 +33,6 @@ the rest conversationally.
 - Backend guidelines: `.trellis/spec/ThirdParty/Atoll/backend/`
 
 - Frontend guidelines: `.trellis/spec/ThirdParty/Atoll/frontend/`
-
-### Package: ThirdParty/CppJieba (`spec/ThirdParty/CppJieba/`)
-
-- Backend guidelines: `.trellis/spec/ThirdParty/CppJieba/backend/`
-
-- Frontend guidelines: `.trellis/spec/ThirdParty/CppJieba/frontend/`
 
 ### Thinking guides (already populated)
 

@@ -94,7 +94,4 @@ packages:
   ThirdParty/Atoll:
     path: ThirdParty/Atoll
     type: submodule
-  ThirdParty/CppJieba:
-    path: ThirdParty/CppJieba
-    type: submodule
 default_package: ThirdParty/Atoll

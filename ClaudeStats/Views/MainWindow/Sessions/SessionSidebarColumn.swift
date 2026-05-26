@@ -48,15 +48,6 @@ struct SessionSidebarColumn: View {
                 showOverview()
             }
 
-            SidebarRow(
-                title: "Analysis",
-                symbol: "text.magnifyingglass",
-                isSelected: destination == .analysis
-            ) {
-                showAnalysis()
-            }
-            .padding(.bottom, 4)
-
             sessionsTree(vm: vm)
         }
         .padding(.bottom, 10)
@@ -230,11 +221,6 @@ struct SessionSidebarColumn: View {
     private func showOverview() {
         clearSearchFocus()
         destination = .overview
-    }
-
-    private func showAnalysis() {
-        clearSearchFocus()
-        destination = .analysis
     }
 
     private func refreshSessionGroups() {

@@ -65,7 +65,7 @@ struct DashboardView: View {
         .onChange(of: vm.heatmapCells) { _, _ in refreshDerived() }
         .onChange(of: env.github.cells) { _, _ in refreshDerived() }
         .task(id: dashboardReloadKey) {
-            await vm.reload(sessions: env.store.sessions)
+            await vm.reload(events: env.store.usageEventsSnapshot())
         }
         .task(id: githubReloadKey) {
             await env.github.reload(

@@ -1,7 +1,7 @@
 import Foundation
 
 /// Token counts from a single assistant turn or summed across many.
-struct TokenUsage: Sendable, Hashable {
+struct TokenUsage: Sendable, Hashable, Codable {
     var inputTokens: Int = 0
     var outputTokens: Int = 0
     var cacheReadTokens: Int = 0

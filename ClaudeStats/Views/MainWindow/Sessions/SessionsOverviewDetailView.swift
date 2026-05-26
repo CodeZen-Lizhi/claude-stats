@@ -15,7 +15,7 @@ struct SessionsOverviewDetailView: View {
     }
 
     private var summary: UsageSummary {
-        env.store.summary(for: .allTime, provider: provider)
+        UsageSummary.make(period: .allTime, sessions: sessions, pricing: env.pricing)
     }
 
     private var projectCount: Int {

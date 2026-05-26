@@ -296,8 +296,6 @@ struct MainWindowView: View {
         switch sessionsDestination {
         case .overview:
             SessionsOverviewDetailView()
-        case .analysis:
-            SessionsAnalysisDetailView()
         case .session:
             if let session = selectedSession {
                 CenteredPaneContainer { SessionDetailView(session: session) }

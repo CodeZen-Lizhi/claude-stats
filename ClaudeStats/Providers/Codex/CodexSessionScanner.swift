@@ -34,7 +34,9 @@ struct CodexSessionScanner: Sendable {
                 filePath: url.path,
                 cwd: meta?.cwd,
                 lastModified: modified,
-                fileSize: size
+                fileSize: size,
+                stats: nil,
+                agentInfo: meta?.agentInfo
             ))
         }
         return sessions.sorted { $0.lastModified > $1.lastModified }
@@ -55,7 +57,7 @@ struct CodexSessionScanner: Sendable {
 
     // MARK: First-line metadata
 
-    struct SessionMeta { let id: String?; let cwd: String? }
+    struct SessionMeta { let id: String?; let cwd: String?; let agentInfo: SessionAgentInfo? }
 
     /// Read the first JSONL line (`type == "session_meta"`) to pull `id` and
     /// `cwd` without decoding the whole file.
@@ -67,11 +69,51 @@ struct CodexSessionScanner: Sendable {
         struct Line: Decodable {
             let type: String?
             let payload: Payload?
-            struct Payload: Decodable { let id: String?; let cwd: String? }
+            struct Payload: Decodable {
+                let id: String?
+                let cwd: String?
+                let source: Source?
+                let threadSource: String?
+                let agentNickname: String?
+                let agentRole: String?
+                let agentPath: String?
+
+                enum CodingKeys: String, CodingKey {
+                    case id, cwd, source
+                    case threadSource = "thread_source"
+                    case agentNickname = "agent_nickname"
+                    case agentRole = "agent_role"
+                    case agentPath = "agent_path"
+                }
+            }
+
+            struct Source: Decodable {
+                let subagent: Subagent?
+            }
+
+            struct Subagent: Decodable {
+                let threadSpawn: ThreadSpawn?
+                enum CodingKeys: String, CodingKey { case threadSpawn = "thread_spawn" }
+            }
+
+            struct ThreadSpawn: Decodable {
+                let parentThreadID: String?
+                enum CodingKeys: String, CodingKey { case parentThreadID = "parent_thread_id" }
+            }
         }
         guard let line = try? JSONDecoder().decode(Line.self, from: Data(firstLine)),
               line.type == "session_meta" else { return nil }
-        return SessionMeta(id: line.payload?.id, cwd: line.payload?.cwd)
+        let parentID = line.payload?.source?.subagent?.threadSpawn?.parentThreadID
+            .map { "codex::\($0)" }
+        let agentInfo = SessionAgentInfo(
+            threadSource: line.payload?.threadSource,
+            parentSessionID: parentID,
+            nickname: line.payload?.agentNickname,
+            role: line.payload?.agentRole,
+            path: line.payload?.agentPath
+        )
+        let hasAgentInfo = agentInfo.threadSource != nil || agentInfo.parentSessionID != nil
+        return SessionMeta(id: line.payload?.id, cwd: line.payload?.cwd, agentInfo: hasAgentInfo ? agentInfo : nil)
     }
 
     /// Fallback id extraction from `rollout-<timestamp>-<uuid>.jsonl` — the

@@ -130,7 +130,7 @@ struct AIConfigDocumentInspector: View {
                 .padding(14)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         } else if let content = document.contentPreview {
-            ConfigurationTextEditor(
+            AIConfigTextPreview(
                 text: .constant(content),
                 fileKind: document.fileKind,
                 isEditable: false,

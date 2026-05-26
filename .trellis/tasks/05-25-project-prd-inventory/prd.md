@@ -8,9 +8,9 @@ Document the current Claude Stats product as a stable PRD reference for future r
 
 * Claude Stats is a native macOS menu-bar app for AI coding work.
 * The app reads local session, usage, status, Git, terminal, network, and configuration data.
-* The current codebase already has major surfaces for sessions, stats, usage limits, activity, Git, LinuxDo, configs, skills, terminal, network debugging, ops, system monitor, and settings.
+* The current codebase already has major surfaces for sessions, stats, usage limits, activity, Git, configs, ops, system monitor, and settings.
 * After `12816a7 merge: codex-only provider cleanup`, the main product boundary is Codex-only for AI session providers.
-* Claude, Gemini, Kimi, and MiniMax provider code, provider UI, and provider-specific tests have been removed from `codex/dev`.
+* Non-Codex provider code, provider UI, and provider-specific tests have been removed from `codex/dev`.
 * The existing README describes the app as a focused macOS take on Claude Statistics and lists the major product areas.
 
 ## Assumptions

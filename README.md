@@ -94,9 +94,6 @@ Screenshots and GIF demos live in [`docs/assets/screens`](docs/assets/screens), 
 <p><strong>Plans and config browser</strong></p>
 <img src="docs/assets/screens/configs-plans-browser.png" alt="Plans and config browser">
 
-<p><strong>Skills library</strong></p>
-<img src="docs/assets/screens/skills-library.png" alt="Local and plugin skills library">
-
 </details>
 
 <details>
@@ -201,7 +198,7 @@ ClaudeStats/
   Views/        menu bar, main window, settings, ops, and activity UI
   Utilities/    formatters, logging, shared helpers
 AtollEmbed/       app-side wrapper for the Atoll/DynamicIsland integration
-ThirdParty/       git submodules for Atoll and CppJieba
+ThirdParty/       git submodules for Atoll
 ClaudeStatsTests/ parser, scanner, settings, integration, and feature tests
 docs/assets/      README images, icons, screenshots, and GIFs
 scripts/          project generation, local run/test, release, appcast tooling

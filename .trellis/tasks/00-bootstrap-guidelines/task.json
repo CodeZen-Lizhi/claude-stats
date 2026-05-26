@@ -21,8 +21,7 @@
   "children": [],
   "parent": null,
   "relatedFiles": [
-    ".trellis/spec/ThirdParty/Atoll/",
-    ".trellis/spec/ThirdParty/CppJieba/"
+    ".trellis/spec/ThirdParty/Atoll/"
   ],
   "notes": "First-time setup task created by trellis init (fullstack project)",
   "meta": {}

@@ -7,22 +7,19 @@ Remove the Dictionary / Technical Terms feature from this fork because this proj
 ## What I Already Know
 
 * The user asked to remove the feature, related code, page, and documentation.
-* Dictionary currently means the technical-term dictionary used by transcript analysis.
+* Dictionary currently means the removed technical-term management feature.
 * The settings page is exposed as `Dictionary` and backed by `TechnicalTermDictionaryStore`.
 * The product PRD exists at `docs/claude-stats-product-prd.md`.
 
 ## Assumptions
 
-* Transcript analysis can keep generic extraction from code spans, paths, commands, errors, Jieba, and NaturalLanguage.
 * User-managed built-in/global/project term dictionary management should be removed.
-* Local AI semantic search is a separate feature and should remain.
 
 ## Requirements
 
 * Remove the Dictionary settings page and sidebar entry.
 * Remove user-facing dictionary management models, store, repository, resources, and settings UI.
-* Remove dictionary-specific wiring from the app environment and transcript analysis flow.
-* Keep transcript analysis functional without a user-managed dictionary.
+* Remove dictionary-specific wiring from the app environment.
 * Remove documentation references that present Dictionary as a product/settings feature.
 * Record in the product PRD that this fork intentionally does not include the Dictionary feature and should not follow upstream Dictionary changes by default.
 
@@ -30,18 +27,16 @@ Remove the Dictionary / Technical Terms feature from this fork because this proj
 
 * [x] No Dictionary settings page is reachable from the app UI.
 * [x] Dictionary management files and bundled technical term resources are removed.
-* [x] Transcript analysis still compiles and uses generic/default term extraction without user-managed dictionaries.
 * [x] Product PRD records the fork decision to omit Dictionary.
 * [x] Search confirms no stale user-facing Dictionary feature references remain, aside from technical use of Swift `Dictionary`.
 * [x] Project build/tests are run or an explicit blocker is recorded.
 
 ## Verification Notes
 
-* `rg` confirms no stale Dictionary feature symbols remain in app/test/docs sources. Remaining dictionary hits are the task PRD, Swift standard `Dictionary`, CppJieba dictionary file/path terminology, and legacy SQLite column names retained for cache compatibility.
-* A focused Swift typecheck for the changed transcript-analysis path passes with the macOS 15.4 SDK. Covered files include `TranscriptAnalysisModels.swift`, `TermNormalizer.swift`, `JiebaTokenizer.swift`, `TranscriptTermExtractor.swift`, `TranscriptTFIDFAnalyzer.swift`, SQLite storage/index files, and `TranscriptAnalysisService.swift`.
+* `rg` confirms no stale Dictionary feature symbols remain in app/test/docs sources. Remaining dictionary hits are the task PRD and Swift standard `Dictionary`.
 * A focused Swift typecheck for `SettingsSection.swift` passes with `L10n.swift`, confirming the settings enum itself is valid after removing the Dictionary case.
 * Post-merge review on `12816a7 merge: codex-only provider cleanup` confirms the worktree merge did not reintroduce Dictionary. `docs/claude-stats-product-prd.md` still records the fork-specific Dictionary omission, and the merged product direction is now Codex-only.
-* The worktree commit `e2af669 refactor: keep only Codex provider` is a broad provider-scope cleanup: it deletes Claude/Gemini/Kimi/MiniMax AI session providers, Claude status/Desktop usage/usage-limit bridge code, provider switcher UI, platform settings, and corresponding tests. It is orthogonal to Dictionary removal but reinforces that upstream multi-provider or Dictionary work should not be followed by default in this fork.
+* The worktree commit `e2af669 refactor: keep only Codex provider` is a broad provider-scope cleanup: it deletes non-Codex AI session providers, service-status and usage-limit bridge code, provider switcher UI, platform settings, and corresponding tests. It is orthogonal to Dictionary removal but reinforces that upstream multi-provider or Dictionary work should not be followed by default in this fork.
 * `bash scripts/run-tests.sh` ran Python tests successfully (`Ran 22 tests ... OK`) but the full project test pipeline is blocked before Swift tests by local toolchain/environment issues:
   * Zig 0.15.2 cannot fetch Ghostty tarballs through the current proxy directly; `curl` can fetch the same URL and `zig fetch <local tarball>` was used to seed the cache for `uucode`.
   * After that, GhosttyKit build fails while linking Zig's build runner against the macOS 26 SDK with missing system symbols such as `_abort`, `_bzero`, `_dispatch_queue_create`, and `__availability_version_check`.
@@ -58,6 +53,5 @@ Remove the Dictionary / Technical Terms feature from this fork because this proj
 
 ## Out of Scope
 
-* Removing Local AI semantic search.
-* Removing Sessions Analysis itself.
+* Removing unrelated session views.
 * Redesigning transcript analysis visualizations.

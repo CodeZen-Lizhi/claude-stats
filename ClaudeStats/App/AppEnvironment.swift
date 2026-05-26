@@ -12,7 +12,6 @@ final class AppEnvironment {
     let preferences: Preferences
     let providerRegistry: ProviderRegistry
     let store: SessionStore
-    let transcriptAnalysis: TranscriptAnalysisStore
     let updater = UpdaterController()
     let floatingStatsPanel = FloatingStatsPanelController()
     let notchIsland = NotchIslandController()
@@ -24,7 +23,6 @@ final class AppEnvironment {
     let github = GitHubViewModel()
     let openAIStatus: OpenAIStatusViewModel
     let usageLimits: UsageLimitStore
-    let configurationProfiles: ConfigurationProfilesViewModel
     let aiConfigs: AIConfigsViewModel
     let systemMonitor: SystemMonitorViewModel
     let ops: OpsStore
@@ -42,14 +40,12 @@ final class AppEnvironment {
         self.preferences = preferences
         self.providerRegistry = providerRegistry
         self.store = store
-        self.transcriptAnalysis = TranscriptAnalysisStore()
         self.systemMonitor = systemMonitor
         self.ops = ops
         self.dashboard = DashboardViewModel(pricing: pricing)
         self.gitActivity = GitActivityViewModel()
         self.openAIStatus = OpenAIStatusViewModel(preferences: preferences)
         self.usageLimits = usageLimits ?? UsageLimitStore(registry: providerRegistry)
-        self.configurationProfiles = ConfigurationProfilesViewModel(registry: providerRegistry)
         self.aiConfigs = AIConfigsViewModel(scanner: AIConfigScanner(registry: providerRegistry))
     }
 
@@ -69,7 +65,6 @@ final class AppEnvironment {
         LegacyFeatureDataCleaner().cleanRemovedFeatureData()
         LaunchAtLogin.enableByDefaultIfNeeded()
         Task {
-            await configurationProfiles.loadIfNeeded()
             await store.refresh()
         }
         openAIStatus.start()

@@ -19,6 +19,10 @@ struct Session: Sendable, Identifiable, Hashable {
 
     /// Filled in after parsing. `nil` until ``SessionStore`` parses it.
     var stats: SessionStats?
+    /// Provider-owned agent metadata. Present for Codex subagent transcripts.
+    var agentInfo: SessionAgentInfo? = nil
+    /// Child agent sessions confidently attributed to this parent.
+    var childSessions: [Session] = []
 
     /// Display name for the project: the real `cwd`'s last path component,
     /// falling back to a de-mangled form of the encoded directory name.
