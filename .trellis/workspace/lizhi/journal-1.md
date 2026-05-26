@@ -109,3 +109,39 @@ Diagnosed packaged Claude Stats exiting while idle, added a resident menu-bar li
 ### Next Steps
 
 - None - task complete
+
+
+## Session 4: 云端重打 v1.7.6 安装包
+
+**Date**: 2026-05-26
+**Task**: 云端重打 v1.7.6 安装包
+**Package**: ThirdParty/Atoll
+**Branch**: `codex/release-ci-fix`
+
+### Summary
+
+将发布流程改为按标签 ref 构建，补齐 Atoll 终端占位视图并清理裁剪功能后的残留编译错误；重新推送 v1.7.6 标签后，GitHub Actions 已成功生成源仓库 DMG/zip，DMG 已下载到本机 Downloads。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1730d90` | (see git log) |
+| `fa92cb8` | (see git log) |
+| `03c4384` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
