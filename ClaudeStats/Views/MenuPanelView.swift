@@ -42,8 +42,7 @@ struct StatsExportConfig {
     /// Usage pane settings. `.period` is also reused by the Sessions pane.
     var usage: UsageView.ExportConfig
     var activity: AIActivityView.ExportData
-    /// Whether the exported snapshot includes the top strip (the platform
-    /// switcher when multiple platforms are enabled, otherwise the scanline bar).
+    /// Whether the exported snapshot includes the top scanline strip.
     var showTopBar: Bool = true
     /// The share timestamp shown in the header corner (replaces the live
     /// "UPD …" readout).

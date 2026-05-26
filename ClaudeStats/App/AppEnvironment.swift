@@ -25,8 +25,6 @@ final class AppEnvironment {
     let openAIStatus: OpenAIStatusViewModel
     let usageLimits: UsageLimitStore
     let configurationProfiles: ConfigurationProfilesViewModel
-    let apiProviders: APIProviderSwitcherViewModel
-    let cliEnvironment: CLIEnvironmentViewModel
     let aiConfigs: AIConfigsViewModel
     let systemMonitor: SystemMonitorViewModel
     let ops: OpsStore
@@ -37,7 +35,6 @@ final class AppEnvironment {
         providerRegistry: ProviderRegistry,
         store: SessionStore,
         usageLimits: UsageLimitStore? = nil,
-        cliEnvironment: CLIEnvironmentViewModel = CLIEnvironmentViewModel(),
         systemMonitor: SystemMonitorViewModel = SystemMonitorViewModel(),
         ops: OpsStore = OpsStore()
     ) {
@@ -46,7 +43,6 @@ final class AppEnvironment {
         self.providerRegistry = providerRegistry
         self.store = store
         self.transcriptAnalysis = TranscriptAnalysisStore()
-        self.cliEnvironment = cliEnvironment
         self.systemMonitor = systemMonitor
         self.ops = ops
         self.dashboard = DashboardViewModel(pricing: pricing)
@@ -54,7 +50,6 @@ final class AppEnvironment {
         self.openAIStatus = OpenAIStatusViewModel(preferences: preferences)
         self.usageLimits = usageLimits ?? UsageLimitStore(registry: providerRegistry)
         self.configurationProfiles = ConfigurationProfilesViewModel(registry: providerRegistry)
-        self.apiProviders = APIProviderSwitcherViewModel()
         self.aiConfigs = AIConfigsViewModel(scanner: AIConfigScanner(registry: providerRegistry))
     }
 
@@ -74,7 +69,6 @@ final class AppEnvironment {
         LegacyFeatureDataCleaner().cleanRemovedFeatureData()
         LaunchAtLogin.enableByDefaultIfNeeded()
         Task {
-            await apiProviders.loadIfNeeded(keyStorageMode: preferences.apiProviderKeyStorageMode)
             await configurationProfiles.loadIfNeeded()
             await store.refresh()
         }

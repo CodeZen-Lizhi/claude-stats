@@ -32,7 +32,6 @@ struct SidebarColumn: View {
             if env.preferences.systemMonitorEnabled { navRow(.system) }
 
             sectionHeader("TOOLS")
-            navRow(.configurations)
             SidebarRow(
                 title: "Configs",
                 symbol: "doc.text.magnifyingglass",
@@ -193,7 +192,7 @@ struct SidebarRow: View {
     @Previewable @State var page: MainPage = .dashboard
     return SidebarColumn(
         page: $page,
-        availablePages: [.dashboard, .configurations, .usage, .activity, .git],
+        availablePages: [.dashboard, .usage, .activity, .git],
         onOpenSettings: {},
         onOpenSessions: {},
         onOpenConfigs: {},

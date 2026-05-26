@@ -14,20 +14,6 @@ enum MenuBarMetric: String, CaseIterable, Sendable, Identifiable {
     }
 }
 
-enum APIProviderKeyStorageMode: String, CaseIterable, Sendable, Identifiable {
-    case json
-    case keychain
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .json: "JSON"
-        case .keychain: L10n.string("api_key_storage.keychain", defaultValue: "Keychain")
-        }
-    }
-}
-
 /// Thin, observable wrapper over the handful of `UserDefaults` keys the app
 /// uses. Writing a property persists it immediately.
 @MainActor
@@ -140,9 +126,6 @@ final class Preferences {
     var sessionsExpandedOnAppOpen: Bool {
         didSet { defaults.set(sessionsExpandedOnAppOpen, forKey: Keys.sessionsExpandedOnAppOpen) }
     }
-    var apiProviderKeyStorageMode: APIProviderKeyStorageMode {
-        didSet { defaults.set(apiProviderKeyStorageMode.rawValue, forKey: Keys.apiProviderKeyStorageMode) }
-    }
     var systemMonitorEnabled: Bool {
         didSet { defaults.set(systemMonitorEnabled, forKey: Keys.systemMonitorEnabled) }
     }
@@ -161,9 +144,8 @@ final class Preferences {
         }
     }
 
-    /// Which platforms the user has turned on. The switcher bar only appears
-    /// when this has more than one entry; otherwise the panel shows the single
-    /// enabled platform (and the original scanline strip). Always non-empty.
+    /// Which platform is enabled. The app is Codex-only, so this remains
+    /// normalized to a single value for compatibility with shared data paths.
     var enabledProviders: Set<ProviderKind> {
         didSet {
             if enabledProviders != [.codex] {
@@ -183,8 +165,8 @@ final class Preferences {
             defaults.set(selectedProvider.rawValue, forKey: Keys.selectedProvider)
         }
     }
-    /// When off, the app forgets ``selectedProvider`` on launch and starts on
-    /// the first enabled platform.
+    /// Kept for compatibility with older defaults. Codex-only builds always
+    /// normalize the selected provider to Codex.
     var rememberSelectedProvider: Bool {
         didSet { defaults.set(rememberSelectedProvider, forKey: Keys.rememberSelectedProvider) }
     }
@@ -348,7 +330,6 @@ final class Preferences {
             : Set(storedNotchModules)
         detailPanelBoundaryFalloffEnabled = (defaults.object(forKey: Keys.detailPanelBoundaryFalloffEnabled) as? Bool) ?? true
         sessionsExpandedOnAppOpen = (defaults.object(forKey: Keys.sessionsExpandedOnAppOpen) as? Bool) ?? false
-        apiProviderKeyStorageMode = APIProviderKeyStorageMode(rawValue: defaults.string(forKey: Keys.apiProviderKeyStorageMode) ?? "") ?? .json
         systemMonitorEnabled = defaults.bool(forKey: Keys.systemMonitorEnabled)
         systemMonitorRefreshRate = SystemMonitorRefreshRate(rawValue: defaults.string(forKey: Keys.systemMonitorRefreshRate) ?? "") ?? .threeSeconds
         let storedSystemMonitorModules = (defaults.string(forKey: Keys.systemMonitorVisibleModules) ?? "")
@@ -451,7 +432,6 @@ final class Preferences {
         static let notchIslandEnabledModules = "notchIslandEnabledModules"
         static let detailPanelBoundaryFalloffEnabled = "detailPanelBoundaryFalloffEnabled"
         static let sessionsExpandedOnAppOpen = "sessionsExpandedOnAppOpen"
-        static let apiProviderKeyStorageMode = "apiProviderKeyStorageMode"
         static let systemMonitorEnabled = "systemMonitorEnabled"
         static let systemMonitorRefreshRate = "systemMonitorRefreshRate"
         static let systemMonitorVisibleModules = "systemMonitorVisibleModules"

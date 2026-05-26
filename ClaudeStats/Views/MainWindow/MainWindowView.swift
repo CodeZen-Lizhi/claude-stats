@@ -4,13 +4,12 @@ import SwiftUI
 /// Top-level page shown in the main window's detail column. Settings live in
 /// their own main-window mode, not as a `MainPage`.
 enum MainPage: String, CaseIterable, Identifiable, Sendable {
-    case dashboard, configurations, usage, activity, git, system
+    case dashboard, usage, activity, git, system
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .dashboard: L10n.string("main_page.dashboard", defaultValue: "Dashboard")
-        case .configurations: L10n.string("main_page.switcher", defaultValue: "Switcher")
         case .usage: L10n.string("main_page.usage", defaultValue: "Usage")
         case .activity: L10n.string("main_page.activity", defaultValue: "Activity")
         case .git: L10n.string("main_page.git", defaultValue: "Git")
@@ -21,7 +20,6 @@ enum MainPage: String, CaseIterable, Identifiable, Sendable {
     var symbol: String {
         switch self {
         case .dashboard: "square.grid.2x2"
-        case .configurations: "slider.horizontal.3"
         case .usage: "chart.bar.xaxis"
         case .activity: "waveform"
         case .git: "arrow.triangle.branch"
@@ -60,7 +58,7 @@ struct MainWindowView: View {
     @State private var trafficLights = TrafficLightPositioner()
 
     private var availablePages: [MainPage] {
-        var pages: [MainPage] = [.dashboard, .configurations, .usage]
+        var pages: [MainPage] = [.dashboard, .usage]
         if env.preferences.aiActivityAnalysisEnabled { pages.append(.activity) }
         if env.preferences.gitTrackingEnabled { pages.append(.git) }
         if env.preferences.systemMonitorEnabled { pages.append(.system) }
@@ -282,8 +280,6 @@ struct MainWindowView: View {
         switch page {
         case .dashboard:
             DashboardView()
-        case .configurations:
-            ConfigurationsView()
         case .usage:
             MainUsageView()
         case .activity:

@@ -77,13 +77,6 @@ struct GeneralSettingsView: View {
 
             SettingGroup(title: "Behavior") {
                 VStack(spacing: 0) {
-                    SettingRow(title: "Remember selected platform",
-                               description: "When off, the app starts on the first enabled platform each launch instead of the one you last viewed.") {
-                        Toggle("", isOn: $prefs.rememberSelectedProvider)
-                            .labelsHidden()
-                            .toggleStyle(.switch)
-                    }
-                    SettingRowDivider()
                     SettingRow(title: "Detail edge fade",
                                description: "Blend the main detail pane into the sidebar with a soft boundary fade.") {
                         Toggle("", isOn: $prefs.detailPanelBoundaryFalloffEnabled)
@@ -107,17 +100,6 @@ struct GeneralSettingsView: View {
                         }
                         .labelsHidden()
                         .frame(maxWidth: 170)
-                    }
-                    SettingRowDivider()
-                    SettingRow(title: "API key storage",
-                               description: "Where API Provider Switcher saves provider keys. JSON keeps them with provider data; Keychain stores references in the library.") {
-                        Picker("", selection: $prefs.apiProviderKeyStorageMode) {
-                            ForEach(APIProviderKeyStorageMode.allCases) { mode in
-                                Text(mode.displayName).tag(mode)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(maxWidth: 150)
                     }
                 }
                 .settingCard()

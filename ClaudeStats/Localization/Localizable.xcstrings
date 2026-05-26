@@ -622,50 +622,6 @@
         }
       }
     },
-    "API key storage" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "API key storage"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "API 密钥存储"
-          }
-        }
-      }
-    },
-    "API Provider Switcher" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "API 服务商切换器"
-          }
-        }
-      }
-    },
-    "api_key_storage.keychain" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Keychain"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "钥匙串"
-          }
-        }
-      }
-    },
     "App language" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2787,23 +2743,6 @@
         }
       }
     },
-    "main_page.switcher" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Switcher"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "切换器"
-          }
-        }
-      }
-    },
     "main_page.system" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3719,23 +3658,6 @@
         }
       }
     },
-    "Pick which platforms to track. Enable more than one and a platform switcher appears at the top of the panel." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pick which platforms to track. Enable more than one and a platform switcher appears at the top of the panel."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择要跟踪的平台。启用多个时，面板顶部会出现一个平台切换器。"
-          }
-        }
-      }
-    },
     "PID" : {
 
     },
@@ -4071,23 +3993,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "发布历史"
-          }
-        }
-      }
-    },
-    "Remember selected platform" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Remember selected platform"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "记住所选平台"
           }
         }
       }
@@ -6057,15 +5962,8 @@
         }
       }
     },
-    "The platform switcher (or scanline strip) above the title." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "标题上方的平台切换器（或扫描线条）。"
-          }
-        }
-      }
+    "The scanline strip above the title." : {
+
     },
     "The terminal still has a running process. Closing it will kill the process." : {
       "localizations" : {
@@ -8178,16 +8076,6 @@
         }
       }
     },
-    "Enable Provider" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "启用服务商"
-          }
-        }
-      }
-    },
     "Enabled" : {
       "localizations" : {
         "zh-Hans" : {
@@ -8454,16 +8342,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "新建话题"
-          }
-        }
-      }
-    },
-    "New provider" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "新建服务商"
           }
         }
       }
@@ -8948,16 +8826,6 @@
         }
       }
     },
-    "Save Provider" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "保存服务商"
-          }
-        }
-      }
-    },
     "Save to Disk" : {
       "localizations" : {
         "zh-Hans" : {
@@ -9294,16 +9162,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "卸载"
-          }
-        }
-      }
-    },
-    "Universal Provider" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "通用服务商"
           }
         }
       }
@@ -10094,26 +9952,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在“功能”中开启它们，以编辑你的公开资料并同步汇总分数。"
-          }
-        }
-      }
-    },
-    "When off, the app starts on the first enabled platform each launch instead of the one you last viewed." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "关闭时，应用每次启动都会切到第一个已启用的平台，而不是你上次查看的那个。"
-          }
-        }
-      }
-    },
-    "Where API Provider Switcher saves provider keys. JSON keeps them with provider data; Keychain stores references in the library." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "API 服务商切换器保存服务商密钥的位置。JSON 与服务商数据一起存放；钥匙串则在库中存储引用。"
           }
         }
       }

@@ -125,7 +125,7 @@ struct ShareExportView: View {
                     Toggle(isOn: $showTopBar) {
                         Text("Show top bar").font(.sora(11))
                     }
-                    Text("The platform switcher (or scanline strip) above the title.")
+                    Text("The scanline strip above the title.")
                         .font(.sora(9))
                         .foregroundStyle(.secondary)
                 }
