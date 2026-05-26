@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 6
+- **Total Sessions**: 7
 - **Last Active**: 2026-05-26
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~215 | Active |
+| `journal-1.md` | ~249 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 7 | 2026-05-26 | 删除 API 服务商切换器 | `88feb72` | `codex/release-ci-fix` |
 | 6 | 2026-05-26 | 删除 Skills 功能 | `64eb79d` | `codex/release-ci-fix` |
 | 5 | 2026-05-26 | 修复 OPS 环境工具检测 | `66764e9` | `codex/release-ci-fix` |
 | 4 | 2026-05-26 | 云端重打 v1.7.6 安装包 | `1730d90`, `fa92cb8`, `03c4384` | `codex/release-ci-fix` |

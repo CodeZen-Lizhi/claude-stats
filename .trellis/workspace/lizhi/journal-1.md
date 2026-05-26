@@ -213,3 +213,37 @@ Diagnosed packaged Claude Stats exiting while idle, added a resident menu-bar li
 ### Next Steps
 
 - None - task complete
+
+
+## Session 7: 删除 API 服务商切换器
+
+**Date**: 2026-05-26
+**Task**: 删除 API 服务商切换器
+**Package**: ThirdParty/Atoll
+**Branch**: `codex/release-ci-fix`
+
+### Summary
+
+移除 API 服务商切换器 UI、模型、服务、测试和产品 PRD 残留，保留直接读取配置文件的 Configs 工作区。验证中 generate 通过，run-tests/run-debug 均因当前 xcode-select 指向 CommandLineTools 而无法进入 xcodebuild。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `88feb72` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
