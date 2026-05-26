@@ -122,27 +122,27 @@ struct ActivityAnalyzerTests {
     }
 }
 
-@Suite("TranscriptParser.coalesceBursts")
+@Suite("CodexTranscriptParser.coalesceBursts")
 struct CoalesceBurstsTests {
     private let base = Date(timeIntervalSince1970: 1_700_000_000)
     private func at(_ minutes: Double) -> Date { base.addingTimeInterval(minutes * 60) }
 
     @Test("messages within the gap collapse into one interval")
     func collapsesNearby() {
-        let bursts = TranscriptParser.coalesceBursts([at(0), at(2), at(4), at(20)])
+        let bursts = CodexTranscriptParser.coalesceBursts([at(0), at(2), at(4), at(20)])
         #expect(bursts.count == 2)
         #expect(bursts[0] == DateInterval(start: at(0), end: at(4)))
     }
 
     @Test("a lone message widens to the minimum burst length")
     func loneMessageWidened() {
-        let bursts = TranscriptParser.coalesceBursts([at(0)])
+        let bursts = CodexTranscriptParser.coalesceBursts([at(0)])
         #expect(bursts.count == 1)
         #expect(bursts[0].duration == 30)
     }
 
     @Test("empty input yields no intervals")
     func empty() {
-        #expect(TranscriptParser.coalesceBursts([]).isEmpty)
+        #expect(CodexTranscriptParser.coalesceBursts([]).isEmpty)
     }
 }

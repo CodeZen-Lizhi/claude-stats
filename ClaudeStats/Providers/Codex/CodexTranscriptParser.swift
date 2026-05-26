@@ -98,7 +98,7 @@ struct CodexTranscriptParser: Sendable {
             lastActivity: lastActivity,
             models: models,
             timeline: timeline,
-            activityIntervals: TranscriptParser.coalesceBursts(messageTimestamps)
+            activityIntervals: Self.coalesceBursts(messageTimestamps)
         )
     }
 
@@ -141,6 +141,36 @@ struct CodexTranscriptParser: Sendable {
         guard let date else { return }
         if first == nil || date < first! { first = date }
         if last == nil || date > last! { last = date }
+    }
+
+    /// Adjacent message timestamps within ``burstGap`` collapse into one
+    /// interval; short runs are widened so they stay visible on timelines.
+    private static let burstGap: TimeInterval = 5 * 60
+    private static let minBurst: TimeInterval = 30
+
+    static func coalesceBursts(_ timestamps: [Date]) -> [DateInterval] {
+        let sorted = timestamps.sorted()
+        guard let first = sorted.first else { return [] }
+        var out: [DateInterval] = []
+        var start = first
+        var end = first
+        for t in sorted.dropFirst() {
+            if t.timeIntervalSince(end) <= burstGap {
+                end = max(end, t)
+            } else {
+                out.append(burstInterval(start, end))
+                start = t
+                end = t
+            }
+        }
+        out.append(burstInterval(start, end))
+        return out
+    }
+
+    private static func burstInterval(_ start: Date, _ end: Date) -> DateInterval {
+        end.timeIntervalSince(start) >= minBurst
+            ? DateInterval(start: start, end: end)
+            : DateInterval(start: start, duration: minBurst)
     }
 }
 
