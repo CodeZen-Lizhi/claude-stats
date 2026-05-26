@@ -85,7 +85,7 @@ class UpdateAppcastTests(unittest.TestCase):
             notes = root / "notes.html"
             deltas = root / "deltas.json"
             out = root / "appcast.xml"
-            notes.write_text("<p>delta release</p>", encoding="utf-8")
+            notes.write_text("<h2>本次更新</h2>\n<p>delta release</p>", encoding="utf-8")
             deltas.write_text(
                 json.dumps(
                     [
@@ -140,6 +140,8 @@ class UpdateAppcastTests(unittest.TestCase):
                 xml,
             )
             self.assertIn("本次更新", xml)
+            self.assertEqual(xml.count("本次更新"), 1)
+            self.assertNotIn("cs-update-summary", xml)
             self.assertIn("cs-update-size-pill", xml)
             self.assertIn('data-sparkle-version="78"', xml)
             self.assertIn('data-sparkle-version="79"', xml)
@@ -152,7 +154,10 @@ class UpdateAppcastTests(unittest.TestCase):
             self.assertNotIn("增量更新包", xml)
             self.assertNotIn("完整安装包", xml)
             self.assertIn("更新内容", xml)
-            self.assertLess(xml.index("本次更新"), xml.index("<p>delta release</p>"))
+            heading_start = xml.index("<h2>本次更新")
+            heading_end = xml.index("</h2>", heading_start)
+            self.assertLess(xml.index("cs-update-size-pill", heading_start), heading_end)
+            self.assertLess(heading_end, xml.index("<p>delta release</p>"))
 
     def test_formats_download_sizes_in_release_notes(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -160,7 +165,7 @@ class UpdateAppcastTests(unittest.TestCase):
             notes = root / "notes.html"
             deltas = root / "deltas.json"
             out = root / "appcast.xml"
-            notes.write_text("<p>larger release</p>", encoding="utf-8")
+            notes.write_text("<h2>本次更新</h2>\n<p>larger release</p>", encoding="utf-8")
             deltas.write_text(
                 json.dumps(
                     [
@@ -203,14 +208,18 @@ class UpdateAppcastTests(unittest.TestCase):
             self.assertIn('data-sparkle-version="84"', xml)
             self.assertIn("2.2 MB", xml)
             self.assertIn("101 MB", xml)
-            self.assertLess(xml.index("本次更新"), xml.index("<p>larger release</p>"))
+            self.assertEqual(xml.count("本次更新"), 1)
+            heading_start = xml.index("<h2>本次更新")
+            heading_end = xml.index("</h2>", heading_start)
+            self.assertLess(xml.index("cs-update-size-pill", heading_start), heading_end)
+            self.assertLess(heading_end, xml.index("<p>larger release</p>"))
 
     def test_omits_delta_container_without_delta_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             notes = root / "notes.html"
             out = root / "appcast.xml"
-            notes.write_text("<p>full only</p>", encoding="utf-8")
+            notes.write_text("<h2>本次更新</h2>\n<p>full only</p>", encoding="utf-8")
 
             result = subprocess.run(
                 [
@@ -237,6 +246,7 @@ class UpdateAppcastTests(unittest.TestCase):
             xml = out.read_text(encoding="utf-8")
             self.assertNotIn("<sparkle:deltas>", xml)
             self.assertIn("本次更新", xml)
+            self.assertEqual(xml.count("本次更新"), 1)
             self.assertIn("123 bytes", xml)
             self.assertNotIn('class="cs-update-size-pill cs-update-size-delta"', xml)
 

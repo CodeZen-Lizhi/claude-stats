@@ -65,6 +65,7 @@ DELTA_ENCLOSURE_TEMPLATE = """        <enclosure url="{url}" sparkle:deltaFrom="
 """
 
 LENGTH_ATTRIBUTE_RE = re.compile(r'(?:^|\s)length="(?P<length>\d+)"')
+UPDATE_HEADING_RE = re.compile(r"(<h([1-6])[^>]*>\s*本次更新\s*)(</h\2>)", re.IGNORECASE)
 
 
 def enclosure_length(enclosure_attrs: str) -> int | None:
@@ -98,7 +99,7 @@ def render_size_pill(size: str, class_name: str, version: str | None = None) -> 
     return f"<span {attrs}>{html.escape(size)}</span>"
 
 
-def render_update_summary(enclosure_attrs: str, deltas: list[dict[str, str]]) -> str:
+def render_update_size_pills(enclosure_attrs: str, deltas: list[dict[str, str]]) -> str:
     full_length = enclosure_length(enclosure_attrs)
     if full_length is None:
         raise ValueError("full enclosureAttrs must include length")
@@ -114,12 +115,24 @@ def render_update_summary(enclosure_attrs: str, deltas: list[dict[str, str]]) ->
     full_size = format_byte_count(full_length)
     pills.append(render_size_pill(full_size, "cs-update-size-full"))
 
+    return f'<span class="cs-update-size-pills">{"".join(pills)}</span>'
+
+
+def inject_update_size_pills(notes_html: str, enclosure_attrs: str, deltas: list[dict[str, str]]) -> str:
+    pills = render_update_size_pills(enclosure_attrs, deltas)
+
+    def add_pills(match: re.Match[str]) -> str:
+        return f"{match.group(1)}{pills}{match.group(3)}"
+
+    updated_notes, count = UPDATE_HEADING_RE.subn(add_pills, notes_html, count=1)
+    if count:
+        return updated_notes
     return "\n".join(
         [
-            '<div class="cs-update-summary">',
-            '  <span class="cs-update-summary-title">本次更新</span>',
-            f'  <span class="cs-update-size-pills">{"".join(pills)}</span>',
+            '<div class="cs-update-size-fallback">',
+            pills,
             "</div>",
+            notes_html,
         ]
     )
 
@@ -147,7 +160,7 @@ def render_appcast_notes_html(
     enclosure_attrs: str,
     deltas: list[dict[str, str]],
 ) -> str:
-    update_summary = render_update_summary(enclosure_attrs, deltas)
+    notes_html = inject_update_size_pills(notes_html, enclosure_attrs, deltas)
     release_notes = render_release_notes_section(notes_html)
     return "\n".join(
         [
@@ -157,16 +170,11 @@ def render_appcast_notes_html(
             ),
             "  <style>",
             (
-                "    .cs-update-summary { display: flex; align-items: center; "
-                "justify-content: flex-start; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }"
-            ),
-            (
-                "    .cs-update-summary-title { color: #172033; font-size: 15px; "
-                "font-weight: 700; line-height: 1.3; }"
+                "    .cs-update-size-fallback { margin: 0 0 14px; }"
             ),
             (
                 "    .cs-update-size-pills { display: inline-flex; align-items: center; "
-                "min-width: 0; }"
+                "margin-left: 10px; min-width: 0; vertical-align: middle; }"
             ),
             (
                 "    .cs-update-size-pill { display: inline-block; padding: 4px 10px; "
@@ -177,7 +185,6 @@ def render_appcast_notes_html(
             "    .cs-update-size-delta.sparkle-installed-version { display: inline-block; }",
             "    .cs-update-size-delta.sparkle-installed-version ~ .cs-update-size-full { display: none; }",
             "  </style>",
-            update_summary,
             release_notes,
             "</div>",
         ]

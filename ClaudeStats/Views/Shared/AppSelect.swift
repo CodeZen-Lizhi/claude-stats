@@ -230,11 +230,14 @@ struct AppSelect<Value: Hashable>: View {
 
     private func togglePanel() {
         guard !isEffectivelyDisabled else { return }
+        guard let anchorView = anchorBox.view else { return }
+        if AppSelectPanelPresenter.shared.consumeRecentClose(for: anchorView) {
+            return
+        }
         if isPresented {
             AppSelectPanelPresenter.shared.close()
             return
         }
-        guard let anchorView = anchorBox.view else { return }
 
         isPresented = true
         let panelWidth = max(width ?? anchorView.bounds.width, size.minimumWidth)
@@ -289,6 +292,8 @@ private struct AppSelectPanelContent<Value: Hashable>: View {
     }
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+
         Group {
             if isLoading {
                 loadingBody
@@ -299,12 +304,18 @@ private struct AppSelectPanelContent<Value: Hashable>: View {
                     optionsBody
                 }
                 .frame(height: maxHeight)
+                .background(AppSelectScrollBackgroundClearer())
             } else {
                 optionsBody
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(panelBackground)
+        .background(AppSurface.panelFill)
+        .clipShape(shape)
+        .overlay {
+            shape.strokeBorder(Color.stxStroke, lineWidth: 1)
+        }
+        .shadow(color: Color.black.opacity(0.28), radius: 22, x: 0, y: 12)
         .background(AppSelectKeyCapture { event in
             handleKeyDown(event)
         })
@@ -337,16 +348,6 @@ private struct AppSelectPanelContent<Value: Hashable>: View {
             .font(size.titleFont)
             .foregroundStyle(Color.stxMuted)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var panelBackground: some View {
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .fill(AppSurface.panelFill)
-            .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(Color.stxStroke, lineWidth: 1)
-            }
-            .shadow(color: Color.black.opacity(0.28), radius: 22, x: 0, y: 12)
     }
 
     private var estimatedContentHeight: CGFloat {
@@ -519,12 +520,64 @@ private struct AppSelectKeyCapture: NSViewRepresentable {
     }
 }
 
+private struct AppSelectScrollBackgroundClearer: NSViewRepresentable {
+    func makeNSView(context: Context) -> ClearerView {
+        ClearerView()
+    }
+
+    func updateNSView(_ nsView: ClearerView, context: Context) {
+        nsView.clearScrollBackground()
+    }
+
+    final class ClearerView: NSView {
+        override func viewDidMoveToSuperview() {
+            super.viewDidMoveToSuperview()
+            clearScrollBackground()
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            clearScrollBackground()
+        }
+
+        override func layout() {
+            super.layout()
+            clearScrollBackground()
+        }
+
+        func clearScrollBackground() {
+            guard let scrollView = enclosingNativeScrollView else { return }
+            scrollView.drawsBackground = false
+            scrollView.backgroundColor = .clear
+            scrollView.contentView.drawsBackground = false
+        }
+
+        private var enclosingNativeScrollView: NSScrollView? {
+            if let scrollView = enclosingScrollView {
+                return scrollView
+            }
+
+            var candidate = superview
+            while let view = candidate {
+                if let scrollView = view as? NSScrollView {
+                    return scrollView
+                }
+                candidate = view.superview
+            }
+            return nil
+        }
+    }
+}
+
 @MainActor
 private final class AppSelectPanelPresenter {
     static let shared = AppSelectPanelPresenter()
 
     private var panel: AppSelectPanel?
     private var onDismiss: (() -> Void)?
+    private weak var presentedAnchorView: NSView?
+    private weak var recentlyClosedAnchorView: NSView?
+    private var recentlyClosedAt: Date?
     private var isClosing = false
 
     func present(from anchorView: NSView, size: CGSize, onDismiss: @escaping () -> Void, content: AnyView) {
@@ -533,6 +586,7 @@ private final class AppSelectPanelPresenter {
         guard let window = anchorView.window else { return }
 
         self.onDismiss = onDismiss
+        presentedAnchorView = anchorView
         let panel = AppSelectPanel(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -548,7 +602,7 @@ private final class AppSelectPanelPresenter {
         panel.isFloatingPanel = true
         panel.collectionBehavior = [.transient, .ignoresCycle]
         panel.level = .popUpMenu
-        panel.contentView = NSHostingView(rootView: content)
+        panel.contentView = AppSelectHostingView(rootView: content)
         panel.setFrame(frame(for: anchorView, in: window, size: size), display: true)
 
         self.panel = panel
@@ -561,10 +615,25 @@ private final class AppSelectPanelPresenter {
         isClosing = true
         panel.orderOut(nil)
         self.panel = nil
+        recentlyClosedAnchorView = presentedAnchorView
+        recentlyClosedAt = Date()
+        presentedAnchorView = nil
         let dismiss = onDismiss
         onDismiss = nil
         isClosing = false
         dismiss?()
+    }
+
+    func consumeRecentClose(for anchorView: NSView) -> Bool {
+        guard recentlyClosedAnchorView === anchorView,
+              let recentlyClosedAt,
+              Date().timeIntervalSince(recentlyClosedAt) < 0.35
+        else {
+            return false
+        }
+        recentlyClosedAnchorView = nil
+        self.recentlyClosedAt = nil
+        return true
     }
 
     fileprivate func panelDidResignKey() {
@@ -590,6 +659,28 @@ private final class AppSelectPanelPresenter {
         }
 
         return NSRect(origin: origin, size: size)
+    }
+}
+
+private final class AppSelectHostingView: NSHostingView<AnyView> {
+    required init(rootView: AnyView) {
+        super.init(rootView: rootView)
+        configure()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        configure()
+    }
+
+    private func configure() {
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.clear.cgColor
     }
 }
 
