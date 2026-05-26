@@ -109,3 +109,37 @@ Diagnosed packaged Claude Stats exiting while idle, added a resident menu-bar li
 ### Next Steps
 
 - None - task complete
+
+
+## Session 4: 精简 Ops 与移除网络调试
+
+**Date**: 2026-05-26
+**Task**: 精简 Ops 与移除网络调试
+**Package**: ThirdParty/Atoll
+**Branch**: `codex/dev`
+
+### Summary
+
+保留 Ops 的 Brew 和 Environment 功能，移除 Network/Rockxy 以及旧 Ops 工具入口；完成 Trellis check，Xcode 阶段因本机仅安装 CommandLineTools 无法运行。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `dc2bdd8` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
