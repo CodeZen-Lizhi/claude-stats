@@ -260,6 +260,7 @@ private struct GitCommitInspector: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(AppSurface.panelFill)
         .sheet(item: $diffRequest) { request in
             GitFileDiffViewer(request: request)
@@ -312,19 +313,25 @@ private struct GitCommitInspector: View {
     @ViewBuilder
     private var commitBody: some View {
         if let commit = vm.selectedCommit {
-            AppScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    commitSummary(commit)
-                    if let detail = vm.commitDetail {
-                        commitMessage(detail)
-                        changedFiles(detail)
-                    } else if vm.isDetailLoading {
-                        GitWorkspaceInlineEmptyState("Loading commit detail.")
-                    } else {
-                        GitWorkspaceInlineEmptyState("Couldn't load this commit.")
+            GeometryReader { proxy in
+                let viewportWidth = max(0, proxy.size.width)
+
+                AppScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        commitSummary(commit)
+                        if let detail = vm.commitDetail {
+                            commitMessage(detail)
+                            changedFiles(detail)
+                        } else if vm.isDetailLoading {
+                            GitWorkspaceInlineEmptyState("Loading commit detail.")
+                        } else {
+                            GitWorkspaceInlineEmptyState("Couldn't load this commit.")
+                        }
                     }
+                    .padding(14)
+                    .frame(width: viewportWidth, alignment: .topLeading)
                 }
-                .padding(14)
+                .frame(width: viewportWidth, height: proxy.size.height, alignment: .topLeading)
             }
         } else {
             GitWorkspaceInlineEmptyState("Select a commit.")
@@ -422,7 +429,7 @@ private struct GitCommitInspector: View {
                     .padding(12)
             } else {
                 ForEach(detail.files) { file in
-                    Button {
+                    GitChangedFileRow(file: file) {
                         diffRequest = GitFileDiffRequest(
                             repo: repo,
                             hash: detail.hash,
@@ -430,40 +437,12 @@ private struct GitCommitInspector: View {
                             abbreviatedHash: detail.abbreviatedHash,
                             path: file.path
                         )
-                    } label: {
-                        HStack(spacing: 8) {
-                            if file.isBinary {
-                                Text("bin")
-                                    .font(.sora(9).monospacedDigit())
-                                    .foregroundStyle(Color.stxMuted)
-                            } else {
-                                Text("+\(file.insertions)")
-                                    .font(.sora(9).monospacedDigit())
-                                    .foregroundStyle(GitPalette.add)
-                                Text("-\(file.deletions)")
-                                    .font(.sora(9).monospacedDigit())
-                                    .foregroundStyle(GitPalette.del)
-                            }
-                            Text(file.path)
-                                .font(.sora(10))
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                            Spacer(minLength: 6)
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 8, weight: .bold))
-                                .foregroundStyle(Color.stxMuted)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
-                    .help("Open diff for \(file.path)")
                     if file.id != detail.files.last?.id { StxRule() }
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .gitWorkspaceCard()
     }
 
@@ -654,6 +633,90 @@ private enum GitInspectorMode: String, CaseIterable, Identifiable {
 
     static func modes(hasWorkingTree: Bool) -> [GitInspectorMode] {
         hasWorkingTree ? [.commit, .workingTree, .repo] : [.commit, .repo]
+    }
+}
+
+private struct GitChangedFileRow: View {
+    let file: CommitFileChange
+    let onOpen: () -> Void
+
+    @State private var hovering = false
+
+    private var textOpacity: Double { hovering ? 0.72 : 1 }
+
+    var body: some View {
+        Button(action: onOpen) {
+            HStack(spacing: 8) {
+                changeSummary
+                Text(file.path)
+                    .font(.sora(10))
+                    .foregroundStyle(Color.primary.opacity(textOpacity))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                disclosureIcon
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(rowBackground)
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .onDisappear { hovering = false }
+        .help("Open diff for \(file.path)")
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text("Open diff for \(file.path)"))
+        .animation(.easeOut(duration: 0.15), value: hovering)
+    }
+
+    private var rowBackground: some View {
+        Rectangle()
+            .fill(Color.primary.opacity(hovering ? 0.045 : 0.0001))
+    }
+
+    @ViewBuilder
+    private var changeSummary: some View {
+        if file.isBinary {
+            Text("bin")
+                .font(.sora(9).monospacedDigit())
+                .foregroundStyle(Color.stxMuted.opacity(textOpacity))
+        } else {
+            Text("+\(file.insertions)")
+                .font(.sora(9).monospacedDigit())
+                .foregroundStyle(GitPalette.add.opacity(textOpacity))
+            Text("-\(file.deletions)")
+                .font(.sora(9).monospacedDigit())
+                .foregroundStyle(GitPalette.del.opacity(textOpacity))
+        }
+    }
+
+    private var disclosureIcon: some View {
+        Image(systemName: "chevron.right")
+            .font(.system(size: 8, weight: .bold))
+            .foregroundStyle(Color.stxMuted)
+            .frame(width: 22, height: 22)
+            .background { disclosureBackground }
+    }
+
+    @ViewBuilder
+    private var disclosureBackground: some View {
+        if hovering {
+            let shape = RoundedRectangle(cornerRadius: 4, style: .continuous)
+            shape
+                .fill(Color.primary.opacity(0.055))
+                .overlay {
+                    DiagonalStripes(spacing: 4)
+                        .stroke(Color.primary.opacity(0.12), lineWidth: 0.8)
+                        .clipShape(shape)
+                }
+                .overlay {
+                    shape.strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                }
+        }
     }
 }
 

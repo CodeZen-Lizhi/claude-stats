@@ -35,15 +35,16 @@ git tag v1.2.0 && git push origin v1.2.0
 
 `.github/workflows/release.yml` (runs on `macos-26` with Xcode 26.4.1) then: writes `1.2.0` into `project.yml`
 (build number = the workflow run number), builds a Release `Claude Stats.app`, packages it,
-publishes GitHub Releases **in this source repo and on the public companion repo
-`1pitaph/claude-stats-releases`** with the artifact(s) attached, and commits the
+publishes a GitHub Release **in this source repo** with the artifact(s) attached,
+publishes the Sparkle appcast to this repo's `gh-pages` branch, and commits the
 bumped `project.yml` back to `master` here.
 
-The source lives in a **private** repo; binaries and the Sparkle appcast live in the **public**
-`claude-stats-releases` repo so anyone can download a release / receive an update. The release
-workflow uses a fine-grained PAT (`RELEASES_REPO_TOKEN`, repo secret, Contents: Read and write
-on `claude-stats-releases`) to push across repos; the source repo Release uses the
-built-in `GITHUB_TOKEN`.
+The source repo is public and is the canonical download/update host. During the
+migration away from the old public `claude-stats-releases` companion repo, the
+workflow can still mirror only `appcast.xml` to that repo's `gh-pages` branch via
+the optional fine-grained PAT `RELEASES_REPO_TOKEN` (Contents: Read and write) so
+older builds can discover the migration release; release binaries are no longer
+uploaded there.
 
 Packaging has two modes, picked automatically:
 
@@ -68,32 +69,32 @@ while Sparkle's windows are up and back to `.accessory` when the session ends.
 Settings ▸ About has a "Check for Updates…" button; scheduled background checks
 are on by default (`SUEnableAutomaticChecks` in `Info.plist`).
 
-The update feed is `appcast.xml` on the `gh-pages` branch of the public releases
-repo, served at `https://1pitaph.github.io/claude-stats-releases/appcast.xml`
+The update feed is `appcast.xml` on this repo's `gh-pages` branch, served at
+`https://1pitaph.github.io/claude-stats/appcast.xml`
 (`SUFeedURL` in `Info.plist`). On each tagged release the workflow EdDSA-signs the
 archive (`scripts/publish-appcast.sh` → `scripts/update-appcast.py`) and pushes an
-updated `appcast.xml` to that branch via `RELEASES_REPO_TOKEN`. This works the same
-whether the release is the un-notarized zip/DMG or the signed+notarized DMG —
-Sparkle just downloads whichever asset the appcast points at (it prefers the `.zip`
-when present). Release notes are generated from the source repo's commit log
+updated `appcast.xml` to that branch. During the transition, the same appcast can
+also be mirrored to `https://1pitaph.github.io/claude-stats-releases/appcast.xml`
+for older builds whose `SUFeedURL` still points there. This works the same whether
+the release is the un-notarized zip/DMG or the signed+notarized DMG — Sparkle just
+downloads whichever asset the appcast points at (it prefers the `.zip` when
+present). Release notes are generated from the source repo's commit log
 between this tag and the previous semver tag, written as both markdown (used as
 the GitHub Release body) and minimal HTML (embedded directly in the appcast's
 `<description>` CDATA so Sparkle renders them inline without a webview fetch).
 
 **One-time setup:**
 
-1. Create the public releases repo `1pitaph/claude-stats-releases` (any commit on
-   the default branch; `softprops/action-gh-release` needs one to anchor the tag).
-2. Create a fine-grained PAT scoped to `claude-stats-releases` with
-   **Contents: Read and write**. Add it to this (private) repo's Actions secrets
-   as `RELEASES_REPO_TOKEN`.
+1. Enable GitHub Pages on this repo: Settings → Pages → Source = `gh-pages`
+   branch / `/ (root)`.
+2. Optional migration mirror: keep `1pitaph/claude-stats-releases` Pages enabled,
+   create a fine-grained PAT scoped to that repo with **Contents: Read and write**,
+   and add it as `RELEASES_REPO_TOKEN` until old builds have moved to the new feed.
 3. Sparkle keys: `./bin/generate_keys` to generate (private key into login
    keychain, public key printed), then `./bin/generate_keys -x sparkle_private_key`
    to export the private key for CI. Put the public key in `Info.plist` as
    `SUPublicEDKey`; add the exported file's contents as repo secret
    `SPARKLE_PRIVATE_ED_KEY` (then `rm` the file — keychain keeps a copy).
-4. After the first release runs, enable GitHub Pages on the public repo:
-   Settings → Pages → Source = `gh-pages` branch / `/ (root)`.
 
 ## Regenerate the Xcode project
 

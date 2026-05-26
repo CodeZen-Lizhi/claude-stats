@@ -17,7 +17,7 @@ struct GeneralSettingsView: View {
                                description: "Open Claude Stats automatically when you log in to your Mac.") {
                         Toggle("", isOn: $launchAtLogin)
                             .labelsHidden()
-                            .toggleStyle(.switch)
+                            .toggleStyle(.appSwitch)
                     }
                     .onChange(of: launchAtLogin) { _, newValue in LaunchAtLogin.setEnabled(newValue) }
                     SettingRowDivider()
@@ -25,7 +25,7 @@ struct GeneralSettingsView: View {
                                description: "Show the main window when Claude Stats starts, including when you double-click the app.") {
                         Toggle("", isOn: $prefs.openMainWindowOnLaunch)
                             .labelsHidden()
-                            .toggleStyle(.switch)
+                            .toggleStyle(.appSwitch)
                     }
                 }
                 .settingCard()
@@ -35,13 +35,14 @@ struct GeneralSettingsView: View {
                 VStack(spacing: 0) {
                     SettingRow(title: "App language",
                                description: "Choose the language Claude Stats uses after the next restart.") {
-                        Picker("", selection: $prefs.appLanguagePreference) {
-                            ForEach(AppLanguagePreference.allCases) { language in
-                                Text(language.displayName()).tag(language)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(maxWidth: 170)
+                        AppSelect(
+                            .localized("App language"),
+                            selection: $prefs.appLanguagePreference,
+                            options: AppLanguagePreference.allCases.map { language in
+                                AppSelectOption(value: language, title: .verbatim(language.displayName()))
+                            },
+                            width: 170
+                        )
                     }
                     .onChange(of: prefs.appLanguagePreference) { _, _ in
                         languageRestartNoticeVisible = true
@@ -62,13 +63,14 @@ struct GeneralSettingsView: View {
                 VStack(spacing: 0) {
                     SettingRow(title: "Refresh every",
                                description: "How often Claude Stats re-scans your session logs in the background.") {
-                        Picker("", selection: $prefs.autoRefreshMinutes) {
-                            ForEach(Self.refreshOptions, id: \.self) { minutes in
-                                Text(L10n.refreshInterval(minutes: minutes)).tag(minutes)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(maxWidth: 160)
+                        AppSelect(
+                            .localized("Refresh every"),
+                            selection: $prefs.autoRefreshMinutes,
+                            options: Self.refreshOptions.map { minutes in
+                                AppSelectOption(value: minutes, title: .verbatim(L10n.refreshInterval(minutes: minutes)))
+                            },
+                            width: 160
+                        )
                     }
                     .onChange(of: prefs.autoRefreshMinutes) { _, _ in env.applyAutoRefreshSetting() }
                 }
@@ -77,29 +79,37 @@ struct GeneralSettingsView: View {
 
             SettingGroup(title: "Behavior") {
                 VStack(spacing: 0) {
+                    SettingRow(title: "Remember selected platform",
+                               description: "When off, the app starts on the first enabled platform each launch instead of the one you last viewed.") {
+                        Toggle("", isOn: $prefs.rememberSelectedProvider)
+                            .labelsHidden()
+                            .toggleStyle(.appSwitch)
+                    }
+                    SettingRowDivider()
                     SettingRow(title: "Detail edge fade",
                                description: "Blend the main detail pane into the sidebar with a soft boundary fade.") {
                         Toggle("", isOn: $prefs.detailPanelBoundaryFalloffEnabled)
                             .labelsHidden()
-                            .toggleStyle(.switch)
+                            .toggleStyle(.appSwitch)
                     }
                     SettingRowDivider()
                     SettingRow(title: "Include cache reads in token counts",
                                description: "Some APIs re-report cached context on assistant turns, so the same tokens can be counted many times. Turn off to show only \u{201C}new\u{201D} traffic (input + output + cache writes). Estimated cost is unaffected.") {
                         Toggle("", isOn: $prefs.includeCacheInTokens)
                             .labelsHidden()
-                            .toggleStyle(.switch)
+                            .toggleStyle(.appSwitch)
                     }
                     SettingRowDivider()
                     SettingRow(title: "Cost mode",
                                description: "API estimate uses standard first-party token prices. Detailed billing is kept for compatible imported data and currently matches the standard Codex estimate.") {
-                        Picker("", selection: $prefs.costEstimationMode) {
-                            ForEach(CostEstimationMode.allCases) { mode in
-                                Text(mode.displayName).tag(mode)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(maxWidth: 170)
+                        AppSelect(
+                            .localized("Cost mode"),
+                            selection: $prefs.costEstimationMode,
+                            options: CostEstimationMode.allCases.map { mode in
+                                AppSelectOption(value: mode, title: .localized(mode.displayName))
+                            },
+                            width: 170
+                        )
                     }
                 }
                 .settingCard()

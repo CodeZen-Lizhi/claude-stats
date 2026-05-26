@@ -43,11 +43,14 @@ struct GitHubSettingsView: View {
             VStack(spacing: 0) {
                 SettingRow(title: "Overlap palette",
                            description: "Colour scheme used by the Overlap heatmap on the Dashboard.") {
-                    Picker("", selection: $prefs.overlapPalette) {
-                        ForEach(OverlapPalette.allCases) { Text($0.displayName).tag($0) }
-                    }
-                    .labelsHidden()
-                    .frame(maxWidth: 200)
+                    AppSelect(
+                        .localized("Overlap palette"),
+                        selection: $prefs.overlapPalette,
+                        options: OverlapPalette.allCases.map {
+                            AppSelectOption(value: $0, title: .localized($0.displayName))
+                        },
+                        width: 200
+                    )
                 }
             }
             .settingCard()

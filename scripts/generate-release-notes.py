@@ -13,7 +13,7 @@ from pathlib import Path
 from release_notes_lib import GROUP_ORDER, find_previous_tag, grouped_notes, read_commits
 
 
-RELEASE_REPO_URL = "https://github.com/1pitaph/claude-stats-releases"
+RELEASE_REPO_URL = "https://github.com/1pitaph/claude-stats"
 SPARKLE_PRIMARY_GROUPS = ["新功能", "修复", "性能", "改进"]
 SPARKLE_FALLBACK_GROUPS = ["工程与发布", "其他"]
 

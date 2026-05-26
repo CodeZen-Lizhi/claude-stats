@@ -65,7 +65,7 @@ private struct DetailPanelBoundaryFalloff: View {
 
     private var falloffColor: Color {
         colorScheme == .dark
-            ? Color(red: 0.58, green: 0.58, blue: 0.58)
+            ? Color.black
             : Color(red: 0.42, green: 0.42, blue: 0.42)
     }
 

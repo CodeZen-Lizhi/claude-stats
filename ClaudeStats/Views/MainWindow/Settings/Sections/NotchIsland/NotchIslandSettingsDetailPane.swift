@@ -104,13 +104,15 @@ struct NotchIslandSettingsDetailPane: View {
                                     .foregroundStyle(Color.stxMuted)
                                     .lineLimit(1)
                             } else {
-                                Picker("", selection: screenStyleBinding(descriptor.id, prefs: prefs)) {
-                                    ForEach(NotchIslandScreenStyle.allCases) { style in
-                                        Text(style.displayName).tag(style)
-                                    }
-                                }
-                                .labelsHidden()
-                                .frame(width: 150)
+                                AppSelect(
+                                    .localized("Screen style"),
+                                    selection: screenStyleBinding(descriptor.id, prefs: prefs),
+                                    options: NotchIslandScreenStyle.allCases.map { style in
+                                        AppSelectOption(value: style, title: .localized(style.displayName))
+                                    },
+                                    width: 150,
+                                    size: .small
+                                )
                                 .disabled(!prefs.notchIslandSelectedScreenIDs.contains(descriptor.id))
                             }
 
@@ -128,13 +130,15 @@ struct NotchIslandSettingsDetailPane: View {
                 SettingRowDivider()
 
                 SettingRow(title: "Size", description: "Compact and expanded island dimensions.") {
-                    Picker("", selection: sizePresetBinding(prefs)) {
-                        ForEach(NotchIslandSizePreset.allCases) { preset in
-                            Text(preset.displayName).tag(preset)
-                        }
-                    }
-                    .labelsHidden()
-                    .frame(width: 150)
+                    AppSelect(
+                        .localized("Size"),
+                        selection: sizePresetBinding(prefs),
+                        options: NotchIslandSizePreset.allCases.map { preset in
+                            AppSelectOption(value: preset, title: .localized(preset.displayName))
+                        },
+                        width: 150,
+                        size: .small
+                    )
                 }
 
                 SettingRowDivider()
@@ -293,13 +297,14 @@ private struct AtollSettingControlRow: View {
                     .frame(width: 210)
             }
         case .picker(let options):
-            Picker("", selection: stringBinding) {
-                ForEach(options) { option in
-                    Text(option.title).tag(option.value)
-                }
-            }
-            .labelsHidden()
-            .frame(width: 210)
+            AppSelect(
+                .localized(descriptor.title),
+                selection: stringBinding,
+                options: options.map { option in
+                    AppSelectOption(value: option.value, title: .localized(option.title))
+                },
+                width: 210
+            )
         case .text:
             TextField("", text: stringBinding)
                 .textFieldStyle(.roundedBorder)

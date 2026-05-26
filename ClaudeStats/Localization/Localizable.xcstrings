@@ -6435,6 +6435,23 @@
         }
       }
     },
+    "usage.limit.status.cached" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CACHED"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缓存"
+          }
+        }
+      }
+    },
     "usage.limit.status.setup" : {
       "extractionState" : "stale",
       "localizations" : {

@@ -28,8 +28,8 @@ struct CodexUsageLimitLoaderTests {
         #expect(window.remainingPercent == 75)
     }
 
-    @Test("Expired reset or old snapshot waits for next response")
-    func staleSnapshotsWaitForNextResponse() throws {
+    @Test("Expired reset or old snapshot returns cached usage")
+    func staleSnapshotsReturnCachedUsage() throws {
         let root = try TempDir.make()
         defer { try? FileManager.default.removeItem(at: root) }
         let day = root.appendingPathComponent("sessions/2026/01/10", isDirectory: true)
@@ -38,11 +38,13 @@ struct CodexUsageLimitLoaderTests {
 
         let staleNow = try Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse("2026-01-10T09:45:01.000Z")
         let stale = CodexUsageLimitLoader(paths: CodexPaths(homeDirectory: root)).report(now: staleNow)
-        #expect(stale.status == .waitingForNextResponse)
+        #expect(stale.status == .cached)
+        #expect(stale.snapshot?.windows.first?.usedPercent == 25)
 
         let expiredNow = Date(timeIntervalSince1970: 1_768_100_001)
         let expired = CodexUsageLimitLoader(paths: CodexPaths(homeDirectory: root)).report(now: expiredNow)
-        #expect(expired.status == .waitingForNextResponse)
+        #expect(expired.status == .cached)
+        #expect(expired.snapshot?.windows.first?.usedPercent == 25)
     }
 
     @Test("Parses string fields and clamps remaining percentage")
