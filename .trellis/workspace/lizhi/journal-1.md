@@ -531,3 +531,37 @@ Diagnosed packaged Claude Stats exiting while idle, added a resident menu-bar li
 ### Next Steps
 
 - None - task complete
+
+
+## Session 16: 修复 Git 工具入口默认显示
+
+**Date**: 2026-05-27
+**Task**: 修复 Git 工具入口默认显示
+**Package**: ThirdParty/Atoll
+**Branch**: `codex/dev`
+
+### Summary
+
+恢复 Git Tracking 缺省可见，避免工具区空白；保留用户手动关闭偏好，并补充偏好回归测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e2c6f01` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

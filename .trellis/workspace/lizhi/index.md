@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 15
+- **Total Sessions**: 16
 - **Last Active**: 2026-05-27
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~533 | Active |
+| `journal-1.md` | ~567 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 16 | 2026-05-27 | 修复 Git 工具入口默认显示 | `e2c6f01` | `codex/dev` |
 | 15 | 2026-05-27 | 诊断自动退出与会话统计卡顿 | `635f2c6` | `codex/dev` |
 | 14 | 2026-05-27 | Claude Statistics 借鉴功能实现 | `44279bf` | `codex/dev` |
 | 13 | 2026-05-27 | 第一阶段 UI/Git 优化 | `054e803` | `codex/dev` |
