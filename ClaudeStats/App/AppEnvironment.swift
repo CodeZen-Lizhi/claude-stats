@@ -24,7 +24,6 @@ final class AppEnvironment {
     let openAIStatus: OpenAIStatusViewModel
     let usageLimits: UsageLimitStore
     let systemMonitor: SystemMonitorViewModel
-    let ops: OpsStore
 
     init(
         pricing: ModelPricing,
@@ -32,15 +31,13 @@ final class AppEnvironment {
         providerRegistry: ProviderRegistry,
         store: SessionStore,
         usageLimits: UsageLimitStore? = nil,
-        systemMonitor: SystemMonitorViewModel = SystemMonitorViewModel(),
-        ops: OpsStore = OpsStore()
+        systemMonitor: SystemMonitorViewModel = SystemMonitorViewModel()
     ) {
         self.pricing = pricing
         self.preferences = preferences
         self.providerRegistry = providerRegistry
         self.store = store
         self.systemMonitor = systemMonitor
-        self.ops = ops
         self.dashboard = DashboardViewModel(pricing: pricing)
         self.gitActivity = GitActivityViewModel()
         self.openAIStatus = OpenAIStatusViewModel(preferences: preferences)

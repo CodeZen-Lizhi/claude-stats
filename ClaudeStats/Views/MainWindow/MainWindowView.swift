@@ -45,7 +45,6 @@ struct MainWindowView: View {
     @SceneStorage("mainWindow.sidebarVisible") private var sidebarVisible: Bool = true
     @SceneStorage("mainWindow.mode") private var modeRaw: String = MainWindowMode.app.rawValue
     @SceneStorage("mainWindow.settingsSection") private var settingsSectionRaw: String = SettingsSection.general.rawValue
-    @SceneStorage("mainWindow.opsSection") private var opsSectionRaw: String = OpsSection.brew.rawValue
     @SceneStorage("mainWindow.sessionsDestination") private var sessionsDestinationRaw: String = SessionsDestination.overviewRawValue
     @State private var page: MainPage = .dashboard
     @State private var toggleHovering = false
@@ -77,21 +76,10 @@ struct MainWindowView: View {
         SettingsSection(rawValue: settingsSectionRaw) ?? .general
     }
 
-    private var opsSection: OpsSection {
-        OpsSection(storedRawValue: opsSectionRaw)
-    }
-
     private var settingsSectionBinding: Binding<SettingsSection> {
         Binding(
             get: { settingsSection },
             set: { settingsSectionRaw = $0.rawValue }
-        )
-    }
-
-    private var opsSectionBinding: Binding<OpsSection> {
-        Binding(
-            get: { opsSection },
-            set: { opsSectionRaw = $0.rawValue }
         )
     }
 
@@ -115,8 +103,7 @@ struct MainWindowView: View {
                     page: $page,
                     availablePages: availablePages,
                     onOpenSettings: openSettings,
-                    onOpenSessions: openSessions,
-                    onOpenOps: openOps
+                    onOpenSessions: openSessions
                 )
             } sessionsSidebar: {
                 SessionSidebarColumn(
@@ -125,16 +112,12 @@ struct MainWindowView: View {
                 )
             } settingsSidebar: {
                 SettingsSidebarColumn(section: settingsSectionBinding, onExit: closeSettings)
-            } opsSidebar: {
-                OpsSidebarColumn(section: opsSectionBinding, onExit: closeOps)
             } appDetail: {
                 detail
             } sessionsDetail: {
                 sessionsDetail
             } settingsDetail: {
                 SettingsDetailView(section: settingsSection, onSelectSection: selectSettingsSection)
-            } opsDetail: {
-                OpsDetailView(store: env.ops, section: opsSection)
             }
             .background {
                 Color.clear
@@ -142,7 +125,7 @@ struct MainWindowView: View {
                     .onTapGesture { clearTextFocus() }
             }
 
-            if mode == .app || mode == .sessions || mode == .ops {
+            if mode == .app || mode == .sessions {
                 sidebarToggle
                     .padding(.leading, 81)
                     .padding(.top, 11)
@@ -271,19 +254,11 @@ struct MainWindowView: View {
         transition(to: .sessions)
     }
 
-    private func openOps() {
-        transition(to: .ops)
-    }
-
     private func closeSettings() {
         transition(to: .app)
     }
 
     private func closeSessions() {
-        transition(to: .app)
-    }
-
-    private func closeOps() {
         transition(to: .app)
     }
 

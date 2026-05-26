@@ -8332,26 +8332,6 @@
         }
       }
     },
-    "Ops" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "操作"
-          }
-        }
-      }
-    },
-    "Ops Detail" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "操作详情"
-          }
-        }
-      }
-    },
     "Per-core CPU load" : {
       "localizations" : {
         "zh-Hans" : {
