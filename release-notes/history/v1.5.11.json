@@ -1,5 +1,5 @@
 {
-  "headline": "新增了Ops工具面板，包含监听端口管理、进程监控、Homebrew管理、开发环境检查、系统清理和诊断功能，具体实现包括：",
+  "headline": "新增了Ops工具面板，聚焦Homebrew管理和开发环境检查，具体实现包括：",
   "changes": [
     "新增AppEnvironment中的OpsStore依赖注入",
     "在侧边栏添加Ops导航入口",

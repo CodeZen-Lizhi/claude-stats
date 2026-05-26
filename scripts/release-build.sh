@@ -81,7 +81,6 @@ fi
 
 PRODUCTS="$DERIVED/Build/Products/$CONFIGURATION"
 APP="$PRODUCTS/Claude Stats.app"
-ROCKXY_HELPER_TOOL="$APP/Contents/Library/HelperTools/RockxyHelperTool"
 
 codesign_release() {
     local attempt=1
@@ -166,14 +165,6 @@ if [[ $SIGNED -eq 1 ]]; then
     # bottom-up, then re-sign the main app with the resolved entitlements.
     echo "==> Deep re-signing nested code + main app"
     codesign_nested_release_code "$APP" --options runtime --timestamp --sign "$SIGN_IDENTITY"
-    if [[ ! -f "$ROCKXY_HELPER_TOOL" ]]; then
-        echo "error: missing bundled Rockxy helper at $ROCKXY_HELPER_TOOL" >&2
-        exit 1
-    fi
-    echo "==> Re-signing Rockxy helper tool"
-    codesign_release --force --options runtime --timestamp \
-        --sign "$SIGN_IDENTITY" \
-        "$ROCKXY_HELPER_TOOL"
     codesign_release --force --options runtime --timestamp \
         --sign "$SIGN_IDENTITY" \
         --entitlements "$SIGNED_ENTITLEMENTS" \

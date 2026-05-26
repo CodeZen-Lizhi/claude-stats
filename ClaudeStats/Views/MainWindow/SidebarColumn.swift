@@ -14,7 +14,6 @@ struct SidebarColumn: View {
     var onOpenSettings: () -> Void
     var onOpenSessions: () -> Void
     var onOpenConfigs: () -> Void
-    var onOpenNetwork: () -> Void
     var onOpenOps: () -> Void
 
     @Environment(AppEnvironment.self) private var env
@@ -55,16 +54,6 @@ struct SidebarColumn: View {
             ) {
                 clearTextFocus()
                 onOpenOps()
-            }
-            SidebarRow(
-                title: "Network",
-                symbol: "network",
-                isSelected: false,
-                trailingSymbol: "chevron.right",
-                showsTrailingOnHover: true
-            ) {
-                clearTextFocus()
-                onOpenNetwork()
             }
 
             Spacer(minLength: 0)
@@ -209,7 +198,6 @@ struct SidebarRow: View {
         onOpenSettings: {},
         onOpenSessions: {},
         onOpenConfigs: {},
-        onOpenNetwork: {},
         onOpenOps: {}
     )
     .environment(AppEnvironment.preview())

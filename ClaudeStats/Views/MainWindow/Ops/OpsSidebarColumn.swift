@@ -45,7 +45,7 @@ struct OpsSidebarColumn: View {
 
 #if DEBUG
 #Preview("Ops sidebar") {
-    @Previewable @State var section: OpsSection = .ports
+    @Previewable @State var section: OpsSection = .brew
     return OpsSidebarColumn(section: $section, onExit: {})
         .frame(width: 240, height: 620)
         .background(VisualEffectBackground())

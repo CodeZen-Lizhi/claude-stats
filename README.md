@@ -5,7 +5,7 @@
 <h1 align="center">Claude Stats</h1>
 
 <p align="center">
-  Native macOS menu-bar stats, Notch Island, and network debugging for AI coding work.
+  Native macOS menu-bar stats and Notch Island for AI coding work.
 </p>
 
 <p align="center">
@@ -19,7 +19,7 @@
 
 Claude Stats is an open-source native macOS app for people who work in AI coding tools all day. It runs from the menu bar, reads local usage and activity data, and turns it into quick answers about sessions, tokens, cost, limits, repository activity, local status, and debugging context.
 
-The app began as a focused macOS take on the open-source [Claude Statistics](https://github.com/sj719045032/claude-statistics) project. It is now a Codex-only product with a provider abstraction kept internally for clean session, usage, and configuration boundaries, plus a Notch Island surface and an integrated network debugger.
+The app began as a focused macOS take on the open-source [Claude Statistics](https://github.com/sj719045032/claude-statistics) project. It is now a Codex-only product with a provider abstraction kept internally for clean session, usage, and configuration boundaries, plus a Notch Island surface.
 
 ## Reference Notes
 
@@ -33,7 +33,7 @@ The app began as a focused macOS take on the open-source [Claude Statistics](htt
 - API provider switcher for Codex CLI configuration.
 - Git and repository activity views, including optional bundled Git tooling for release builds.
 - An Atoll-backed Notch Island surface for optional media, timer, stats, clipboard, and related modules.
-- A Rockxy-backed network debugger with proxy, rule, certificate, and helper-tool integration.
+- Ops tools for Homebrew packages and developer environment checks.
 - Sparkle-based automatic updates for packaged releases.
 
 ## Screens
@@ -111,19 +111,13 @@ Screenshots and GIF demos live in [`docs/assets/screens`](docs/assets/screens), 
 </details>
 
 <details>
-<summary><strong>Ops and network</strong></summary>
-
-<p><strong>Listening ports</strong></p>
-<img src="docs/assets/screens/ops-listening-ports.png" alt="Listening ports inspector">
+<summary><strong>Ops</strong></summary>
 
 <p><strong>Homebrew packages</strong></p>
 <img src="docs/assets/screens/ops-homebrew-packages.png" alt="Homebrew package inspector">
 
 <p><strong>Developer environment check</strong></p>
 <img src="docs/assets/screens/ops-environment-check.png" alt="Developer environment check">
-
-<p><strong>Network traffic</strong></p>
-<img src="docs/assets/screens/network-traffic.png" alt="Network traffic debugger">
 
 </details>
 
@@ -154,7 +148,7 @@ Intel Macs are not supported by current releases. The last public universal buil
 
 Claude Stats is local-first. Core usage stats are read from local Codex data such as `~/.codex/sessions/`; optional activity features may request macOS permissions such as Full Disk Access, Accessibility, or Screen Recording.
 
-Network-facing features are opt-in or feature-specific: Sparkle checks for updates, OpenAI status views may query public status pages, and the network debugger proxies only the traffic you route through it. The Rockxy helper and certificate features are powerful debugging tools, so review the source and settings before enabling HTTPS interception.
+Network-facing features are feature-specific: Sparkle checks for updates, OpenAI status views may query public status pages, and GitHub-related views connect only when configured.
 
 ## Build From Source
 
@@ -202,13 +196,12 @@ ClaudeStats/
   Models/       Sendable value types and generated release history
   Providers/    provider protocol, registry, and Codex scanner/parser
   Resources/    pricing data, Git tools placeholder, app resources
-  Services/     stores, scanners, network debugging, system integrations
+  Services/     stores, scanners, and system integrations
   ViewModels/   per-screen and feature view models
-  Views/        menu bar, main window, settings, network, activity UI
+  Views/        menu bar, main window, settings, ops, and activity UI
   Utilities/    formatters, logging, shared helpers
 AtollEmbed/       app-side wrapper for the Atoll/DynamicIsland integration
-RockxyBackendEmbed/ app-side wrapper for Rockxy proxy/debugging support
-ThirdParty/       git submodules for Atoll and Rockxy
+ThirdParty/       git submodules for Atoll and CppJieba
 ClaudeStatsTests/ parser, scanner, settings, integration, and feature tests
 docs/assets/      README images, icons, screenshots, and GIFs
 scripts/          project generation, local run/test, release, appcast tooling
@@ -220,10 +213,9 @@ Claude Stats is released under the [GNU Affero General Public License v3.0](LICE
 
 | Project | License | How Claude Stats uses it |
 | --- | --- | --- |
-| [Rockxy](https://github.com/1pitaph/Rockxy) | AGPL-3.0 | Integrated through `RockxyBackendEmbed` and `RockxyHelperTool` for the network debugger, proxy engine, rule handling, certificates, and privileged helper flow. |
 | [Atoll / DynamicIsland](https://github.com/1pitaph/Atoll) | GPL-3.0 | Integrated through `AtollEmbed` for the optional Notch Island surface and modules. Its [`NOTICE`](ThirdParty/Atoll/NOTICE) and [`COPYRIGHT_ASSETS`](ThirdParty/Atoll/COPYRIGHT_ASSETS) files remain part of the attribution trail. |
 
-Additional Swift Package Manager dependencies include Sparkle, SwiftNIO, SwiftNIOSSL, Swift Certificates, Swift Crypto, Defaults, KeyboardShortcuts, SwiftUIIntrospect, Lottie, MacroVisionKit, SkyLightWindow, AtollExtensionKit, and Swift Collections. Those packages keep their upstream licenses and notices.
+Additional Swift Package Manager dependencies include Sparkle, Defaults, KeyboardShortcuts, SwiftUIIntrospect, Lottie, MacroVisionKit, SkyLightWindow, AtollExtensionKit, and Swift Collections. Those packages keep their upstream licenses and notices.
 
 ## Contributing
 
@@ -239,4 +231,4 @@ For app behavior changes, also run:
 bash scripts/run-debug.sh
 ```
 
-Keep Swift 6 strict concurrency warning-free. When changing Atoll or Rockxy integration code, make the source changes in the relevant submodule/fork first, then update the submodule pointer in this repo.
+Keep Swift 6 strict concurrency warning-free. When changing Atoll integration code, make the source changes in the relevant submodule/fork first, then update the submodule pointer in this repo.

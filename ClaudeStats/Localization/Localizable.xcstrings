@@ -3868,16 +3868,6 @@
         }
       }
     },
-    "Port" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "端口"
-          }
-        }
-      }
-    },
     "Preview" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3904,16 +3894,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "主副本"
-          }
-        }
-      }
-    },
-    "Process" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "进程"
           }
         }
       }
@@ -4223,32 +4203,12 @@
         }
       }
     },
-    "Route Rockxy through %@ before enabling the system proxy." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在启用系统代理前，将 Rockxy 通过 %@ 路由。"
-          }
-        }
-      }
-    },
     "Route Rules" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "路由规则"
-          }
-        }
-      }
-    },
-    "Route rules are stored with the environment and describe outbound routing intent. The selected profile remains the active fallback route for Rockxy." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "路由规则随环境一起存储，用于描述出站路由意图。所选配置文件仍是 Rockxy 的活动回退路由。"
           }
         }
       }
@@ -7778,26 +7738,6 @@
         }
       }
     },
-    "Clean Selected" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "清理所选"
-          }
-        }
-      }
-    },
-    "Cleanup" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "清理"
-          }
-        }
-      }
-    },
     "Clear" : {
       "localizations" : {
         "zh-Hans" : {
@@ -8518,16 +8458,6 @@
         }
       }
     },
-    "Network Detail" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "网络详情"
-          }
-        }
-      }
-    },
     "New Env" : {
       "localizations" : {
         "zh-Hans" : {
@@ -8778,16 +8708,6 @@
         }
       }
     },
-    "Ports" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "端口"
-          }
-        }
-      }
-    },
     "Preserve Host header" : {
       "localizations" : {
         "zh-Hans" : {
@@ -9004,16 +8924,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "还原"
-          }
-        }
-      }
-    },
-    "Route Diagnostics" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "路由诊断"
           }
         }
       }
@@ -9454,16 +9364,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "升级"
-          }
-        }
-      }
-    },
-    "Upstream Proxy" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "上游代理"
           }
         }
       }
@@ -10084,16 +9984,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已保存"
-          }
-        }
-      }
-    },
-    "Search ports, process, user" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "搜索端口、进程、用户"
           }
         }
       }

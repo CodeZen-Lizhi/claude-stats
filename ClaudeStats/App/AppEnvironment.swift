@@ -30,7 +30,6 @@ final class AppEnvironment {
     let aiConfigs: AIConfigsViewModel
     let skills: SkillsStore
     let systemMonitor: SystemMonitorViewModel
-    let networkDebugger: NetworkDebuggerStore
     let ops: OpsStore
 
     init(
@@ -41,7 +40,6 @@ final class AppEnvironment {
         usageLimits: UsageLimitStore? = nil,
         cliEnvironment: CLIEnvironmentViewModel = CLIEnvironmentViewModel(),
         systemMonitor: SystemMonitorViewModel = SystemMonitorViewModel(),
-        networkDebugger: NetworkDebuggerStore? = nil,
         ops: OpsStore = OpsStore()
     ) {
         self.pricing = pricing
@@ -51,7 +49,6 @@ final class AppEnvironment {
         self.transcriptAnalysis = TranscriptAnalysisStore()
         self.cliEnvironment = cliEnvironment
         self.systemMonitor = systemMonitor
-        self.networkDebugger = networkDebugger ?? NetworkDebuggerStore(preferences: preferences)
         self.ops = ops
         self.dashboard = DashboardViewModel(pricing: pricing)
         self.gitActivity = GitActivityViewModel()

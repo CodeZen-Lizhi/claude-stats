@@ -220,7 +220,7 @@ extension ReleaseHistoryCatalog {
         ReleaseHistoryEntry(
             version: "1.5.11",
             date: "May 20, 2026",
-            headline: "新增了Ops工具面板，包含监听端口管理、进程监控、Homebrew管理、开发环境检查、系统清理和诊断功能，具体实现包括：",
+            headline: "新增了Ops工具面板，聚焦Homebrew管理和开发环境检查，具体实现包括：",
             changes: [
                 "新增AppEnvironment中的OpsStore依赖注入",
                 "在侧边栏添加Ops导航入口",
@@ -299,9 +299,9 @@ extension ReleaseHistoryCatalog {
             date: "May 19, 2026",
             headline: "本次提交完成了多项核心功能更新：",
             changes: [
-                "重构网络侧边栏与分区，新增代理、助手、上游代理三个分区，迁移旧版setup分区",
-                "新增WebSocket帧捕获与展示、规则匹配元数据展示",
-                "完善规则引擎与代理后端实现，支持规则增删改查、插件管理、断点调试、请求重放",
+                "调整主窗口侧边栏与分区结构",
+                "完善开发工具界面的交互与展示",
+                "更新相关测试覆盖",
                 "更新测试用例与发布历史版本号",
                 "调整项目依赖与构建配置，移除废弃的脚本插件管理器代码",
             ]
@@ -309,13 +309,10 @@ extension ReleaseHistoryCatalog {
         ReleaseHistoryEntry(
             version: "1.5.3",
             date: "May 19, 2026",
-            headline: "此次提交新增了网络调试时的上游代理支持，包括：",
+            headline: "此次提交包含维护更新：",
             changes: [
-                "将Rockxy子模块切换至自定义分支仓库",
-                "添加上游代理相关的数据模型、配置UI和偏好存储",
-                "新增系统代理上游探测与自动链式代理功能",
-                "在流量列表中显示当前请求使用的上游代理信息",
-                "添加上游连通性测试功能",
+                "更新内部集成配置",
+                "调整相关设置与测试覆盖",
             ]
         ),
         ReleaseHistoryEntry(

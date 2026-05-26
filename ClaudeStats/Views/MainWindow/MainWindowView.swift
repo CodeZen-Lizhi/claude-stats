@@ -55,8 +55,7 @@ struct MainWindowView: View {
     @SceneStorage("mainWindow.configsSearch") private var configsSearchText: String = ""
     @SceneStorage("mainWindow.configsProjectID") private var configsProjectIDRaw: String = ""
     @SceneStorage("mainWindow.configsDocumentID") private var configsDocumentIDRaw: String = ""
-    @SceneStorage("mainWindow.networkSection") private var networkSectionRaw: String = NetworkSection.traffic.rawValue
-    @SceneStorage("mainWindow.opsSection") private var opsSectionRaw: String = OpsSection.ports.rawValue
+    @SceneStorage("mainWindow.opsSection") private var opsSectionRaw: String = OpsSection.brew.rawValue
     @SceneStorage("mainWindow.sessionsDestination") private var sessionsDestinationRaw: String = SessionsDestination.overviewRawValue
     @State private var page: MainPage = .dashboard
     @State private var toggleHovering = false
@@ -92,10 +91,6 @@ struct MainWindowView: View {
 
     private var configsSection: AIConfigsSection {
         AIConfigsSection(rawValue: configsSectionRaw) ?? .overview
-    }
-
-    private var networkSection: NetworkSection {
-        NetworkSection(storedRawValue: networkSectionRaw)
     }
 
     private var opsSection: OpsSection {
@@ -137,13 +132,6 @@ struct MainWindowView: View {
         )
     }
 
-    private var networkSectionBinding: Binding<NetworkSection> {
-        Binding(
-            get: { networkSection },
-            set: { networkSectionRaw = $0.rawValue }
-        )
-    }
-
     private var opsSectionBinding: Binding<OpsSection> {
         Binding(
             get: { opsSection },
@@ -173,7 +161,6 @@ struct MainWindowView: View {
                     onOpenSettings: openSettings,
                     onOpenSessions: openSessions,
                     onOpenConfigs: openConfigs,
-                    onOpenNetwork: openNetwork,
                     onOpenOps: openOps
                 )
             } sessionsSidebar: {
@@ -189,8 +176,6 @@ struct MainWindowView: View {
                 )
             } settingsSidebar: {
                 SettingsSidebarColumn(section: settingsSectionBinding, onExit: closeSettings)
-            } networkSidebar: {
-                NetworkSidebarColumn(store: env.networkDebugger, section: networkSectionBinding, onExit: closeNetwork)
             } opsSidebar: {
                 OpsSidebarColumn(section: opsSectionBinding, onExit: closeOps)
             } appDetail: {
@@ -206,8 +191,6 @@ struct MainWindowView: View {
                 )
             } settingsDetail: {
                 SettingsDetailView(section: settingsSection, onSelectSection: selectSettingsSection)
-            } networkDetail: {
-                NetworkDetailView(section: networkSection)
             } opsDetail: {
                 OpsDetailView(store: env.ops, section: opsSection)
             }
@@ -217,7 +200,7 @@ struct MainWindowView: View {
                     .onTapGesture { clearTextFocus() }
             }
 
-            if mode == .app || mode == .sessions || mode == .configs || mode == .network || mode == .ops {
+            if mode == .app || mode == .sessions || mode == .configs || mode == .ops {
                 sidebarToggle
                     .padding(.leading, 81)
                     .padding(.top, 11)
@@ -361,10 +344,6 @@ struct MainWindowView: View {
         transition(to: .configs)
     }
 
-    private func openNetwork() {
-        transition(to: .network)
-    }
-
     private func openOps() {
         transition(to: .ops)
     }
@@ -381,10 +360,6 @@ struct MainWindowView: View {
         transition(to: .app)
     }
 
-    private func closeNetwork() {
-        transition(to: .app)
-    }
-
     private func closeOps() {
         transition(to: .app)
     }
@@ -394,8 +369,6 @@ struct MainWindowView: View {
         case .page(let nextPage):
             page = availablePages.contains(nextPage) ? nextPage : .dashboard
             transition(to: .app)
-        case .network:
-            transition(to: .network)
         }
     }
 

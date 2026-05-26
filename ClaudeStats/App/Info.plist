@@ -26,36 +26,6 @@
 	<string>NSApplication</string>
 	<key>NSHumanReadableCopyright</key>
 	<string></string>
-	<key>RockxyBundledHelperVersion</key>
-	<string>$(ROCKXY_HELPER_VERSION)</string>
-	<key>RockxyBundledHelperBuild</key>
-	<string>$(ROCKXY_HELPER_BUILD)</string>
-	<key>RockxyDefaultsPrefix</key>
-	<string>$(ROCKXY_DEFAULTS_PREFIX)</string>
-	<key>RockxyFamilyNamespace</key>
-	<string>$(ROCKXY_FAMILY_NAMESPACE)</string>
-	<key>RockxyHelperBundleIdentifier</key>
-	<string>$(ROCKXY_HELPER_BUNDLE_ID)</string>
-	<key>RockxyHelperProtocolVersion</key>
-	<string>$(ROCKXY_HELPER_PROTOCOL_VERSION)</string>
-	<key>RockxyHelperMachServiceName</key>
-	<string>$(ROCKXY_HELPER_MACH_SERVICE_NAME)</string>
-	<key>RockxyHelperPlistName</key>
-	<string>$(ROCKXY_HELPER_PLIST_NAME)</string>
-	<key>RockxyAllowedCallerIdentifiers</key>
-	<string>$(ROCKXY_ALLOWED_CALLER_IDENTIFIERS)</string>
-	<key>RockxyLogSubsystem</key>
-	<string>$(ROCKXY_LOG_SUBSYSTEM)</string>
-	<key>RockxyNotificationPrefix</key>
-	<string>$(ROCKXY_NOTIFICATION_PREFIX)</string>
-	<key>RockxyAppSupportDirectoryName</key>
-	<string>$(ROCKXY_APP_SUPPORT_DIRECTORY_NAME)</string>
-	<key>RockxySharedSupportDirectoryName</key>
-	<string>$(ROCKXY_SHARED_SUPPORT_DIRECTORY_NAME)</string>
-	<key>RockxySharedCertificateLabelPrefix</key>
-	<string>$(ROCKXY_SHARED_CERTIFICATE_LABEL_PREFIX)</string>
-	<key>RockxySharedUTTypePrefix</key>
-	<string>$(ROCKXY_SHARED_UTTYPE_PREFIX)</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Notch Island media controls may use Apple Events for local music apps.</string>
 	<key>NSAppleMusicUsageDescription</key>
@@ -70,8 +40,6 @@
 	<string>Notch Island can show camera privacy indicators when enabled.</string>
 	<key>NSContactsUsageDescription</key>
 	<string>Claude Stats may request contacts access for enabled Notch Island modules.</string>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Claude Stats can inspect local network traffic when the network debugger is enabled.</string>
 	<key>NSLocationUsageDescription</key>
 	<string>Claude Stats may request location access for enabled Notch Island modules.</string>
 	<key>NSMicrophoneUsageDescription</key>

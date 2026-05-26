@@ -137,55 +137,6 @@ final class Preferences {
     var detailPanelBoundaryFalloffEnabled: Bool {
         didSet { defaults.set(detailPanelBoundaryFalloffEnabled, forKey: Keys.detailPanelBoundaryFalloffEnabled) }
     }
-    var networkTrafficLayoutMode: NetworkTrafficLayoutMode {
-        didSet { defaults.set(networkTrafficLayoutMode.rawValue, forKey: Keys.networkTrafficLayoutMode) }
-    }
-    var networkTrafficAutoBreakpoint: Double {
-        didSet {
-            let clamped = NetworkTrafficLayoutConstants.clampedAutoBreakpoint(networkTrafficAutoBreakpoint)
-            guard clamped == networkTrafficAutoBreakpoint else {
-                networkTrafficAutoBreakpoint = clamped
-                return
-            }
-            defaults.set(networkTrafficAutoBreakpoint, forKey: Keys.networkTrafficAutoBreakpoint)
-        }
-    }
-    var networkAutoEnableSystemProxyOnStart: Bool {
-        didSet { defaults.set(networkAutoEnableSystemProxyOnStart, forKey: Keys.networkAutoEnableSystemProxyOnStart) }
-    }
-    var networkUpstreamProxyMode: NetworkUpstreamProxyMode {
-        didSet { defaults.set(networkUpstreamProxyMode.rawValue, forKey: Keys.networkUpstreamProxyMode) }
-    }
-    var networkAskBeforeChainingExistingSystemProxy: Bool {
-        didSet { defaults.set(networkAskBeforeChainingExistingSystemProxy, forKey: Keys.networkAskBeforeChainingExistingSystemProxy) }
-    }
-    var networkManualUpstreamProxyProtocol: NetworkUpstreamProxyProtocol {
-        didSet { defaults.set(networkManualUpstreamProxyProtocol.rawValue, forKey: Keys.networkManualUpstreamProxyProtocol) }
-    }
-    var networkManualUpstreamProxyHost: String {
-        didSet { defaults.set(networkManualUpstreamProxyHost, forKey: Keys.networkManualUpstreamProxyHost) }
-    }
-    var networkManualUpstreamProxyPort: Int {
-        didSet { defaults.set(networkManualUpstreamProxyPort, forKey: Keys.networkManualUpstreamProxyPort) }
-    }
-    var networkManualUpstreamProxyPACURL: String {
-        didSet { defaults.set(networkManualUpstreamProxyPACURL, forKey: Keys.networkManualUpstreamProxyPACURL) }
-    }
-    var networkManualUpstreamProxyUsername: String {
-        didSet { defaults.set(networkManualUpstreamProxyUsername, forKey: Keys.networkManualUpstreamProxyUsername) }
-    }
-    var networkManualUpstreamProxyIncludeHosts: String {
-        didSet { defaults.set(networkManualUpstreamProxyIncludeHosts, forKey: Keys.networkManualUpstreamProxyIncludeHosts) }
-    }
-    var networkManualUpstreamProxyExcludeHosts: String {
-        didSet { defaults.set(networkManualUpstreamProxyExcludeHosts, forKey: Keys.networkManualUpstreamProxyExcludeHosts) }
-    }
-    var networkManualUpstreamBypassLocalhost: Bool {
-        didSet { defaults.set(networkManualUpstreamBypassLocalhost, forKey: Keys.networkManualUpstreamBypassLocalhost) }
-    }
-    var networkManualUpstreamDNSOverSOCKS: Bool {
-        didSet { defaults.set(networkManualUpstreamDNSOverSOCKS, forKey: Keys.networkManualUpstreamDNSOverSOCKS) }
-    }
     var sessionsExpandedOnAppOpen: Bool {
         didSet { defaults.set(sessionsExpandedOnAppOpen, forKey: Keys.sessionsExpandedOnAppOpen) }
     }
@@ -396,22 +347,6 @@ final class Preferences {
             ? NotchIslandModule.defaultEnabled
             : Set(storedNotchModules)
         detailPanelBoundaryFalloffEnabled = (defaults.object(forKey: Keys.detailPanelBoundaryFalloffEnabled) as? Bool) ?? true
-        networkTrafficLayoutMode = NetworkTrafficLayoutMode(rawValue: defaults.string(forKey: Keys.networkTrafficLayoutMode) ?? "") ?? .automatic
-        let storedNetworkTrafficAutoBreakpoint = (defaults.object(forKey: Keys.networkTrafficAutoBreakpoint) as? Double)
-            ?? NetworkTrafficLayoutConstants.defaultAutoBreakpoint
-        networkTrafficAutoBreakpoint = NetworkTrafficLayoutConstants.clampedAutoBreakpoint(storedNetworkTrafficAutoBreakpoint)
-        networkAutoEnableSystemProxyOnStart = (defaults.object(forKey: Keys.networkAutoEnableSystemProxyOnStart) as? Bool) ?? false
-        networkUpstreamProxyMode = NetworkUpstreamProxyMode(rawValue: defaults.string(forKey: Keys.networkUpstreamProxyMode) ?? "") ?? .automatic
-        networkAskBeforeChainingExistingSystemProxy = (defaults.object(forKey: Keys.networkAskBeforeChainingExistingSystemProxy) as? Bool) ?? false
-        networkManualUpstreamProxyProtocol = NetworkUpstreamProxyProtocol(rawValue: defaults.string(forKey: Keys.networkManualUpstreamProxyProtocol) ?? "") ?? .http
-        networkManualUpstreamProxyHost = defaults.string(forKey: Keys.networkManualUpstreamProxyHost) ?? ""
-        networkManualUpstreamProxyPort = (defaults.object(forKey: Keys.networkManualUpstreamProxyPort) as? Int) ?? 6_152
-        networkManualUpstreamProxyPACURL = defaults.string(forKey: Keys.networkManualUpstreamProxyPACURL) ?? ""
-        networkManualUpstreamProxyUsername = defaults.string(forKey: Keys.networkManualUpstreamProxyUsername) ?? ""
-        networkManualUpstreamProxyIncludeHosts = defaults.string(forKey: Keys.networkManualUpstreamProxyIncludeHosts) ?? ""
-        networkManualUpstreamProxyExcludeHosts = defaults.string(forKey: Keys.networkManualUpstreamProxyExcludeHosts) ?? ""
-        networkManualUpstreamBypassLocalhost = (defaults.object(forKey: Keys.networkManualUpstreamBypassLocalhost) as? Bool) ?? true
-        networkManualUpstreamDNSOverSOCKS = (defaults.object(forKey: Keys.networkManualUpstreamDNSOverSOCKS) as? Bool) ?? true
         sessionsExpandedOnAppOpen = (defaults.object(forKey: Keys.sessionsExpandedOnAppOpen) as? Bool) ?? false
         apiProviderKeyStorageMode = APIProviderKeyStorageMode(rawValue: defaults.string(forKey: Keys.apiProviderKeyStorageMode) ?? "") ?? .json
         systemMonitorEnabled = defaults.bool(forKey: Keys.systemMonitorEnabled)
@@ -471,10 +406,6 @@ final class Preferences {
         appLanguagePreference.applyToAppleLanguages(defaults: defaults)
     }
 
-    func resetNetworkTrafficAutoBreakpoint() {
-        networkTrafficAutoBreakpoint = NetworkTrafficLayoutConstants.defaultAutoBreakpoint
-    }
-
     private func persistNotchIslandScreenStyles() {
         let raw = notchIslandScreenStyles.mapValues(\.rawValue)
         guard let data = try? JSONEncoder().encode(raw),
@@ -519,20 +450,6 @@ final class Preferences {
         static let notchIslandShortcutEnabled = "notchIslandShortcutEnabled"
         static let notchIslandEnabledModules = "notchIslandEnabledModules"
         static let detailPanelBoundaryFalloffEnabled = "detailPanelBoundaryFalloffEnabled"
-        static let networkTrafficLayoutMode = "networkTrafficLayoutMode"
-        static let networkTrafficAutoBreakpoint = "networkTrafficAutoBreakpoint"
-        static let networkAutoEnableSystemProxyOnStart = "networkAutoEnableSystemProxyOnStart"
-        static let networkUpstreamProxyMode = "networkUpstreamProxyMode"
-        static let networkAskBeforeChainingExistingSystemProxy = "networkAskBeforeChainingExistingSystemProxy"
-        static let networkManualUpstreamProxyProtocol = "networkManualUpstreamProxyProtocol"
-        static let networkManualUpstreamProxyHost = "networkManualUpstreamProxyHost"
-        static let networkManualUpstreamProxyPort = "networkManualUpstreamProxyPort"
-        static let networkManualUpstreamProxyPACURL = "networkManualUpstreamProxyPACURL"
-        static let networkManualUpstreamProxyUsername = "networkManualUpstreamProxyUsername"
-        static let networkManualUpstreamProxyIncludeHosts = "networkManualUpstreamProxyIncludeHosts"
-        static let networkManualUpstreamProxyExcludeHosts = "networkManualUpstreamProxyExcludeHosts"
-        static let networkManualUpstreamBypassLocalhost = "networkManualUpstreamBypassLocalhost"
-        static let networkManualUpstreamDNSOverSOCKS = "networkManualUpstreamDNSOverSOCKS"
         static let sessionsExpandedOnAppOpen = "sessionsExpandedOnAppOpen"
         static let apiProviderKeyStorageMode = "apiProviderKeyStorageMode"
         static let systemMonitorEnabled = "systemMonitorEnabled"

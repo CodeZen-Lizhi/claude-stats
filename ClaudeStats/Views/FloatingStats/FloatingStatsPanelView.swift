@@ -216,13 +216,6 @@ struct FloatingStatsPanelView: View {
                 )
             }
 
-            FloatingStatsActionButton(symbol: "network", label: "Open Network") {
-                NotificationCenter.default.post(
-                    name: .openMainWindowDestinationFromFloatingStats,
-                    object: FloatingStatsMainWindowDestination.network
-                )
-            }
-
             FloatingStatsActionButton(symbol: "gearshape", label: "Open settings") {
                 NotificationCenter.default.post(name: .openSettingsFromFloatingStats, object: nil)
             }

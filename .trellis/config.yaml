@@ -94,9 +94,6 @@ packages:
   ThirdParty/Atoll:
     path: ThirdParty/Atoll
     type: submodule
-  ThirdParty/Rockxy:
-    path: ThirdParty/Rockxy
-    type: submodule
   ThirdParty/CppJieba:
     path: ThirdParty/CppJieba
     type: submodule

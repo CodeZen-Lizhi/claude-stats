@@ -26,7 +26,7 @@ Prevent macOS Automatic Termination from reclaiming Claude Stats while it is mea
 ## Non-goals
 
 - Do not change Sparkle update behavior unless evidence later points there.
-- Do not modify Atoll, Rockxy, or packaging flow unless required by verification.
+- Do not modify Atoll or packaging flow unless required by verification.
 - Do not touch unrelated dirty worktree changes.
 
 ## Acceptance

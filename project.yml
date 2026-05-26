@@ -15,18 +15,6 @@ packages:
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
     from: "2.9.1"
-  SwiftNIO:
-    url: https://github.com/apple/swift-nio.git
-    from: "2.95.0"
-  SwiftNIOSSL:
-    url: https://github.com/apple/swift-nio-ssl
-    from: "2.36.0"
-  SwiftCertificates:
-    url: https://github.com/apple/swift-certificates.git
-    from: "1.18.0"
-  SwiftCrypto:
-    url: https://github.com/apple/swift-crypto
-    from: "4.2.0"
   Defaults:
     url: https://github.com/sindresorhus/Defaults
     from: "9.0.2"
@@ -64,137 +52,7 @@ settings:
     SWIFT_STRICT_CONCURRENCY: complete
     MARKETING_VERSION: "1.7.6"
     CURRENT_PROJECT_VERSION: "75"
-    ROCKXY_FAMILY_NAMESPACE: com.claudestats.rockxy
-    ROCKXY_SHARED_SUPPORT_DIRECTORY_NAME: com.claudestats.rockxy
-    ROCKXY_SHARED_CERTIFICATE_LABEL_PREFIX: com.claudestats.rockxy.rootCA
-    ROCKXY_SHARED_UTTYPE_PREFIX: com.claudestats.rockxy
-    ROCKXY_HELPER_BUNDLE_ID: com.claudestats.rockxy.helper
-    ROCKXY_HELPER_MACH_SERVICE_NAME: com.claudestats.rockxy.helper
-    ROCKXY_HELPER_PLIST_NAME: com.claudestats.rockxy.helper.plist
-    ROCKXY_HELPER_BINARY_NAME: RockxyHelperTool
-    ROCKXY_HELPER_BUNDLE_PROGRAM: Contents/Library/HelperTools/RockxyHelperTool
-    ROCKXY_HELPER_VERSION: "0.7.1"
-    ROCKXY_HELPER_BUILD: "7"
-    ROCKXY_HELPER_PROTOCOL_VERSION: "1"
-    ROCKXY_ALLOWED_CALLER_IDENTIFIERS: com.claudestats.ClaudeStats
-    ROCKXY_DEFAULTS_PREFIX: com.claudestats.rockxy
-    ROCKXY_NOTIFICATION_PREFIX: com.claudestats.rockxy
-    ROCKXY_LOG_SUBSYSTEM: com.claudestats.ClaudeStats
-    ROCKXY_APP_SUPPORT_DIRECTORY_NAME: com.claudestats.rockxy
-
 targets:
-  RockxyHelperTool:
-    type: tool
-    platform: macOS
-    sources:
-      - path: ThirdParty/Rockxy/Shared
-        excludes:
-          - RockxyUpdateConfiguration.swift
-      - path: ThirdParty/Rockxy/RockxyHelperTool
-        excludes:
-          - Info.plist
-          - com.amunx.rockxy.helper.plist
-    dependencies:
-      - sdk: Security.framework
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: "$(ROCKXY_HELPER_BUNDLE_ID)"
-        PRODUCT_NAME: RockxyHelperTool
-        MARKETING_VERSION: "1.7.6"
-        CURRENT_PROJECT_VERSION: "75"
-        INFOPLIST_FILE: ThirdParty/Rockxy/RockxyHelperTool/Info.plist
-        CREATE_INFOPLIST_SECTION_IN_BINARY: YES
-        GENERATE_INFOPLIST_FILE: NO
-        INSTALL_PATH: ""
-        SKIP_INSTALL: YES
-        ENABLE_HARDENED_RUNTIME: YES
-        SWIFT_VERSION: "5.0"
-        SWIFT_STRICT_CONCURRENCY: minimal
-        SWIFT_SUPPRESS_WARNINGS: YES
-      configs:
-        Debug:
-          CODE_SIGN_IDENTITY: "-"
-          CODE_SIGN_STYLE: Automatic
-        Release:
-          CODE_SIGN_IDENTITY: "-"
-          CODE_SIGN_STYLE: Automatic
-        ReleaseSigned:
-          CODE_SIGN_STYLE: Manual
-          CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
-          CODE_SIGN_IDENTITY: "$(SIGN_IDENTITY)"
-          DEVELOPMENT_TEAM: "$(APPLE_TEAM_ID)"
-          OTHER_CODE_SIGN_FLAGS: "--timestamp"
-
-  RockxyBackendEmbed:
-    type: framework
-    platform: macOS
-    sources:
-      - path: RockxyBackendEmbed
-      - path: ThirdParty/Rockxy/Shared/RockxyIdentity.swift
-      - path: ThirdParty/Rockxy/Shared/RockxyHelperProtocol.swift
-      - path: ThirdParty/Rockxy/Shared/HelperInfo.swift
-      - path: ThirdParty/Rockxy/Shared/CallerValidation.swift
-      - path: ThirdParty/Rockxy/Shared/ConnectionValidator.swift
-      - path: ThirdParty/Rockxy/Rockxy/Core/Services/Infrastructure/AppNotifications.swift
-      - path: ThirdParty/Rockxy/Rockxy/Models/Network
-      - path: ThirdParty/Rockxy/Rockxy/Models/Log
-      - path: ThirdParty/Rockxy/Rockxy/Models/Plugins
-      - path: ThirdParty/Rockxy/Rockxy/Models/Rules
-      - path: ThirdParty/Rockxy/Rockxy/Models/Settings
-      - path: ThirdParty/Rockxy/Rockxy/Core/Detection
-      - path: ThirdParty/Rockxy/Rockxy/Core/Storage/AppSettingsStorage.swift
-      - path: ThirdParty/Rockxy/Rockxy/Core/Utilities
-        excludes:
-          - PreviewRenderer.swift
-          - RequestCopyFormatter.swift
-      - path: ThirdParty/Rockxy/Rockxy/Core/RuleEngine
-      - path: ThirdParty/Rockxy/Rockxy/Core/Plugins
-      - path: ThirdParty/Rockxy/Rockxy/Core/Certificate
-        excludes:
-          - CertificateMenuActionRouter.swift
-          - RootCADownloadServer.swift
-          - RootCADownloadSession.swift
-      - path: ThirdParty/Rockxy/Rockxy/Core/ProxyEngine
-        excludes:
-          - CharlesSSLImporter.swift
-          - HTTPToolkitImporter.swift
-          - ProxymanSSLImporter.swift
-    dependencies:
-      - package: SwiftNIO
-        product: NIOCore
-      - package: SwiftNIO
-        product: NIOHTTP1
-      - package: SwiftNIO
-        product: NIOPosix
-      - package: SwiftNIO
-        product: NIOWebSocket
-      - package: SwiftNIOSSL
-        product: NIOSSL
-      - package: SwiftCertificates
-        product: X509
-      - package: SwiftCrypto
-        product: Crypto
-      - sdk: AppKit.framework
-      - sdk: JavaScriptCore.framework
-      - sdk: Security.framework
-      - sdk: ServiceManagement.framework
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.claudestats.RockxyBackendEmbed
-        PRODUCT_NAME: RockxyBackendEmbed
-        GENERATE_INFOPLIST_FILE: YES
-        SWIFT_VERSION: "5.0"
-        SWIFT_STRICT_CONCURRENCY: minimal
-        SWIFT_SUPPRESS_WARNINGS: YES
-        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
-      configs:
-        ReleaseSigned:
-          CODE_SIGN_STYLE: Manual
-          CODE_SIGN_IDENTITY: "$(SIGN_IDENTITY)"
-          DEVELOPMENT_TEAM: "$(APPLE_TEAM_ID)"
-          ENABLE_HARDENED_RUNTIME: YES
-          OTHER_CODE_SIGN_FLAGS: "--timestamp"
-
   AtollEmbed:
     type: framework
     platform: macOS
@@ -288,13 +146,6 @@ targets:
     dependencies:
       - package: Sparkle
       - target: OpenComputerUseKit
-      - target: RockxyBackendEmbed
-      - target: RockxyHelperTool
-        link: false
-        codeSign: true
-        copy:
-          destination: wrapper
-          subpath: Contents/Library/HelperTools
       - target: AtollEmbed
       - package: Lottie
       - package: SwiftCollections
@@ -374,49 +225,6 @@ targets:
           /usr/bin/install -m 644 "${SRCROOT}/ThirdParty/CppJieba/dict/user.dict.utf8" "$JIEBA_RESOURCES_DIR/user.dict.utf8"
           /usr/bin/install -m 644 "${SRCROOT}/ThirdParty/CppJieba/dict/idf.utf8" "$JIEBA_RESOURCES_DIR/idf.utf8"
           /usr/bin/install -m 644 "${SRCROOT}/ThirdParty/CppJieba/dict/stop_words.utf8" "$JIEBA_RESOURCES_DIR/stop_words.utf8"
-      - name: Generate Rockxy Helper LaunchDaemon Plist
-        outputFiles:
-          - "$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchDaemons/$(ROCKXY_HELPER_PLIST_NAME)"
-        script: |
-          set -euo pipefail
-
-          for REQUIRED_VAR in ROCKXY_HELPER_PLIST_NAME ROCKXY_HELPER_MACH_SERVICE_NAME ROCKXY_ALLOWED_CALLER_IDENTIFIERS ROCKXY_HELPER_BUNDLE_PROGRAM; do
-            eval "VALUE=\${$REQUIRED_VAR}"
-            if [ -z "$VALUE" ] || [[ "$VALUE" == *'$('* ]]; then
-              echo "error: Missing required build setting $REQUIRED_VAR"
-              exit 1
-            fi
-          done
-
-          PLIST_DIR="${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Library/LaunchDaemons"
-          PLIST="${PLIST_DIR}/${ROCKXY_HELPER_PLIST_NAME}"
-          /bin/mkdir -p "$PLIST_DIR"
-
-          ABI_ENTRIES=""
-          for BUNDLE_ID in ${ROCKXY_ALLOWED_CALLER_IDENTIFIERS}; do
-            ABI_ENTRIES="${ABI_ENTRIES}\t\t<string>${BUNDLE_ID}</string>\n"
-          done
-
-          cat > "$PLIST" <<PLISTEOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-          	<key>Label</key>
-          	<string>${ROCKXY_HELPER_MACH_SERVICE_NAME}</string>
-          	<key>BundleProgram</key>
-          	<string>${ROCKXY_HELPER_BUNDLE_PROGRAM}</string>
-          	<key>MachServices</key>
-          	<dict>
-          		<key>${ROCKXY_HELPER_MACH_SERVICE_NAME}</key>
-          		<true/>
-          	</dict>
-          	<key>AssociatedBundleIdentifiers</key>
-          	<array>
-          $(printf "%b" "${ABI_ENTRIES}")	</array>
-          </dict>
-          </plist>
-          PLISTEOF
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.claudestats.ClaudeStats
@@ -499,7 +307,6 @@ targets:
       - path: ClaudeStatsTests
     dependencies:
       - target: ClaudeStats
-      - target: RockxyBackendEmbed
       - target: AtollEmbed
     settings:
       base:

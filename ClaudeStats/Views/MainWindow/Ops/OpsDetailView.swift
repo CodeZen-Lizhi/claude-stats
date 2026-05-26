@@ -71,18 +71,10 @@ struct OpsDetailView: View {
     @ViewBuilder
     private var content: some View {
         switch section {
-        case .ports:
-            OpsPortsView(store: store)
-        case .processes:
-            OpsProcessesView(store: store)
         case .brew:
             OpsToolScroll { OpsBrewView(store: store) }
         case .environment:
             OpsToolScroll { OpsEnvironmentView(store: store) }
-        case .cleanup:
-            OpsToolScroll { OpsCleanupView(store: store) }
-        case .diagnostics:
-            OpsToolScroll { OpsDiagnosticsView(store: store) }
         }
     }
 
@@ -120,7 +112,7 @@ struct OpsToolScroll<Content: View>: View {
 
 #if DEBUG
 #Preview("Ops detail") {
-    OpsDetailView(store: OpsStore(), section: .ports)
+    OpsDetailView(store: OpsStore(), section: .brew)
         .environment(AppEnvironment.preview())
         .frame(width: 980, height: 720)
         .background(Color.stxBackground)

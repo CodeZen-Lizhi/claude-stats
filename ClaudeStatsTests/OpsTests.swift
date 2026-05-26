@@ -1,55 +1,8 @@
-import Darwin
 import Foundation
 import Testing
 @testable import ClaudeStats
 
 struct OpsParserTests {
-    @Test("ps parser identifies developer processes and protected owners")
-    func psParserIdentifiesDeveloperProcessesAndProtection() {
-        let output = """
-          123     1 alice   12.5  1.2  01:02 /opt/homebrew/bin/node node server.js
-          456     1 root     0.0  0.1  02:03 /usr/sbin/networkd /usr/sbin/networkd
-          789   123 alice    3.0  0.4  00:12 /usr/bin/python3 python3 -m http.server
-        """
-
-        let processes = OpsParsers.parseProcessList(output, currentPID: 999, currentUser: "alice")
-
-        #expect(processes.first?.pid == 123)
-        #expect(processes.first?.isDeveloperProcess == true)
-        #expect(processes.contains { $0.pid == 456 && $0.protection.reason == "Root-owned process." })
-        #expect(processes.contains { $0.pid == 789 && $0.protection.reason == nil })
-    }
-
-    @Test("lsof field parser maps ports to process metadata")
-    func lsofFieldParserMapsPortsToProcessMetadata() {
-        let process = OpsProcessItem(
-            pid: 123,
-            ppid: 1,
-            user: "alice",
-            cpuPercent: 0,
-            memoryPercent: 0,
-            elapsed: "00:01",
-            executablePath: "/opt/homebrew/bin/node",
-            commandLine: "node server.js",
-            protection: .allowed
-        )
-        let output = """
-        p123
-        cnode
-        Lalice
-        PTCP
-        n*:3000
-        """
-
-        let ports = OpsParsers.parseLsofFieldOutput(output, processLookup: [123: process])
-
-        #expect(ports.count == 1)
-        #expect(ports.first?.port == 3000)
-        #expect(ports.first?.processName == "node")
-        #expect(ports.first?.commandLine == "node server.js")
-        #expect(ports.first?.localhostURL == "http://localhost:3000")
-    }
-
     @Test("brew parsers handle text and json fallbacks")
     func brewParsersHandleTextAndJSONFallbacks() {
         let packages = OpsParsers.parseBrewListVersions(
@@ -70,41 +23,9 @@ struct OpsParserTests {
         #expect(services.first?.status == "started")
     }
 
-    @Test("diagnostic parsers summarize proxy dns and TLS expiry")
-    func diagnosticParsersSummarizeProxyDNSAndTLSExpiry() throws {
-        let proxy = OpsParsers.proxySummary(from: "HTTPEnable : 1\nHTTPProxy : 127.0.0.1\n")
-        let dns = OpsParsers.dnsSummary(from: "nameserver[0] : 1.1.1.1\nnameserver[1] : 8.8.8.8\n")
-        let cert = OpsParsers.firstPEMCertificate(from: "x\n-----BEGIN CERTIFICATE-----\nabc\n-----END CERTIFICATE-----\ny")
-        let expiry = try #require(OpsParsers.parseOpenSSLNotAfter("notAfter=Jun 10 12:00:00 2026 GMT"))
-
-        #expect(proxy.contains("HTTPEnable"))
-        #expect(dns.contains("1.1.1.1"))
-        #expect(cert?.contains("BEGIN CERTIFICATE") == true)
-        #expect(Calendar(identifier: .gregorian).component(.year, from: expiry) == 2026)
-    }
-
-    @Test("ps parser handles large axww lstart output without UI sorting")
-    func psParserHandlesLargeAxwwLstartOutputWithoutUISorting() {
-        let executable = "/Applications/Foo Bar.app/Contents/MacOS/Foo Bar"
-        let output = (0 ..< 10_000)
-            .map { index in
-                "\(index + 100) 1 alice 1.0 0.5 00:01 Wed May 20 17:23:00 2026 \(executable) --worker \(index) --long-argument value"
-            }
-            .joined(separator: "\n")
-
-        let processes = OpsParsers.parseProcessList(
-            output,
-            currentPID: 50_000,
-            currentUser: "alice",
-            executablePathResolver: { _, _ in executable }
-        )
-
-        #expect(processes.count == 10_000)
-        #expect(processes.first?.pid == 100)
-        #expect(processes.first?.startTime == "Wed May 20 17:23:00 2026")
-        #expect(processes.first?.executablePath == executable)
-        #expect(processes.first?.commandLine.contains("--worker 0") == true)
-        #expect(processes.last?.pid == 10_099)
+    @Test("first meaningful line skips blanks")
+    func firstMeaningfulLineSkipsBlanks() {
+        #expect(OpsParsers.firstMeaningfulLine("\n\n  git version 2.50.0\n") == "git version 2.50.0")
     }
 }
 
@@ -246,245 +167,7 @@ struct OpsServiceBrewTests {
         #expect(presentation.output.contains("Warning: /usr/bin occurs before /opt/homebrew/bin"))
         #expect(presentation.error == nil)
     }
-}
 
-@MainActor
-struct OpsStoreTests {
-    @Test("terminate requires confirmation before service call")
-    func terminateRequiresConfirmationBeforeServiceCall() async throws {
-        let service = FakeOpsService()
-        let store = OpsStore(service: service)
-        let process = OpsProcessItem(
-            pid: 222,
-            ppid: 1,
-            user: "alice",
-            cpuPercent: 0,
-            memoryPercent: 0,
-            elapsed: "00:01",
-            executablePath: "/bin/node",
-            commandLine: "node server.js",
-            protection: .allowed
-        )
-
-        store.requestTerminate(process)
-
-        #expect(store.pendingConfirmation != nil)
-        #expect(await service.terminatedSignals.isEmpty)
-
-        store.confirmPendingAction()
-        try await waitFor { await service.terminatedSignals == [SIGTERM] }
-    }
-
-    @Test("SIGTERM still running creates SIGKILL confirmation")
-    func sigtermStillRunningCreatesSIGKILLConfirmation() async throws {
-        let service = FakeOpsService()
-        await service.setStillRunningSignals([SIGTERM])
-        let store = OpsStore(service: service)
-        let process = OpsProcessItem(
-            pid: 222,
-            ppid: 1,
-            user: "alice",
-            cpuPercent: 0,
-            memoryPercent: 0,
-            elapsed: "00:01",
-            executablePath: "/bin/node",
-            commandLine: "node server.js",
-            protection: .allowed
-        )
-
-        store.requestTerminate(process)
-        store.confirmPendingAction()
-        try await waitFor { store.pendingConfirmation?.commandSummary == "kill -KILL 222" }
-        store.confirmPendingAction()
-
-        try await waitFor { await service.terminatedSignals == [SIGTERM, SIGKILL] }
-    }
-
-    @Test("protected processes cannot create terminate confirmation")
-    func protectedProcessesCannotCreateTerminateConfirmation() {
-        let store = OpsStore(service: FakeOpsService())
-        let process = OpsProcessItem(
-            pid: 1,
-            ppid: 0,
-            user: "root",
-            cpuPercent: 0,
-            memoryPercent: 0,
-            elapsed: "1-00:00",
-            executablePath: "/sbin/launchd",
-            commandLine: "/sbin/launchd",
-            protection: .protected(reason: "System launch process.")
-        )
-
-        store.requestTerminate(process)
-
-        #expect(store.pendingConfirmation == nil)
-        #expect(store.lastError?.contains("System launch process.") == true)
-    }
-
-    @Test("cleanup confirmation runs selected allowlisted cleanup")
-    func cleanupConfirmationRunsSelectedAllowlistedCleanup() async throws {
-        let service = FakeOpsService()
-        let store = OpsStore(service: service)
-        store.cleanupItems = [
-            OpsCleanupItem(kind: .npmCache, path: "/tmp/.npm", sizeBytes: 10, isAvailable: true, detail: "ok"),
-        ]
-        store.toggleCleanupSelection(store.cleanupItems[0])
-
-        store.requestCleanupSelected()
-        #expect(store.pendingConfirmation != nil)
-
-        store.confirmPendingAction()
-        try await waitFor { await service.cleanedKinds == [.npmCache] }
-    }
-
-    @Test("filtered selection follows visible ports and processes")
-    func filteredSelectionFollowsVisibleItems() {
-        let store = OpsStore(service: FakeOpsService())
-        store.processes = [
-            OpsProcessItem(pid: 1, ppid: 0, user: "alice", cpuPercent: 0, memoryPercent: 0, elapsed: "00:01", executablePath: "/bin/node", commandLine: "node api.js", protection: .allowed),
-            OpsProcessItem(pid: 2, ppid: 0, user: "alice", cpuPercent: 0, memoryPercent: 0, elapsed: "00:01", executablePath: "/bin/python3", commandLine: "python worker.py", protection: .allowed),
-        ]
-        store.selectProcess(store.processes[1])
-
-        store.processQuery = "node"
-
-        #expect(store.selectedProcess?.pid == 1)
-    }
-
-    @Test("process projection caches large visible list between reads")
-    func processProjectionCachesLargeVisibleListBetweenReads() {
-        let store = OpsStore(service: FakeOpsService())
-        store.processes = Self.makeProcesses(count: 5_000)
-
-        let generation = store.processProjectionGeneration
-        #expect(store.visibleProcessRows.count == 5_000)
-
-        for _ in 0 ..< 100 {
-            _ = store.visibleProcessRows.count
-            _ = store.selectedProcessRow?.id
-            _ = store.filteredProcesses.count
-        }
-
-        #expect(store.processProjectionGeneration == generation)
-
-        store.processQuery = "worker-4999"
-
-        #expect(store.processProjectionGeneration == generation + 1)
-        #expect(store.visibleProcessRows.map(\.id) == [4_999])
-        #expect(store.selectedProcessRow?.id == 4_999)
-    }
-
-    @Test("process projection sorts by cached row values")
-    func processProjectionSortsByCachedRowValues() {
-        let store = OpsStore(service: FakeOpsService())
-        store.processes = [
-            OpsProcessItem(pid: 10, ppid: 1, user: "alice", cpuPercent: 2, memoryPercent: 10, elapsed: "00:01", executablePath: "/usr/bin/git", commandLine: "git status", protection: .allowed),
-            OpsProcessItem(pid: 20, ppid: 1, user: "alice", cpuPercent: 9, memoryPercent: 3, elapsed: "00:01", executablePath: "/opt/homebrew/bin/node", commandLine: "node server.js", protection: .allowed),
-            OpsProcessItem(pid: 30, ppid: 1, user: "alice", cpuPercent: 4, memoryPercent: 50, elapsed: "00:01", executablePath: "/usr/bin/python3", commandLine: "python3 worker.py", protection: .allowed),
-        ]
-
-        #expect(store.visibleProcessRows.map(\.id) == [20, 30, 10])
-
-        store.processSort = .memory
-        #expect(store.visibleProcessRows.map(\.id) == [30, 10, 20])
-
-        store.processSort = .name
-        #expect(store.visibleProcessRows.map(\.displayName) == ["git", "node", "python3"])
-    }
-
-    @Test("port projection caches large visible list and repairs selection")
-    func portProjectionCachesLargeVisibleListAndRepairsSelection() {
-        let store = OpsStore(service: FakeOpsService())
-        store.ports = Self.makePorts(count: 1_000)
-        store.selectedPortID = store.ports[900].id
-
-        let generation = store.portProjectionGeneration
-        for _ in 0 ..< 100 {
-            _ = store.visiblePortRows.count
-            _ = store.selectedPortRow?.id
-            _ = store.filteredPorts.count
-        }
-        #expect(store.portProjectionGeneration == generation)
-
-        store.portQuery = "3001"
-
-        #expect(store.portProjectionGeneration == generation + 1)
-        #expect(store.visiblePortRows.map(\.item.port) == [3_001])
-        #expect(store.selectedPortRow?.item.port == 3_001)
-    }
-
-    private static func makeProcesses(count: Int) -> [OpsProcessItem] {
-        (0 ..< count).map { index in
-            let executable = index.isMultiple(of: 2) ? "/opt/homebrew/bin/node" : "/usr/bin/python3"
-            let command = index.isMultiple(of: 2) ? "node worker-\(index).js" : "python3 worker-\(index).py"
-            return OpsProcessItem(
-                pid: Int32(index),
-                ppid: 1,
-                user: "alice",
-                cpuPercent: Double(index % 100),
-                memoryPercent: Double((count - index) % 100),
-                elapsed: "00:01",
-                executablePath: executable,
-                commandLine: command,
-                protection: .allowed
-            )
-        }
-    }
-
-    private static func makePorts(count: Int) -> [OpsPortItem] {
-        (0 ..< count).map { index in
-            OpsPortItem(
-                id: "port-\(index)",
-                pid: Int32(index + 100),
-                processName: index.isMultiple(of: 2) ? "node" : "python3",
-                user: "alice",
-                protocolName: "TCP",
-                localAddress: "127.0.0.1",
-                port: 3_000 + index,
-                commandLine: "server --port \(3_000 + index)",
-                executablePath: "/usr/bin/env",
-                protection: .allowed
-            )
-        }
-    }
-}
-
-struct OpsServiceCleanupTests {
-    @Test("cleanup only removes known cache path for selected kind")
-    func cleanupOnlyRemovesKnownCachePath() async throws {
-        let dir = try TempDir.make()
-        defer { try? FileManager.default.removeItem(at: dir) }
-
-        let npm = dir.appendingPathComponent(".npm", isDirectory: true)
-        try FileManager.default.createDirectory(at: npm, withIntermediateDirectories: true)
-        try TempDir.write("cache", to: npm.appendingPathComponent("entry.txt"))
-
-        let service = OpsService(runner: FailingOpsRunner(), environment: ["PATH": ""], homeDirectory: dir)
-        let result = try await service.cleanup(kinds: [.npmCache])
-
-        #expect(result.removedKinds == [.npmCache])
-        #expect(!FileManager.default.fileExists(atPath: npm.path))
-    }
-
-    @Test("cleanup skips symlink targets")
-    func cleanupSkipsSymlinkTargets() async throws {
-        let dir = try TempDir.make()
-        defer { try? FileManager.default.removeItem(at: dir) }
-
-        let outside = dir.appendingPathComponent("outside", isDirectory: true)
-        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
-        let npm = dir.appendingPathComponent(".npm")
-        try FileManager.default.createSymbolicLink(at: npm, withDestinationURL: outside)
-
-        let service = OpsService(runner: FailingOpsRunner(), environment: ["PATH": ""], homeDirectory: dir)
-        let result = try await service.cleanup(kinds: [.npmCache])
-
-        #expect(result.removedKinds.isEmpty)
-        #expect(FileManager.default.fileExists(atPath: npm.path))
-    }
-}
-
-struct OpsServiceSafetyTests {
     @Test("brew typed actions reject unsafe tokens")
     func brewTypedActionsRejectUnsafeTokens() {
         #expect(!OpsService.brewActionIsAllowed(.install("--HEAD")))
@@ -495,54 +178,97 @@ struct OpsServiceSafetyTests {
         #expect(OpsService.brewActionIsAllowed(.service(.restart, "postgresql@16")))
     }
 
-    @Test("URL diagnostics only accept HTTP schemes")
-    func urlDiagnosticsOnlyAcceptHTTPSchemes() async {
-        let service = OpsService(runner: FailingOpsRunner(), environment: ["PATH": ""])
+    @Test("environment loader reports tool versions")
+    func environmentLoaderReportsToolVersions() async throws {
+        let temp = try makeTempDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let executable = temp.appendingPathComponent("git")
+        try "#!/bin/sh\nexit 0\n".write(to: executable, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
 
-        let file = await service.runURLDiagnostics("file://localhost/etc/hosts")
-        let ftp = await service.runURLDiagnostics("ftp://example.com")
+        let service = OpsService(
+            runner: RecordingOpsRunner(results: [
+                executable.path: OpsCommandResult(
+                    exitCode: 0,
+                    stdout: "git version 2.50.0\n",
+                    stderr: "",
+                    launchError: nil,
+                    timedOut: false
+                ),
+            ]),
+            environment: ["PATH": temp.path]
+        )
 
-        #expect(file.errorMessage?.contains("Only HTTP and HTTPS") == true)
-        #expect(ftp.errorMessage?.contains("Only HTTP and HTTPS") == true)
+        let tools = await service.loadEnvironment()
+        let git = tools.first { $0.command == "git" }
+
+        #expect(git?.resolvedPath == executable.path)
+        #expect(git?.version == "git version 2.50.0")
+        #expect(git?.status == .available)
+    }
+
+    private func makeTempDirectory() throws -> URL {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("claude-stats-ops-tests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        return root
+    }
+}
+
+@MainActor
+struct OpsStoreTests {
+    @Test("brew install requires confirmation before service call")
+    func brewInstallRequiresConfirmationBeforeServiceCall() async throws {
+        let service = FakeOpsService()
+        let store = OpsStore(service: service)
+
+        store.requestBrewInstall("git")
+
+        #expect(store.pendingConfirmation != nil)
+        #expect(await service.actions.isEmpty)
+
+        store.confirmPendingAction()
+        try await waitFor { await service.actions == [.install("git")] }
+        #expect(store.lastActionOutput == "ok")
+    }
+
+    @Test("brew selection repairs to visible package")
+    func brewSelectionRepairsToVisiblePackage() {
+        let store = OpsStore(service: FakeOpsService())
+        store.brewSnapshot = OpsBrewSnapshot(
+            brewPath: "/opt/homebrew/bin/brew",
+            packages: [
+                OpsBrewPackage(name: "git", installedVersion: "2.50.0", kind: .formula),
+                OpsBrewPackage(name: "node", installedVersion: "24.1.0", kind: .formula),
+            ],
+            services: [],
+            doctorOutput: ""
+        )
+        store.selectedBrewPackageID = "formula:missing"
+        store.brewQuery = "node"
+
+        #expect(store.selectedBrewPackage?.name == "node")
     }
 }
 
 private actor FakeOpsService: OpsServicing {
-    var terminatedSignals: [Int32] = []
-    var cleanedKinds: Set<OpsCleanupKind> = []
-    var stillRunningSignals = Set<Int32>()
+    var actions: [OpsBrewAction] = []
 
-    func setStillRunningSignals(_ signals: Set<Int32>) {
-        stillRunningSignals = signals
-    }
-
-    func loadPorts() async throws -> [OpsPortItem] { [] }
-    func loadProcesses() async throws -> [OpsProcessItem] { [] }
     func loadBrew() async -> OpsBrewSnapshot { .missing }
     func loadEnvironment() async -> [OpsEnvironmentTool] { [] }
-    func loadCleanupItems() async -> [OpsCleanupItem] { [] }
-    func loadDiagnostics() async -> OpsDiagnosticsSnapshot {
-        OpsDiagnosticsSnapshot(proxySummary: "", dnsSummary: "", hostsEntries: [])
-    }
-    func runURLDiagnostics(_ rawURL: String) async -> OpsURLDiagnosticResult {
-        OpsURLDiagnosticResult(url: rawURL, headerText: "", tlsExpiration: nil, errorMessage: nil)
-    }
-    func terminate(target: OpsProcessIdentity, signal: Int32) async throws -> OpsTerminationOutcome {
-        terminatedSignals.append(signal)
-        return OpsTerminationOutcome(pid: target.pid, signal: signal, isStillRunning: stillRunningSignals.contains(signal))
-    }
+
     func runBrew(action: OpsBrewAction) async throws -> OpsCommandResult {
-        OpsCommandResult(exitCode: 0, stdout: "ok", stderr: "", launchError: nil, timedOut: false)
-    }
-    func cleanup(kinds: Set<OpsCleanupKind>) async throws -> OpsCleanupResult {
-        cleanedKinds = kinds
-        return OpsCleanupResult(removedKinds: kinds, skippedKinds: [:], commandOutput: nil)
+        actions.append(action)
+        return OpsCommandResult(exitCode: 0, stdout: "ok", stderr: "", launchError: nil, timedOut: false)
     }
 }
 
-private struct FailingOpsRunner: OpsCommandRunning {
+private struct RecordingOpsRunner: OpsCommandRunning {
+    var results: [String: OpsCommandResult]
+
     func run(_ invocation: OpsCommandInvocation) async -> OpsCommandResult {
-        OpsCommandResult(exitCode: 1, stdout: "", stderr: "missing", launchError: nil, timedOut: false)
+        results[invocation.executablePath]
+            ?? OpsCommandResult(exitCode: 1, stdout: "", stderr: "missing", launchError: nil, timedOut: false)
     }
 }
 
