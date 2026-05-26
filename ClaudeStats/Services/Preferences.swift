@@ -176,11 +176,6 @@ final class Preferences {
         [.codex]
     }
 
-    /// Opt-in to the AI activity analysis (reads macOS Screen Time; needs Full
-    /// Disk Access). Off by default — the Activity tab only appears when on.
-    var aiActivityAnalysisEnabled: Bool {
-        didSet { defaults.set(aiActivityAnalysisEnabled, forKey: Keys.aiActivityAnalysisEnabled) }
-    }
     /// Opt-in to git tracking — adds a view that correlates Codex usage with the
     /// commit activity of the repos you've used Claude in. Off by default.
     var gitTrackingEnabled: Bool {
@@ -249,46 +244,6 @@ final class Preferences {
     var overlapPalette: OverlapPalette {
         didSet { defaults.set(overlapPalette.rawValue, forKey: Keys.overlapPalette) }
     }
-    /// Extra GUI coding-surface bundle ids the user added on top of
-    /// ``ActivitySurfaceCatalog/codingSurfaceDefaults``.
-    var codingSurfaceBundleIDsAdded: [String] {
-        didSet { defaults.set(codingSurfaceBundleIDsAdded, forKey: Keys.codingSurfaceBundleIDsAdded) }
-    }
-    /// Default GUI coding-surface bundle ids the user turned off.
-    var codingSurfaceBundleIDsRemoved: [String] {
-        didSet { defaults.set(codingSurfaceBundleIDsRemoved, forKey: Keys.codingSurfaceBundleIDsRemoved) }
-    }
-    /// Extra terminal/CLI-host bundle ids the user added on top of
-    /// ``ActivitySurfaceCatalog/cliHostDefaults``.
-    var cliHostBundleIDsAdded: [String] {
-        didSet { defaults.set(cliHostBundleIDsAdded, forKey: Keys.cliHostBundleIDsAdded) }
-    }
-    /// Default terminal/CLI-host bundle ids the user turned off.
-    var cliHostBundleIDsRemoved: [String] {
-        didSet { defaults.set(cliHostBundleIDsRemoved, forKey: Keys.cliHostBundleIDsRemoved) }
-    }
-
-    /// The GUI coding-surface bundle ids actually in effect for the analysis.
-    var effectiveCodingSurfaceBundleIDs: Set<String> {
-        ActivitySurfaceCatalog.effectiveCodingSurfaceBundleIDs(
-            added: codingSurfaceBundleIDsAdded,
-            removed: codingSurfaceBundleIDsRemoved
-        )
-    }
-
-    /// The CLI-host bundle ids actually in effect for the analysis.
-    var effectiveCLIHostBundleIDs: Set<String> {
-        ActivitySurfaceCatalog.effectiveCLIHostBundleIDs(
-            added: cliHostBundleIDsAdded,
-            removed: cliHostBundleIDsRemoved
-        )
-    }
-
-    /// All app-focus bundle ids needed for one Screen Time query.
-    var effectiveActivityBundleIDs: Set<String> {
-        effectiveCodingSurfaceBundleIDs.union(effectiveCLIHostBundleIDs)
-    }
-
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -338,7 +293,6 @@ final class Preferences {
         systemMonitorVisibleModules = storedSystemMonitorModules.isEmpty
             ? SystemMonitorModule.defaultVisible
             : Set(storedSystemMonitorModules)
-        aiActivityAnalysisEnabled = defaults.bool(forKey: Keys.aiActivityAnalysisEnabled)
         gitTrackingEnabled = defaults.bool(forKey: Keys.gitTrackingEnabled)
         gitOpensInWindow = defaults.bool(forKey: Keys.gitOpensInWindow)
         gitWorkspaceSourceIDs = GitWorkspaceSourceCatalog.decodeStoredSourceIDs(
@@ -359,25 +313,6 @@ final class Preferences {
         openAIStatusNotificationsEnabled = defaults.bool(forKey: Keys.openAIStatusNotificationsEnabled)
         openAIStatusLastNotificationFingerprint = defaults.string(forKey: Keys.openAIStatusLastNotificationFingerprint) ?? ""
         overlapPalette = OverlapPalette(rawValue: defaults.string(forKey: Keys.overlapPalette) ?? "") ?? .appCohesive
-        let hasNewCodingSurfaceAdditions = defaults.object(forKey: Keys.codingSurfaceBundleIDsAdded) != nil
-        let hasNewCodingSurfaceRemovals = defaults.object(forKey: Keys.codingSurfaceBundleIDsRemoved) != nil
-        let storedCodingSurfaceBundleIDsAdded = defaults.stringArray(forKey: Keys.codingSurfaceBundleIDsAdded)
-            ?? defaults.stringArray(forKey: Keys.ideBundleIDsAdded)
-            ?? []
-        let storedCodingSurfaceBundleIDsRemoved = defaults.stringArray(forKey: Keys.codingSurfaceBundleIDsRemoved)
-            ?? defaults.stringArray(forKey: Keys.ideBundleIDsRemoved)
-            ?? []
-        codingSurfaceBundleIDsAdded = storedCodingSurfaceBundleIDsAdded
-        codingSurfaceBundleIDsRemoved = storedCodingSurfaceBundleIDsRemoved
-        cliHostBundleIDsAdded = defaults.stringArray(forKey: Keys.cliHostBundleIDsAdded) ?? []
-        cliHostBundleIDsRemoved = defaults.stringArray(forKey: Keys.cliHostBundleIDsRemoved) ?? []
-
-        if !hasNewCodingSurfaceAdditions, defaults.object(forKey: Keys.ideBundleIDsAdded) != nil {
-            defaults.set(storedCodingSurfaceBundleIDsAdded, forKey: Keys.codingSurfaceBundleIDsAdded)
-        }
-        if !hasNewCodingSurfaceRemovals, defaults.object(forKey: Keys.ideBundleIDsRemoved) != nil {
-            defaults.set(storedCodingSurfaceBundleIDsRemoved, forKey: Keys.codingSurfaceBundleIDsRemoved)
-        }
 
         let remember = (defaults.object(forKey: Keys.rememberSelectedProvider) as? Bool) ?? true
 
@@ -435,18 +370,11 @@ final class Preferences {
         static let systemMonitorEnabled = "systemMonitorEnabled"
         static let systemMonitorRefreshRate = "systemMonitorRefreshRate"
         static let systemMonitorVisibleModules = "systemMonitorVisibleModules"
-        static let aiActivityAnalysisEnabled = "aiActivityAnalysisEnabled"
         static let gitTrackingEnabled = "gitTrackingEnabled"
         static let gitOpensInWindow = "gitOpensInWindow"
         static let gitWorkspaceSourceIDs = "gitWorkspaceSourceIDs"
         static let gitStatsScope = "gitStatsScope"
         static let gitDiffBlockGranularity = "gitDiffBlockGranularity"
-        static let codingSurfaceBundleIDsAdded = "codingSurfaceBundleIDsAdded"
-        static let codingSurfaceBundleIDsRemoved = "codingSurfaceBundleIDsRemoved"
-        static let cliHostBundleIDsAdded = "cliHostBundleIDsAdded"
-        static let cliHostBundleIDsRemoved = "cliHostBundleIDsRemoved"
-        static let ideBundleIDsAdded = "ideBundleIDsAdded"
-        static let ideBundleIDsRemoved = "ideBundleIDsRemoved"
         static let enabledProviders = "enabledProviders"
         static let selectedProvider = "selectedProvider"
         static let rememberSelectedProvider = "rememberSelectedProvider"

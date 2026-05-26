@@ -359,37 +359,6 @@ struct PreferencesTests {
         #expect(reloaded.openAIStatusVisibleGroupIDs == OpenAIStatusGroupCatalog.defaultVisibleGroupIDs)
     }
 
-    @Test("Legacy IDE bundle preferences migrate to coding surfaces")
-    func legacyIDEBundlePreferencesMigrate() {
-        let defaults = makeDefaults()
-        defaults.set(["com.example.LegacyEditor"], forKey: "ideBundleIDsAdded")
-        defaults.set(["com.apple.dt.Xcode"], forKey: "ideBundleIDsRemoved")
-
-        let prefs = Preferences(defaults: defaults)
-
-        #expect(prefs.codingSurfaceBundleIDsAdded == ["com.example.LegacyEditor"])
-        #expect(prefs.codingSurfaceBundleIDsRemoved == ["com.apple.dt.Xcode"])
-        #expect(prefs.effectiveCodingSurfaceBundleIDs.contains("com.example.LegacyEditor"))
-        #expect(!prefs.effectiveCodingSurfaceBundleIDs.contains("com.apple.dt.Xcode"))
-        #expect(defaults.stringArray(forKey: "codingSurfaceBundleIDsAdded") == ["com.example.LegacyEditor"])
-        #expect(defaults.stringArray(forKey: "codingSurfaceBundleIDsRemoved") == ["com.apple.dt.Xcode"])
-    }
-
-    @Test("CLI host bundle preferences persist")
-    func cliHostBundlePreferencesPersist() {
-        let defaults = makeDefaults()
-        let prefs = Preferences(defaults: defaults)
-        prefs.cliHostBundleIDsAdded = ["com.example.Terminal"]
-        prefs.cliHostBundleIDsRemoved = ["com.apple.Terminal"]
-
-        let reloaded = Preferences(defaults: defaults)
-        #expect(reloaded.cliHostBundleIDsAdded == ["com.example.Terminal"])
-        #expect(reloaded.cliHostBundleIDsRemoved == ["com.apple.Terminal"])
-        #expect(reloaded.effectiveCLIHostBundleIDs.contains("com.example.Terminal"))
-        #expect(!reloaded.effectiveCLIHostBundleIDs.contains("com.apple.Terminal"))
-        #expect(reloaded.effectiveCLIHostBundleIDs.contains("com.mitchellh.ghostty"))
-    }
-
     private func makeDefaults() -> UserDefaults {
         let suiteName = "com.codexstats.tests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName) ?? .standard

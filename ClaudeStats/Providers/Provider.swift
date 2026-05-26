@@ -49,14 +49,6 @@ protocol Provider: Sendable {
     /// their transcript format reports cache fields with different semantics.
     func cacheHitRate(for usage: TokenUsage) -> Double?
 
-    /// Read-only AI configuration sources surfaced by the Configs page.
-    /// Providers own path conventions; the shared scanner owns parsing,
-    /// statistics, and diagnostics.
-    func globalAIConfigSources() -> [AIConfigSource]
-
-    /// Project-local AI configuration sources surfaced by the Configs page.
-    func projectAIConfigSources(for projectURL: URL) -> [AIConfigSource]
-
     /// Optional provider-owned usage-limit snapshot. Providers that expose
     /// rate-limit windows keep file formats and source-specific fallback logic
     /// behind this boundary so shared UI can remain provider-agnostic.
@@ -70,7 +62,5 @@ extension Provider {
     func taskIntervals(for session: Session) async -> [SessionTaskInterval] { [] }
     func displayName(forModel id: String) -> String { id }
     func cacheHitRate(for usage: TokenUsage) -> Double? { usage.cacheHitRate }
-    func globalAIConfigSources() -> [AIConfigSource] { [] }
-    func projectAIConfigSources(for projectURL: URL) -> [AIConfigSource] { [] }
     func usageLimitReport(now: Date) async -> UsageLimitReport { .unsupported(provider: kind) }
 }

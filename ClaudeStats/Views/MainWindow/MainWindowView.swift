@@ -4,14 +4,13 @@ import SwiftUI
 /// Top-level page shown in the main window's detail column. Settings live in
 /// their own main-window mode, not as a `MainPage`.
 enum MainPage: String, CaseIterable, Identifiable, Sendable {
-    case dashboard, usage, activity, git, system
+    case dashboard, usage, git, system
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .dashboard: L10n.string("main_page.dashboard", defaultValue: "Dashboard")
         case .usage: L10n.string("main_page.usage", defaultValue: "Usage")
-        case .activity: L10n.string("main_page.activity", defaultValue: "Activity")
         case .git: L10n.string("main_page.git", defaultValue: "Git")
         case .system: L10n.string("main_page.system", defaultValue: "System")
         }
@@ -21,7 +20,6 @@ enum MainPage: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .dashboard: "square.grid.2x2"
         case .usage: "chart.bar.xaxis"
-        case .activity: "waveform"
         case .git: "arrow.triangle.branch"
         case .system: "cpu"
         }
@@ -47,10 +45,6 @@ struct MainWindowView: View {
     @SceneStorage("mainWindow.sidebarVisible") private var sidebarVisible: Bool = true
     @SceneStorage("mainWindow.mode") private var modeRaw: String = MainWindowMode.app.rawValue
     @SceneStorage("mainWindow.settingsSection") private var settingsSectionRaw: String = SettingsSection.general.rawValue
-    @SceneStorage("mainWindow.configsSection") private var configsSectionRaw: String = AIConfigsSection.overview.rawValue
-    @SceneStorage("mainWindow.configsSearch") private var configsSearchText: String = ""
-    @SceneStorage("mainWindow.configsProjectID") private var configsProjectIDRaw: String = ""
-    @SceneStorage("mainWindow.configsDocumentID") private var configsDocumentIDRaw: String = ""
     @SceneStorage("mainWindow.opsSection") private var opsSectionRaw: String = OpsSection.brew.rawValue
     @SceneStorage("mainWindow.sessionsDestination") private var sessionsDestinationRaw: String = SessionsDestination.overviewRawValue
     @State private var page: MainPage = .dashboard
@@ -59,7 +53,6 @@ struct MainWindowView: View {
 
     private var availablePages: [MainPage] {
         var pages: [MainPage] = [.dashboard, .usage]
-        if env.preferences.aiActivityAnalysisEnabled { pages.append(.activity) }
         if env.preferences.gitTrackingEnabled { pages.append(.git) }
         if env.preferences.systemMonitorEnabled { pages.append(.system) }
         return pages
@@ -84,10 +77,6 @@ struct MainWindowView: View {
         SettingsSection(rawValue: settingsSectionRaw) ?? .general
     }
 
-    private var configsSection: AIConfigsSection {
-        AIConfigsSection(rawValue: configsSectionRaw) ?? .overview
-    }
-
     private var opsSection: OpsSection {
         OpsSection(storedRawValue: opsSectionRaw)
     }
@@ -96,34 +85,6 @@ struct MainWindowView: View {
         Binding(
             get: { settingsSection },
             set: { settingsSectionRaw = $0.rawValue }
-        )
-    }
-
-    private var configsSectionBinding: Binding<AIConfigsSection> {
-        Binding(
-            get: { configsSection },
-            set: { configsSectionRaw = $0.rawValue }
-        )
-    }
-
-    private var configsSearchBinding: Binding<String> {
-        Binding(
-            get: { configsSearchText },
-            set: { configsSearchText = $0 }
-        )
-    }
-
-    private var configsProjectIDBinding: Binding<String> {
-        Binding(
-            get: { configsProjectIDRaw },
-            set: { configsProjectIDRaw = $0 }
-        )
-    }
-
-    private var configsDocumentIDBinding: Binding<String> {
-        Binding(
-            get: { configsDocumentIDRaw },
-            set: { configsDocumentIDRaw = $0 }
         )
     }
 
@@ -155,19 +116,12 @@ struct MainWindowView: View {
                     availablePages: availablePages,
                     onOpenSettings: openSettings,
                     onOpenSessions: openSessions,
-                    onOpenConfigs: openConfigs,
                     onOpenOps: openOps
                 )
             } sessionsSidebar: {
                 SessionSidebarColumn(
                     destination: sessionsDestinationBinding,
                     onExit: closeSessions
-                )
-            } configsSidebar: {
-                AIConfigsSidebarColumn(
-                    section: configsSectionBinding,
-                    searchText: configsSearchBinding,
-                    onExit: closeConfigs
                 )
             } settingsSidebar: {
                 SettingsSidebarColumn(section: settingsSectionBinding, onExit: closeSettings)
@@ -177,13 +131,6 @@ struct MainWindowView: View {
                 detail
             } sessionsDetail: {
                 sessionsDetail
-            } configsDetail: {
-                AIConfigsDetailView(
-                    section: configsSection,
-                    searchText: configsSearchText,
-                    selectedProjectID: configsProjectIDBinding,
-                    selectedDocumentID: configsDocumentIDBinding
-                )
             } settingsDetail: {
                 SettingsDetailView(section: settingsSection, onSelectSection: selectSettingsSection)
             } opsDetail: {
@@ -195,7 +142,7 @@ struct MainWindowView: View {
                     .onTapGesture { clearTextFocus() }
             }
 
-            if mode == .app || mode == .sessions || mode == .configs || mode == .ops {
+            if mode == .app || mode == .sessions || mode == .ops {
                 sidebarToggle
                     .padding(.leading, 81)
                     .padding(.top, 11)
@@ -231,9 +178,6 @@ struct MainWindowView: View {
             if mode == .sessions, case .session = sessionsDestination {
                 sessionsDestinationRaw = SessionsDestination.overviewRawValue
             }
-        }
-        .onChange(of: env.preferences.aiActivityAnalysisEnabled) { _, on in
-            if !on && page == .activity { page = .dashboard }
         }
         .onChange(of: env.preferences.gitTrackingEnabled) { _, on in
             if !on && page == .git { page = .dashboard }
@@ -282,8 +226,6 @@ struct MainWindowView: View {
             DashboardView()
         case .usage:
             MainUsageView()
-        case .activity:
-            MainActivityView()
         case .git:
             MainGitActivityView()
         case .system:
@@ -329,10 +271,6 @@ struct MainWindowView: View {
         transition(to: .sessions)
     }
 
-    private func openConfigs() {
-        transition(to: .configs)
-    }
-
     private func openOps() {
         transition(to: .ops)
     }
@@ -342,10 +280,6 @@ struct MainWindowView: View {
     }
 
     private func closeSessions() {
-        transition(to: .app)
-    }
-
-    private func closeConfigs() {
         transition(to: .app)
     }
 

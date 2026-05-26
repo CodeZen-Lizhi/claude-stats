@@ -2,8 +2,7 @@ import SwiftUI
 import AppKit
 
 /// The main window's left column. Two regions stacked vertically:
-///   - Top nav (Dashboard, STATS for usage/activity, then TOOLS for
-///     configuration and Git tools).
+///   - Top nav (Dashboard, STATS for usage/system, then TOOLS for Git and Ops).
 /// Settings stays pinned at the bottom.
 ///
 /// Lives over a window-level `NSVisualEffectView` (`.sidebar` material), so
@@ -13,7 +12,6 @@ struct SidebarColumn: View {
     var availablePages: [MainPage]
     var onOpenSettings: () -> Void
     var onOpenSessions: () -> Void
-    var onOpenConfigs: () -> Void
     var onOpenOps: () -> Void
 
     @Environment(AppEnvironment.self) private var env
@@ -28,20 +26,9 @@ struct SidebarColumn: View {
 
             sectionHeader("STATS")
             navRow(.usage)
-            if env.preferences.aiActivityAnalysisEnabled { navRow(.activity) }
             if env.preferences.systemMonitorEnabled { navRow(.system) }
 
             sectionHeader("TOOLS")
-            SidebarRow(
-                title: "Configs",
-                symbol: "doc.text.magnifyingglass",
-                isSelected: false,
-                trailingSymbol: "chevron.right",
-                showsTrailingOnHover: true
-            ) {
-                clearTextFocus()
-                onOpenConfigs()
-            }
             if env.preferences.gitTrackingEnabled { navRow(.git) }
             SidebarRow(
                 title: "Ops",
@@ -192,10 +179,9 @@ struct SidebarRow: View {
     @Previewable @State var page: MainPage = .dashboard
     return SidebarColumn(
         page: $page,
-        availablePages: [.dashboard, .usage, .activity, .git],
+        availablePages: [.dashboard, .usage, .git],
         onOpenSettings: {},
         onOpenSessions: {},
-        onOpenConfigs: {},
         onOpenOps: {}
     )
     .environment(AppEnvironment.preview())

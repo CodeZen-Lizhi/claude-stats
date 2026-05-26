@@ -932,26 +932,6 @@
         }
       }
     },
-    "Claude Stats reads macOS Screen Time (the Knowledge database) to see when your coding surfaces and CLI hosts were focused. macOS keeps that file behind Full Disk Access — grant it, then come back to this tab." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Claude Stats 会读取 macOS 屏幕使用时间（Knowledge 数据库），以了解你的编码界面与 CLI 主机何时处于焦点。macOS 将该文件置于完全磁盘访问权限之后 —— 授予权限后再回到此标签页。"
-          }
-        }
-      }
-    },
-    "Claude Stats reads macOS Screen Time to see when your coding surfaces and CLI hosts were focused. macOS protects that database behind Full Disk Access." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Claude Stats 会读取 macOS 屏幕使用时间，以了解你的编码界面与 CLI 主机何时处于焦点。macOS 将该数据库置于完全磁盘访问权限之后保护。"
-          }
-        }
-      }
-    },
     "Claude Status" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1056,46 +1036,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "编码活动"
-          }
-        }
-      }
-    },
-    "CODING SURFACE · CLI HOST · AI ACTIVE" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "编码界面 · CLI 主机 · AI 活跃"
-          }
-        }
-      }
-    },
-    "Coding surface, CLI host, and AI active windows." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "编码界面、CLI 主机与 AI 活跃时段。"
-          }
-        }
-      }
-    },
-    "Coding surfaces" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "编码界面"
-          }
-        }
-      }
-    },
-    "Coding-surface focus, CLI host time, and AI bursts for %@." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 的编码界面专注、CLI 主机时长与 AI 爆发。"
           }
         }
       }
@@ -1526,16 +1466,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "每日明细"
-          }
-        }
-      }
-    },
-    "Daily share of GUI coding-surface focus that overlapped with AI activity." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "每日 GUI 编码界面专注中与 AI 活动重叠的占比。"
           }
         }
       }
@@ -2692,23 +2622,6 @@
         }
       }
     },
-    "main_page.activity" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Activity"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "活动"
-          }
-        }
-      }
-    },
     "main_page.dashboard" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3015,36 +2928,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没有可显示的更改。"
-          }
-        }
-      }
-    },
-    "No coding-surface activity data to show — Claude Stats needs Full Disk Access to read macOS Screen Time." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没有可显示的编码界面活动数据 —— Claude Stats 需要完全磁盘访问权限才能读取 macOS 屏幕使用时间。"
-          }
-        }
-      }
-    },
-    "No coding-surface activity recorded in this range." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此范围内未记录编码界面活动。"
-          }
-        }
-      }
-    },
-    "No coding-surface, CLI host, or AI activity recorded for this day." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这一天未记录编码界面、CLI 主机或 AI 活动。"
           }
         }
       }
@@ -5097,23 +4980,6 @@
         }
       }
     },
-    "stats.pane.activity" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ACTIVITY"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "活动"
-          }
-        }
-      }
-    },
     "stats.pane.git" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5868,16 +5734,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "编码界面"
-          }
-        }
-      }
-    },
-    "Surface + AI / coding surface" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "编码界面 + AI / 编码界面"
           }
         }
       }
@@ -7706,16 +7562,6 @@
         }
       }
     },
-    "Coding surface, CLI host, and AI activity timeline" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "编码界面、CLI 主机与 AI 活动时间线"
-          }
-        }
-      }
-    },
     "Comment" : {
       "localizations" : {
         "zh-Hans" : {
@@ -7732,16 +7578,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "撰写"
-          }
-        }
-      }
-    },
-    "Configs Detail" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "配置详情"
           }
         }
       }
@@ -8406,16 +8242,6 @@
         }
       }
     },
-    "Open Full Disk Access settings" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打开完全磁盘访问设置"
-          }
-        }
-      }
-    },
     "Open Git activity" : {
       "localizations" : {
         "zh-Hans" : {
@@ -8642,16 +8468,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "读取 Codex"
-          }
-        }
-      }
-    },
-    "Refresh configs" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "刷新配置"
           }
         }
       }
@@ -9206,16 +9022,6 @@
         }
       }
     },
-    "AI Activity Analysis" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "AI 活动分析"
-          }
-        }
-      }
-    },
     "API estimate uses standard first-party token prices. Detailed billing also applies fast mode and web search charges when Claude logs expose them." : {
       "localizations" : {
         "zh-Hans" : {
@@ -9276,16 +9082,6 @@
         }
       }
     },
-    "Adds an Activity tab that compares coding surfaces, CLI hosts, and AI activity. Reading Screen Time requires Full Disk Access." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "添加“活动”标签页，对比编码界面、CLI 主机与 AI 活动。读取屏幕使用时间需要完全磁盘访问权限。"
-          }
-        }
-      }
-    },
     "Adds an Atoll-backed Dynamic Island surface around the camera notch while keeping existing app entry points." : {
       "localizations" : {
         "zh-Hans" : {
@@ -9336,52 +9132,12 @@
         }
       }
     },
-    "CLI hosts" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "CLI 主机"
-          }
-        }
-      }
-    },
-    "Choose a config file to inspect its read-only preview and diagnostics." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择一个配置文件以查看其只读预览和诊断。"
-          }
-        }
-      }
-    },
     "Colour scheme used by the Overlap heatmap on the Dashboard." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "仪表盘上 Overlap 热力图使用的配色方案。"
-          }
-        }
-      }
-    },
-    "Compares coding apps, terminal hosts, and AI-assisted overlap using local Screen Time data." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "使用本地屏幕使用时间数据对比编码应用、终端主机与 AI 辅助重叠。"
-          }
-        }
-      }
-    },
-    "Configs" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "配置"
           }
         }
       }
@@ -9452,26 +9208,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "浮动边缘标签"
-          }
-        }
-      }
-    },
-    "GUI coding apps plus Codex and Claude." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "GUI 编码应用，外加 Codex 和 Claude。"
-          }
-        }
-      }
-    },
-    "GUI coding surfaces" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "GUI 编码界面"
           }
         }
       }
@@ -9716,26 +9452,6 @@
         }
       }
     },
-    "Refresh or adjust the search query to inspect configs." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "刷新或调整搜索查询以查看配置。"
-          }
-        }
-      }
-    },
-    "Required so Claude Stats can read the local Screen Time database." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "需要此权限以便 Claude Stats 读取本地的屏幕使用时间数据库。"
-          }
-        }
-      }
-    },
     "Runs in the background while the app is open. You can force a sync here." : {
       "localizations" : {
         "zh-Hans" : {
@@ -9866,16 +9582,6 @@
         }
       }
     },
-    "This scope has no files for the selected Configs section." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此范围在所选的“配置”分区中没有文件。"
-          }
-        }
-      }
-    },
     "Total Commits" : {
       "localizations" : {
         "zh-Hans" : {
@@ -9902,16 +9608,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在“功能”中开启它，以连接 GitHub 账户并编辑对比设置。"
-          }
-        }
-      }
-    },
-    "Turn it on in Features to edit Screen Time access and coding surface settings." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在“功能”中开启它，以编辑屏幕使用时间访问与编码界面设置。"
           }
         }
       }
@@ -10262,16 +9958,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "规则名称"
-          }
-        }
-      }
-    },
-    "Search configs" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "搜索配置"
           }
         }
       }

@@ -23,7 +23,6 @@ final class AppEnvironment {
     let github = GitHubViewModel()
     let openAIStatus: OpenAIStatusViewModel
     let usageLimits: UsageLimitStore
-    let aiConfigs: AIConfigsViewModel
     let systemMonitor: SystemMonitorViewModel
     let ops: OpsStore
 
@@ -46,7 +45,6 @@ final class AppEnvironment {
         self.gitActivity = GitActivityViewModel()
         self.openAIStatus = OpenAIStatusViewModel(preferences: preferences)
         self.usageLimits = usageLimits ?? UsageLimitStore(registry: providerRegistry)
-        self.aiConfigs = AIConfigsViewModel(scanner: AIConfigScanner(registry: providerRegistry))
     }
 
     convenience init() {

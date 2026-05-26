@@ -1,8 +1,7 @@
 import Foundation
 
 /// Reads git history by shelling out to `git`. Stateless and `Sendable`; all of
-/// its methods block on `Process`, so callers run them off the main actor (the
-/// view model does this via `Task.detached`, mirroring `ScreenTimeService`).
+/// its methods block on `Process`, so callers run them off the main actor.
 struct GitAnalyzer: Sendable {
     /// macOS ships the Xcode command-line-tools shim here; if the tools aren't
     /// installed, invoking it triggers the install prompt — acceptable for a

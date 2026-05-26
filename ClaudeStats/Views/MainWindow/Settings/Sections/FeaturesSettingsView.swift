@@ -2,7 +2,6 @@ import SwiftUI
 
 struct FeaturesSettingsView: View {
     @Environment(AppEnvironment.self) private var env
-    @State private var fullDiskAccessOK = ScreenTimeService.canRead()
 
     var onSelectSection: (SettingsSection) -> Void = { _ in }
 
@@ -14,26 +13,11 @@ struct FeaturesSettingsView: View {
         @Bindable var prefs = env.preferences
 
         LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
-            aiActivityCard(prefs: prefs)
             gitTrackingCard(prefs: prefs)
             systemMonitorCard(prefs: prefs)
             githubCard(prefs: prefs)
             floatingTabCard(prefs: prefs)
             notchIslandCard(prefs: prefs)
-        }
-    }
-
-    private func aiActivityCard(prefs: Preferences) -> some View {
-        @Bindable var prefs = prefs
-        return FeatureControlCard(
-            title: "AI Activity Analysis",
-            symbol: "waveform.path.ecg",
-            description: "Compares coding apps, terminal hosts, and AI-assisted overlap using local Screen Time data.",
-            status: prefs.aiActivityAnalysisEnabled ? fullDiskAccessStatus : "Hidden from Stats",
-            isOn: $prefs.aiActivityAnalysisEnabled,
-            onConfigure: { onSelectSection(.tracking) }
-        ) {
-            ActivityFeaturePreview()
         }
     }
 
@@ -107,10 +91,6 @@ struct FeaturesSettingsView: View {
         }
     }
 
-    private var fullDiskAccessStatus: String {
-        fullDiskAccessOK ? "Full Disk Access granted" : "Needs Full Disk Access"
-    }
-
     private func gitTrackingStatus(prefs: Preferences) -> String {
         prefs.gitOpensInWindow ? "Separate window" : "Panel tab"
     }
@@ -137,33 +117,6 @@ struct FeaturesSettingsView: View {
         }
     }
 
-}
-
-private struct ActivityFeaturePreview: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Label("Activity", systemImage: "waveform")
-                    .font(.sora(12, weight: .semibold))
-                Spacer()
-                Text("Today")
-                    .font(.sora(10, weight: .medium))
-                    .foregroundStyle(Color.stxMuted)
-            }
-
-            HStack(spacing: 8) {
-                PreviewMetric(title: "Surface", value: "4h 12m")
-                PreviewMetric(title: "AI Active", value: "2h 37m")
-                PreviewMetric(title: "Overlap", value: "61%")
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                PreviewLane(label: "IDE", color: Color.primary.opacity(0.28), widths: [0.42, 0.24, 0.18])
-                PreviewLane(label: "CLI", color: Color.blue.opacity(0.46), widths: [0.22, 0.18, 0.36])
-                PreviewLane(label: "AI", color: Color.stxAccent.opacity(0.68), widths: [0.31, 0.24, 0.22])
-            }
-        }
-    }
 }
 
 private struct GitTrackingFeaturePreview: View {

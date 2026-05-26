@@ -3,9 +3,8 @@ import AppKit
 import UniformTypeIdentifiers
 
 /// The "Share Stats" window: a live preview of the exported panel on the left,
-/// the export options (appearance, pane, time range / activity range, chart) on
-/// the right, and Save / Copy actions that rasterise the panel to a PNG via
-/// `ImageRenderer`.
+/// the export options (appearance, pane, time range, chart) on the right, and
+/// Save / Copy actions that rasterise the panel to a PNG via `ImageRenderer`.
 struct ShareExportView: View {
     static let windowID = "share-export"
 
@@ -21,13 +20,10 @@ struct ShareExportView: View {
     @State private var customEnd = Date.now
     @State private var chartStyle: TrendChartStyle = .line
     @State private var useLog = false
-    @State private var activityVM = AIActivityViewModel()
     @State private var statusMessage: String?
 
     private var availablePanes: [StatsPane] {
-        StatsPane.allCases.filter { pane in
-            pane != .git && (pane != .activity || env.preferences.aiActivityAnalysisEnabled)
-        }
+        StatsPane.allCases.filter { $0 != .git }
     }
 
     private var selection: PeriodSelection {
@@ -37,34 +33,9 @@ struct ShareExportView: View {
     private var exportConfig: StatsExportConfig {
         StatsExportConfig(
             usage: UsageView.ExportConfig(period: selection, chartStyle: chartStyle, useLog: useLog && chartStyle == .line),
-            activity: AIActivityView.ExportData(
-                range: activityVM.range,
-                selectedDay: activityVM.selectedDay,
-                dayActivity: activityVM.dayActivity,
-                trend: activityVM.trend,
-                permissionDenied: activityVM.permissionState == .needsFullDiskAccess,
-                isLoading: activityVM.isLoading
-            ),
             showTopBar: showTopBar,
             stampDate: .now,
             stampPrecision: stampPrecision
-        )
-    }
-
-    private var activityLoading: Bool { pane == .activity && activityVM.isLoading }
-
-    private var activityReloadKey: AnyHashable {
-        [AnyHashable(pane == .activity), AnyHashable(activityVM.reloadToken),
-         AnyHashable(env.store.lastRefreshedAt), AnyHashable(env.preferences.effectiveCodingSurfaceBundleIDs),
-         AnyHashable(env.preferences.effectiveCLIHostBundleIDs),
-         AnyHashable(env.preferences.selectedProvider)]
-    }
-
-    /// A day binding that re-triggers the activity reload when changed.
-    private var dayBinding: Binding<Date> {
-        Binding(
-            get: { activityVM.selectedDay },
-            set: { activityVM.selectedDay = $0; activityVM.bumpReload() }
         )
     }
 
@@ -98,15 +69,6 @@ struct ShareExportView: View {
                 .padding(20)
         }
         .frame(minHeight: 540)
-        .task(id: activityReloadKey) {
-            guard pane == .activity else { return }
-            await activityVM.reload(
-                sessions: env.store.sessions(for: env.preferences.selectedProvider),
-                codingSurfaceBundleIDs: env.preferences.effectiveCodingSurfaceBundleIDs,
-                cliHostBundleIDs: env.preferences.effectiveCLIHostBundleIDs
-            )
-        }
-        .onAppear { activityVM.refreshPermissionState() }
     }
 
     @ViewBuilder
@@ -163,36 +125,23 @@ struct ShareExportView: View {
                 }
             }
 
-            if pane == .activity {
-                optionGroup("Activity range") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        UnderlineTabRow(options: ActivityRange.allCases, label: \.shortLabel, selection: $activityVM.range)
-
-                        if activityVM.range == .day {
-                            DatePicker("Day", selection: dayBinding, in: ...activityVM.today, displayedComponents: .date)
-                                .font(.sora(11))
-                        }
+            optionGroup("Time range") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Picker("Time range", selection: $preset) {
+                        ForEach(StatsPeriod.allCases) { Text($0.displayName).tag($0) }
                     }
-                }
-            } else {
-                optionGroup("Time range") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Picker("Time range", selection: $preset) {
-                            ForEach(StatsPeriod.allCases) { Text($0.displayName).tag($0) }
-                        }
-                        .labelsHidden()
-                        .disabled(useCustomRange)
+                    .labelsHidden()
+                    .disabled(useCustomRange)
 
-                        DisclosureGroup(isExpanded: $useCustomRange) {
-                            VStack(alignment: .leading, spacing: 6) {
-                                DatePicker("From", selection: $customStart, displayedComponents: .date)
-                                DatePicker("To", selection: $customEnd, displayedComponents: .date)
-                            }
-                            .font(.sora(11))
-                            .padding(.top, 4)
-                        } label: {
-                            Text("Advanced — custom range").font(.sora(11))
+                    DisclosureGroup(isExpanded: $useCustomRange) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            DatePicker("From", selection: $customStart, displayedComponents: .date)
+                            DatePicker("To", selection: $customEnd, displayedComponents: .date)
                         }
+                        .font(.sora(11))
+                        .padding(.top, 4)
+                    } label: {
+                        Text("Advanced — custom range").font(.sora(11))
                     }
                 }
             }
@@ -211,7 +160,6 @@ struct ShareExportView: View {
                 Button("Save PNG…") { savePNG() }
                     .keyboardShortcut(.defaultAction)
             }
-            .disabled(activityLoading)
         }
     }
 
