@@ -179,3 +179,37 @@ Diagnosed packaged Claude Stats exiting while idle, added a resident menu-bar li
 ### Next Steps
 
 - None - task complete
+
+
+## Session 6: 删除 Skills 功能
+
+**Date**: 2026-05-26
+**Task**: 删除 Skills 功能
+**Package**: ThirdParty/Atoll
+**Branch**: `codex/release-ci-fix`
+
+### Summary
+
+移除主窗口 Skills 功能入口、相关模型服务视图与测试，并更新产品 PRD 将 Skills 库列入当前 fork 的删减范围。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `64eb79d` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
