@@ -577,8 +577,9 @@ private extension SessionStore {
 
     static func childSessionMarker(for child: Session) -> SessionTranscriptMessage {
         let stats = child.stats
-        let tokens = stats.map { Format.tokens($0.totalTokens(includingCacheRead: true)) } ?? "0"
-        let cost = stats.map { Format.cost($0.totalCost) } ?? "$0.00"
+        let ownTotals = ownTotals(for: child)
+        let tokens = Format.tokens(ownTotals.tokens)
+        let cost = Format.cost(ownTotals.cost)
         let label = child.agentInfo?.displayTitle ?? child.projectDisplayName
         return SessionTranscriptMessage(
             id: "\(child.id)::subagent-marker",
@@ -586,6 +587,20 @@ private extension SessionStore {
             text: "Subagent: \(label)\nTokens: \(tokens)   Cost: \(cost)   Session: \(child.externalID)",
             timestamp: stats?.firstActivity ?? child.lastModified,
             model: stats?.models.first?.model
+        )
+    }
+
+    static func ownTotals(for session: Session) -> (tokens: Int, cost: Double) {
+        guard let stats = session.stats else { return (0, 0) }
+        let childTokens = session.childSessions.reduce(0) { partial, child in
+            partial + (child.stats?.totalTokens(includingCacheRead: true) ?? 0)
+        }
+        let childCost = session.childSessions.reduce(0) { partial, child in
+            partial + (child.stats?.totalCost ?? 0)
+        }
+        return (
+            max(0, stats.totalTokens(includingCacheRead: true) - childTokens),
+            max(0, stats.totalCost - childCost)
         )
     }
 }

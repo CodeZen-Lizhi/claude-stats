@@ -245,6 +245,8 @@ struct SessionStoreTests {
         #expect(messages.map(\.text).contains("root"))
         #expect(messages.map(\.text).contains("child"))
         #expect(messages.map(\.text).contains("grandchild"))
+        #expect(messages.contains { $0.text.contains("Subagent: Planner") && $0.text.contains("Tokens: 50") })
+        #expect(messages.contains { $0.text.contains("Subagent: Worker") && $0.text.contains("Tokens: 25") })
     }
 
     @MainActor
