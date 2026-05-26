@@ -145,3 +145,37 @@ Diagnosed packaged Claude Stats exiting while idle, added a resident menu-bar li
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: 修复 OPS 环境工具检测
+
+**Date**: 2026-05-26
+**Task**: 修复 OPS 环境工具检测
+**Package**: ThirdParty/Atoll
+**Branch**: `codex/release-ci-fix`
+
+### Summary
+
+修复 OPS Environment 在 GUI 启动环境下检测 npm 和用户级工具目录的问题：版本探测会把已解析可执行文件目录放入 PATH，并补充 OrbStack、Volta、nvm 等常见用户工具目录扫描；新增对应 OPS 测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `66764e9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
