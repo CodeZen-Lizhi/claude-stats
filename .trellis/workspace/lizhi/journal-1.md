@@ -281,3 +281,42 @@ Diagnosed packaged Claude Stats exiting while idle, added a resident menu-bar li
 ### Next Steps
 
 - None - task complete
+
+
+## Session 9: 修复 Codex 会话项目归属
+
+**Date**: 2026-05-26
+**Task**: 修复 Codex 会话项目归属
+**Package**: ClaudeStats
+**Branch**: `codex/dev`
+
+### Summary
+
+修复 Codex 会话列表把 worktree、agent、ad-hoc transcript 误当普通项目的问题，增加项目归属解析、标题 fallback、来源标记和对应测试。验证脚本单测通过，完整 Xcode 构建受本机 xcode-select 指向 CommandLineTools 阻塞。
+
+### Main Changes
+
+- Added Codex session project-resolution metadata so synthetic worktree, agent, and ad-hoc transcript cwd values no longer masquerade as normal projects.
+- Made Codex transcript metadata decoding tolerate `session_meta.source` as either an object or a string.
+- Added title fallback and source badges for sessions without a transcript title.
+- Covered normal projects, worktrees, agent sessions, ad-hoc sessions, and fallback titles with tests.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fd41713` | 修复 Codex 会话项目归属 |
+
+### Testing
+
+- [OK] `swiftc -frontend -parse ...`
+- [OK] `python3 -B -m unittest discover scripts/tests`
+- [WARN] `bash scripts/run-tests.sh` and `bash scripts/run-debug.sh` reached project generation, then stopped because `xcodebuild` requires full Xcode while `xcode-select` points to CommandLineTools.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
