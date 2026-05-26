@@ -247,3 +247,37 @@ Diagnosed packaged Claude Stats exiting while idle, added a resident menu-bar li
 ### Next Steps
 
 - None - task complete
+
+
+## Session 8: 清理已删除功能残留
+
+**Date**: 2026-05-26
+**Task**: 清理已删除功能残留
+**Package**: ThirdParty/Atoll
+**Branch**: `codex/release-ci-fix`
+
+### Summary
+
+完成已删除功能残留清理，移除 analysis/insights、Semantic/LocalAI 相关代码、旧配置编辑器、旧 provider 资源与相关文档痕迹；验证了 Python 测试与项目生成，Swift 构建仍受本机缺少完整 Xcode 限制。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9858cc9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
