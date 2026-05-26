@@ -74,7 +74,7 @@ enum L10n {
 
     static func restartLanguageNotice(locale: Locale? = nil) -> String {
         string("settings.language.restart_required",
-               defaultValue: "Restart Claude Stats to apply this language.",
+               defaultValue: "Restart Codex Statistics to apply this language.",
                locale: locale)
     }
 }

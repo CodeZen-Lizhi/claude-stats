@@ -33,7 +33,7 @@ struct ClaudeStatsApp: App {
                 .tint(.stxAccent)
         }
 
-        Window("Claude Stats", id: MainWindowView.windowID) {
+        Window("Codex Statistics", id: MainWindowView.windowID) {
             MainWindowView()
                 .appEnvironment(appDelegate.env)
                 .frame(minWidth: 900, idealWidth: 1040, minHeight: 600, idealHeight: 720)

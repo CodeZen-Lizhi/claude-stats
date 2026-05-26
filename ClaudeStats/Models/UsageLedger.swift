@@ -56,7 +56,7 @@ struct UsageLedgerSnapshot: Sendable, Hashable, Codable {
 }
 
 enum UsageLedgerPaths {
-    private static let appSupportFolderName = "Claude Stats"
+    private static let appSupportFolderName = "Codex Statistics"
     private static let usageLedgerFolderName = "UsageLedger"
 
     static func directory(fileManager: FileManager = .default) -> URL {

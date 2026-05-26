@@ -203,8 +203,8 @@ targets:
           fi
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.claudestats.ClaudeStats
-        PRODUCT_NAME: "Claude Stats"
+        PRODUCT_BUNDLE_IDENTIFIER: com.claudestats.CodexStatistics
+        PRODUCT_NAME: "Codex Statistics"
         PRODUCT_MODULE_NAME: ClaudeStats
         INFOPLIST_FILE: ClaudeStats/App/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -244,9 +244,9 @@ targets:
       - target: AtollEmbed
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.claudestats.ClaudeStatsTests
+        PRODUCT_BUNDLE_IDENTIFIER: com.claudestats.CodexStatisticsTests
         GENERATE_INFOPLIST_FILE: YES
-        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Claude Stats.app/Contents/MacOS/Claude Stats"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Codex Statistics.app/Contents/MacOS/Codex Statistics"
         BUNDLE_LOADER: "$(TEST_HOST)"
 
 schemes:

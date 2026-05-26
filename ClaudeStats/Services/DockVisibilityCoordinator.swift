@@ -1,6 +1,6 @@
 import AppKit
 
-/// Reference-counted switch for the app's activation policy. Claude Stats runs
+/// Reference-counted switch for the app's activation policy. Codex Statistics runs
 /// as a menu-bar (`LSUIElement`) app and normally stays in `.accessory` (no
 /// Dock icon, windows don't take focus); while *any* full-window experience is
 /// up — the main window or a Sparkle update dialog — it promotes to `.regular`

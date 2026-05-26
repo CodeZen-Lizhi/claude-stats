@@ -92,7 +92,7 @@ struct NotchIslandSettingsDetailPane: View {
     }
 
     private func islandDisplaySettings(prefs: Preferences) -> some View {
-        SettingGroup(title: "Display", caption: "Claude Stats owns placement, sizing, and the global shortcut.") {
+        SettingGroup(title: "Display", caption: "Codex Statistics owns placement, sizing, and the global shortcut.") {
             VStack(spacing: 0) {
                 let descriptors = NotchIslandScreenCatalog.descriptors()
                 ForEach(Array(descriptors.enumerated()), id: \.element.id) { index, descriptor in
@@ -169,7 +169,7 @@ struct NotchIslandSettingsDetailPane: View {
 
     private func moduleAvailabilitySettings(_ module: NotchIslandModule, prefs: Preferences) -> some View {
         let descriptor = NotchIslandFeatureRegistry.descriptor(for: module)
-        return SettingGroup(title: "Module", caption: "Module availability is stored in Claude Stats; Atoll-specific settings below tune behavior inside the module.") {
+        return SettingGroup(title: "Module", caption: "Module availability is stored in Codex Statistics; Atoll-specific settings below tune behavior inside the module.") {
             VStack(spacing: 0) {
                 SettingRow(title: module.title, description: module.settingsDescription) {
                     HStack(spacing: 10) {

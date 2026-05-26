@@ -3,7 +3,7 @@ import os
 
 /// Subsystem-scoped loggers. Use these instead of `print`.
 enum Log {
-    private static let subsystem = Bundle.main.bundleIdentifier ?? "com.claudestats.ClaudeStats"
+    private static let subsystem = Bundle.main.bundleIdentifier ?? "com.claudestats.CodexStatistics"
 
     static let app = Logger(subsystem: subsystem, category: "app")
     static let scanner = Logger(subsystem: subsystem, category: "scanner")

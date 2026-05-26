@@ -11,7 +11,7 @@
 	</array>
 	<key>com.apple.security.mach-services</key>
 	<array>
-		<string>com.claudestats.ClaudeStats.notch-island</string>
+		<string>com.claudestats.CodexStatistics.notch-island</string>
 	</array>
 </dict>
 </plist>

@@ -208,7 +208,7 @@ struct ShareExportView: View {
         panel.canCreateDirectories = true
         let df = DateFormatter()
         df.dateFormat = "yyyy-MM-dd"
-        panel.nameFieldStringValue = "Claude Stats \(pane.title) \(df.string(from: .now)).png"
+        panel.nameFieldStringValue = "Codex Statistics \(pane.title) \(df.string(from: .now)).png"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try data.write(to: url)

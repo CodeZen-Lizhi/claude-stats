@@ -55,7 +55,7 @@ final class Preferences {
     var menuBarIncludesCache: Bool {
         didSet { defaults.set(menuBarIncludesCache, forKey: Keys.menuBarIncludesCache) }
     }
-    /// Whether launching Claude Stats should present the main window. On by
+    /// Whether launching Codex Statistics should present the main window. On by
     /// default so double-clicking the app behaves like a normal windowed app.
     var openMainWindowOnLaunch: Bool {
         didSet { defaults.set(openMainWindowOnLaunch, forKey: Keys.openMainWindowOnLaunch) }

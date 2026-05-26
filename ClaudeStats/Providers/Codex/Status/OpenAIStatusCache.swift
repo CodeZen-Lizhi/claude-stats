@@ -16,7 +16,7 @@ struct OpenAIStatusCache: OpenAIStatusCaching {
         } else {
             let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
                 ?? URL(fileURLWithPath: NSTemporaryDirectory())
-            let bundleID = Bundle.main.bundleIdentifier ?? "com.claudestats.ClaudeStats"
+            let bundleID = Bundle.main.bundleIdentifier ?? "com.claudestats.CodexStatistics"
             self.fileURL = caches
                 .appendingPathComponent(bundleID, isDirectory: true)
                 .appendingPathComponent("openai-status", isDirectory: true)

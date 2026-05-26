@@ -14,7 +14,7 @@ struct GeneralSettingsView: View {
             SettingGroup(title: "Startup") {
                 VStack(spacing: 0) {
                     SettingRow(title: "Launch at login",
-                               description: "Open Claude Stats automatically when you log in to your Mac.") {
+                               description: "Open Codex Statistics automatically when you log in to your Mac.") {
                         Toggle("", isOn: $launchAtLogin)
                             .labelsHidden()
                             .toggleStyle(.appSwitch)
@@ -22,7 +22,7 @@ struct GeneralSettingsView: View {
                     .onChange(of: launchAtLogin) { _, newValue in LaunchAtLogin.setEnabled(newValue) }
                     SettingRowDivider()
                     SettingRow(title: "Open main window on launch",
-                               description: "Show the main window when Claude Stats starts, including when you double-click the app.") {
+                               description: "Show the main window when Codex Statistics starts, including when you double-click the app.") {
                         Toggle("", isOn: $prefs.openMainWindowOnLaunch)
                             .labelsHidden()
                             .toggleStyle(.appSwitch)
@@ -34,7 +34,7 @@ struct GeneralSettingsView: View {
             SettingGroup(title: "Language") {
                 VStack(spacing: 0) {
                     SettingRow(title: "App language",
-                               description: "Choose the language Claude Stats uses after the next restart.") {
+                               description: "Choose the language Codex Statistics uses after the next restart.") {
                         AppSelect(
                             .localized("App language"),
                             selection: $prefs.appLanguagePreference,
@@ -62,7 +62,7 @@ struct GeneralSettingsView: View {
             SettingGroup(title: "Refresh") {
                 VStack(spacing: 0) {
                     SettingRow(title: "Refresh every",
-                               description: "How often Claude Stats re-scans your session logs in the background.") {
+                               description: "How often Codex Statistics re-scans your session logs in the background.") {
                         AppSelect(
                             .localized("Refresh every"),
                             selection: $prefs.autoRefreshMinutes,

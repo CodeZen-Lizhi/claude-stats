@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Build a Release Claude Stats.app and package it for distribution into ./dist/.
+# Build a Release Codex Statistics.app and package it for distribution into ./dist/.
 #
 # Two modes, selected automatically by whether SIGN_IDENTITY is set:
 #
 #   • Signed mode (SIGN_IDENTITY set): codesign with a Developer ID Application
 #     identity + hardened runtime, package a DMG, notarize it with notarytool,
-#     and staple the ticket.  Output: dist/ClaudeStats-<version>.dmg
+#     and staple the ticket.  Output: dist/CodexStatistics-<version>.dmg
 #
 #   • Unsigned mode (SIGN_IDENTITY unset): ad-hoc sign, package both a DMG and a
 #     .zip.  Gatekeeper will warn on first launch (right-click ▸ Open).
-#     Output: dist/ClaudeStats-<version>.dmg and dist/ClaudeStats-<version>.zip
+#     Output: dist/CodexStatistics-<version>.dmg and dist/CodexStatistics-<version>.zip
 #
 # Usage: bash scripts/release-build.sh [version]
 #   [version]  version label for the artifact file names; defaults to the
@@ -38,18 +38,18 @@ UNSIGNED_ENTITLEMENTS="$DIST/unsigned-entitlements.plist"
 
 VERSION="${1:-$(grep -E '^[[:space:]]*MARKETING_VERSION:' project.yml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')}"
 [[ -n "$VERSION" ]] || { echo "error: could not determine version" >&2; exit 1; }
-DMG="$DIST/ClaudeStats-$VERSION.dmg"
-ZIP="$DIST/ClaudeStats-$VERSION.zip"
+DMG="$DIST/CodexStatistics-$VERSION.dmg"
+ZIP="$DIST/CodexStatistics-$VERSION.zip"
 
 SIGNED=0
 [[ -n "${SIGN_IDENTITY:-}" ]] && SIGNED=1
 
 if [[ "$(uname -m)" != "arm64" ]]; then
-    echo "error: Claude Stats release builds must run on Apple Silicon." >&2
+    echo "error: Codex Statistics release builds must run on Apple Silicon." >&2
     exit 1
 fi
 
-echo "==> Building Claude Stats $VERSION (Release, $([[ $SIGNED -eq 1 ]] && echo "signed + notarized" || echo "unsigned"))"
+echo "==> Building Codex Statistics $VERSION (Release, $([[ $SIGNED -eq 1 ]] && echo "signed + notarized" || echo "unsigned"))"
 REQUIRE_LINGUIST_RUNTIME="${REQUIRE_LINGUIST_RUNTIME:-1}" \
 REQUIRE_RELOCATABLE_LINGUIST_RUNTIME="${REQUIRE_RELOCATABLE_LINGUIST_RUNTIME:-1}" \
     bash scripts/build-linguist-runtime.sh
@@ -80,7 +80,7 @@ else
 fi
 
 PRODUCTS="$DERIVED/Build/Products/$CONFIGURATION"
-APP="$PRODUCTS/Claude Stats.app"
+APP="$PRODUCTS/Codex Statistics.app"
 
 codesign_release() {
     local attempt=1
@@ -173,7 +173,7 @@ fi
 
 make_dmg() {
     local stage; stage="$(mktemp -d)"
-    local rw_dmg="$DIST/.ClaudeStats-$VERSION-rw.dmg"
+    local rw_dmg="$DIST/.CodexStatistics-$VERSION-rw.dmg"
     local mount_dir; mount_dir="$(mktemp -d)"
     local attached=0
 
@@ -192,7 +192,7 @@ make_dmg() {
     mkdir -p "$stage/.background"
     swift scripts/render-dmg-background.swift "$stage/.background/dmg-background.png"
 
-    hdiutil create -volname "Claude Stats" -srcfolder "$stage" -ov -fs HFS+ -format UDRW "$rw_dmg"
+    hdiutil create -volname "Codex Statistics" -srcfolder "$stage" -ov -fs HFS+ -format UDRW "$rw_dmg"
     hdiutil attach "$rw_dmg" -mountpoint "$mount_dir" -nobrowse -noverify -noautoopen
     attached=1
 
@@ -214,9 +214,9 @@ tell application "Finder"
         set text size of viewOptions to 16
         set background picture of viewOptions to backgroundImage
 
-        set position of item "Claude Stats.app" to {235, 255}
+        set position of item "Codex Statistics.app" to {235, 255}
         set position of item "Applications" to {665, 255}
-        select item "Claude Stats.app"
+        select item "Codex Statistics.app"
 
         close
         open
