@@ -60,7 +60,7 @@ struct FeatureControlCard<Preview: View, Controls: View>: View {
 
                 Toggle("", isOn: $isOn)
                     .labelsHidden()
-                    .toggleStyle(.switch)
+                    .toggleStyle(.appSwitch)
                     .accessibilityLabel(title)
             }
 

@@ -315,7 +315,6 @@ private struct AppSelectPanelContent<Value: Hashable>: View {
         .overlay {
             shape.strokeBorder(Color.stxStroke, lineWidth: 1)
         }
-        .shadow(color: Color.black.opacity(0.28), radius: 22, x: 0, y: 12)
         .background(AppSelectKeyCapture { event in
             handleKeyDown(event)
         })
@@ -663,6 +662,8 @@ private final class AppSelectPanelPresenter {
 }
 
 private final class AppSelectHostingView: NSHostingView<AnyView> {
+    override var isOpaque: Bool { false }
+
     required init(rootView: AnyView) {
         super.init(rootView: rootView)
         configure()
@@ -675,6 +676,11 @@ private final class AppSelectHostingView: NSHostingView<AnyView> {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        configure()
+    }
+
+    override func layout() {
+        super.layout()
         configure()
     }
 

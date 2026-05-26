@@ -43,7 +43,7 @@ struct MenuBarSettingsView: View {
                                    description: "Independent from the in-app setting, so the menu bar can show a less inflated figure (or vice versa).") {
                             Toggle("", isOn: $prefs.menuBarIncludesCache)
                                 .labelsHidden()
-                                .toggleStyle(.switch)
+                                .toggleStyle(.appSwitch)
                         }
                     }
                 }

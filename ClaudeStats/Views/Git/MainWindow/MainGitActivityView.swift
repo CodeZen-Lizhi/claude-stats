@@ -561,10 +561,14 @@ private struct GitOverviewXAxisLabels: View {
 }
 
 private enum GitOverviewChartDrawing {
+    private static let lineStrokeWidth: CGFloat = 2
+    private static let lineVerticalInset: CGFloat = lineStrokeWidth / 2 + 1
+
     static func drawGrid(context: inout GraphicsContext, size: CGSize, tickCount: Int) {
         let count = max(tickCount, 2)
         for index in 0..<count {
-            let y = size.height * CGFloat(index) / CGFloat(count - 1)
+            let rawY = size.height * CGFloat(index) / CGFloat(count - 1)
+            let y = min(max(rawY, 0.5), max(size.height - 0.5, 0.5))
             var path = Path()
             path.move(to: CGPoint(x: 0, y: y))
             path.addLine(to: CGPoint(x: size.width, y: y))
@@ -579,8 +583,9 @@ private enum GitOverviewChartDrawing {
         maxValue: Int,
         color: Color
     ) {
+        let plotRect = linePlotRect(in: size)
         let points = values.enumerated().map { index, value in
-            point(index: index, count: values.count, value: value, maxValue: maxValue, size: size)
+            point(index: index, count: values.count, value: value, maxValue: maxValue, plotRect: plotRect)
         }
         guard let first = points.first, let last = points.last else { return }
 
@@ -588,13 +593,13 @@ private enum GitOverviewChartDrawing {
         appendMonotoneCurve(points, to: &line)
 
         var area = Path()
-        area.move(to: CGPoint(x: first.x, y: size.height))
+        area.move(to: CGPoint(x: first.x, y: plotRect.maxY))
         appendMonotoneCurve(points, to: &area, moveToFirst: false)
-        area.addLine(to: CGPoint(x: last.x, y: size.height))
+        area.addLine(to: CGPoint(x: last.x, y: plotRect.maxY))
         area.closeSubpath()
 
         context.fill(area, with: .color(color.opacity(0.16)))
-        context.stroke(line, with: .color(color), style: StrokeStyle(lineWidth: 2, lineJoin: .round))
+        context.stroke(line, with: .color(color), style: StrokeStyle(lineWidth: lineStrokeWidth, lineJoin: .round))
     }
 
     private static func appendMonotoneCurve(_ points: [CGPoint], to path: inout Path, moveToFirst: Bool = true) {
@@ -689,10 +694,20 @@ private enum GitOverviewChartDrawing {
         }
     }
 
-    private static func point(index: Int, count: Int, value: Int, maxValue: Int, size: CGSize) -> CGPoint {
-        let x = count <= 1 ? size.width / 2 : size.width * CGFloat(index) / CGFloat(count - 1)
+    private static func linePlotRect(in size: CGSize) -> CGRect {
+        let inset = min(lineVerticalInset, max(size.height / 2, 0))
+        return CGRect(
+            x: 0,
+            y: inset,
+            width: size.width,
+            height: max(size.height - inset * 2, 0)
+        )
+    }
+
+    private static func point(index: Int, count: Int, value: Int, maxValue: Int, plotRect: CGRect) -> CGPoint {
+        let x = count <= 1 ? plotRect.midX : plotRect.minX + plotRect.width * CGFloat(index) / CGFloat(count - 1)
         let normalized = CGFloat(value) / CGFloat(max(maxValue, 1))
-        let y = size.height - size.height * min(max(normalized, 0), 1)
+        let y = plotRect.maxY - plotRect.height * min(max(normalized, 0), 1)
         return CGPoint(x: x, y: y)
     }
 }
@@ -717,6 +732,9 @@ private struct GitChurnTable: View {
 }
 
 private struct GitChurnTableRow: View, Equatable {
+    private static let churnColumnWidth: CGFloat = 72
+    private static let filesColumnWidth: CGFloat = 72
+
     let row: GitActivityViewModel.OverviewRepoRow
 
     var body: some View {
@@ -725,19 +743,26 @@ private struct GitChurnTableRow: View, Equatable {
                 .font(.sora(11, weight: .semibold))
                 .lineLimit(1)
                 .truncationMode(.middle)
+                .layoutPriority(-1)
             Spacer(minLength: 8)
             Text(row.insertionsLabel)
                 .font(.sora(10).monospacedDigit())
                 .foregroundStyle(GitPalette.add)
-                .frame(width: 48, alignment: .trailing)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(width: Self.churnColumnWidth, alignment: .trailing)
             Text(row.deletionsLabel)
                 .font(.sora(10).monospacedDigit())
                 .foregroundStyle(GitPalette.del)
-                .frame(width: 48, alignment: .trailing)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(width: Self.churnColumnWidth, alignment: .trailing)
             Text(row.filesLabel)
                 .font(.sora(10).monospacedDigit())
                 .foregroundStyle(Color.stxMuted)
-                .frame(width: 52, alignment: .trailing)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(width: Self.filesColumnWidth, alignment: .trailing)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

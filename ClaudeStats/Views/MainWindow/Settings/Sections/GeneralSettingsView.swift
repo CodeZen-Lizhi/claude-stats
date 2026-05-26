@@ -17,7 +17,7 @@ struct GeneralSettingsView: View {
                                description: "Open Claude Stats automatically when you log in to your Mac.") {
                         Toggle("", isOn: $launchAtLogin)
                             .labelsHidden()
-                            .toggleStyle(.switch)
+                            .toggleStyle(.appSwitch)
                     }
                     .onChange(of: launchAtLogin) { _, newValue in LaunchAtLogin.setEnabled(newValue) }
                     SettingRowDivider()
@@ -25,7 +25,7 @@ struct GeneralSettingsView: View {
                                description: "Show the main window when Claude Stats starts, including when you double-click the app.") {
                         Toggle("", isOn: $prefs.openMainWindowOnLaunch)
                             .labelsHidden()
-                            .toggleStyle(.switch)
+                            .toggleStyle(.appSwitch)
                     }
                 }
                 .settingCard()
@@ -83,21 +83,21 @@ struct GeneralSettingsView: View {
                                description: "When off, the app starts on the first enabled platform each launch instead of the one you last viewed.") {
                         Toggle("", isOn: $prefs.rememberSelectedProvider)
                             .labelsHidden()
-                            .toggleStyle(.switch)
+                            .toggleStyle(.appSwitch)
                     }
                     SettingRowDivider()
                     SettingRow(title: "Detail edge fade",
                                description: "Blend the main detail pane into the sidebar with a soft boundary fade.") {
                         Toggle("", isOn: $prefs.detailPanelBoundaryFalloffEnabled)
                             .labelsHidden()
-                            .toggleStyle(.switch)
+                            .toggleStyle(.appSwitch)
                     }
                     SettingRowDivider()
                     SettingRow(title: "Include cache reads in token counts",
                                description: "Anthropic's API re-reports the cached context on every assistant turn, so the same tokens get counted many times. Turn off to show only \u{201C}new\u{201D} traffic (input + output + cache writes). Estimated cost is unaffected.") {
                         Toggle("", isOn: $prefs.includeCacheInTokens)
                             .labelsHidden()
-                            .toggleStyle(.switch)
+                            .toggleStyle(.appSwitch)
                     }
                     SettingRowDivider()
                     SettingRow(title: "Cost mode",

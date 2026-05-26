@@ -69,7 +69,7 @@ struct PlatformsSettingsView: View {
             Spacer(minLength: 12)
             Toggle("", isOn: binding)
                 .labelsHidden()
-                .toggleStyle(.switch)
+                .toggleStyle(.appSwitch)
                 .disabled(isLastEnabled)
         }
         .padding(.horizontal, 16)
@@ -128,7 +128,7 @@ struct PlatformsSettingsView: View {
                 set: { prefs.claudeDesktopUsageTimedCaptureEnabled = $0 }
             ))
             .labelsHidden()
-            .toggleStyle(.switch)
+            .toggleStyle(.appSwitch)
         }
     }
 
@@ -151,7 +151,7 @@ struct PlatformsSettingsView: View {
                 }
             ))
             .labelsHidden()
-            .toggleStyle(.switch)
+            .toggleStyle(.appSwitch)
         }
     }
 
@@ -194,7 +194,7 @@ struct PlatformsSettingsView: View {
                 set: { enabled in setClaudeStatusAlertsEnabled(enabled) }
             ))
             .labelsHidden()
-            .toggleStyle(.switch)
+            .toggleStyle(.appSwitch)
             .disabled(env.claudeStatus.isRequestingNotificationAuthorization)
             .help(env.claudeStatus.notificationPermissionDenied
                 ? L10n.string("platforms.notifications.help.open_settings",
@@ -237,7 +237,7 @@ struct PlatformsSettingsView: View {
                 set: { env.claudeStatus.setComponentVisibility(component, isVisible: $0) }
             ))
             .labelsHidden()
-            .toggleStyle(.switch)
+            .toggleStyle(.appSwitch)
             .disabled(isVisible && !canHide)
         }
         .padding(.horizontal, 16)
@@ -283,7 +283,7 @@ struct PlatformsSettingsView: View {
                 set: { enabled in setOpenAIStatusAlertsEnabled(enabled) }
             ))
             .labelsHidden()
-            .toggleStyle(.switch)
+            .toggleStyle(.appSwitch)
             .disabled(env.openAIStatus.isRequestingNotificationAuthorization)
             .help(env.openAIStatus.notificationPermissionDenied
                 ? L10n.string("platforms.notifications.help.open_settings",
@@ -326,7 +326,7 @@ struct PlatformsSettingsView: View {
                 set: { env.openAIStatus.setGroupVisibility(group, isVisible: $0) }
             ))
             .labelsHidden()
-            .toggleStyle(.switch)
+            .toggleStyle(.appSwitch)
             .disabled(isVisible && !canHide)
         }
         .padding(.horizontal, 16)

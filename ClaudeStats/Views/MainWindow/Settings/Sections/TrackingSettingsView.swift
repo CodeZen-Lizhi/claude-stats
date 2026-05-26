@@ -174,7 +174,7 @@ struct TrackingSettingsView: View {
             Spacer()
             Toggle("", isOn: isOn)
                 .labelsHidden()
-                .toggleStyle(.switch)
+                .toggleStyle(.appSwitch)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -363,7 +363,7 @@ struct TrackingSettingsView: View {
                 }
             ))
             .labelsHidden()
-            .toggleStyle(.switch)
+            .toggleStyle(.appSwitch)
             .disabled(isLastEnabled)
             .help(isLastEnabled ? "At least one repository source must stay enabled." : source.detail)
         }

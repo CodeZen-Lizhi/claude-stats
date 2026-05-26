@@ -103,8 +103,6 @@ struct SessionSidebarColumn: View {
     }
 
     private func statusCard(vm: SessionListViewModel) -> some View {
-        @Bindable var vm = vm
-
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("SESSIONS")
@@ -121,9 +119,13 @@ struct SessionSidebarColumn: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("\(providerSessionCount)")
                         .font(.sora(18, weight: .semibold).monospacedDigit())
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                     Text(providerSessionCount == 1 ? "session" : "sessions")
                         .font(.sora(10))
                         .foregroundStyle(Color.stxMuted)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
 
                 Spacer(minLength: 0)
@@ -138,17 +140,6 @@ struct SessionSidebarColumn: View {
                         vm.expandedProjects.removeAll()
                     }
                 }
-
-                AppSelect(
-                    .localized("Sort by"),
-                    selection: $vm.sortOrder,
-                    options: SessionListViewModel.SortOrder.allCases.map { order in
-                        AppSelectOption(value: order, title: .localized(order.displayName), systemImage: "line.3.horizontal.decrease")
-                    },
-                    width: 118,
-                    size: .small
-                )
-                .help("Sort sessions")
             }
         }
         .padding(10)

@@ -455,7 +455,7 @@ private struct DictionaryTermEditorSheet: View {
                             .font(.sora(12))
                     }
                     Toggle("Enabled", isOn: $enabled)
-                        .toggleStyle(.switch)
+                        .toggleStyle(.appSwitch)
                 }
             }
 
