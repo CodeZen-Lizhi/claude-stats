@@ -35,13 +35,14 @@ struct GitDiffRenderLayoutTests {
 
     @Test("Modified rows and connectors share the same fill color")
     func modifiedColorIsShared() {
-        let palette = GitDiffRenderPalette.standard
-        #expect(sameColor(palette.blockFill(for: .modification), palette.connectorFill(for: .modification)))
+        for palette in [lightPalette, darkPalette] {
+            #expect(sameColor(palette.blockFill(for: .modification), palette.connectorFill(for: .modification)))
+        }
     }
 
-    @Test("Diff kind fills use the shared requested palette")
-    func diffKindFillsUseRequestedPalette() {
-        let palette = GitDiffRenderPalette.standard
+    @Test("Light diff kind fills use the shared requested palette")
+    func lightDiffKindFillsUseRequestedPalette() {
+        let palette = lightPalette
         #expect(sameColor(palette.blockFill(for: .modification), hexColor(0xF2FAFF)))
         #expect(sameColor(palette.blockFill(for: .deletion), hexColor(0xFFF0EF)))
         #expect(sameColor(palette.blockFill(for: .addition), hexColor(0xF7FFF5)))
@@ -53,9 +54,26 @@ struct GitDiffRenderLayoutTests {
         #expect(sameColor(palette.blockFill(for: .addition, state: .selected), hexColor(0xEEFFEA)))
     }
 
-    @Test("Selected fills sit between normal fills and hover strokes")
-    func selectedFillsSitBetweenNormalAndStroke() {
-        let palette = GitDiffRenderPalette.standard
+    @Test("Dark diff palette uses low-luminance adaptive fills")
+    func darkDiffPaletteUsesLowLuminanceAdaptiveFills() {
+        let palette = darkPalette
+        #expect(luminance(palette.background) < 0.12)
+        #expect(luminance(palette.gutterFill) < 0.16)
+        #expect(luminance(palette.hunkHeaderFill) < 0.18)
+        #expect(luminance(palette.hunkHeaderHoverFill) > luminance(palette.hunkHeaderFill))
+        #expect(luminance(palette.overviewTrackFill) < 0.18)
+        #expect(luminance(palette.blockFill(for: .addition)) < 0.20)
+        #expect(luminance(palette.blockFill(for: .deletion)) < 0.20)
+        #expect(luminance(palette.blockFill(for: .modification)) < 0.20)
+        #expect(luminance(palette.inlineFill(for: .addition)) < 0.32)
+        #expect(luminance(palette.inlineFill(for: .deletion)) < 0.32)
+        #expect(sameColor(palette.rowFill(for: .deletion), palette.blockFill(for: .deletion)))
+        #expect(sameColor(palette.rowFill(for: .addition), palette.blockFill(for: .addition)))
+    }
+
+    @Test("Light selected fills sit between normal fills and hover strokes")
+    func lightSelectedFillsSitBetweenNormalAndStroke() {
+        let palette = lightPalette
         for kind in [GitDiffVisualKind.modification, .deletion, .addition] {
             let normal = luminance(palette.blockFill(for: kind))
             let selected = luminance(palette.blockFill(for: kind, state: .selected))
@@ -63,6 +81,19 @@ struct GitDiffRenderLayoutTests {
 
             #expect(selected < normal)
             #expect(stroke < selected)
+        }
+    }
+
+    @Test("Dark selected fills and strokes brighten change blocks")
+    func darkSelectedFillsAndStrokesBrightenChangeBlocks() {
+        let palette = darkPalette
+        for kind in [GitDiffVisualKind.modification, .deletion, .addition] {
+            let normal = luminance(palette.blockFill(for: kind))
+            let selected = luminance(palette.blockFill(for: kind, state: .selected))
+            let stroke = luminance(palette.blockStroke(for: kind))
+
+            #expect(selected > normal)
+            #expect(stroke > selected)
         }
     }
 
@@ -265,6 +296,14 @@ struct GitDiffRenderLayoutTests {
             rightPane: CGRect(x: 200, y: 0, width: 120, height: 300),
             overviewLane: CGRect(x: 328, y: 0, width: 28, height: 300)
         )
+    }
+
+    private var lightPalette: GitDiffRenderPalette {
+        GitDiffRenderPalette.standard(for: NSAppearance(named: .aqua)!)
+    }
+
+    private var darkPalette: GitDiffRenderPalette {
+        GitDiffRenderPalette.standard(for: NSAppearance(named: .darkAqua)!)
     }
 
     private func fluidLayout(_ patch: String) -> GitDiffRenderLayout {

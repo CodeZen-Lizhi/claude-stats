@@ -72,9 +72,6 @@ struct GitRepoWorkspaceView: View {
         .task(id: "\(repo.id)|\(vm.selectedHash ?? "")") {
             await vm.loadDetail(repo: repo)
         }
-        .task(id: "\(repo.id)|\(vm.selectedHash ?? "")|\(vm.diffPath ?? "")") {
-            await vm.loadDiff(repo: repo)
-        }
         .onAppear {
             vm.statsScope = env.preferences.gitStatsScope
         }
@@ -232,7 +229,6 @@ struct GitRepoWorkspaceView: View {
 
     private func showRepoInspector() {
         inspectorMode = .repo
-        vm.closeDiff()
     }
 }
 
@@ -247,17 +243,13 @@ private struct GitCommitInspector: View {
         VStack(alignment: .leading, spacing: 0) {
             inspectorHeader
             StxRule()
-            if vm.diffPath != nil {
-                diffBody
-            } else {
-                switch mode {
-                case .commit:
-                    commitBody
-                case .workingTree:
-                    workingTreeBody
-                case .repo:
-                    repoBody
-                }
+            switch mode {
+            case .commit:
+                commitBody
+            case .workingTree:
+                workingTreeBody
+            case .repo:
+                repoBody
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -280,19 +272,17 @@ private struct GitCommitInspector: View {
                 tracking: 1.0,
                 fadeWidth: 36
             )
-            if vm.diffPath == nil {
-                Picker("", selection: $mode) {
-                    ForEach(GitInspectorMode.modes(hasWorkingTree: vm.graph?.workingTree.isDirty == true)) { mode in
-                        Text(mode.label).tag(mode)
-                    }
+            Picker("", selection: $mode) {
+                ForEach(GitInspectorMode.modes(hasWorkingTree: vm.graph?.workingTree.isDirty == true)) { mode in
+                    Text(mode.label).tag(mode)
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .controlSize(.mini)
-                .frame(width: vm.graph?.workingTree.isDirty == true ? 176 : 112)
-                .help("Switch inspector mode")
             }
-            if vm.isDetailLoading || vm.isDiffLoading || vm.isStatsLoading {
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .controlSize(.mini)
+            .frame(width: vm.graph?.workingTree.isDirty == true ? 176 : 112)
+            .help("Switch inspector mode")
+            if vm.isDetailLoading || vm.isStatsLoading {
                 ProgressView()
                     .controlSize(.mini)
             }
@@ -302,7 +292,6 @@ private struct GitCommitInspector: View {
     }
 
     private var inspectorTitle: String {
-        if vm.diffPath != nil { return "FILE DIFF" }
         switch mode {
         case .commit: return "COMMIT INSPECTOR"
         case .workingTree: return "WORKING TREE"
@@ -409,52 +398,37 @@ private struct GitCommitInspector: View {
     }
 
     private func changedFiles(_ detail: CommitDetail) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("FILES CHANGED")
-                    .font(.sora(10, weight: .semibold))
-                    .tracking(0.8)
-                    .foregroundStyle(Color.stxMuted)
-                Spacer()
-                Text("+\(detail.totalInsertions) -\(detail.totalDeletions)")
-                    .font(.sora(9).monospacedDigit())
-                    .foregroundStyle(Color.stxMuted)
-            }
-            .padding(12)
-
-            StxRule()
-
-            if detail.files.isEmpty {
-                GitWorkspaceInlineEmptyState(detail.isMerge ? "Merge commit with no file diff." : "No file changes.")
-                    .padding(12)
-            } else {
-                ForEach(detail.files) { file in
-                    GitChangedFileRow(file: file) {
-                        diffRequest = GitFileDiffRequest(
-                            repo: repo,
-                            hash: detail.hash,
-                            parentHash: detail.parentHashes.first,
-                            abbreviatedHash: detail.abbreviatedHash,
-                            path: file.path
-                        )
-                    }
-                    if file.id != detail.files.last?.id { StxRule() }
-                }
-            }
+        GitChangedFilesPanel(
+            summary: "+\(detail.totalInsertions) -\(detail.totalDeletions)",
+            emptyMessage: detail.isMerge ? "Merge commit with no file diff." : "No file changes.",
+            rows: detail.files.map(GitChangedFileRowModel.init(commitFile:))
+        ) { row in
+            guard let path = row.openPath else { return }
+            diffRequest = GitFileDiffRequest(
+                repo: repo,
+                hash: detail.hash,
+                parentHash: detail.parentHashes.first,
+                abbreviatedHash: detail.abbreviatedHash,
+                path: path
+            )
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .gitWorkspaceCard()
     }
 
     @ViewBuilder
     private var workingTreeBody: some View {
         if let summary = vm.graph?.workingTree, summary.isDirty {
-            AppScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    workingTreeSummary(summary)
-                    workingTreeFiles(summary)
+            GeometryReader { proxy in
+                let viewportWidth = max(0, proxy.size.width)
+
+                AppScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        workingTreeSummary(summary)
+                        workingTreeFiles(summary)
+                    }
+                    .padding(14)
+                    .frame(width: viewportWidth, alignment: .topLeading)
                 }
-                .padding(14)
+                .frame(width: viewportWidth, height: proxy.size.height, alignment: .topLeading)
             }
         } else {
             GitWorkspaceInlineEmptyState("No working tree changes.")
@@ -493,47 +467,11 @@ private struct GitCommitInspector: View {
     }
 
     private func workingTreeFiles(_ summary: GitWorkingTreeSummary) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("FILES CHANGED")
-                    .font(.sora(10, weight: .semibold))
-                    .tracking(0.8)
-                    .foregroundStyle(Color.stxMuted)
-                Spacer()
-                Text("\(summary.fileCount)")
-                    .font(.sora(9).monospacedDigit())
-                    .foregroundStyle(Color.stxMuted)
-            }
-            .padding(12)
-
-            StxRule()
-
-            ForEach(summary.changes) { change in
-                HStack(spacing: 8) {
-                    GitWorkingTreeKindPill(kind: change.kind)
-                    Text(change.displayPath)
-                        .font(.sora(10))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Spacer(minLength: 6)
-                    if change.isStaged {
-                        Text("staged")
-                            .font(.sora(8, weight: .semibold))
-                            .foregroundStyle(Color.stxMuted)
-                    }
-                    if change.isUnstaged {
-                        Text("unstaged")
-                            .font(.sora(8, weight: .semibold))
-                            .foregroundStyle(Color.stxMuted)
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                if change.id != summary.changes.last?.id { StxRule() }
-            }
-        }
-        .gitWorkspaceCard()
+        GitChangedFilesPanel(
+            summary: "\(summary.fileCount)",
+            emptyMessage: "No working tree changes.",
+            rows: summary.changes.map(GitChangedFileRowModel.init(workingTreeChange:))
+        )
     }
 
     @ViewBuilder
@@ -567,53 +505,6 @@ private struct GitCommitInspector: View {
         }
     }
 
-    @ViewBuilder
-    private var diffBody: some View {
-        AppScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
-                    GitBackButton(help: "Back to changed files") {
-                        vm.closeDiff()
-                    }
-                    Text(vm.diffPath ?? "")
-                        .font(.sora(12, weight: .semibold))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .help(vm.diffPath ?? "")
-                }
-                .padding(12)
-                .gitWorkspaceCard()
-
-                if vm.isDiffLoading {
-                    ProgressView()
-                        .controlSize(.small)
-                        .frame(maxWidth: .infinity, minHeight: 80)
-                } else if let diff = vm.fileDiff {
-                    diffLines(diff)
-                } else {
-                    GitWorkspaceInlineEmptyState("Couldn't load this diff.")
-                }
-            }
-            .padding(14)
-        }
-    }
-
-    private func diffLines(_ diff: FileDiff) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if diff.isBinary {
-                GitWorkspaceInlineEmptyState("Binary file.")
-                    .padding(12)
-            } else if diff.lines.isEmpty {
-                GitWorkspaceInlineEmptyState("No diff lines.")
-                    .padding(12)
-            } else {
-                ForEach(diff.lines) { line in
-                    DiffLineRow(line: line)
-                }
-            }
-        }
-        .gitWorkspaceCard()
-    }
 }
 
 private enum GitInspectorMode: String, CaseIterable, Identifiable {
@@ -633,90 +524,6 @@ private enum GitInspectorMode: String, CaseIterable, Identifiable {
 
     static func modes(hasWorkingTree: Bool) -> [GitInspectorMode] {
         hasWorkingTree ? [.commit, .workingTree, .repo] : [.commit, .repo]
-    }
-}
-
-private struct GitChangedFileRow: View {
-    let file: CommitFileChange
-    let onOpen: () -> Void
-
-    @State private var hovering = false
-
-    private var textOpacity: Double { hovering ? 0.72 : 1 }
-
-    var body: some View {
-        Button(action: onOpen) {
-            HStack(spacing: 8) {
-                changeSummary
-                Text(file.path)
-                    .font(.sora(10))
-                    .foregroundStyle(Color.primary.opacity(textOpacity))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-                disclosureIcon
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(rowBackground)
-        .contentShape(Rectangle())
-        .onHover { hovering = $0 }
-        .onDisappear { hovering = false }
-        .help("Open diff for \(file.path)")
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text("Open diff for \(file.path)"))
-        .animation(.easeOut(duration: 0.15), value: hovering)
-    }
-
-    private var rowBackground: some View {
-        Rectangle()
-            .fill(Color.primary.opacity(hovering ? 0.045 : 0.0001))
-    }
-
-    @ViewBuilder
-    private var changeSummary: some View {
-        if file.isBinary {
-            Text("bin")
-                .font(.sora(9).monospacedDigit())
-                .foregroundStyle(Color.stxMuted.opacity(textOpacity))
-        } else {
-            Text("+\(file.insertions)")
-                .font(.sora(9).monospacedDigit())
-                .foregroundStyle(GitPalette.add.opacity(textOpacity))
-            Text("-\(file.deletions)")
-                .font(.sora(9).monospacedDigit())
-                .foregroundStyle(GitPalette.del.opacity(textOpacity))
-        }
-    }
-
-    private var disclosureIcon: some View {
-        Image(systemName: "chevron.right")
-            .font(.system(size: 8, weight: .bold))
-            .foregroundStyle(Color.stxMuted)
-            .frame(width: 22, height: 22)
-            .background { disclosureBackground }
-    }
-
-    @ViewBuilder
-    private var disclosureBackground: some View {
-        if hovering {
-            let shape = RoundedRectangle(cornerRadius: 4, style: .continuous)
-            shape
-                .fill(Color.primary.opacity(0.055))
-                .overlay {
-                    DiagonalStripes(spacing: 4)
-                        .stroke(Color.primary.opacity(0.12), lineWidth: 0.8)
-                        .clipShape(shape)
-                }
-                .overlay {
-                    shape.strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-                }
-        }
     }
 }
 
@@ -992,75 +799,7 @@ private struct FlowPills: View {
     }
 }
 
-private struct DiffLineRow: View {
-    let line: DiffLine
-
-    var body: some View {
-        HStack(spacing: 0) {
-            Text(line.oldLine.map(String.init) ?? "")
-                .font(.sora(9).monospacedDigit())
-                .foregroundStyle(Color.stxMuted.opacity(0.65))
-                .frame(width: 32, alignment: .trailing)
-                .padding(.trailing, 6)
-            Text(line.newLine.map(String.init) ?? "")
-                .font(.sora(9).monospacedDigit())
-                .foregroundStyle(Color.stxMuted.opacity(0.65))
-                .frame(width: 32, alignment: .trailing)
-                .padding(.trailing, 8)
-            Text(prefix)
-                .font(.sora(9).monospacedDigit())
-                .foregroundStyle(prefixColor)
-                .frame(width: 14, alignment: .leading)
-            Text(line.text.isEmpty ? " " : line.text)
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundStyle(textColor)
-                .lineLimit(1)
-                .truncationMode(.tail)
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, 2)
-        .padding(.horizontal, 8)
-        .background(backgroundColor)
-    }
-
-    private var prefix: String {
-        switch line.kind {
-        case .addition: "+"
-        case .deletion: "-"
-        case .hunkHeader: "@"
-        default: " "
-        }
-    }
-
-    private var prefixColor: Color {
-        switch line.kind {
-        case .addition: GitPalette.add
-        case .deletion: GitPalette.del
-        case .hunkHeader: Color.stxAccent
-        default: Color.stxMuted
-        }
-    }
-
-    private var textColor: Color {
-        switch line.kind {
-        case .fileHeader, .hunkHeader: Color.stxMuted
-        case .addition: GitPalette.add
-        case .deletion: GitPalette.del
-        case .context: .primary
-        }
-    }
-
-    private var backgroundColor: Color {
-        switch line.kind {
-        case .addition: GitPalette.add.opacity(0.10)
-        case .deletion: GitPalette.del.opacity(0.10)
-        case .hunkHeader: Color.stxAccent.opacity(0.08)
-        default: .clear
-        }
-    }
-}
-
-private struct GitWorkspaceInlineEmptyState: View {
+struct GitWorkspaceInlineEmptyState: View {
     let message: String
 
     init(_ message: String) {

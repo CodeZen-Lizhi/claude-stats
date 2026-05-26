@@ -255,13 +255,10 @@ struct CommitDetailView: View {
     }
 }
 
-/// One changed file inside a directory group. Highlights and reveals a "diff"
-/// glyph on hover so it reads as a target; a double-click opens its diff.
+/// One changed file inside a directory group. A double-click opens its diff.
 private struct FileRow: View {
     let change: CommitFileChange
     let onOpen: () -> Void
-
-    @State private var hovering = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -283,20 +280,13 @@ private struct FileRow: View {
             Image(systemName: "chevron.left.forwardslash.chevron.right")
                 .font(.system(size: 8, weight: .bold))
                 .foregroundStyle(Color.stxMuted)
-                .opacity(hovering ? 1 : 0)
         }
         .padding(.leading, 12)
         .padding(.trailing, 6)
         .padding(.vertical, 4)
-        .background(
-            RoundedRectangle(cornerRadius: 3)
-                .fill(Color.primary.opacity(hovering ? 0.06 : 0))
-        )
         .contentShape(Rectangle())
-        .onHover { hovering = $0 }
         .onTapGesture(count: 2, perform: onOpen)
         .help("Double-click to view the diff of \(change.path)")
-        .animation(.easeOut(duration: 0.15), value: hovering)
     }
 
     @ViewBuilder
