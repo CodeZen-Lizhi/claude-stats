@@ -65,7 +65,10 @@ struct DashboardView: View {
         .onChange(of: vm.heatmapCells) { _, _ in refreshDerived() }
         .onChange(of: env.github.cells) { _, _ in refreshDerived() }
         .task(id: dashboardReloadKey) {
-            await vm.reload(events: env.store.usageEventsSnapshot())
+            await vm.reloadIfNeeded(
+                events: env.store.usageEventsSnapshot(),
+                storeRefreshedAt: env.store.lastRefreshedAt
+            )
         }
         .task(id: githubReloadKey) {
             await env.github.reload(
@@ -159,7 +162,7 @@ struct DashboardView: View {
         let s = vm.stats
         return Grid(horizontalSpacing: 12, verticalSpacing: 12) {
             GridRow {
-                StatCard(label: L10n.string("dashboard.stat.sessions", defaultValue: "SESSIONS"), value: "\(s.sessions)")
+                StatCard(label: L10n.string("dashboard.stat.sessions", defaultValue: "HISTORICAL SESSIONS"), value: "\(s.sessions)")
                 StatCard(label: L10n.string("usage.stat.requests", defaultValue: "REQUESTS"), value: Format.tokens(s.messages))
                 StatCard(label: L10n.string("dashboard.stat.total_tokens", defaultValue: "TOTAL TOKENS"), value: Format.tokens(s.totalTokens))
                 StatCard(label: L10n.string("dashboard.stat.active_days", defaultValue: "ACTIVE DAYS"), value: "\(s.activeDays)")

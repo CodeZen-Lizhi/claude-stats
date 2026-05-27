@@ -109,6 +109,7 @@ final class DashboardViewModel {
 
     private let calendar = Calendar.current
     @ObservationIgnored private var currentReloadGeneration: UInt64 = 0
+    @ObservationIgnored private var lastRequestedReloadKey: ReloadInputKey?
 
     /// Number of trailing days the heatmap spans (rolling, ends today).
     static let heatmapDayCount = 90
@@ -133,6 +134,22 @@ final class DashboardViewModel {
     }
 
     func reload(events: [UsageLedgerEvent]) async {
+        await reload(events: events, storeRefreshedAt: nil)
+    }
+
+    func reloadIfNeeded(events: [UsageLedgerEvent], storeRefreshedAt: Date?) async {
+        let key = ReloadInputKey(
+            period: period,
+            storeRefreshedAt: storeRefreshedAt,
+            reloadToken: reloadToken,
+            eventCount: events.count
+        )
+        guard lastRequestedReloadKey != key else { return }
+        lastRequestedReloadKey = key
+        await reload(events: events, storeRefreshedAt: storeRefreshedAt)
+    }
+
+    private func reload(events: [UsageLedgerEvent], storeRefreshedAt _: Date?) async {
         currentReloadGeneration &+= 1
         let generation = currentReloadGeneration
         if !isLoading { isLoading = true }
@@ -167,9 +184,18 @@ final class DashboardViewModel {
             apply(result)
         } catch is CancellationError {
             task.cancel()
+            lastRequestedReloadKey = nil
         } catch {
+            lastRequestedReloadKey = nil
             Log.store.error("Dashboard reload failed: \(error.localizedDescription)")
         }
+    }
+
+    private struct ReloadInputKey: Equatable {
+        let period: StatsPeriod
+        let storeRefreshedAt: Date?
+        let reloadToken: UInt64
+        let eventCount: Int
     }
 
     private struct ReloadResult: Sendable {

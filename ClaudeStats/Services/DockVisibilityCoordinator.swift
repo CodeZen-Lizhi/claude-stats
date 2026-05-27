@@ -28,6 +28,7 @@ final class DockVisibilityCoordinator {
         count = max(0, count - 1)
         if count == 0, NSApp.activationPolicy() != .accessory {
             NSApp.setActivationPolicy(.accessory)
+            AppLifecyclePolicy.reassertAutomaticTerminationPolicy()
         }
     }
 }

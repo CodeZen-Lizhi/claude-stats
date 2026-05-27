@@ -1834,13 +1834,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "SESSIONS"
+            "value": "HISTORICAL SESSIONS"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "会话数"
+            "value": "历史会话数"
           }
         }
       }

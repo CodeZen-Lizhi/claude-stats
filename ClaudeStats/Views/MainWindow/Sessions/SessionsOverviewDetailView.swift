@@ -16,41 +16,49 @@ struct SessionsOverviewDetailView: View {
         env.store.sessions(for: provider)
     }
 
-    private var summary: UsageSummary {
-        UsageSummary.make(period: .allTime, sessions: sessions, pricing: env.pricing)
-    }
-
-    private var projectCount: Int {
-        Set(sessions.map(\.projectDirectoryName)).count
-    }
-
-    private var lastActivity: Date? {
-        sessions.map(activityDate).max()
-    }
-
-    private var recentSessions: [Session] {
-        Array(sessions.sorted { activityDate($0) > activityDate($1) }.prefix(8))
-    }
-
-    private var cacheHitRate: Double? {
-        env.store.cacheHitRate(for: summary.totalUsage, provider: provider)
+    private struct OverviewSnapshot {
+        let sessions: [Session]
+        let summary: UsageSummary
+        let projectCount: Int
+        let lastActivity: Date?
+        let recentSessions: [Session]
+        let cacheHitRate: Double?
     }
 
     var body: some View {
+        let snapshot = makeSnapshot()
+
         CenteredPaneContainer {
             VStack(alignment: .leading, spacing: 18) {
                 header
 
-                if sessions.isEmpty {
+                if snapshot.sessions.isEmpty {
                     emptyState
                 } else {
-                    statsGrid
-                    modelBreakdown
-                    recentSessionsSection
+                    statsGrid(snapshot)
+                    modelBreakdown(snapshot)
+                    recentSessionsSection(snapshot)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    private func makeSnapshot() -> OverviewSnapshot {
+        let sessions = sessions
+        let summary = UsageSummary.make(period: .allTime, sessions: sessions, pricing: env.pricing)
+        let projectCount = Set(sessions.map(\.projectDirectoryName)).count
+        let lastActivity = sessions.map(activityDate).max()
+        let recentSessions = Array(sessions.sorted { activityDate($0) > activityDate($1) }.prefix(8))
+        let cacheHitRate = env.store.cacheHitRate(for: summary.totalUsage, provider: provider)
+        return OverviewSnapshot(
+            sessions: sessions,
+            summary: summary,
+            projectCount: projectCount,
+            lastActivity: lastActivity,
+            recentSessions: recentSessions,
+            cacheHitRate: cacheHitRate
+        )
     }
 
     private var header: some View {
@@ -104,100 +112,100 @@ struct SessionsOverviewDetailView: View {
         return L10n.format("sessions.empty.provider", defaultValue: "No sessions for %@ yet.", provider.shortName)
     }
 
-    private var statsGrid: some View {
+    private func statsGrid(_ snapshot: OverviewSnapshot) -> some View {
         ViewThatFits(in: .horizontal) {
             Grid(horizontalSpacing: 12, verticalSpacing: 12) {
                 GridRow {
-                    sessionCountCard
-                    projectCountCard
-                    messageCountCard
-                    tokenCountCard
+                    sessionCountCard(snapshot.summary)
+                    projectCountCard(snapshot)
+                    messageCountCard(snapshot.summary)
+                    tokenCountCard(snapshot.summary)
                 }
                 GridRow {
-                    estimatedCostCard
-                    modelCountCard
-                    cacheHitCard
-                    lastActivityCard
+                    estimatedCostCard(snapshot.summary)
+                    modelCountCard(snapshot.summary)
+                    cacheHitCard(snapshot)
+                    lastActivityCard(snapshot)
                 }
             }
 
             Grid(horizontalSpacing: 12, verticalSpacing: 12) {
                 GridRow {
-                    sessionCountCard
-                    projectCountCard
+                    sessionCountCard(snapshot.summary)
+                    projectCountCard(snapshot)
                 }
                 GridRow {
-                    messageCountCard
-                    tokenCountCard
+                    messageCountCard(snapshot.summary)
+                    tokenCountCard(snapshot.summary)
                 }
                 GridRow {
-                    estimatedCostCard
-                    modelCountCard
+                    estimatedCostCard(snapshot.summary)
+                    modelCountCard(snapshot.summary)
                 }
                 GridRow {
-                    cacheHitCard
-                    lastActivityCard
+                    cacheHitCard(snapshot)
+                    lastActivityCard(snapshot)
                 }
             }
         }
     }
 
-    private var sessionCountCard: some View {
+    private func sessionCountCard(_ summary: UsageSummary) -> some View {
         StatCard(label: L10n.string("usage.stat.sessions", defaultValue: "SESSIONS"), value: "\(summary.sessionCount)")
     }
 
-    private var projectCountCard: some View {
-        StatCard(label: L10n.string("sessions.stat.projects", defaultValue: "PROJECTS"), value: "\(projectCount)")
+    private func projectCountCard(_ snapshot: OverviewSnapshot) -> some View {
+        StatCard(label: L10n.string("sessions.stat.projects", defaultValue: "PROJECTS"), value: "\(snapshot.projectCount)")
     }
 
-    private var messageCountCard: some View {
+    private func messageCountCard(_ summary: UsageSummary) -> some View {
         StatCard(label: L10n.string("usage.stat.requests", defaultValue: "REQUESTS"), value: Format.tokens(summary.messageCount))
     }
 
-    private var tokenCountCard: some View {
+    private func tokenCountCard(_ summary: UsageSummary) -> some View {
         StatCard(
             label: L10n.string("session.stat.total_tokens", defaultValue: "TOTAL TOKENS"),
             value: Format.tokens(summary.totalTokens(includingCacheRead: env.preferences.includeCacheInTokens))
         )
     }
 
-    private var estimatedCostCard: some View {
+    private func estimatedCostCard(_ summary: UsageSummary) -> some View {
         StatCard(
             label: L10n.string("usage.stat.estimated_cost", defaultValue: "EST. COST"),
             value: Format.cost(summary.totalCost(for: env.preferences.costEstimationMode))
         )
     }
 
-    private var modelCountCard: some View {
+    private func modelCountCard(_ summary: UsageSummary) -> some View {
         StatCard(label: L10n.string("sessions.stat.models", defaultValue: "MODELS"), value: "\(summary.models.count)")
     }
 
-    private var cacheHitCard: some View {
+    private func cacheHitCard(_ snapshot: OverviewSnapshot) -> some View {
         StatCard(
             label: L10n.string("usage.stat.cache_hit", defaultValue: "CACHE HIT"),
-            value: cacheHitRate.map { Format.percent($0) } ?? "--",
+            value: snapshot.cacheHitRate.map { Format.percent($0) } ?? "--",
             animatesNumericValue: false
         )
     }
 
-    private var lastActivityCard: some View {
+    private func lastActivityCard(_ snapshot: OverviewSnapshot) -> some View {
         StatCard(
             label: L10n.string("session.stat.last_activity", defaultValue: "LAST ACTIVITY"),
-            value: lastActivity.map { Format.relativeDate($0) } ?? "--",
+            value: snapshot.lastActivity.map { Format.relativeDate($0) } ?? "--",
             animatesNumericValue: false
         )
     }
 
     @ViewBuilder
-    private var modelBreakdown: some View {
-        if !summary.models.isEmpty {
+    private func modelBreakdown(_ snapshot: OverviewSnapshot) -> some View {
+        if !snapshot.summary.models.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Text(L10n.string("section.by_model", defaultValue: "BY MODEL"))
                     .font(.sora(10, weight: .semibold))
                     .tracking(0.6)
                     .foregroundStyle(Color.stxMuted)
                 ModelTable(
-                    models: summary.models,
+                    models: snapshot.summary.models,
                     includeCacheInTotals: env.preferences.includeCacheInTokens,
                     displayName: { env.store.displayName(forModel: $0, provider: provider) }
                 )
@@ -206,8 +214,8 @@ struct SessionsOverviewDetailView: View {
     }
 
     @ViewBuilder
-    private var recentSessionsSection: some View {
-        if !recentSessions.isEmpty {
+    private func recentSessionsSection(_ snapshot: OverviewSnapshot) -> some View {
+        if !snapshot.recentSessions.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Text(L10n.string("sessions.recent", defaultValue: "RECENT SESSIONS"))
                     .font(.sora(10, weight: .semibold))
@@ -215,7 +223,7 @@ struct SessionsOverviewDetailView: View {
                     .foregroundStyle(Color.stxMuted)
 
                 VStack(spacing: 0) {
-                    ForEach(recentSessions) { session in
+                    ForEach(snapshot.recentSessions) { session in
                         SessionRow(
                             session: session,
                             onSelect: { onSelectSession(session) },

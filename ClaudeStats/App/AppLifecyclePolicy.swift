@@ -3,9 +3,16 @@ import Foundation
 /// Keeps Codex Statistics resident while it is running as a menu-bar utility.
 enum AppLifecyclePolicy {
     static let automaticTerminationReason = "Codex Statistics is a resident menu-bar app."
+    private static var processInfo: AutomaticTerminationControlling = ProcessInfo.processInfo
 
     @MainActor
     static func configureAutomaticTermination(using processInfo: AutomaticTerminationControlling = ProcessInfo.processInfo) {
+        self.processInfo = processInfo
+        reassertAutomaticTerminationPolicy()
+    }
+
+    @MainActor
+    static func reassertAutomaticTerminationPolicy() {
         processInfo.disableAutomaticTermination(automaticTerminationReason)
     }
 
@@ -16,7 +23,7 @@ enum AppLifecyclePolicy {
     static func reassertAfterLaunchRestoration() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
             Task { @MainActor in
-                configureAutomaticTermination()
+                reassertAutomaticTerminationPolicy()
             }
         }
     }

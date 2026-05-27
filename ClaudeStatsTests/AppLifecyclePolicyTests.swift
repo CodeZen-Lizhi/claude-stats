@@ -13,6 +13,19 @@ struct AppLifecyclePolicyTests {
 
         #expect(processInfo.disableReasons == [AppLifecyclePolicy.automaticTerminationReason])
     }
+
+    @Test("Resident menu bar app can reassert automatic termination policy after activation changes")
+    func residentMenuBarAppCanReassertAutomaticTerminationPolicyAfterActivationChanges() {
+        let processInfo = RecordingAutomaticTerminationController()
+
+        AppLifecyclePolicy.configureAutomaticTermination(using: processInfo)
+        AppLifecyclePolicy.reassertAutomaticTerminationPolicy()
+
+        #expect(processInfo.disableReasons == [
+            AppLifecyclePolicy.automaticTerminationReason,
+            AppLifecyclePolicy.automaticTerminationReason,
+        ])
+    }
 }
 
 private final class RecordingAutomaticTerminationController: AutomaticTerminationControlling {
