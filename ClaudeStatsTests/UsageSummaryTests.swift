@@ -306,7 +306,7 @@ struct UsageSummaryTests {
 
     @MainActor
     @Test("Usage derived data is keyed by data inputs, not layout")
-    func usageDerivedDataKeyedByDataInputs() {
+    func usageDerivedDataKeyedByDataInputs() async {
         let store = SessionStore(registry: ProviderRegistry(pricing: TestPricing.table), pricing: TestPricing.table)
         store.loadPreviewSessions([
             session("derived", daysAgo: 0, hour: 10, model: "model-a", count: 120),
@@ -317,7 +317,7 @@ struct UsageSummaryTests {
             provider: .codex,
             lastRefreshedAt: store.lastRefreshedAt
         )
-        let snapshot = UsageDerivedData.make(key: key, store: store)
+        let snapshot = await UsageDerivedData.make(key: key, store: store)
 
         #expect(snapshot.summary.totalTokens == 120)
         #expect(snapshot.series.models == ["model-a"])
@@ -328,7 +328,7 @@ struct UsageSummaryTests {
 
     @MainActor
     @Test("Trend snapshot key changes when empty derived data is replaced by real data")
-    func trendSnapshotKeyIncludesSeriesRevision() {
+    func trendSnapshotKeyIncludesSeriesRevision() async {
         let store = SessionStore(registry: ProviderRegistry(pricing: TestPricing.table), pricing: TestPricing.table)
         store.loadPreviewSessions([
             legacySession("real-trend", daysAgo: 0, hour: 10, models: [model("model-a", count: 120)]),
@@ -339,7 +339,7 @@ struct UsageSummaryTests {
             lastRefreshedAt: store.lastRefreshedAt
         )
         let empty = UsageDerivedData.empty(for: key)
-        let real = UsageDerivedData.make(key: key, store: store)
+        let real = await UsageDerivedData.make(key: key, store: store)
 
         let emptyKey = UsageTrendSnapshotKey(
             seriesID: key.chartSeriesID,
@@ -364,7 +364,7 @@ struct UsageSummaryTests {
 
     @MainActor
     @Test("Model breakdown key changes when empty derived data is replaced by real data")
-    func modelBreakdownKeyIncludesDataRevisions() {
+    func modelBreakdownKeyIncludesDataRevisions() async {
         let store = SessionStore(registry: ProviderRegistry(pricing: TestPricing.table), pricing: TestPricing.table)
         store.loadPreviewSessions([
             legacySession("real-models", daysAgo: 0, hour: 10, models: [model("model-a", count: 120)]),
@@ -375,7 +375,7 @@ struct UsageSummaryTests {
             lastRefreshedAt: store.lastRefreshedAt
         )
         let empty = UsageDerivedData.empty(for: key)
-        let real = UsageDerivedData.make(key: key, store: store)
+        let real = await UsageDerivedData.make(key: key, store: store)
 
         let emptyKey = UsageModelBreakdownSnapshot.Key(
             seriesID: key.chartSeriesID,
@@ -398,7 +398,7 @@ struct UsageSummaryTests {
 
     @MainActor
     @Test("Usage derived data and model breakdown handle legacy sessions without timeline")
-    func usageDerivedDataHandlesLegacySessionsWithoutTimeline() {
+    func usageDerivedDataHandlesLegacySessionsWithoutTimeline() async {
         let store = SessionStore(registry: ProviderRegistry(pricing: TestPricing.table), pricing: TestPricing.table)
         store.loadPreviewSessions([
             legacySession("legacy-derived", daysAgo: 0, hour: 10, models: [model("model-a", count: 120)]),
@@ -409,7 +409,7 @@ struct UsageSummaryTests {
             lastRefreshedAt: store.lastRefreshedAt
         )
 
-        let data = UsageDerivedData.make(key: key, store: store)
+        let data = await UsageDerivedData.make(key: key, store: store)
         let breakdown = UsageModelBreakdownSnapshot(
             key: UsageModelBreakdownSnapshot.Key(
                 seriesID: data.key.chartSeriesID,

@@ -68,8 +68,8 @@ struct UsageView: View {
 
         if interactive {
             AppScrollView { content }
-                .onAppear { refreshDerivedData() }
-                .onChange(of: usageDataKey) { _, _ in refreshDerivedData() }
+                .onAppear { Task { await refreshDerivedData() } }
+                .onChange(of: usageDataKey) { _, _ in Task { await refreshDerivedData() } }
         } else {
             content
         }
@@ -142,8 +142,8 @@ struct UsageView: View {
         )
     }
 
-    private func refreshDerivedData() {
-        vm.refreshDerivedData(
+    private func refreshDerivedData() async {
+        await vm.refreshDerivedData(
             from: env.store,
             provider: env.preferences.selectedProvider,
             lastRefreshedAt: env.store.lastRefreshedAt

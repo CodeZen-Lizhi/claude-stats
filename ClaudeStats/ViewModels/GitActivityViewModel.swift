@@ -55,7 +55,7 @@ final class GitActivityViewModel {
     private var lastLoadedIdentity: ReloadIdentity?
 
     private struct ReloadIdentity: Equatable, Sendable {
-        let lastRefreshedAt: Date?
+        let gitInputRevision: Int
         let sourceIDs: Set<GitWorkspaceSourceID>
         let range: GitRange
         let onlyMyCommits: Bool
@@ -73,10 +73,10 @@ final class GitActivityViewModel {
     func reloadIfNeeded(
         sessions: [Session],
         sourceIDs: Set<GitWorkspaceSourceID>,
-        lastRefreshedAt: Date?
+        gitInputRevision: Int
     ) async {
         let identity = ReloadIdentity(
-            lastRefreshedAt: lastRefreshedAt,
+            gitInputRevision: gitInputRevision,
             sourceIDs: GitWorkspaceSourceCatalog.normalized(sourceIDs),
             range: range,
             onlyMyCommits: onlyMyCommits,

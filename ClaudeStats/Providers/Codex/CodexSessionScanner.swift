@@ -9,6 +9,7 @@ struct CodexSessionScanner: Sendable {
     static let minimumFileSize: Int64 = 200
 
     private static let resourceKeys: [URLResourceKey] = [.fileSizeKey, .contentModificationDateKey, .isRegularFileKey]
+    private static let titleIndexReadChunkSize = 64 * 1024
 
     func scan() async -> [Session] {
         let fm = FileManager.default
@@ -112,7 +113,8 @@ struct CodexSessionScanner: Sendable {
     }
 
     static func readSessionTitleIndex(from url: URL) -> [String: String] {
-        guard let data = try? Data(contentsOf: url), !data.isEmpty else { return [:] }
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return [:] }
+        defer { try? handle.close() }
         struct Entry: Decodable {
             let id: String?
             let threadName: String?
@@ -125,17 +127,39 @@ struct CodexSessionScanner: Sendable {
 
         let decoder = JSONDecoder()
         var titles: [String: String] = [:]
-        for lineBytes in data.split(separator: 0x0A /* \n */, omittingEmptySubsequences: true) {
-            guard let entry = try? decoder.decode(Entry.self, from: Data(lineBytes)),
+        Self.readLines(from: handle) { lineData in
+            guard let entry = try? decoder.decode(Entry.self, from: lineData),
                   let id = entry.id?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !id.isEmpty,
                   let title = entry.threadName?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !title.isEmpty else {
-                continue
+                return
             }
             titles[id] = title
         }
         return titles
+    }
+
+    private static func readLines(from handle: FileHandle, handleLine: (Data) -> Void) {
+        var buffer = Data()
+        while true {
+            guard let chunk = try? handle.read(upToCount: titleIndexReadChunkSize),
+                  let chunk,
+                  !chunk.isEmpty else {
+                break
+            }
+            buffer.append(chunk)
+            while let newline = buffer.firstIndex(of: 0x0A) {
+                if newline > buffer.startIndex {
+                    handleLine(Data(buffer[..<newline]))
+                }
+                let nextIndex = buffer.index(after: newline)
+                buffer.removeSubrange(buffer.startIndex..<nextIndex)
+            }
+        }
+        if !buffer.isEmpty {
+            handleLine(buffer)
+        }
     }
 
     /// Read the first JSONL line (`type == "session_meta"`) to pull `id` and

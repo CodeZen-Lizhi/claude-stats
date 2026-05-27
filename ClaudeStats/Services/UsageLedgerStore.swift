@@ -6,12 +6,22 @@ import Foundation
 actor UsageLedgerStore {
     private let fileURL: URL
     private var snapshot: UsageLedgerSnapshot
+    private var eventsBySessionID: [String: [UsageLedgerEvent]]
+    private var parseStateBySessionID: [String: UsageLedgerParseState]
+    private var eventKeys: Set<String>
+    private var eventsAreDirty = false
     private var persistenceBatchDepth = 0
     private var hasDeferredPersistence = false
 
     init(fileURL: URL = UsageLedgerPaths.ledgerURL()) {
         self.fileURL = fileURL
-        self.snapshot = Self.load(from: fileURL)
+        let snapshot = Self.load(from: fileURL)
+        self.snapshot = snapshot
+        self.eventsBySessionID = Dictionary(grouping: snapshot.events, by: \.sessionID)
+        self.parseStateBySessionID = snapshot.parseStates.reduce(into: [:]) { states, state in
+            states[state.sessionID] = state
+        }
+        self.eventKeys = Set(snapshot.events.map(\.eventKey))
     }
 
     func beginPersistenceBatch() {
@@ -27,16 +37,16 @@ actor UsageLedgerStore {
     }
 
     func events(provider: ProviderKind? = nil) -> [UsageLedgerEvent] {
+        materializeEventsIfNeeded()
         let live = snapshot.events
         guard let provider else { return live }
         return live.filter { $0.provider == provider }
     }
 
     func stats(for session: Session, calendar: Calendar = .current) -> SessionStats? {
-        let sessionEvents = snapshot.events
-            .filter { $0.sessionID == session.id }
+        let sessionEvents = (eventsBySessionID[session.id] ?? [])
             .sorted { $0.timestamp < $1.timestamp }
-        guard let state = snapshot.parseStates.first(where: { $0.sessionID == session.id }),
+        guard let state = parseStateBySessionID[session.id],
               state.hasViewableTranscript != false,
               !sessionEvents.isEmpty || state.messageCount > 0 else {
             return nil
@@ -53,23 +63,22 @@ actor UsageLedgerStore {
     }
 
     func visibleSessionIDs() -> Set<String> {
-        Set(snapshot.parseStates.filter(\.sourceExists).map(\.sessionID))
+        Set(parseStateBySessionID.values.filter(\.sourceExists).map(\.sessionID))
     }
 
     func parseState(for sessionID: String) -> UsageLedgerParseState? {
-        snapshot.parseStates.first { $0.sessionID == sessionID }
+        parseStateBySessionID[sessionID]
     }
 
     func replaceEvents(for session: Session, stats: SessionStats, now: Date = .now) async {
         let newEvents = Self.events(from: stats, session: session)
-        snapshot.events.removeAll { $0.sessionID == session.id }
-        snapshot.events.append(contentsOf: newEvents)
+        replaceIndexedEvents(for: session.id, with: newEvents)
         upsertParseState(for: session, stats: stats, sourceExists: true, eventCount: newEvents.count, now: now)
         persist()
     }
 
     func clearEvents(for session: Session, now: Date = .now) async {
-        snapshot.events.removeAll { $0.sessionID == session.id }
+        replaceIndexedEvents(for: session.id, with: [])
         let empty = SessionStats(
             title: session.projectDisplayName,
             messageCount: 0,
@@ -83,12 +92,13 @@ actor UsageLedgerStore {
     }
 
     func markUnviewable(for session: Session, now: Date = .now) async {
-        if let index = snapshot.parseStates.firstIndex(where: { $0.sessionID == session.id }) {
-            snapshot.parseStates[index].sourceExists = true
-            snapshot.parseStates[index].lastSeenAt = now
-            snapshot.parseStates[index].hasViewableTranscript = false
+        if var state = parseStateBySessionID[session.id] {
+            state.sourceExists = true
+            state.lastSeenAt = now
+            state.hasViewableTranscript = false
+            upsertIndexedParseState(state)
         } else {
-            snapshot.parseStates.append(UsageLedgerParseState(
+            upsertIndexedParseState(UsageLedgerParseState(
                 sessionID: session.id,
                 provider: session.provider,
                 sourcePath: session.filePath,
@@ -110,9 +120,11 @@ actor UsageLedgerStore {
     }
 
     func appendEvents(for session: Session, result: UsageLedgerAppendResult, now: Date = .now) async {
-        let existingKeys = Set(snapshot.events.map(\.eventKey))
-        let newEvents = result.events.filter { !existingKeys.contains($0.eventKey) }
-        snapshot.events.append(contentsOf: newEvents)
+        let newEvents = result.events.filter { eventKeys.insert($0.eventKey).inserted }
+        if !newEvents.isEmpty {
+            eventsBySessionID[session.id, default: []].append(contentsOf: newEvents)
+            eventsAreDirty = true
+        }
         upsertParseState(for: session, append: result, parsedEventCount: result.events.count, sourceExists: true, now: now)
         persist()
     }
@@ -120,14 +132,16 @@ actor UsageLedgerStore {
     func markSeen(_ sessions: [Session], now: Date = .now) async {
         let liveIDs = Set(sessions.map(\.id))
         var didChange = false
-        for index in snapshot.parseStates.indices {
-            let isLive = liveIDs.contains(snapshot.parseStates[index].sessionID)
-            let wasLive = snapshot.parseStates[index].sourceExists
+        for sessionID in Array(parseStateBySessionID.keys) {
+            guard var state = parseStateBySessionID[sessionID] else { continue }
+            let isLive = liveIDs.contains(sessionID)
+            let wasLive = state.sourceExists
             if wasLive != isLive {
-                snapshot.parseStates[index].sourceExists = isLive
+                state.sourceExists = isLive
                 if isLive {
-                    snapshot.parseStates[index].lastSeenAt = now
+                    state.lastSeenAt = now
                 }
+                upsertIndexedParseState(state)
                 didChange = true
             }
         }
@@ -136,34 +150,45 @@ actor UsageLedgerStore {
 
     func syncParentSessionIDs(mapping: [String: String], liveSessionIDs: Set<String>) async {
         var didChange = false
-        for index in snapshot.events.indices where liveSessionIDs.contains(snapshot.events[index].sessionID) {
-            guard let parentID = mapping[snapshot.events[index].sessionID],
-                  snapshot.events[index].parentSessionID != parentID else {
+        for sessionID in liveSessionIDs {
+            guard let parentID = mapping[sessionID],
+                  var events = eventsBySessionID[sessionID] else {
                 continue
             }
-            snapshot.events[index].parentSessionID = parentID
-            didChange = true
+            var sessionChanged = false
+            for index in events.indices where events[index].parentSessionID != parentID {
+                events[index].parentSessionID = parentID
+                sessionChanged = true
+            }
+            if sessionChanged {
+                eventsBySessionID[sessionID] = events
+                didChange = true
+            }
         }
-        if didChange { persist() }
+        if didChange {
+            eventsAreDirty = true
+            persist()
+        }
     }
 
     private func upsertParseState(for session: Session, stats: SessionStats, sourceExists: Bool, eventCount: Int, now: Date) {
         let offset = UInt64(max(session.fileSize, 0))
-        if let index = snapshot.parseStates.firstIndex(where: { $0.sessionID == session.id }) {
-            snapshot.parseStates[index].fileSize = session.fileSize
-            snapshot.parseStates[index].lastModified = session.lastModified
-            snapshot.parseStates[index].lastParsedByteOffset = offset
-            snapshot.parseStates[index].eventCount = eventCount
-            snapshot.parseStates[index].title = stats.title
-            snapshot.parseStates[index].messageCount = stats.messageCount
-            snapshot.parseStates[index].firstActivity = stats.firstActivity
-            snapshot.parseStates[index].lastActivity = stats.lastActivity
-            snapshot.parseStates[index].sourceExists = sourceExists
-            snapshot.parseStates[index].lastSeenAt = now
-            snapshot.parseStates[index].lastModel = stats.lastModel
-            snapshot.parseStates[index].hasViewableTranscript = true
+        if var state = parseStateBySessionID[session.id] {
+            state.fileSize = session.fileSize
+            state.lastModified = session.lastModified
+            state.lastParsedByteOffset = offset
+            state.eventCount = eventCount
+            state.title = stats.title
+            state.messageCount = stats.messageCount
+            state.firstActivity = stats.firstActivity
+            state.lastActivity = stats.lastActivity
+            state.sourceExists = sourceExists
+            state.lastSeenAt = now
+            state.lastModel = stats.lastModel
+            state.hasViewableTranscript = true
+            upsertIndexedParseState(state)
         } else {
-            snapshot.parseStates.append(UsageLedgerParseState(
+            upsertIndexedParseState(UsageLedgerParseState(
                 sessionID: session.id,
                 provider: session.provider,
                 sourcePath: session.filePath,
@@ -190,27 +215,26 @@ actor UsageLedgerStore {
         sourceExists: Bool,
         now: Date
     ) {
-        if let index = snapshot.parseStates.firstIndex(where: { $0.sessionID == session.id }) {
-            snapshot.parseStates[index].fileSize = Int64(min(result.lastParsedByteOffset, UInt64(Int64.max)))
-            snapshot.parseStates[index].lastModified = session.lastModified
-            snapshot.parseStates[index].lastParsedByteOffset = result.lastParsedByteOffset
-            snapshot.parseStates[index].eventCount += parsedEventCount
+        if var state = parseStateBySessionID[session.id] {
+            state.fileSize = Int64(min(result.lastParsedByteOffset, UInt64(Int64.max)))
+            state.lastModified = session.lastModified
+            state.lastParsedByteOffset = result.lastParsedByteOffset
+            state.eventCount += parsedEventCount
             if let title = result.title {
-                snapshot.parseStates[index].title = title
+                state.title = title
             }
-            snapshot.parseStates[index].messageCount += result.messageCountDelta
+            state.messageCount += result.messageCountDelta
             if let first = result.firstActivity {
-                let existing = snapshot.parseStates[index].firstActivity
-                snapshot.parseStates[index].firstActivity = existing.map { min($0, first) } ?? first
+                state.firstActivity = state.firstActivity.map { min($0, first) } ?? first
             }
             if let last = result.lastActivity {
-                let existing = snapshot.parseStates[index].lastActivity
-                snapshot.parseStates[index].lastActivity = existing.map { max($0, last) } ?? last
+                state.lastActivity = state.lastActivity.map { max($0, last) } ?? last
             }
-            snapshot.parseStates[index].sourceExists = sourceExists
-            snapshot.parseStates[index].lastSeenAt = now
-            snapshot.parseStates[index].lastModel = result.lastModel
-            snapshot.parseStates[index].hasViewableTranscript = true
+            state.sourceExists = sourceExists
+            state.lastSeenAt = now
+            state.lastModel = result.lastModel
+            state.hasViewableTranscript = true
+            upsertIndexedParseState(state)
         } else {
             let stats = Self.stats(
                 title: result.title ?? session.projectDisplayName,
@@ -323,6 +347,7 @@ actor UsageLedgerStore {
 
     private func persistNow() {
         do {
+            materializeEventsIfNeeded()
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
@@ -332,6 +357,39 @@ actor UsageLedgerStore {
         } catch {
             Log.store.error("Failed to persist usage ledger: \(error.localizedDescription)")
         }
+    }
+
+    private func replaceIndexedEvents(for sessionID: String, with events: [UsageLedgerEvent]) {
+        for event in eventsBySessionID[sessionID] ?? [] {
+            eventKeys.remove(event.eventKey)
+        }
+        if events.isEmpty {
+            eventsBySessionID.removeValue(forKey: sessionID)
+        } else {
+            eventsBySessionID[sessionID] = events
+            eventKeys.formUnion(events.map(\.eventKey))
+        }
+        eventsAreDirty = true
+    }
+
+    private func upsertIndexedParseState(_ state: UsageLedgerParseState) {
+        parseStateBySessionID[state.sessionID] = state
+        if let index = snapshot.parseStates.firstIndex(where: { $0.sessionID == state.sessionID }) {
+            snapshot.parseStates[index] = state
+        } else {
+            snapshot.parseStates.append(state)
+        }
+    }
+
+    private func materializeEventsIfNeeded() {
+        guard eventsAreDirty else { return }
+        snapshot.events = eventsBySessionID.values
+            .flatMap { $0 }
+            .sorted {
+                if $0.timestamp != $1.timestamp { return $0.timestamp < $1.timestamp }
+                return $0.eventKey < $1.eventKey
+            }
+        eventsAreDirty = false
     }
 
     private static func load(from url: URL) -> UsageLedgerSnapshot {

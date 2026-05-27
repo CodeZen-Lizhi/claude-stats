@@ -61,13 +61,13 @@ struct MainUsageView: View {
         }
         .onAppear {
             syncFromSceneStorage()
-            refreshDerivedData()
+            Task { await refreshDerivedData() }
         }
         .onChange(of: vm.period) { _, new in periodRaw = new.rawValue }
         .onChange(of: vm.chartStyle) { _, new in chartStyleRaw = ChartStyleStorage(new).rawValue }
         .onChange(of: vm.scaleMode) { _, new in scaleModeRaw = ScaleModeStorage(new).rawValue }
         .onChange(of: vm.stackByType) { _, new in stackByTypeRaw = new }
-        .onChange(of: usageDataKey) { _, _ in refreshDerivedData() }
+        .onChange(of: usageDataKey) { _, _ in Task { await refreshDerivedData() } }
         .onChange(of: env.store.lastRefreshedAt) { _, _ in
             guard env.preferences.selectedProvider.supportsUsageLimits else { return }
             Task {
@@ -162,8 +162,8 @@ struct MainUsageView: View {
         vm.stackByType = stackByTypeRaw
     }
 
-    private func refreshDerivedData() {
-        vm.refreshDerivedData(
+    private func refreshDerivedData() async {
+        await vm.refreshDerivedData(
             from: env.store,
             provider: env.preferences.selectedProvider,
             lastRefreshedAt: env.store.lastRefreshedAt

@@ -14,10 +14,9 @@ struct CodexTranscriptParser: Sendable {
     /// Codex sessions don't name the model in `session_meta`; default to GPT-5
     /// when no `turn_context` has been seen yet.
     private static let defaultModel = "gpt-5"
+    private static let lineReadChunkSize = 64 * 1024
 
     func parse(transcriptAt url: URL, fallbackTitle: String, sessionID: String? = nil) async -> SessionStats? {
-        guard let data = try? Data(contentsOf: url) else { return nil }
-
         var currentModel = Self.defaultModel
         var perModel: [String: (count: Int, usage: TokenUsage, cost: CostEstimate)] = [:]
         var perModelHourly: [String: [Date: TokenUsage]] = [:]
@@ -32,11 +31,11 @@ struct CodexTranscriptParser: Sendable {
         let calendar = Calendar.current
 
         let decoder = JSONDecoder()
-        for lineBytes in data.split(separator: 0x0A /* \n */, omittingEmptySubsequences: true) {
-            guard let line = try? decoder.decode(CodexLine.self, from: Data(lineBytes)) else { continue }
+        let parsedByteCount = Self.readLines(from: url) { lineData in
+            guard let line = try? decoder.decode(CodexLine.self, from: lineData) else { return }
             let date = ISO8601.parse(line.timestamp)
             track(date, &firstActivity, &lastActivity)
-            guard let payload = line.payload else { continue }
+            guard let payload = line.payload else { return }
 
             switch (line.type, payload.type) {
             case ("turn_context", _):
@@ -96,6 +95,7 @@ struct CodexTranscriptParser: Sendable {
                 break
             }
         }
+        guard parsedByteCount != nil else { return nil }
 
         let models = perModel
             .map { ModelUsage(model: $0.key, messageCount: $0.value.count, usage: $0.value.usage, costEstimate: $0.value.cost) }
@@ -130,38 +130,6 @@ struct CodexTranscriptParser: Sendable {
             return nil
         }
 
-        guard let data = try? handle.readToEnd(), !data.isEmpty else {
-            return UsageLedgerAppendResult(
-                events: [],
-                lastParsedByteOffset: state.lastParsedByteOffset,
-                messageCountDelta: 0,
-                firstActivity: nil,
-                lastActivity: nil,
-                title: nil,
-                lastModel: state.lastModel
-            )
-        }
-
-        let parseData: Data.SubSequence
-        let parsedByteCount: UInt64
-        if data.last == 0x0A {
-            parseData = data[...]
-            parsedByteCount = UInt64(data.count)
-        } else if let lastNewline = data.lastIndex(of: 0x0A) {
-            parseData = data.prefix(through: lastNewline)
-            parsedByteCount = UInt64(parseData.count)
-        } else {
-            return UsageLedgerAppendResult(
-                events: [],
-                lastParsedByteOffset: state.lastParsedByteOffset,
-                messageCountDelta: 0,
-                firstActivity: nil,
-                lastActivity: nil,
-                title: nil,
-                lastModel: state.lastModel
-            )
-        }
-
         var currentModel = state.lastModel ?? Self.defaultModel
         var events: [UsageLedgerEvent] = []
         var tokenEventIndex = state.eventCount
@@ -172,11 +140,15 @@ struct CodexTranscriptParser: Sendable {
         var firstUserTitle: String?
         let decoder = JSONDecoder()
 
-        for lineBytes in parseData.split(separator: 0x0A /* \n */, omittingEmptySubsequences: true) {
-            guard let line = try? decoder.decode(CodexLine.self, from: Data(lineBytes)) else { continue }
+        let parsedByteCount = Self.readLines(
+            from: handle,
+            requireTrailingNewline: true,
+            startingAt: state.lastParsedByteOffset
+        ) { lineData in
+            guard let line = try? decoder.decode(CodexLine.self, from: lineData) else { return }
             let date = ISO8601.parse(line.timestamp)
             track(date, &firstActivity, &lastActivity)
-            guard let payload = line.payload else { continue }
+            guard let payload = line.payload else { return }
 
             switch (line.type, payload.type) {
             case ("turn_context", _):
@@ -229,6 +201,19 @@ struct CodexTranscriptParser: Sendable {
                 break
             }
         }
+        guard let parsedByteCount else { return nil }
+
+        guard parsedByteCount > 0 else {
+            return UsageLedgerAppendResult(
+                events: [],
+                lastParsedByteOffset: state.lastParsedByteOffset,
+                messageCountDelta: 0,
+                firstActivity: nil,
+                lastActivity: nil,
+                title: nil,
+                lastModel: state.lastModel
+            )
+        }
 
         return UsageLedgerAppendResult(
             events: events,
@@ -242,14 +227,14 @@ struct CodexTranscriptParser: Sendable {
     }
 
     func messages(transcriptAt url: URL) async -> [SessionTranscriptMessage] {
-        guard let data = try? Data(contentsOf: url) else { return [] }
-
         var messages: [SessionTranscriptMessage] = []
         let decoder = JSONDecoder()
-        for (index, lineBytes) in data.split(separator: 0x0A /* \n */, omittingEmptySubsequences: true).enumerated() {
-            guard let line = try? decoder.decode(CodexLine.self, from: Data(lineBytes)),
+        var lineIndex = 0
+        let parsedByteCount = Self.readLines(from: url) { lineData in
+            defer { lineIndex += 1 }
+            guard let line = try? decoder.decode(CodexLine.self, from: lineData),
                   line.type == "event_msg",
-                  let payload = line.payload else { continue }
+                  let payload = line.payload else { return }
 
             let role: SessionTranscriptMessage.Role
             switch payload.type {
@@ -258,27 +243,26 @@ struct CodexTranscriptParser: Sendable {
             case "agent_message":
                 role = .assistant
             default:
-                continue
+                return
             }
 
             guard let text = payload.message?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !text.isEmpty else { continue }
+                  !text.isEmpty else { return }
 
             messages.append(SessionTranscriptMessage(
-                id: "codex-\(index)",
+                id: "codex-\(lineIndex)",
                 role: role,
                 text: text,
                 timestamp: ISO8601.parse(line.timestamp),
                 model: nil
             ))
         }
+        guard parsedByteCount != nil else { return [] }
 
         return messages
     }
 
     func taskIntervals(transcriptAt url: URL) async -> [SessionTaskInterval] {
-        guard let data = try? Data(contentsOf: url) else { return [] }
-
         struct Started {
             let id: String
             let start: Date
@@ -287,11 +271,11 @@ struct CodexTranscriptParser: Sendable {
         var open: [String: Started] = [:]
         var intervals: [SessionTaskInterval] = []
         let decoder = JSONDecoder()
-        for lineBytes in data.split(separator: 0x0A /* \n */, omittingEmptySubsequences: true) {
-            guard let line = try? decoder.decode(CodexLine.self, from: Data(lineBytes)),
+        let parsedByteCount = Self.readLines(from: url) { lineData in
+            guard let line = try? decoder.decode(CodexLine.self, from: lineData),
                   line.type == "event_msg",
                   let payload = line.payload,
-                  let turnID = payload.turnID else { continue }
+                  let turnID = payload.turnID else { return }
 
             switch payload.type {
             case "task_started":
@@ -301,17 +285,61 @@ struct CodexTranscriptParser: Sendable {
                     open[turnID] = Started(id: turnID, start: start)
                 }
             case "task_complete":
-                guard let started = open.removeValue(forKey: turnID) else { continue }
+                guard let started = open.removeValue(forKey: turnID) else { return }
                 let end = payload.completedAt.map { Date(timeIntervalSince1970: TimeInterval($0)) }
                     ?? ISO8601.parse(line.timestamp)
                     ?? started.start
                 intervals.append(SessionTaskInterval(id: started.id, start: started.start, end: max(end, started.start)))
             default:
-                continue
+                return
             }
         }
+        guard parsedByteCount != nil else { return [] }
 
         return intervals
+    }
+
+    @discardableResult
+    private static func readLines(
+        from url: URL,
+        requireTrailingNewline: Bool = false,
+        handleLine: (Data) -> Void
+    ) -> UInt64? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        return readLines(from: handle, requireTrailingNewline: requireTrailingNewline, startingAt: 0, handleLine: handleLine)
+    }
+
+    @discardableResult
+    private static func readLines(
+        from handle: FileHandle,
+        requireTrailingNewline: Bool,
+        startingAt offset: UInt64,
+        handleLine: (Data) -> Void
+    ) -> UInt64? {
+        do {
+            try handle.seek(toOffset: offset)
+            var buffer = Data()
+            var parsedBytes: UInt64 = 0
+            while let chunk = try handle.read(upToCount: lineReadChunkSize), !chunk.isEmpty {
+                buffer.append(chunk)
+                while let newline = buffer.firstIndex(of: 0x0A) {
+                    if newline > buffer.startIndex {
+                        handleLine(Data(buffer[..<newline]))
+                    }
+                    let nextIndex = buffer.index(after: newline)
+                    parsedBytes += UInt64(buffer.distance(from: buffer.startIndex, to: nextIndex))
+                    buffer.removeSubrange(buffer.startIndex..<nextIndex)
+                }
+            }
+            if !requireTrailingNewline, !buffer.isEmpty {
+                handleLine(buffer)
+                parsedBytes += UInt64(buffer.count)
+            }
+            return parsedBytes
+        } catch {
+            return nil
+        }
     }
 
     private func track(_ date: Date?, _ first: inout Date?, _ last: inout Date?) {

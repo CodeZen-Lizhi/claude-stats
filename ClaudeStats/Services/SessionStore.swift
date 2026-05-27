@@ -26,12 +26,28 @@ final class SessionStore {
     private let trashTranscript: TranscriptTrasher
     private var cache: [String: CacheEntry] = [:]
     private var usageEventsSnapshot: [UsageLedgerEvent] = []
+    private var usageEventsByProviderSnapshot: [ProviderKind: [UsageLedgerEvent]] = [:]
+    private var summaryCache: [UsageSummaryCacheKey: UsageSummary] = [:]
+    private var summaryCacheDay: Date?
+    private(set) var gitAttributionRevision: Int = 0
+    private var gitAttributionSignature: [String] = []
     private var autoRefreshTask: Task<Void, Never>?
 
     private struct CacheEntry {
         let fileSize: Int64
         let lastModified: Date
         let stats: SessionStats
+    }
+
+    private struct UsageSummaryCacheKey: Hashable, Sendable {
+        let period: StatsPeriod
+        let provider: ProviderKind?
+    }
+
+    private struct UsageSnapshotCache: Sendable {
+        let day: Date
+        let eventsByProvider: [ProviderKind: [UsageLedgerEvent]]
+        let summaries: [UsageSummaryCacheKey: UsageSummary]
     }
 
     /// Max transcripts parsed concurrently.
@@ -100,6 +116,9 @@ final class SessionStore {
     }
 
     func summary(for period: StatsPeriod, provider: ProviderKind? = nil, now: Date = .now) -> UsageSummary {
+        if let cached = cachedSummary(for: period, provider: provider, now: now) {
+            return cached
+        }
         UsageSummary.make(period: period, events: ledgerEvents(matching: provider), now: now)
     }
 
@@ -130,16 +149,58 @@ final class SessionStore {
 
     private func ledgerEvents(matching provider: ProviderKind?) -> [UsageLedgerEvent] {
         guard let provider else { return usageEventsSnapshot }
-        return usageEventsSnapshot.filter { $0.provider == provider }
+        return usageEventsByProviderSnapshot[provider] ?? []
+    }
+
+    private func cachedSummary(for period: StatsPeriod, provider: ProviderKind?, now: Date) -> UsageSummary? {
+        if period != .allTime {
+            let day = Calendar.current.startOfDay(for: now)
+            guard summaryCacheDay == day else { return nil }
+        }
+        return summaryCache[UsageSummaryCacheKey(period: period, provider: provider)]
+    }
+
+    nonisolated private static func makeUsageSnapshotCache(
+        events: [UsageLedgerEvent],
+        providers: [ProviderKind],
+        now: Date,
+        calendar: Calendar = .current
+    ) -> UsageSnapshotCache {
+        let day = calendar.startOfDay(for: now)
+        let eventsByProvider = Dictionary(grouping: events, by: \.provider)
+        var summaries: [UsageSummaryCacheKey: UsageSummary] = [:]
+        for period in StatsPeriod.allCases {
+            summaries[UsageSummaryCacheKey(period: period, provider: nil)] = UsageSummary.make(
+                period: period,
+                events: events,
+                now: now,
+                calendar: calendar
+            )
+            for provider in providers {
+                summaries[UsageSummaryCacheKey(period: period, provider: provider)] = UsageSummary.make(
+                    period: period,
+                    events: eventsByProvider[provider] ?? [],
+                    now: now,
+                    calendar: calendar
+                )
+            }
+        }
+        return UsageSnapshotCache(day: day, eventsByProvider: eventsByProvider, summaries: summaries)
+    }
+
+    nonisolated private static func formatDuration(_ duration: TimeInterval) -> String {
+        String(format: "%.3f", duration)
     }
 
     // MARK: Refresh
 
     func refresh() async {
         guard !isLoading else { return }
+        let refreshStartedAt = Date()
         isLoading = true
         defer { isLoading = false }
 
+        let discoveryStartedAt = Date()
         var discovered: [Session] = []
         for provider in registry.providers {
             discovered += await provider.discoverSessions()
@@ -149,9 +210,14 @@ final class SessionStore {
         discovered.removeAll { deletedIndex.contains($0) }
         discovered.sort { $0.lastModified > $1.lastModified }
         dataDirectoryExists = registry.providers.contains { $0.dataDirectoryExists }
+        let discoveryDuration = Date().timeIntervalSince(discoveryStartedAt)
+
+        let ledgerStartedAt = Date()
         await usageLedger.beginPersistenceBatch()
         await usageLedger.markSeen(discovered)
+        let ledgerMarkSeenDuration = Date().timeIntervalSince(ledgerStartedAt)
 
+        let workPlanningStartedAt = Date()
         let providerByKind = Dictionary(uniqueKeysWithValues: registry.providers.map { ($0.kind, $0) })
         var work: [RefreshWorkItem] = []
         for session in discovered {
@@ -175,7 +241,9 @@ final class SessionStore {
                 work.append(.rebuild(session, .replaceLedgerOnNil))
             }
         }
+        let workPlanningDuration = Date().timeIntervalSince(workPlanningStartedAt)
 
+        let parseStartedAt = Date()
         var index = 0
         var appendedCount = 0
         var rebuiltCount = 0
@@ -240,7 +308,9 @@ final class SessionStore {
                 }
             }
         }
+        let parseDuration = Date().timeIntervalSince(parseStartedAt)
 
+        let statsStartedAt = Date()
         let liveIDs = Set(discovered.map(\.id))
         cache = cache.filter { liveIDs.contains($0.key) }
 
@@ -258,6 +328,9 @@ final class SessionStore {
                 )
             }
         }
+        let statsDuration = Date().timeIntervalSince(statsStartedAt)
+
+        let graphStartedAt = Date()
         // Drop transcripts that parsed to nothing (only queue-ops / snapshots).
         let parsedSessions = withStats.filter { $0.stats != nil }
         let deletedRecordSessions = await deletedRecordSessions(from: deletedRecords)
@@ -267,15 +340,40 @@ final class SessionStore {
         )
         let allSessionGraph = await buildSessionGraph(from: allSessionInputs, providers: providerByKind)
         historicalSessions = allSessionGraph
+        let newGitAttributionSignature = Self.gitAttributionSignature(from: allSessionGraph)
+        if newGitAttributionSignature != gitAttributionSignature {
+            gitAttributionSignature = newGitAttributionSignature
+            gitAttributionRevision &+= 1
+        }
         sessions = Self.visibleSessionGraph(from: allSessionGraph, deletedIndex: deletedIndex)
         await usageLedger.syncParentSessionIDs(
             mapping: Self.parentMapping(from: sessions),
             liveSessionIDs: liveIDs
         )
+        let graphDuration = Date().timeIntervalSince(graphStartedAt)
+
+        let snapshotStartedAt = Date()
         await usageLedger.endPersistenceBatch()
-        usageEventsSnapshot = await usageLedger.events()
-        lastRefreshedAt = .now
-        Log.store.notice("Refreshed: \(self.sessions.count) sessions visible, \(appendedCount) appended, \(rebuiltCount) rebuilt")
+        let events = await usageLedger.events()
+        let providerKinds = registry.providers.map(\.kind)
+        let snapshotCache = await Task.detached(priority: .utility) {
+            Self.makeUsageSnapshotCache(
+                events: events,
+                providers: providerKinds,
+                now: Date()
+            )
+        }.value
+        usageEventsSnapshot = events
+        usageEventsByProviderSnapshot = snapshotCache.eventsByProvider
+        summaryCache = snapshotCache.summaries
+        summaryCacheDay = snapshotCache.day
+        let snapshotDuration = Date().timeIntervalSince(snapshotStartedAt)
+
+        let refreshedAt = Date()
+        lastRefreshedAt = refreshedAt
+        let totalDuration = refreshedAt.timeIntervalSince(refreshStartedAt)
+        Log.store.notice("Refreshed: \(self.sessions.count) visible, \(events.count) events, \(work.count) planned, \(appendedCount) appended, \(rebuiltCount) rebuilt")
+        Log.store.info("Refresh timings total=\(Self.formatDuration(totalDuration), privacy: .public)s discover=\(Self.formatDuration(discoveryDuration), privacy: .public)s markSeen=\(Self.formatDuration(ledgerMarkSeenDuration), privacy: .public)s plan=\(Self.formatDuration(workPlanningDuration), privacy: .public)s parse=\(Self.formatDuration(parseDuration), privacy: .public)s stats=\(Self.formatDuration(statsDuration), privacy: .public)s graph=\(Self.formatDuration(graphDuration), privacy: .public)s snapshot=\(Self.formatDuration(snapshotDuration), privacy: .public)s")
         onRefresh?()
     }
 
@@ -367,8 +465,20 @@ extension SessionStore {
     func loadPreviewSessions(_ sessions: [Session]) {
         self.sessions = sessions
         self.historicalSessions = sessions
-        self.usageEventsSnapshot = Self.previewEvents(from: sessions)
-        self.lastRefreshedAt = .now
+        let events = Self.previewEvents(from: sessions)
+        let now = Date()
+        let snapshotCache = Self.makeUsageSnapshotCache(
+            events: events,
+            providers: Array(Set(sessions.map(\.provider))),
+            now: now
+        )
+        self.usageEventsSnapshot = events
+        self.usageEventsByProviderSnapshot = snapshotCache.eventsByProvider
+        self.summaryCache = snapshotCache.summaries
+        self.summaryCacheDay = snapshotCache.day
+        self.gitAttributionSignature = Self.gitAttributionSignature(from: sessions)
+        self.gitAttributionRevision &+= 1
+        self.lastRefreshedAt = now
         self.dataDirectoryExists = !sessions.isEmpty
     }
 
@@ -413,6 +523,14 @@ extension SessionStore {
 #endif
 
 private extension SessionStore {
+    static func gitAttributionSignature(from sessions: [Session]) -> [String] {
+        sessions
+            .map {
+                "\($0.id)|\($0.provider.rawValue)|\($0.cwd ?? "")|\($0.projectDirectoryName)|\($0.filePath)"
+            }
+            .sorted()
+    }
+
     struct DeletedSessionIndex {
         let ids: Set<String>
         let paths: Set<String>

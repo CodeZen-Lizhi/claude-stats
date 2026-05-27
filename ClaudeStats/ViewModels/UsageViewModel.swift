@@ -28,9 +28,9 @@ struct UsageDerivedData: Sendable {
     let cacheHitRate: Double?
 
     @MainActor
-    static func make(key: Key, store: SessionStore) -> UsageDerivedData {
+    static func make(key: Key, store: SessionStore) async -> UsageDerivedData {
         let summary = store.summary(for: key.period, provider: key.provider)
-        let series = summary.trendSeries()
+        let series = await Task.detached(priority: .userInitiated) { summary.trendSeries() }.value
         let cacheHitRate = store.cacheHitRate(for: summary.totalUsage, provider: key.provider)
         return UsageDerivedData(key: key, summary: summary, series: series, cacheHitRate: cacheHitRate)
     }
@@ -68,10 +68,10 @@ final class UsageViewModel {
         store.summary(for: period, provider: provider)
     }
 
-    func refreshDerivedData(from store: SessionStore, provider: ProviderKind, lastRefreshedAt: Date?) {
+    func refreshDerivedData(from store: SessionStore, provider: ProviderKind, lastRefreshedAt: Date?) async {
         let key = UsageDerivedData.Key(period: period, provider: provider, lastRefreshedAt: lastRefreshedAt)
         guard derivedData?.key != key else { return }
-        derivedData = UsageDerivedData.make(key: key, store: store)
+        derivedData = await UsageDerivedData.make(key: key, store: store)
     }
 
     func displayedDerivedData(provider: ProviderKind, lastRefreshedAt: Date?) -> UsageDerivedData {

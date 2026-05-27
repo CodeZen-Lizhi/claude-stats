@@ -39,7 +39,7 @@ struct GitActivityView: View {
 
     private struct ReloadKey: Equatable {
         let token: UInt64
-        let lastRefreshed: Date?
+        let gitInputRevision: Int
         let sourceIDs: String
     }
 
@@ -61,7 +61,7 @@ struct GitActivityView: View {
         let sourceIDs = env.preferences.gitWorkspaceSourceIDs
         let key = ReloadKey(
             token: vm.reloadToken,
-            lastRefreshed: env.store.lastRefreshedAt,
+            gitInputRevision: env.store.gitAttributionRevision,
             sourceIDs: GitWorkspaceSourceCatalog.storageString(for: sourceIDs)
         )
         return AppScrollView {
@@ -89,7 +89,7 @@ struct GitActivityView: View {
             await vm.reloadIfNeeded(
                 sessions: env.store.gitAttributionSessions,
                 sourceIDs: sourceIDs,
-                lastRefreshedAt: env.store.lastRefreshedAt
+                gitInputRevision: env.store.gitAttributionRevision
             )
         }
     }

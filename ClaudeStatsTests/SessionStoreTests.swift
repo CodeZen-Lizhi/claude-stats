@@ -36,6 +36,56 @@ struct SessionStoreTests {
     }
 
     @MainActor
+    @Test("Git attribution revision changes only when repo source inputs change")
+    func gitAttributionRevisionIgnoresStatsOnlyRefreshes() async {
+        let first = Self.session(
+            lastModified: Date(timeIntervalSince1970: 1_000),
+            fileSize: 42,
+            cwd: "/tmp/project"
+        )
+        let provider = MutableSessionProvider(
+            sessions: [first],
+            statsByID: [first.id: Self.stats(title: "First", tokens: 100)]
+        )
+        let store = SessionStore(
+            registry: ProviderRegistry(providers: [provider]),
+            pricing: TestPricing.table,
+            usageLedger: Self.temporaryLedger()
+        )
+
+        await store.refresh()
+        let initialRevision = store.gitAttributionRevision
+
+        let statsOnlyChange = Self.session(
+            lastModified: Date(timeIntervalSince1970: 2_000),
+            fileSize: 42,
+            cwd: "/tmp/project"
+        )
+        provider.update(
+            sessions: [statsOnlyChange],
+            statsByID: [statsOnlyChange.id: Self.stats(title: "Second", tokens: 120)]
+        )
+
+        await store.refresh()
+
+        #expect(store.gitAttributionRevision == initialRevision)
+
+        let cwdChange = Self.session(
+            lastModified: Date(timeIntervalSince1970: 3_000),
+            fileSize: 42,
+            cwd: "/tmp/other-project"
+        )
+        provider.update(
+            sessions: [cwdChange],
+            statsByID: [cwdChange.id: Self.stats(title: "Third", tokens: 140)]
+        )
+
+        await store.refresh()
+
+        #expect(store.gitAttributionRevision == initialRevision + 1)
+    }
+
+    @MainActor
     @Test("Unchanged sessions are restored from ledger without reparsing")
     func unchangedSessionsRestoreFromLedgerWithoutReparsing() async {
         let session = Self.session(lastModified: Date(timeIntervalSince1970: 1_000), fileSize: 42)

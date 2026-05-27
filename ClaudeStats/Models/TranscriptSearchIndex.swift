@@ -9,8 +9,17 @@ struct TranscriptSearchMatch: Equatable, Sendable, Identifiable {
 }
 
 struct TranscriptSearchIndex: Equatable, Sendable {
+    static let empty = TranscriptSearchIndex(query: "", matches: [])
+
     let query: String
     let matches: [TranscriptSearchMatch]
+    private let matchesByMessageID: [String: [TranscriptSearchMatch]]
+
+    init(query: String, matches: [TranscriptSearchMatch]) {
+        self.query = query
+        self.matches = matches
+        self.matchesByMessageID = Dictionary(grouping: matches, by: \.messageID)
+    }
 
     var isEmpty: Bool { matches.isEmpty }
     var count: Int { matches.count }
@@ -18,7 +27,7 @@ struct TranscriptSearchIndex: Equatable, Sendable {
     static func make(messages: [SessionTranscriptMessage], query: String) -> TranscriptSearchIndex {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            return TranscriptSearchIndex(query: "", matches: [])
+            return .empty
         }
 
         var matches: [TranscriptSearchMatch] = []
@@ -38,7 +47,7 @@ struct TranscriptSearchIndex: Equatable, Sendable {
     }
 
     func matches(for messageID: String) -> [TranscriptSearchMatch] {
-        matches.filter { $0.messageID == messageID }
+        matchesByMessageID[messageID] ?? []
     }
 
     func selectedMessageID(selectedOrdinal: Int?) -> String? {

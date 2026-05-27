@@ -14,12 +14,12 @@ struct SessionDetailView: View {
     let session: Session
     var onDelete: ((Session) -> Void)?
     @State private var transcriptMessages: [SessionTranscriptMessage] = []
+    @State private var transcriptSearchIndex = TranscriptSearchIndex.empty
     @State private var transcriptIsLoading = false
     @State private var transcriptSearchText = ""
     @State private var selectedSearchOrdinal: Int?
 
     var body: some View {
-        let transcriptSearchIndex = TranscriptSearchIndex.make(messages: transcriptMessages, query: transcriptSearchText)
         let renderWindow = TranscriptRenderWindow.make(
             messages: transcriptMessages,
             searchIndex: transcriptSearchIndex,
@@ -45,8 +45,7 @@ struct SessionDetailView: View {
             await loadTranscript()
         }
         .onChange(of: transcriptSearchText) { _, _ in
-            let index = TranscriptSearchIndex.make(messages: transcriptMessages, query: transcriptSearchText)
-            selectedSearchOrdinal = index.isEmpty ? nil : 0
+            rebuildTranscriptSearchIndex()
         }
     }
 
@@ -324,10 +323,14 @@ struct SessionDetailView: View {
         transcriptIsLoading = true
         let messages = await env.store.transcriptMessages(for: session)
         guard !Task.isCancelled else { return }
-        let index = TranscriptSearchIndex.make(messages: messages, query: transcriptSearchText)
         transcriptMessages = messages
-        selectedSearchOrdinal = index.isEmpty ? nil : 0
+        rebuildTranscriptSearchIndex()
         transcriptIsLoading = false
+    }
+
+    private func rebuildTranscriptSearchIndex() {
+        transcriptSearchIndex = TranscriptSearchIndex.make(messages: transcriptMessages, query: transcriptSearchText)
+        selectedSearchOrdinal = transcriptSearchIndex.isEmpty ? nil : 0
     }
 
     // MARK: - Missing stats placeholder
