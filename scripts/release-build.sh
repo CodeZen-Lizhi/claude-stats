@@ -134,13 +134,42 @@ codesign_nested_release_code() {
     )
 }
 
+emit_xcodebuild_failure_summary() {
+    local log="$1"
+    local first_error
+    first_error="$(grep -Ei '(^|[[:space:]])(error|fatal error):|Command .* failed|BUILD FAILED|The following build commands failed' "$log" | head -1 || true)"
+
+    echo "::group::xcodebuild failure summary"
+    if ! grep -Ei '(^|[[:space:]])(error|fatal error):|Command .* failed|BUILD FAILED|The following build commands failed|SwiftCompile|CompileSwift|Ld ' "$log" | tail -120; then
+        tail -120 "$log" || true
+    fi
+    echo "::endgroup::"
+
+    if [[ -n "$first_error" ]]; then
+        first_error="${first_error//'%'/'%25'}"
+        first_error="${first_error//$'\n'/'%0A'}"
+        first_error="${first_error//$'\r'/'%0D'}"
+        echo "::error title=xcodebuild failed::$first_error"
+    else
+        echo "::error title=xcodebuild failed::See xcodebuild failure summary above."
+    fi
+}
+
+XCODEBUILD_LOG="$WORK/xcodebuild.log"
+set +e
 xcodebuild \
     -project ClaudeStats.xcodeproj \
     -scheme ClaudeStats \
     -configuration "$CONFIGURATION" \
     -derivedDataPath "$DERIVED" \
     "${XCODE_BUILD_ARGS[@]}" \
-    build
+    build 2>&1 | tee "$XCODEBUILD_LOG"
+build_status=${PIPESTATUS[0]}
+set -e
+if [[ $build_status -ne 0 ]]; then
+    emit_xcodebuild_failure_summary "$XCODEBUILD_LOG"
+    exit "$build_status"
+fi
 
 [[ -d "$APP" ]] || { echo "error: build did not produce $APP" >&2; exit 1; }
 
