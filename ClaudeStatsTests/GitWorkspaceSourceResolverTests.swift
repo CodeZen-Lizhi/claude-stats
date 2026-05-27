@@ -4,6 +4,13 @@ import Testing
 
 @Suite("Git workspace source resolver")
 struct GitWorkspaceSourceResolverTests {
+    @Test("All workspace source descriptors have icon assets")
+    func sourceDescriptorsHaveIcons() {
+        for source in GitWorkspaceSourceCatalog.all {
+            #expect(!source.assetName.isEmpty)
+        }
+    }
+
     @Test("Codex session source includes non-empty Codex working directories")
     func codexSessionSourceIncludesNonEmptyCwds() {
         let resolver = GitWorkspaceSourceResolver(applicationSupportDirectory: URL(fileURLWithPath: "/tmp/unused"))

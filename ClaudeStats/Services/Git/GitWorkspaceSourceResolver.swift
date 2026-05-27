@@ -84,7 +84,7 @@ enum GitWorkspaceSourceCatalog {
             id: .jetbrains,
             displayName: "JetBrains",
             detail: L10n.string("git.sources.jetbrains.detail", defaultValue: "Matches JetBrains recent projects against Codex repos."),
-            assetName: "",
+            assetName: "jetbrains-logo",
             kind: .jetbrainsRecentProjects
         ),
     ]
