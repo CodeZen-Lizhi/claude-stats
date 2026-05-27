@@ -257,8 +257,9 @@ final class SessionStore {
         }
         // Drop transcripts that parsed to nothing (only queue-ops / snapshots).
         let parsedSessions = withStats.filter { $0.stats != nil }
+        let deletedRecordSessions = await deletedRecordSessions(from: deletedRecords)
         let allSessionInputs = Self.applyingDeletedParentLinks(
-            to: parsedSessions + await deletedRecordSessions(from: deletedRecords),
+            to: parsedSessions + deletedRecordSessions,
             records: deletedRecords
         )
         let allSessionGraph = await buildSessionGraph(from: allSessionInputs, providers: providerByKind)
