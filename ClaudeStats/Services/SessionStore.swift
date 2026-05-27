@@ -329,7 +329,7 @@ final class SessionStore {
 
     private func childTranscriptMessages(from children: [Session]) async -> [SessionTranscriptMessage] {
         var messages: [SessionTranscriptMessage] = []
-        for child in children.sorted(by: childSort) {
+        for child in children.sorted(by: Self.childSort) {
             messages.append(Self.childSessionMarker(for: child))
             guard let childProvider = registry.provider(for: child.provider) else { continue }
             let childMessages = await childProvider.transcriptMessages(for: child)
@@ -501,7 +501,7 @@ private extension SessionStore {
         guard !deletedIndex.contains(session) else { return nil }
         var copy = session
         copy.childSessions = session.childSessions.compactMap { visibleSession(from: $0, deletedIndex: deletedIndex) }
-            .sorted(by: childSort)
+            .sorted(by: Self.childSort)
         return copy
     }
 
@@ -636,7 +636,7 @@ private extension SessionStore {
                     ancestors: nextAncestors
                 )
             }
-            .sorted(by: childSort)
+            .sorted(by: Self.childSort)
         if !session.childSessions.isEmpty, let stats = session.stats {
             session.stats = Self.mergedStats(
                 parent: stats,
@@ -700,7 +700,7 @@ private extension SessionStore {
         return l.hasPrefix(r + "/") || r.hasPrefix(l + "/")
     }
 
-    func childSort(_ lhs: Session, _ rhs: Session) -> Bool {
+    static func childSort(_ lhs: Session, _ rhs: Session) -> Bool {
         let l = lhs.stats?.firstActivity ?? lhs.stats?.lastActivity ?? lhs.lastModified
         let r = rhs.stats?.firstActivity ?? rhs.stats?.lastActivity ?? rhs.lastModified
         return l < r
