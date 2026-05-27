@@ -498,3 +498,36 @@ Diagnosed packaged Claude Stats exiting while idle, added a resident menu-bar li
 ### Next Steps
 
 - None - task complete
+
+
+## Session 15: 诊断自动退出与会话统计卡顿
+
+**Date**: 2026-05-27
+**Task**: 诊断自动退出与会话统计卡顿
+**Branch**: `codex/dev`
+
+### Summary
+
+修复菜单栏应用在切回 accessory 激活策略后未重申驻留策略的问题；减少仪表盘和会话概览重复聚合计算；澄清仪表盘历史会话数与会话列表数量的统计口径。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `635f2c6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
