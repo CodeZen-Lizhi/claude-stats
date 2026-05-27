@@ -10,7 +10,7 @@ struct GitRepoWorkspaceView: View {
     private static let rowHeight: CGFloat = 36
     private static let workingTreeRowHeight: CGFloat = 56
     private static let laneSpacing: CGFloat = 14
-    private static let railPad: CGFloat = 15
+    private static let railPad: CGFloat = 18
     private static let nodeRadius: CGFloat = 3
     private static let graphInspectorSplitFraction: CGFloat = 0.63
     private static let graphMinWidth: CGFloat = 220
@@ -42,7 +42,11 @@ struct GitRepoWorkspaceView: View {
     #endif
 
     private var railWidth: CGFloat {
-        CGFloat((vm.layout?.maxColumn ?? 0)) * Self.laneSpacing + Self.railPad * 2
+        rowGeometry.railWidth(maxColumn: vm.layout?.maxColumn ?? 0)
+    }
+
+    private var rowGeometry: GitGraphRowGeometry {
+        GitGraphRowGeometry(laneSpacing: Self.laneSpacing, railPad: Self.railPad)
     }
 
     var body: some View {
@@ -188,7 +192,7 @@ struct GitRepoWorkspaceView: View {
                     GitWorkingTreeRowView(
                         summary: graph.workingTree,
                         rowHeight: Self.workingTreeRowHeight,
-                        railPad: Self.railPad,
+                        geometry: rowGeometry,
                         nodeRadius: Self.nodeRadius,
                         railWidth: railWidth,
                         railColorIndex: layout.rows.first?.colorIndex ?? 0,
@@ -201,8 +205,7 @@ struct GitRepoWorkspaceView: View {
                     GitGraphRowView(
                         row: row,
                         rowHeight: Self.rowHeight,
-                        laneSpacing: Self.laneSpacing,
-                        railPad: Self.railPad,
+                        geometry: rowGeometry,
                         nodeRadius: Self.nodeRadius,
                         railWidth: railWidth,
                         isSelected: vm.selectedHash == row.commit.hash,

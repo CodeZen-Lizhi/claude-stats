@@ -13,7 +13,7 @@ struct GitGraphView: View {
     private static let rowHeight: CGFloat = 38
     private static let workingTreeRowHeight: CGFloat = 56
     private static let laneSpacing: CGFloat = 14
-    private static let railPad: CGFloat = 15
+    private static let railPad: CGFloat = 18
     private static let nodeRadius: CGFloat = 3
 
     @State private var graph: GitGraph?
@@ -48,9 +48,11 @@ struct GitGraphView: View {
     #endif
 
     private var railWidth: CGFloat {
-        CGFloat((layout?.maxColumn ?? 0)) * Self.laneSpacing + Self.railPad * 2
+        rowGeometry.railWidth(maxColumn: layout?.maxColumn ?? 0)
     }
-    private func laneX(_ column: Int) -> CGFloat { Self.railPad + CGFloat(column) * Self.laneSpacing }
+    private var rowGeometry: GitGraphRowGeometry {
+        GitGraphRowGeometry(laneSpacing: Self.laneSpacing, railPad: Self.railPad)
+    }
     private func laneColor(_ idx: Int) -> Color { Color.stxRamp[idx % Color.stxRamp.count] }
 
     var body: some View {
@@ -141,7 +143,7 @@ struct GitGraphView: View {
                         GitWorkingTreeRowView(
                             summary: graph.workingTree,
                             rowHeight: Self.workingTreeRowHeight,
-                            railPad: Self.railPad,
+                            geometry: rowGeometry,
                             nodeRadius: Self.nodeRadius,
                             railWidth: railWidth,
                             railColorIndex: layout.rows.first?.colorIndex ?? 0,
@@ -156,8 +158,7 @@ struct GitGraphView: View {
                         VStack(spacing: 0) {
                             GitGraphRowView(row: row,
                                             rowHeight: Self.rowHeight,
-                                            laneSpacing: Self.laneSpacing,
-                                            railPad: Self.railPad,
+                                            geometry: rowGeometry,
                                             nodeRadius: Self.nodeRadius,
                                             railWidth: railWidth,
                                             isSelected: expandedHash == row.id,
@@ -187,56 +188,61 @@ struct GitGraphView: View {
     @ViewBuilder
     private func detail(for row: GraphLayout.Row) -> some View {
         let commit = row.commit
-        HStack(spacing: 8) {
+        ZStack(alignment: .leading) {
             railContinuation(for: row).frame(width: railWidth)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(commit.shortHash).font(.sora(9).monospacedDigit()).foregroundStyle(Color.stxAccent)
-                    Text("\(commit.author) <\(commit.authorEmail)>")
-                        .font(.sora(9)).foregroundStyle(Color.stxMuted).lineLimit(1)
-                    Spacer(minLength: 8)
-                    Text(Format.shortDate(commit.date)).font(.sora(9).monospacedDigit()).foregroundStyle(Color.stxMuted)
-                }
-                if let changes = fileChanges[commit.hash] {
-                    if changes.isEmpty {
-                        Text(commit.isMerge ? "Merge commit — no file diff." : "No file changes.")
-                            .font(.sora(9)).foregroundStyle(Color.stxMuted.opacity(0.7))
-                    } else {
-                        ForEach(changes) { fc in
-                            HStack(spacing: 6) {
-                                if fc.isBinary {
-                                    Text("bin").font(.sora(9).monospacedDigit()).foregroundStyle(Color.stxMuted)
-                                } else {
-                                    Text("+\(fc.insertions)").font(.sora(9).monospacedDigit()).foregroundStyle(GitPalette.add)
-                                    Text("−\(fc.deletions)").font(.sora(9).monospacedDigit()).foregroundStyle(GitPalette.del)
+
+            HStack(spacing: 0) {
+                Color.clear
+                    .frame(width: rowGeometry.contentLeading(for: row))
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(commit.shortHash).font(.sora(9).monospacedDigit()).foregroundStyle(Color.stxAccent)
+                        Text("\(commit.author) <\(commit.authorEmail)>")
+                            .font(.sora(9)).foregroundStyle(Color.stxMuted).lineLimit(1)
+                        Spacer(minLength: 8)
+                        Text(Format.shortDate(commit.date)).font(.sora(9).monospacedDigit()).foregroundStyle(Color.stxMuted)
+                    }
+                    if let changes = fileChanges[commit.hash] {
+                        if changes.isEmpty {
+                            Text(commit.isMerge ? "Merge commit — no file diff." : "No file changes.")
+                                .font(.sora(9)).foregroundStyle(Color.stxMuted.opacity(0.7))
+                        } else {
+                            ForEach(changes) { fc in
+                                HStack(spacing: 6) {
+                                    if fc.isBinary {
+                                        Text("bin").font(.sora(9).monospacedDigit()).foregroundStyle(Color.stxMuted)
+                                    } else {
+                                        Text("+\(fc.insertions)").font(.sora(9).monospacedDigit()).foregroundStyle(GitPalette.add)
+                                        Text("−\(fc.deletions)").font(.sora(9).monospacedDigit()).foregroundStyle(GitPalette.del)
+                                    }
+                                    Text(fc.path)
+                                        .font(.sora(9)).foregroundStyle(.primary)
+                                        .lineLimit(1).truncationMode(.middle)
+                                    Spacer(minLength: 0)
                                 }
-                                Text(fc.path)
-                                    .font(.sora(9)).foregroundStyle(.primary)
-                                    .lineLimit(1).truncationMode(.middle)
-                                Spacer(minLength: 0)
                             }
                         }
+                    } else {
+                        Text("Loading…").font(.sora(9)).foregroundStyle(Color.stxMuted.opacity(0.7))
                     }
-                } else {
-                    Text("Loading…").font(.sora(9)).foregroundStyle(Color.stxMuted.opacity(0.7))
-                }
-                HStack(spacing: 0) {
-                    Spacer()
-                    Button { detailHash = commit.hash } label: {
-                        BracketBox(spacing: 4) {
-                            Text("MORE").font(.sora(9, weight: .semibold)).tracking(0.8)
-                            Image(systemName: "arrow.up.right").font(.system(size: 9, weight: .bold))
+                    HStack(spacing: 0) {
+                        Spacer()
+                        Button { detailHash = commit.hash } label: {
+                            BracketBox(spacing: 4) {
+                                Text("MORE").font(.sora(9, weight: .semibold)).tracking(0.8)
+                                Image(systemName: "arrow.up.right").font(.system(size: 9, weight: .bold))
+                            }
                         }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Color.stxAccent)
+                        .help("Open the full commit detail")
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Color.stxAccent)
-                    .help("Open the full commit detail")
+                    .padding(.top, 2)
                 }
-                .padding(.top, 2)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.vertical, 8)
             .padding(.trailing, 14)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(Color.primary.opacity(0.05))
     }
@@ -248,8 +254,8 @@ struct GitGraphView: View {
             lanes += row.edgesDown.map { ($0.toColumn, $0.colorIndex) }
             for lane in lanes where seen.insert(lane.column).inserted {
                 var p = Path()
-                p.move(to: CGPoint(x: laneX(lane.column), y: 0))
-                p.addLine(to: CGPoint(x: laneX(lane.column), y: size.height))
+                p.move(to: CGPoint(x: rowGeometry.laneX(lane.column), y: 0))
+                p.addLine(to: CGPoint(x: rowGeometry.laneX(lane.column), y: size.height))
                 ctx.stroke(p, with: .color(laneColor(lane.colorIndex)),
                            style: StrokeStyle(lineWidth: 1.6, lineCap: .round, dash: [1.5, 3.5]))
             }

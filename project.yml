@@ -23,8 +23,8 @@ settings:
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     DEVELOPMENT_LANGUAGE: en
     SWIFT_STRICT_CONCURRENCY: complete
-    MARKETING_VERSION: "1.7.7"
-    CURRENT_PROJECT_VERSION: "76"
+    MARKETING_VERSION: "1.7.8"
+    CURRENT_PROJECT_VERSION: "77"
 targets:
   ClaudeStats:
     type: application
