@@ -25,6 +25,13 @@ struct GitRepositoryService: Sendable {
         }
     }
 
+    func branchesContaining(hash: String, in repo: GitRepo) async -> [GitRef] {
+        let key = "\(repo.cacheKey)|branches-containing|\(hash)"
+        return await cache.branchesContaining(key: key) {
+            analyzer.branchesContaining(hash: hash, in: repo)
+        }
+    }
+
     func fileDiff(for hash: String, path: String, in repo: GitRepo) async -> FileDiff? {
         let key = "\(repo.cacheKey)|diff|\(hash)|\(path)"
         return await cache.fileDiff(key: key) {

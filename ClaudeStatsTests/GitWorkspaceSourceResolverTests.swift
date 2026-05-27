@@ -32,7 +32,8 @@ struct GitWorkspaceSourceResolverTests {
         )
 
         let resolver = GitWorkspaceSourceResolver(applicationSupportDirectory: appSupport)
-        #expect(resolver.cwds(sessions: [], enabledSources: [.cursor]) == [standardized(project)])
+        #expect(resolver.enrichmentCwds(enabledSources: [.cursor]) == [standardized(project)])
+        #expect(resolver.cwds(sessions: [], enabledSources: [.cursor]).isEmpty)
     }
 
     @Test("Code workspace resolves relative path, absolute path and file URI")
@@ -69,7 +70,7 @@ struct GitWorkspaceSourceResolverTests {
         )
 
         let resolver = GitWorkspaceSourceResolver(applicationSupportDirectory: appSupport)
-        #expect(Set(resolver.cwds(sessions: [], enabledSources: [.cursor])) == Set([
+        #expect(Set(resolver.enrichmentCwds(enabledSources: [.cursor])) == Set([
             standardized(relative),
             standardized(absolute),
             standardized(fileURI),
@@ -99,6 +100,63 @@ struct GitWorkspaceSourceResolverTests {
         )
 
         #expect(resolver.cwds(sessions: [], enabledSources: [.cursor]).isEmpty)
+    }
+
+    @Test("Editor workspace history enriches only and does not create primary Codex repos")
+    func editorSourcesDoNotCreatePrimaryRepos() throws {
+        let root = try tempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let appSupport = root.appendingPathComponent("Application Support", isDirectory: true)
+        let codexProject = root.appendingPathComponent("CodexProject", isDirectory: true)
+        let editorOnlyProject = root.appendingPathComponent("EditorOnlyProject", isDirectory: true)
+        try FileManager.default.createDirectory(at: codexProject, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: editorOnlyProject, withIntermediateDirectories: true)
+        try writeWorkspaceJSON(
+            #"{"folder":"\#(editorOnlyProject.absoluteString)"}"#,
+            appSupport: appSupport,
+            appName: "Cursor",
+            workspaceID: "editor-only"
+        )
+
+        let resolver = GitWorkspaceSourceResolver(applicationSupportDirectory: appSupport)
+
+        #expect(resolver.cwds(
+            sessions: [session("codex", provider: .codex, cwd: codexProject.path)],
+            enabledSources: [.cursor]
+        ) == [standardized(codexProject)])
+        #expect(resolver.enrichmentCwds(enabledSources: [.cursor]) == [standardized(editorOnlyProject)])
+    }
+
+    @Test("JetBrains recentProjects.xml resolves USER_HOME and file URL paths")
+    func jetBrainsRecentProjectsXML() throws {
+        let root = try tempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let home = root.appendingPathComponent("Home", isDirectory: true)
+        let alpha = home.appendingPathComponent("Alpha", isDirectory: true)
+        let beta = root.appendingPathComponent("Beta Space", isDirectory: true)
+        try FileManager.default.createDirectory(at: alpha, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: beta, withIntermediateDirectories: true)
+
+        let xml = """
+        <application>
+          <component name="RecentProjectsManager">
+            <option name="additionalInfo">
+              <map>
+                <entry key="$USER_HOME$/Alpha" />
+                <entry key="\(beta.absoluteString)" />
+                <entry key="ssh://example.invalid/project" />
+              </map>
+            </option>
+          </component>
+        </application>
+        """
+        let xmlURL = root.appendingPathComponent("recentProjects.xml")
+        try xml.write(to: xmlURL, atomically: true, encoding: .utf8)
+
+        #expect(Set(GitWorkspaceSourceResolver.paths(
+            fromJetBrainsRecentProjectsXMLAt: xmlURL,
+            homeDirectory: home
+        )) == Set([standardized(alpha), standardized(beta)]))
     }
 
     @Test("Multiple sources pointing into one repo are de-duplicated by git discovery", .enabled(if: GitAnalyzer().isAvailable))

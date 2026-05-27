@@ -86,13 +86,16 @@ struct MainWindowView: View {
     }
 
     var body: some View {
+        @Bindable var prefs = env.preferences
+
         ZStack(alignment: .topLeading) {
             VisualEffectBackground(material: .sidebar, blendingMode: .behindWindow)
 
             MainWindowModeShell(
                 mode: mode,
                 sidebarVisible: sidebarVisible,
-                boundaryFalloffEnabled: env.preferences.detailPanelBoundaryFalloffEnabled
+                boundaryFalloffEnabled: prefs.detailPanelBoundaryFalloffEnabled,
+                appSidebarWidth: $prefs.mainWindowSidebarWidth
             ) {
                 SidebarColumn(
                     page: $page,

@@ -3,7 +3,7 @@ import Foundation
 /// A ref (branch / tag / HEAD) pointing at a commit, parsed from `git log`'s
 /// `%D` decoration field.
 struct GitRef: Sendable, Hashable {
-    enum Kind: Sendable { case head, branch, remoteBranch, tag }
+    enum Kind: Sendable, Hashable { case head, branch, remoteBranch, tag }
     let kind: Kind
     /// `"main"`, `"v1.0"`, `"claude/fix-drawer-card-bugs"`, …
     let name: String

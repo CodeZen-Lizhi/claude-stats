@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 enum MainWindowMode: String, Sendable {
@@ -6,7 +7,6 @@ enum MainWindowMode: String, Sendable {
 }
 
 enum MainWindowMotion {
-    static let appSidebarWidth: CGFloat = 240
     static let settingsSidebarWidth: CGFloat = 220
 
     private static let detailOffset: CGFloat = 10
@@ -51,6 +51,7 @@ struct MainWindowModeShell<AppSidebar: View, SettingsSidebar: View, AppDetail: V
     let mode: MainWindowMode
     let sidebarVisible: Bool
     let boundaryFalloffEnabled: Bool
+    @Binding var appSidebarWidth: Double
 
     private let appSidebar: AppSidebar
     private let settingsSidebar: SettingsSidebar
@@ -61,6 +62,7 @@ struct MainWindowModeShell<AppSidebar: View, SettingsSidebar: View, AppDetail: V
         mode: MainWindowMode,
         sidebarVisible: Bool,
         boundaryFalloffEnabled: Bool,
+        appSidebarWidth: Binding<Double>,
         @ViewBuilder appSidebar: () -> AppSidebar,
         @ViewBuilder settingsSidebar: () -> SettingsSidebar,
         @ViewBuilder appDetail: () -> AppDetail,
@@ -69,6 +71,7 @@ struct MainWindowModeShell<AppSidebar: View, SettingsSidebar: View, AppDetail: V
         self.mode = mode
         self.sidebarVisible = sidebarVisible
         self.boundaryFalloffEnabled = boundaryFalloffEnabled
+        _appSidebarWidth = appSidebarWidth
         self.appSidebar = appSidebar()
         self.settingsSidebar = settingsSidebar()
         self.appDetail = appDetail()
@@ -88,12 +91,19 @@ struct MainWindowModeShell<AppSidebar: View, SettingsSidebar: View, AppDetail: V
                 detailContent
             }
         }
+        .overlay(alignment: .leading) {
+            if mode == .app && sidebarVisible {
+                MainWindowSidebarResizeHandle(width: $appSidebarWidth)
+                    .offset(x: sidebarWidth - 4)
+                    .zIndex(4)
+            }
+        }
     }
 
     private var sidebarWidth: CGFloat {
         switch mode {
         case .app:
-            sidebarVisible ? MainWindowMotion.appSidebarWidth : 0
+            sidebarVisible ? CGFloat(Preferences.clampedMainWindowSidebarWidth(appSidebarWidth)) : 0
         case .settings:
             MainWindowMotion.settingsSidebarWidth
         }
@@ -121,7 +131,7 @@ struct MainWindowModeShell<AppSidebar: View, SettingsSidebar: View, AppDetail: V
             switch mode {
             case .app:
                 appSidebar
-                    .frame(width: MainWindowMotion.appSidebarWidth)
+                    .frame(width: CGFloat(Preferences.clampedMainWindowSidebarWidth(appSidebarWidth)))
                     .opacity(sidebarVisible ? 1 : 0)
                     .allowsHitTesting(appSidebarIsActive)
                     .accessibilityHidden(!appSidebarIsActive)
@@ -154,9 +164,64 @@ struct MainWindowModeShell<AppSidebar: View, SettingsSidebar: View, AppDetail: V
     }
 }
 
+private struct MainWindowSidebarResizeHandle: View {
+    @Binding var width: Double
+    @State private var dragStartWidth: Double?
+    @State private var hovering = false
+    @State private var cursorPushed = false
+
+    var body: some View {
+        Rectangle()
+            .fill(Color.clear)
+            .frame(width: 8)
+            .contentShape(Rectangle())
+            .overlay {
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(Color.stxAccent.opacity(hovering || dragStartWidth != nil ? 0.8 : 0))
+                    .frame(width: 3, height: 52)
+            }
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        let start = dragStartWidth ?? width
+                        if dragStartWidth == nil {
+                            dragStartWidth = width
+                        }
+                        width = Preferences.clampedMainWindowSidebarWidth(start + value.translation.width)
+                    }
+                    .onEnded { _ in
+                        dragStartWidth = nil
+                    }
+            )
+            .onHover { isHovering in
+                hovering = isHovering
+                if isHovering && !cursorPushed {
+                    NSCursor.resizeLeftRight.push()
+                    cursorPushed = true
+                } else if !isHovering && cursorPushed {
+                    NSCursor.pop()
+                    cursorPushed = false
+                }
+            }
+            .onDisappear {
+                if cursorPushed {
+                    NSCursor.pop()
+                    cursorPushed = false
+                }
+            }
+            .help(L10n.string("main_window.sidebar.resize", defaultValue: "Drag to resize sidebar"))
+    }
+}
+
 #if DEBUG
 #Preview("Main window shell") {
-    MainWindowModeShell(mode: .settings, sidebarVisible: true, boundaryFalloffEnabled: true) {
+    @Previewable @State var sidebarWidth = Preferences.defaultMainWindowSidebarWidth
+    return MainWindowModeShell(
+        mode: .settings,
+        sidebarVisible: true,
+        boundaryFalloffEnabled: true,
+        appSidebarWidth: $sidebarWidth
+    ) {
         VStack(alignment: .leading) {
             Text("App")
             Spacer()

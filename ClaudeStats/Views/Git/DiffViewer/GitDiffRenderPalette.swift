@@ -28,7 +28,14 @@ struct GitDiffRenderPalette {
     let inlineAdditionFill: NSColor
     let inlineDeletionFill: NSColor
 
-    static let standard = GitDiffRenderPalette(
+    static let standard = light
+
+    static func standard(for appearance: NSAppearance) -> GitDiffRenderPalette {
+        let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        return isDark ? dark : light
+    }
+
+    private static let light = GitDiffRenderPalette(
         background: .textBackgroundColor,
         paneBackground: .textBackgroundColor,
         separator: NSColor.separatorColor.withAlphaComponent(0.42),
@@ -50,6 +57,30 @@ struct GitDiffRenderPalette {
         overviewTrackFill: hexColor(0xF3F3F3),
         inlineAdditionFill: hexColor(0xEEFFEA),
         inlineDeletionFill: hexColor(0xFFDFDE)
+    )
+
+    private static let dark = GitDiffRenderPalette(
+        background: hexColor(0x151617),
+        paneBackground: hexColor(0x151617),
+        separator: hexColor(0x3B3D40, alpha: 0.72),
+        lineNumber: hexColor(0x8E949B),
+        primaryText: hexColor(0xE7EAF0),
+        secondaryText: hexColor(0xA9B0BA),
+        gutterFill: hexColor(0x1D1F22),
+        additionFill: hexColor(0x12271A),
+        additionSelectedFill: hexColor(0x183722),
+        additionStroke: hexColor(0x3C7F4B),
+        deletionFill: hexColor(0x321818),
+        deletionSelectedFill: hexColor(0x462020),
+        deletionStroke: hexColor(0x98504F),
+        modificationFill: hexColor(0x142536),
+        modificationSelectedFill: hexColor(0x1A344D),
+        modificationStroke: hexColor(0x4F81AD),
+        hunkHeaderFill: hexColor(0x202226),
+        hunkHeaderHoverFill: hexColor(0x292C31),
+        overviewTrackFill: hexColor(0x202226),
+        inlineAdditionFill: hexColor(0x244A2D),
+        inlineDeletionFill: hexColor(0x5A2A2A)
     )
 
     private static func hexColor(_ hex: Int, alpha: CGFloat = 1) -> NSColor {

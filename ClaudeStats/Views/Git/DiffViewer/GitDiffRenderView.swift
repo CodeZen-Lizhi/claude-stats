@@ -30,7 +30,6 @@ final class GitDiffRenderView: NSView {
         blocks: []
     )
     private let metrics = GitDiffRenderMetrics.standard
-    private let palette = GitDiffRenderPalette.standard
     private lazy var projector = GitDiffFluidProjector(metrics: metrics)
     private let font = GitDiffTextMeasurement.standardCodeFont()
     private let lineNumberFont = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .regular)
@@ -41,6 +40,10 @@ final class GitDiffRenderView: NSView {
 
     var contentHeight: CGFloat {
         renderLayout.contentHeight
+    }
+
+    private var palette: GitDiffRenderPalette {
+        GitDiffRenderPalette.standard(for: effectiveAppearance)
     }
 
     func update(diff: StructuredFileDiff, mode: DiffViewMode, granularity: GitDiffBlockGranularity) {
@@ -60,6 +63,11 @@ final class GitDiffRenderView: NSView {
             stopHunkHeaderAnimationTimerIfNeeded()
         }
         rebuildLayout()
+        needsDisplay = true
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
         needsDisplay = true
     }
 
@@ -703,19 +711,32 @@ final class GitDiffRenderView: NSView {
     }
 
     private func drawHunkHeaderSymbol(in rect: CGRect, alpha: CGFloat) {
-        guard let image = NSImage(
-            systemSymbolName: "arrow.up.left.and.arrow.down.right",
-            accessibilityDescription: nil
-        ) else { return }
-        let configured = image.withSymbolConfiguration(.init(pointSize: 13, weight: .medium)) ?? image
-        let size = configured.size
-        let target = CGRect(
-            x: rect.midX - size.width / 2,
-            y: rect.midY - size.height / 2,
-            width: size.width,
-            height: size.height
-        )
-        configured.draw(in: target, from: .zero, operation: .sourceOver, fraction: alpha * 0.55)
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let extent: CGFloat = 5
+        let arrowhead: CGFloat = 3.5
+        let topLeft = CGPoint(x: center.x - extent, y: center.y - extent)
+        let bottomRight = CGPoint(x: center.x + extent, y: center.y + extent)
+        let path = NSBezierPath()
+        path.lineWidth = 1.45
+        path.lineCapStyle = .round
+        path.lineJoinStyle = .round
+
+        path.move(to: CGPoint(x: center.x - 1, y: center.y - 1))
+        path.line(to: topLeft)
+        path.move(to: topLeft)
+        path.line(to: CGPoint(x: topLeft.x + arrowhead, y: topLeft.y))
+        path.move(to: topLeft)
+        path.line(to: CGPoint(x: topLeft.x, y: topLeft.y + arrowhead))
+
+        path.move(to: CGPoint(x: center.x + 1, y: center.y + 1))
+        path.line(to: bottomRight)
+        path.move(to: bottomRight)
+        path.line(to: CGPoint(x: bottomRight.x - arrowhead, y: bottomRight.y))
+        path.move(to: bottomRight)
+        path.line(to: CGPoint(x: bottomRight.x, y: bottomRight.y - arrowhead))
+
+        palette.secondaryText.withAlphaComponent(alpha * 0.72).setStroke()
+        path.stroke()
     }
 
     private func drawUnifiedLine(_ line: GitDiffRenderLine, rect: CGRect, y: CGFloat, drawBackground: Bool) {

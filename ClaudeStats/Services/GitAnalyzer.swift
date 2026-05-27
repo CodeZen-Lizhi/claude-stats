@@ -585,6 +585,42 @@ struct GitAnalyzer: Sendable {
         return nil
     }
 
+    func branchesContaining(hash: String, in repo: GitRepo) -> [GitRef] {
+        guard isAvailable, !hash.isEmpty else { return [] }
+        let local = runGit(["-C", repo.rootPath, "branch", "--contains", hash]) ?? ""
+        let remote = runGit(["-C", repo.rootPath, "branch", "-r", "--contains", hash]) ?? ""
+        return Self.parseBranchesContaining(localOutput: local, remoteOutput: remote)
+    }
+
+    static func parseBranchesContaining(localOutput: String, remoteOutput: String) -> [GitRef] {
+        var seen = Set<String>()
+        var refs: [GitRef] = []
+
+        func append(_ ref: GitRef) {
+            let key = "\(ref.kind)|\(ref.name)"
+            guard seen.insert(key).inserted else { return }
+            refs.append(ref)
+        }
+
+        for line in localOutput.split(separator: "\n", omittingEmptySubsequences: true) {
+            let name = String(line)
+                .replacingOccurrences(of: "*", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty, name != "HEAD" else { continue }
+            append(GitRef(kind: .branch, name: name))
+        }
+
+        for line in remoteOutput.split(separator: "\n", omittingEmptySubsequences: true) {
+            let name = String(line)
+                .replacingOccurrences(of: "*", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty, name != "HEAD", !name.contains(" -> ") else { continue }
+            append(GitRef(kind: .remoteBranch, name: name))
+        }
+
+        return refs
+    }
+
     // MARK: - Process plumbing
 
     private var historyRevArgs: [String] {

@@ -16,13 +16,13 @@ struct TrackingSettingsView: View {
     private func gitTrackingGroup(prefs: Preferences) -> some View {
         @Bindable var prefs = prefs
         SettingGroup(
-            title: "Git Tracking",
-            caption: "Reads commit history from repositories opened or used by configured AI coding tools via the `git` command."
+            title: L10n.string("settings.tracking.title", defaultValue: "仓库来源"),
+            caption: L10n.string("settings.tracking.caption", defaultValue: "本地读取 Codex 使用过的 Git 仓库；编辑器来源只做匹配补充，不上传代码。")
         ) {
             if !prefs.gitTrackingEnabled {
                 FeatureDisabledNotice(
-                    featureName: "Git Tracking",
-                    message: "Turn it on in Features to edit git workspace behavior."
+                    featureName: L10n.string("settings.tracking.feature_name", defaultValue: "仓库来源"),
+                    message: L10n.string("settings.tracking.disabled", defaultValue: "请先在「功能」里开启 Git 跟踪。")
                 ) {
                     onSelectSection(.features)
                 }
@@ -30,58 +30,6 @@ struct TrackingSettingsView: View {
 
             repositorySourcesCard(prefs: prefs)
                 .disabledSettingsBlock(!prefs.gitTrackingEnabled)
-
-            VStack(spacing: 0) {
-                SettingRow(title: "Open git view in") {
-                    Picker("", selection: $prefs.gitOpensInWindow) {
-                        Text("Panel tab").tag(false)
-                        Text("Separate window").tag(true)
-                    }
-                    .labelsHidden()
-                    .frame(maxWidth: 180)
-                }
-                SettingRowDivider()
-                SettingRow(
-                    title: "Diff block granularity",
-                    description: "Fine separates mixed changes into modified, inserted, and deleted bands; Coarse keeps each change region as one block."
-                ) {
-                    Picker("", selection: $prefs.gitDiffBlockGranularity) {
-                        ForEach(GitDiffBlockGranularity.allCases) { granularity in
-                            Text(granularity.displayName).tag(granularity)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .controlSize(.small)
-                    .frame(maxWidth: 180)
-                }
-                SettingRowDivider()
-                SettingRow(
-                    title: "Language engine",
-                    description: "Language detection uses GitHub Linguist; scc supplies line counts."
-                ) {
-                    Text("GitHub Linguist + scc")
-                        .font(.sora(12, weight: .semibold))
-                        .foregroundStyle(Color.stxMuted)
-                }
-                SettingRowDivider()
-                SettingRow(
-                    title: "Statistics scope",
-                    description: "HEAD counts committed code; Working Tree includes local uncommitted files."
-                ) {
-                    Picker("", selection: $prefs.gitStatsScope) {
-                        ForEach(GitStatsScope.allCases) { scope in
-                            Text(scope.label).tag(scope)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .controlSize(.small)
-                    .frame(maxWidth: 220)
-                }
-            }
-            .settingCard()
-            .disabledSettingsBlock(!prefs.gitTrackingEnabled)
         }
     }
 
@@ -89,7 +37,7 @@ struct TrackingSettingsView: View {
         @Bindable var prefs = prefs
         return VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text(LocalizedStringKey("Repository sources"))
+                Text(L10n.string("settings.tracking.sources.title", defaultValue: "仓库来源"))
                     .font(.sora(13, weight: .medium))
                 Spacer()
             }
@@ -100,8 +48,8 @@ struct TrackingSettingsView: View {
             SettingRowDivider()
 
             gitWorkspaceSourceSection(
-                title: "Session sources",
-                caption: "Transcript working directories.",
+                title: L10n.string("settings.tracking.sources.session_title", defaultValue: "Codex 会话"),
+                caption: L10n.string("settings.tracking.sources.session_caption", defaultValue: "从 session cwd 归并到 Git root。"),
                 sources: GitWorkspaceSourceCatalog.sessionSources,
                 prefs: prefs
             )
@@ -109,8 +57,8 @@ struct TrackingSettingsView: View {
             SettingRowDivider()
 
             gitWorkspaceSourceSection(
-                title: "AI editor workspace history",
-                caption: "Workspace folders remembered by each editor.",
+                title: L10n.string("settings.tracking.sources.editor_title", defaultValue: "编辑器辅助来源"),
+                caption: L10n.string("settings.tracking.sources.editor_caption", defaultValue: "只用于匹配/补全标签，不单独加入未使用 Codex 的项目。"),
                 sources: GitWorkspaceSourceCatalog.editorSources,
                 prefs: prefs
             )
@@ -126,10 +74,10 @@ struct TrackingSettingsView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(LocalizedStringKey(title))
+                Text(title)
                     .font(.sora(12, weight: .semibold))
                     .foregroundStyle(.primary)
-                Text(LocalizedStringKey(caption))
+                Text(caption)
                     .font(.sora(10))
                     .foregroundStyle(Color.stxMuted)
             }
@@ -146,15 +94,10 @@ struct TrackingSettingsView: View {
 
     private func gitWorkspaceSourceRow(_ source: GitWorkspaceSourceDescriptor, prefs: Preferences) -> some View {
         let isOn = prefs.gitWorkspaceSourceIDs.contains(source.id)
+        let isRequired = source.id == .codex
         let isLastEnabled = isOn && prefs.gitWorkspaceSourceIDs.count == 1
         return HStack(spacing: 12) {
-            Image(source.assetName)
-                .resizable()
-                .renderingMode(.original)
-                .scaledToFit()
-                .frame(width: 22, height: 22)
-                .opacity(isOn ? 1 : 0.45)
-                .accessibilityHidden(true)
+            sourceIcon(source, isOn: isOn)
             VStack(alignment: .leading, spacing: 2) {
                 Text(source.displayName)
                     .font(.sora(13, weight: .medium))
@@ -167,6 +110,7 @@ struct TrackingSettingsView: View {
             Toggle("", isOn: Binding(
                 get: { prefs.gitWorkspaceSourceIDs.contains(source.id) },
                 set: { enabled in
+                    if isRequired { return }
                     var ids = prefs.gitWorkspaceSourceIDs
                     if enabled {
                         ids.insert(source.id)
@@ -178,11 +122,40 @@ struct TrackingSettingsView: View {
             ))
             .labelsHidden()
             .toggleStyle(.switch)
-            .disabled(isLastEnabled)
-            .help(isLastEnabled ? L10n.string("git.sources.minimum_one", defaultValue: "At least one repository source must stay enabled.") : source.detail)
+            .disabled(isRequired || isLastEnabled)
+            .help(sourceHelp(source, isRequired: isRequired, isLastEnabled: isLastEnabled))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+
+    @ViewBuilder
+    private func sourceIcon(_ source: GitWorkspaceSourceDescriptor, isOn: Bool) -> some View {
+        if source.assetName.isEmpty {
+            Image(systemName: "hammer")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(isOn ? Color.primary : Color.stxMuted.opacity(0.65))
+                .frame(width: 22, height: 22)
+                .accessibilityHidden(true)
+        } else {
+            Image(source.assetName)
+                .resizable()
+                .renderingMode(.original)
+                .scaledToFit()
+                .frame(width: 22, height: 22)
+                .opacity(isOn ? 1 : 0.45)
+                .accessibilityHidden(true)
+        }
+    }
+
+    private func sourceHelp(_ source: GitWorkspaceSourceDescriptor, isRequired: Bool, isLastEnabled: Bool) -> String {
+        if isRequired {
+            return L10n.string("settings.tracking.sources.required", defaultValue: "Codex 是主来源，不能关闭。")
+        }
+        if isLastEnabled {
+            return L10n.string("git.sources.minimum_one", defaultValue: "至少保留一个仓库来源。")
+        }
+        return source.detail
     }
 }
 

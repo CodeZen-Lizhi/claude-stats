@@ -166,6 +166,28 @@ struct GitAnalyzerTests {
         #expect(summary.changes.contains { $0.path == "Sources/Conflict.swift" && $0.kind == .conflicted })
     }
 
+    @Test("parseBranchesContaining reads local and remote branches and skips HEAD pointers")
+    func parseBranchesContaining() throws {
+        let local = """
+          main
+        * feature/fix
+          HEAD
+        """
+        let remote = """
+          origin/main
+          origin/release
+          origin/HEAD -> origin/main
+        """
+        let refs = GitAnalyzer.parseBranchesContaining(localOutput: local, remoteOutput: remote)
+
+        #expect(refs == [
+            GitRef(kind: .branch, name: "main"),
+            GitRef(kind: .branch, name: "feature/fix"),
+            GitRef(kind: .remoteBranch, name: "origin/main"),
+            GitRef(kind: .remoteBranch, name: "origin/release"),
+        ])
+    }
+
     // MARK: - bucketing
 
     @Test("RepoActivity.buckets groups commits per repo per calendar unit")

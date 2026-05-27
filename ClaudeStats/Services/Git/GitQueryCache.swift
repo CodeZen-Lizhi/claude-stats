@@ -6,12 +6,14 @@ actor GitQueryCache {
     private let ttl: TimeInterval
     private var graphPages: [String: CacheEntry<GitGraphPage>] = [:]
     private var commitDetails: [String: CacheEntry<CommitDetail>] = [:]
+    private var branchesByCommit: [String: CacheEntry<[GitRef]>] = [:]
     private var fileDiffs: [String: CacheEntry<FileDiff>] = [:]
     private var fileChanges: [String: CacheEntry<[CommitFileChange]>] = [:]
     private var minimaps: [String: CacheEntry<GitGraphMinimapData>] = [:]
 
     private var graphPageTasks: [String: InflightTask<GitGraphPage?>] = [:]
     private var commitDetailTasks: [String: InflightTask<CommitDetail?>] = [:]
+    private var branchesByCommitTasks: [String: InflightTask<[GitRef]>] = [:]
     private var fileDiffTasks: [String: InflightTask<FileDiff?>] = [:]
     private var fileChangeTasks: [String: InflightTask<[CommitFileChange]>] = [:]
     private var minimapTasks: [String: InflightTask<GitGraphMinimapData?>] = [:]
@@ -43,6 +45,19 @@ actor GitQueryCache {
         guard commitDetailTasks[key]?.token == inflight.token else { return nil }
         commitDetailTasks[key] = nil
         if let value { commitDetails[key] = CacheEntry(value: value) }
+        return value
+    }
+
+    func branchesContaining(key: String, load: @escaping @Sendable () -> [GitRef]) async -> [GitRef] {
+        if let cached = fresh(branchesByCommit[key]) { return cached }
+        if let inflight = branchesByCommitTasks[key] { return await inflight.task.value }
+        let task = Task.detached(priority: .utility) { load() }
+        let inflight = InflightTask(task: task)
+        branchesByCommitTasks[key] = inflight
+        let value = await task.value
+        guard branchesByCommitTasks[key]?.token == inflight.token else { return [] }
+        branchesByCommitTasks[key] = nil
+        branchesByCommit[key] = CacheEntry(value: value)
         return value
     }
 
@@ -89,11 +104,13 @@ actor GitQueryCache {
         let prefixes = [repo.cacheKey, repo.worktreeKey, repo.rootPath]
         graphPages = graphPages.filter { key, _ in !matches(key, prefixes: prefixes) }
         commitDetails = commitDetails.filter { key, _ in !matches(key, prefixes: prefixes) }
+        branchesByCommit = branchesByCommit.filter { key, _ in !matches(key, prefixes: prefixes) }
         fileDiffs = fileDiffs.filter { key, _ in !matches(key, prefixes: prefixes) }
         fileChanges = fileChanges.filter { key, _ in !matches(key, prefixes: prefixes) }
         minimaps = minimaps.filter { key, _ in !matches(key, prefixes: prefixes) }
         cancelMatching(&graphPageTasks, prefixes: prefixes)
         cancelMatching(&commitDetailTasks, prefixes: prefixes)
+        cancelMatching(&branchesByCommitTasks, prefixes: prefixes)
         cancelMatching(&fileDiffTasks, prefixes: prefixes)
         cancelMatching(&fileChangeTasks, prefixes: prefixes)
         cancelMatching(&minimapTasks, prefixes: prefixes)

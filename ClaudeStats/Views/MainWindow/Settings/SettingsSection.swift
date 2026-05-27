@@ -20,7 +20,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
         case .features:  L10n.string("settings.section.features", defaultValue: "Features")
         case .menuBar:   L10n.string("settings.section.menu_bar", defaultValue: "Menu Bar")
         case .pricing:   L10n.string("settings.section.pricing", defaultValue: "Model Pricing")
-        case .tracking:  L10n.string("settings.section.tracking", defaultValue: "Tracking")
+        case .tracking:  L10n.string("settings.section.tracking", defaultValue: "Repository Sources")
         case .github:    "GitHub"
         case .systemMonitor: L10n.string("settings.section.system_monitor", defaultValue: "System Monitor")
         case .about:     L10n.string("settings.section.about", defaultValue: "About")
@@ -33,7 +33,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
         case .features:  "switch.2"
         case .menuBar:   "menubar.rectangle"
         case .pricing:   "dollarsign.circle"
-        case .tracking:  "waveform.path.ecg"
+        case .tracking:  "folder.badge.gearshape"
         case .github:    "chevron.left.forwardslash.chevron.right"
         case .systemMonitor: "cpu"
         case .about:     "info.circle"

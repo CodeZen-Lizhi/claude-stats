@@ -8,11 +8,10 @@ final class GitRepoGraphViewModel {
     private(set) var layout: GraphLayout?
     private(set) var isGraphLoading = false
     private(set) var isDetailLoading = false
-    private(set) var isDiffLoading = false
     private(set) var isBaseStatsLoading = false
     private(set) var isCodeOwnershipLoading = false
     private(set) var commitDetail: CommitDetail?
-    private(set) var fileDiff: FileDiff?
+    private(set) var commitBranches: [GitRef] = []
     private(set) var repoBaseStats: GitRepoInspectorBaseStats?
     private(set) var codeOwnershipState: GitCodeOwnershipLoadState = .idle
     private(set) var minimapData: GitGraphMinimapData?
@@ -33,7 +32,6 @@ final class GitRepoGraphViewModel {
         }
     }
     var selectedHash: String?
-    var diffPath: String?
     var limit = 200
 
     private let pageSize = 200
@@ -43,7 +41,6 @@ final class GitRepoGraphViewModel {
     @ObservationIgnored private var watcher: GitRepositoryWatcher?
     @ObservationIgnored private var graphRequestID: UInt64 = 0
     @ObservationIgnored private var detailRequestID: UInt64 = 0
-    @ObservationIgnored private var diffRequestID: UInt64 = 0
     @ObservationIgnored private var baseStatsRequestID: UInt64 = 0
     @ObservationIgnored private var codeOwnershipRequestID: UInt64 = 0
     @ObservationIgnored private var minimapRequestID: UInt64 = 0
@@ -88,6 +85,7 @@ final class GitRepoGraphViewModel {
                 from: commit,
                 files: GitGraph.previewFileChanges()[commit.hash] ?? []
             )
+            commitBranches = commit.refs.filter { $0.kind == .head || $0.kind == .branch || $0.kind == .remoteBranch }
         }
         repoBaseStats = .preview
         codeOwnershipState = .loaded(GitRepoCodeOwnershipStats.preview.codeContributors)
@@ -109,10 +107,6 @@ final class GitRepoGraphViewModel {
 
     var detailLoadID: String {
         "\(currentRepoID ?? "")|\(selectedHash ?? "")"
-    }
-
-    var diffLoadID: String {
-        "\(currentRepoID ?? "")|\(selectedHash ?? "")|\(diffPath ?? "")"
     }
 
     @discardableResult
@@ -165,6 +159,7 @@ final class GitRepoGraphViewModel {
         guard let hash = selectedHash else {
             invalidateDetailRequest()
             commitDetail = nil
+            commitBranches = []
             return
         }
         if isPreview { return }
@@ -176,42 +171,16 @@ final class GitRepoGraphViewModel {
 
         let requestedRepoID = repo.id
         let requestedHash = hash
-        let detail = await repositoryService.commitDetail(for: requestedHash, in: repo)
+        async let detail = repositoryService.commitDetail(for: requestedHash, in: repo)
+        async let branches = repositoryService.branchesContaining(hash: requestedHash, in: repo)
+        let loadedDetail = await detail
+        let loadedBranches = await branches
 
         guard detailRequestID == requestID,
               currentRepoID == requestedRepoID,
               selectedHash == requestedHash else { return }
-        commitDetail = detail
-    }
-
-    func loadDiff(repo: GitRepo) async {
-        guard let hash = selectedHash, let path = diffPath else {
-            invalidateDiffRequest()
-            fileDiff = nil
-            return
-        }
-        if isPreview {
-            #if DEBUG
-            fileDiff = .preview(path: path)
-            #endif
-            return
-        }
-
-        diffRequestID &+= 1
-        let requestID = diffRequestID
-        isDiffLoading = true
-        defer { finishDiffRequest(requestID) }
-
-        let requestedRepoID = repo.id
-        let requestedHash = hash
-        let requestedPath = path
-        let diff = await repositoryService.fileDiff(for: requestedHash, path: requestedPath, in: repo)
-
-        guard diffRequestID == requestID,
-              currentRepoID == requestedRepoID,
-              selectedHash == requestedHash,
-              diffPath == requestedPath else { return }
-        fileDiff = diff
+        commitDetail = loadedDetail
+        commitBranches = loadedBranches
     }
 
     func loadRepoStats(repo: GitRepo) async {
@@ -288,35 +257,18 @@ final class GitRepoGraphViewModel {
     func selectCommit(_ hash: String) {
         guard selectedHash != hash else { return }
         invalidateDetailRequest()
-        invalidateDiffRequest()
         selectedHash = hash
         updateMinimapSelection()
         commitDetail = nil
-        diffPath = nil
-        fileDiff = nil
+        commitBranches = []
     }
 
     func selectWorkingTree() {
         invalidateDetailRequest()
-        invalidateDiffRequest()
         selectedHash = nil
         updateMinimapSelection()
         commitDetail = nil
-        diffPath = nil
-        fileDiff = nil
-    }
-
-    func openDiff(path: String) {
-        guard diffPath != path else { return }
-        invalidateDiffRequest()
-        diffPath = path
-        fileDiff = nil
-    }
-
-    func closeDiff() {
-        invalidateDiffRequest()
-        diffPath = nil
-        fileDiff = nil
+        commitBranches = []
     }
 
     func loadMore() {
@@ -374,7 +326,6 @@ final class GitRepoGraphViewModel {
     private func reset(for repo: GitRepo) {
         invalidateGraphRequest()
         invalidateDetailRequest()
-        invalidateDiffRequest()
         invalidateBaseStatsRequest()
         invalidateCodeOwnershipRequest()
         invalidateMinimapRequest()
@@ -383,7 +334,7 @@ final class GitRepoGraphViewModel {
         graph = nil
         layout = nil
         commitDetail = nil
-        fileDiff = nil
+        commitBranches = []
         repoBaseStats = nil
         repoBaseStatsRepoID = nil
         repoBaseStatsScope = nil
@@ -391,7 +342,6 @@ final class GitRepoGraphViewModel {
         codeOwnershipState = .idle
         minimapData = nil
         selectedHash = nil
-        diffPath = nil
         loadedLimit = 0
         limit = pageSize
         minimapTargetMaxBuckets = 120
@@ -400,23 +350,19 @@ final class GitRepoGraphViewModel {
     private func reconcileSelection() {
         guard let commits = graph?.commits, !commits.isEmpty else {
             invalidateDetailRequest()
-            invalidateDiffRequest()
             selectedHash = nil
             commitDetail = nil
-            diffPath = nil
-            fileDiff = nil
+            commitBranches = []
             return
         }
         if let selectedHash, commits.contains(where: { $0.hash == selectedHash }) {
             return
         }
         invalidateDetailRequest()
-        invalidateDiffRequest()
         selectedHash = nil
         updateMinimapSelection()
         commitDetail = nil
-        diffPath = nil
-        fileDiff = nil
+        commitBranches = []
     }
 
     private func updateMinimapSelection() {
@@ -468,11 +414,6 @@ final class GitRepoGraphViewModel {
         isDetailLoading = false
     }
 
-    private func invalidateDiffRequest() {
-        diffRequestID &+= 1
-        isDiffLoading = false
-    }
-
     private func invalidateBaseStatsRequest() {
         baseStatsRequestID &+= 1
         isBaseStatsLoading = false
@@ -500,12 +441,6 @@ final class GitRepoGraphViewModel {
     private func finishDetailRequest(_ requestID: UInt64) {
         if detailRequestID == requestID {
             isDetailLoading = false
-        }
-    }
-
-    private func finishDiffRequest(_ requestID: UInt64) {
-        if diffRequestID == requestID {
-            isDiffLoading = false
         }
     }
 

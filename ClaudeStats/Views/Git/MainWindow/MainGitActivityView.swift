@@ -109,14 +109,14 @@ struct MainGitActivityView: View {
         @Bindable var vm = model
         return HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("GIT ACTIVITY")
+                Text(L10n.string("git.activity.eyebrow", defaultValue: "GIT ACTIVITY"))
                     .font(.sora(11, weight: .semibold))
                     .tracking(1.2)
                     .foregroundStyle(Color.stxMuted)
-                Text("Repository workspace")
+                Text(L10n.string("git.activity.title", defaultValue: "Repository workspace"))
                     .font(.sora(24, weight: .semibold))
                     .lineLimit(1)
-                Text("Commits from repositories opened or used by configured AI coding tools.")
+                Text(L10n.string("git.activity.subtitle", defaultValue: "Commits from repositories opened or used by configured AI coding tools."))
                     .font(.sora(12))
                     .foregroundStyle(Color.stxMuted)
                     .lineLimit(1)
@@ -125,7 +125,7 @@ struct MainGitActivityView: View {
             if vm.isLoading {
                 ProgressView()
                     .controlSize(.small)
-                    .help("Loading git activity")
+                    .help(L10n.string("git.activity.loading", defaultValue: "Loading git activity"))
             }
             MainGitMineToggle(onlyMyCommits: $vm.onlyMyCommits, userEmail: vm.userEmail)
             MainGitRangePicker(range: $vm.range)
@@ -140,13 +140,13 @@ struct MainGitActivityView: View {
         let vm = activityModel
         if !vm.gitAvailable {
             GitWorkspaceNotice(
-                title: "Git not available",
-                message: "Couldn't run the git command. Install the Xcode command-line tools and refresh."
+                title: L10n.string("git.activity.git_unavailable.title", defaultValue: "Git not available"),
+                message: L10n.string("git.activity.git_unavailable.message", defaultValue: "Couldn't run the git command. Install the Xcode command-line tools and refresh.")
             )
         } else if !vm.hasData {
             GitWorkspaceNotice(
-                title: "No git activity",
-                message: "No configured Git sources have commits in this range. Try a wider window or disable My Commits."
+                title: L10n.string("git.activity.empty.title", defaultValue: "No git activity"),
+                message: L10n.string("git.activity.empty.message", defaultValue: "No Codex-used Git repos have commits in this range. Try a wider window or disable My Commits.")
             )
         } else if let activity = selectedActivity {
             #if DEBUG
@@ -192,9 +192,9 @@ private struct GitRepoSelectionColumn: View {
             AppScrollView {
                 LazyVStack(alignment: .leading, spacing: 4) {
                     GitRepoSelectionRow(
-                        title: "All Repos",
-                        subtitle: "\(totalCommits) commits",
-                        detail: Format.tokens(totalChurn) + " churn",
+                        title: L10n.string("git.repo_selection.all", defaultValue: "All Repos"),
+                        subtitle: L10n.format("git.repo_selection.commits_count", defaultValue: "%@ commits", "\(totalCommits)"),
+                        detail: L10n.format("git.repo_selection.churn_count", defaultValue: "%@ churn", Format.tokens(totalChurn)),
                         symbol: "square.grid.2x2",
                         isSelected: selection == "all"
                     ) {
@@ -204,8 +204,8 @@ private struct GitRepoSelectionColumn: View {
                     ForEach(repos) { activity in
                         GitRepoSelectionRow(
                             title: activity.repo.displayName,
-                            subtitle: "\(activity.commitCount) commits",
-                            detail: "\(activity.filesChanged) files",
+                            subtitle: L10n.format("git.repo_selection.commits_count", defaultValue: "%@ commits", "\(activity.commitCount)"),
+                            detail: L10n.format("git.repo_selection.files_count", defaultValue: "%@ files", "\(activity.filesChanged)"),
                             symbol: "folder",
                             isSelected: selection == activity.repo.id
                         ) {
@@ -226,7 +226,7 @@ private struct GitRepoSelectionColumn: View {
 
     private var columnHeader: some View {
         HStack(spacing: 6) {
-            Text("REPOSITORIES")
+            Text(L10n.string("git.repo_selection.title", defaultValue: "REPOSITORIES"))
                 .font(.sora(10, weight: .semibold))
                 .tracking(1.0)
                 .foregroundStyle(Color.stxMuted)
@@ -436,7 +436,7 @@ private struct GitCorrelationPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
-                Text("AI USAGE VS COMMITS")
+                Text(L10n.string("git.overview.correlation.title", defaultValue: "AI USAGE VS COMMITS"))
                     .font(.sora(13, weight: .semibold))
                     .tracking(1.0)
                 Spacer()
@@ -445,13 +445,13 @@ private struct GitCorrelationPanel: View {
                     .foregroundStyle(Color.stxMuted)
             }
             if correlation.points.isEmpty {
-                GitInlineEmptyState("Nothing to plot for this range.")
+                GitInlineEmptyState(L10n.string("git.overview.correlation.empty", defaultValue: "Nothing to plot for this range."))
             } else {
-                Text("AI TOKENS")
+                Text(L10n.string("git.overview.correlation.tokens", defaultValue: "AI TOKENS"))
                     .font(.sora(9, weight: .medium))
                     .foregroundStyle(Color.stxMuted)
                 GitTokenOverviewChart(correlation: correlation)
-                Text("COMMITS")
+                Text(L10n.string("git.overview.correlation.commits", defaultValue: "COMMITS"))
                     .font(.sora(9, weight: .medium))
                     .foregroundStyle(Color.stxMuted)
                 GitCommitOverviewChart(correlation: correlation)
@@ -783,7 +783,7 @@ private struct GitRecentCommitsTable: View {
             titleRow
             StxRule()
             if rows.isEmpty {
-                GitInlineEmptyState("No commits in this range.")
+                GitInlineEmptyState(L10n.string("git.recent.empty", defaultValue: "No commits in this range."))
                     .padding(14)
             } else {
                 ForEach(displayedRows) { row in
@@ -801,7 +801,7 @@ private struct GitRecentCommitsTable: View {
 
     private var titleRow: some View {
         HStack(alignment: .center, spacing: 8) {
-            Text("RECENT COMMITS")
+            Text(L10n.string("git.recent.title", defaultValue: "RECENT COMMITS"))
                 .font(.sora(12, weight: .semibold))
                 .tracking(0.8)
             Spacer()
@@ -907,7 +907,7 @@ private struct MainGitRangePicker: View {
         PillSegmentedBar(GitRange.allCases, selection: $range) { value, _ in
             Text(value.shortLabel.lowercased())
         }
-        .help("Select git activity range")
+        .help(L10n.string("git.range.help", defaultValue: "Select git activity range"))
     }
 }
 
@@ -923,7 +923,7 @@ private struct MainGitMineToggle: View {
                 Image(systemName: onlyMyCommits ? "checkmark.square.fill" : "square")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(onlyMyCommits ? Color.stxAccent : Color.stxMuted)
-                Text("My Commits")
+                Text(L10n.string("git.mine.toggle", defaultValue: "My Commits"))
                     .font(.sora(11, weight: .medium))
                     .foregroundStyle(.primary)
             }

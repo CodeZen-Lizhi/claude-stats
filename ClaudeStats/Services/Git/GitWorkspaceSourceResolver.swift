@@ -7,6 +7,7 @@ enum GitWorkspaceSourceID: String, CaseIterable, Codable, Sendable, Identifiable
     case trae
     case traeCN
     case qoder
+    case jetbrains
 
     var id: String { rawValue }
 }
@@ -14,6 +15,7 @@ enum GitWorkspaceSourceID: String, CaseIterable, Codable, Sendable, Identifiable
 enum GitWorkspaceSourceKind: Sendable, Hashable {
     case sessionProvider(ProviderKind)
     case vscodeWorkspaceStorage(appSupportDirectoryName: String)
+    case jetbrainsRecentProjects
 }
 
 struct GitWorkspaceSourceDescriptor: Sendable, Identifiable, Hashable {
@@ -36,7 +38,7 @@ enum GitWorkspaceSourceCatalog {
         GitWorkspaceSourceDescriptor(
             id: .codex,
             displayName: "OpenAI Codex",
-            detail: "Repos from Codex session working directories.",
+            detail: L10n.string("git.sources.codex.detail", defaultValue: "Repos from Codex session working directories."),
             assetName: "codex-logo",
             kind: .sessionProvider(.codex)
         ),
@@ -46,37 +48,44 @@ enum GitWorkspaceSourceCatalog {
         GitWorkspaceSourceDescriptor(
             id: .cursor,
             displayName: "Cursor",
-            detail: "Repos from Cursor workspace history.",
+            detail: L10n.string("git.sources.cursor.detail", defaultValue: "Matches Cursor workspace history against Codex repos."),
             assetName: "cursor-logo",
             kind: .vscodeWorkspaceStorage(appSupportDirectoryName: "Cursor")
         ),
         GitWorkspaceSourceDescriptor(
             id: .windsurf,
             displayName: "Windsurf",
-            detail: "Repos from Windsurf workspace history.",
+            detail: L10n.string("git.sources.windsurf.detail", defaultValue: "Matches Windsurf workspace history against Codex repos."),
             assetName: "windsurf-logo",
             kind: .vscodeWorkspaceStorage(appSupportDirectoryName: "Windsurf")
         ),
         GitWorkspaceSourceDescriptor(
             id: .trae,
             displayName: "Trae",
-            detail: "Repos from Trae workspace history.",
+            detail: L10n.string("git.sources.trae.detail", defaultValue: "Matches Trae workspace history against Codex repos."),
             assetName: "trae-logo",
             kind: .vscodeWorkspaceStorage(appSupportDirectoryName: "Trae")
         ),
         GitWorkspaceSourceDescriptor(
             id: .traeCN,
             displayName: "Trae CN",
-            detail: "Repos from Trae CN workspace history.",
+            detail: L10n.string("git.sources.trae_cn.detail", defaultValue: "Matches Trae CN workspace history against Codex repos."),
             assetName: "trae-logo",
             kind: .vscodeWorkspaceStorage(appSupportDirectoryName: "Trae CN")
         ),
         GitWorkspaceSourceDescriptor(
             id: .qoder,
             displayName: "Qoder",
-            detail: "Repos from Qoder workspace history.",
+            detail: L10n.string("git.sources.qoder.detail", defaultValue: "Matches Qoder workspace history against Codex repos."),
             assetName: "qoder-logo",
             kind: .vscodeWorkspaceStorage(appSupportDirectoryName: "Qoder")
+        ),
+        GitWorkspaceSourceDescriptor(
+            id: .jetbrains,
+            displayName: "JetBrains",
+            detail: L10n.string("git.sources.jetbrains.detail", defaultValue: "Matches JetBrains recent projects against Codex repos."),
+            assetName: "",
+            kind: .jetbrainsRecentProjects
         ),
     ]
 
@@ -89,7 +98,7 @@ enum GitWorkspaceSourceCatalog {
     }
 
     static func normalized(_ ids: Set<GitWorkspaceSourceID>) -> Set<GitWorkspaceSourceID> {
-        ids.isEmpty ? defaultEnabled : ids
+        ids.union(defaultEnabled)
     }
 
     static func decodeStoredSourceIDs(_ raw: String?) -> Set<GitWorkspaceSourceID> {
@@ -139,18 +148,34 @@ struct GitWorkspaceSourceResolver: Sendable {
         let normalizedSources = GitWorkspaceSourceCatalog.normalized(enabledSources)
         var paths = Set<String>()
 
-        for descriptor in GitWorkspaceSourceCatalog.all where normalizedSources.contains(descriptor.id) {
-            switch descriptor.kind {
-            case let .sessionProvider(provider):
-                for session in sessions where session.provider == provider {
-                    if let cwd = session.cwd {
-                        insert(cwd, into: &paths)
-                    }
+        for descriptor in GitWorkspaceSourceCatalog.sessionSources where normalizedSources.contains(descriptor.id) {
+            guard case let .sessionProvider(provider) = descriptor.kind else { continue }
+            for session in sessions where session.provider == provider {
+                if let cwd = session.cwd {
+                    insert(cwd, into: &paths)
                 }
+            }
+        }
+
+        return paths.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
+    func enrichmentCwds(enabledSources: Set<GitWorkspaceSourceID>) -> [String] {
+        let normalizedSources = GitWorkspaceSourceCatalog.normalized(enabledSources)
+        var paths = Set<String>()
+
+        for descriptor in GitWorkspaceSourceCatalog.editorSources where normalizedSources.contains(descriptor.id) {
+            switch descriptor.kind {
             case let .vscodeWorkspaceStorage(appSupportDirectoryName):
                 for path in vscodeWorkspacePaths(appSupportDirectoryName: appSupportDirectoryName) {
                     insert(path, into: &paths)
                 }
+            case .jetbrainsRecentProjects:
+                for path in jetbrainsRecentProjectPaths() {
+                    insert(path, into: &paths)
+                }
+            case .sessionProvider:
+                continue
             }
         }
 
@@ -195,6 +220,30 @@ struct GitWorkspaceSourceResolver: Sendable {
                 insert(path, into: &paths)
             }
         }
+        return paths.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
+    private func jetbrainsRecentProjectPaths() -> [String] {
+        let jetBrainsURL = applicationSupportDirectory
+            .appendingPathComponent("JetBrains", isDirectory: true)
+
+        guard let appDirs = try? FileManager.default.contentsOfDirectory(
+            at: jetBrainsURL,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else { return [] }
+
+        var paths = Set<String>()
+        for appDir in appDirs {
+            guard (try? appDir.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true else { continue }
+            let xmlURL = appDir
+                .appendingPathComponent("options", isDirectory: true)
+                .appendingPathComponent("recentProjects.xml")
+            for path in Self.paths(fromJetBrainsRecentProjectsXMLAt: xmlURL) {
+                insert(path, into: &paths)
+            }
+        }
+
         return paths.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
 
@@ -257,6 +306,33 @@ struct GitWorkspaceSourceResolver: Sendable {
             .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
 
+    static func paths(
+        fromJetBrainsRecentProjectsXMLAt url: URL,
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> [String] {
+        guard let data = try? Data(contentsOf: url),
+              let xml = String(data: data, encoding: .utf8) else {
+            return []
+        }
+
+        let attributePattern = #"(?:key|value)="([^"]+)""#
+        guard let regex = try? NSRegularExpression(pattern: attributePattern) else { return [] }
+        let range = NSRange(xml.startIndex..<xml.endIndex, in: xml)
+        var paths = Set<String>()
+
+        regex.enumerateMatches(in: xml, range: range) { match, _, _ in
+            guard let match,
+                  let valueRange = Range(match.range(at: 1), in: xml) else { return }
+            let raw = String(xml[valueRange])
+            guard let path = jetBrainsProjectPath(from: raw, homeDirectory: homeDirectory) else { return }
+            paths.insert(path)
+        }
+
+        return paths
+            .filter { existingReadableDirectory(atPath: $0) }
+            .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
     private static func workspaceFolderPath(_ rawPath: String, relativeTo baseURL: URL) -> String? {
         let trimmed = rawPath.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
@@ -280,6 +356,23 @@ struct GitWorkspaceSourceResolver: Sendable {
     private static func localFileURL(from raw: String) -> URL? {
         guard let url = URL(string: raw), url.isFileURL else { return nil }
         return url
+    }
+
+    private static func jetBrainsProjectPath(from raw: String, homeDirectory: URL) -> String? {
+        let decoded = raw
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&apos;", with: "'")
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !decoded.isEmpty else { return nil }
+        let expanded = decoded
+            .replacingOccurrences(of: "$USER_HOME$", with: homeDirectory.path)
+            .replacingOccurrences(of: "~", with: homeDirectory.path, options: [.anchored])
+        if let path = localFilePath(from: expanded) {
+            return path
+        }
+        guard expanded.hasPrefix("/") else { return nil }
+        return URL(fileURLWithPath: expanded).standardizedFileURL.path
     }
 
     private static func existingReadableDirectory(atPath path: String) -> Bool {

@@ -98,6 +98,18 @@ final class Preferences {
     var detailPanelBoundaryFalloffEnabled: Bool {
         didSet { defaults.set(detailPanelBoundaryFalloffEnabled, forKey: Keys.detailPanelBoundaryFalloffEnabled) }
     }
+    /// Persisted width for the main app sidebar. Settings mode keeps its own
+    /// fixed sidebar so this only applies to the primary app navigation.
+    var mainWindowSidebarWidth: Double {
+        didSet {
+            let clamped = Self.clampedMainWindowSidebarWidth(mainWindowSidebarWidth)
+            guard clamped == mainWindowSidebarWidth else {
+                mainWindowSidebarWidth = clamped
+                return
+            }
+            defaults.set(mainWindowSidebarWidth, forKey: Keys.mainWindowSidebarWidth)
+        }
+    }
     var sessionsExpandedOnAppOpen: Bool {
         didSet { defaults.set(sessionsExpandedOnAppOpen, forKey: Keys.sessionsExpandedOnAppOpen) }
     }
@@ -238,6 +250,9 @@ final class Preferences {
         floatingTabEdge = FloatingPanelEdge(rawValue: defaults.string(forKey: Keys.floatingTabEdge) ?? "") ?? .right
         floatingTabAnchor = (defaults.object(forKey: Keys.floatingTabAnchor) as? Double) ?? 0.5
         detailPanelBoundaryFalloffEnabled = (defaults.object(forKey: Keys.detailPanelBoundaryFalloffEnabled) as? Bool) ?? true
+        mainWindowSidebarWidth = Self.clampedMainWindowSidebarWidth(
+            (defaults.object(forKey: Keys.mainWindowSidebarWidth) as? Double) ?? Self.defaultMainWindowSidebarWidth
+        )
         sessionsExpandedOnAppOpen = (defaults.object(forKey: Keys.sessionsExpandedOnAppOpen) as? Bool) ?? false
         systemMonitorEnabled = defaults.bool(forKey: Keys.systemMonitorEnabled)
         systemMonitorRefreshRate = SystemMonitorRefreshRate(rawValue: defaults.string(forKey: Keys.systemMonitorRefreshRate) ?? "") ?? .threeSeconds
@@ -276,6 +291,14 @@ final class Preferences {
         appLanguagePreference.applyToAppleLanguages(defaults: defaults)
     }
 
+    static let defaultMainWindowSidebarWidth = 240.0
+    static let mainWindowSidebarWidthRange = 180.0...340.0
+
+    static func clampedMainWindowSidebarWidth(_ width: Double) -> Double {
+        guard width.isFinite else { return defaultMainWindowSidebarWidth }
+        return min(max(width, mainWindowSidebarWidthRange.lowerBound), mainWindowSidebarWidthRange.upperBound)
+    }
+
     private enum Keys {
         static let appLanguagePreference = "appLanguagePreference"
         static let appearancePreference = "appearancePreference"
@@ -290,6 +313,7 @@ final class Preferences {
         static let floatingTabEdge = "floatingTabEdge"
         static let floatingTabAnchor = "floatingTabAnchor"
         static let detailPanelBoundaryFalloffEnabled = "detailPanelBoundaryFalloffEnabled"
+        static let mainWindowSidebarWidth = "mainWindowSidebarWidth"
         static let sessionsExpandedOnAppOpen = "sessionsExpandedOnAppOpen"
         static let systemMonitorEnabled = "systemMonitorEnabled"
         static let systemMonitorRefreshRate = "systemMonitorRefreshRate"

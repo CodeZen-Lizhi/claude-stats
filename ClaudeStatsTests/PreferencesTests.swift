@@ -74,6 +74,24 @@ struct PreferencesTests {
         #expect(reloaded.detailPanelBoundaryFalloffEnabled == false)
     }
 
+    @Test("Main window sidebar width defaults and clamps")
+    func mainWindowSidebarWidthDefaultsAndClamps() {
+        let defaults = makeDefaults()
+        let prefs = Preferences(defaults: defaults)
+
+        #expect(prefs.mainWindowSidebarWidth == Preferences.defaultMainWindowSidebarWidth)
+
+        prefs.mainWindowSidebarWidth = 120
+        #expect(prefs.mainWindowSidebarWidth == Preferences.mainWindowSidebarWidthRange.lowerBound)
+
+        prefs.mainWindowSidebarWidth = 420
+        #expect(prefs.mainWindowSidebarWidth == Preferences.mainWindowSidebarWidthRange.upperBound)
+
+        defaults.set(Double.nan, forKey: "mainWindowSidebarWidth")
+        let invalid = Preferences(defaults: defaults)
+        #expect(invalid.mainWindowSidebarWidth == Preferences.defaultMainWindowSidebarWidth)
+    }
+
     @Test("System Monitor defaults are off with balanced refresh and all modules")
     func systemMonitorDefaults() {
         let defaults = makeDefaults()
@@ -195,11 +213,11 @@ struct PreferencesTests {
     func gitWorkspaceSourcesPersist() {
         let defaults = makeDefaults()
         let prefs = Preferences(defaults: defaults)
-        prefs.gitWorkspaceSourceIDs = [.codex, .cursor, .traeCN]
+        prefs.gitWorkspaceSourceIDs = [.codex, .cursor, .traeCN, .jetbrains]
 
         let reloaded = Preferences(defaults: defaults)
-        #expect(reloaded.gitWorkspaceSourceIDs == [.codex, .cursor, .traeCN])
-        #expect(defaults.string(forKey: "gitWorkspaceSourceIDs") == "codex,cursor,traeCN")
+        #expect(reloaded.gitWorkspaceSourceIDs == [.codex, .cursor, .traeCN, .jetbrains])
+        #expect(defaults.string(forKey: "gitWorkspaceSourceIDs") == "codex,cursor,traeCN,jetbrains")
     }
 
     @Test("Empty git workspace sources fall back to defaults")

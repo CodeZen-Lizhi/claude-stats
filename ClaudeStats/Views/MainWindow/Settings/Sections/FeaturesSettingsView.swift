@@ -23,10 +23,10 @@ struct FeaturesSettingsView: View {
     private func gitTrackingCard(prefs: Preferences) -> some View {
         @Bindable var prefs = prefs
         return FeatureControlCard(
-            title: "Git Tracking",
+            title: L10n.string("features.git.title", defaultValue: "Git Tracking"),
             symbol: "arrow.triangle.branch",
-            description: "Reads local commit history for repos used with AI sessions and correlates code churn with usage.",
-            status: prefs.gitTrackingEnabled ? gitTrackingStatus(prefs: prefs) : "Hidden",
+            description: L10n.string("features.git.description", defaultValue: "Reads local commit history for repos used with AI sessions and correlates code churn with usage."),
+            status: prefs.gitTrackingEnabled ? gitTrackingStatus(prefs: prefs) : L10n.string("status.hidden", defaultValue: "Hidden"),
             isOn: $prefs.gitTrackingEnabled,
             onConfigure: { onSelectSection(.tracking) }
         ) {
@@ -79,7 +79,7 @@ struct FeaturesSettingsView: View {
     }
 
     private func gitTrackingStatus(prefs: Preferences) -> String {
-        prefs.gitOpensInWindow ? "Separate window" : "Panel tab"
+        L10n.string("features.git.status.local_sources", defaultValue: "Local sources")
     }
 
     private func systemMonitorStatus(prefs: Preferences) -> String {
