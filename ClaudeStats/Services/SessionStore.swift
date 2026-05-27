@@ -119,7 +119,7 @@ final class SessionStore {
         if let cached = cachedSummary(for: period, provider: provider, now: now) {
             return cached
         }
-        UsageSummary.make(period: period, events: ledgerEvents(matching: provider), now: now)
+        return UsageSummary.make(period: period, events: ledgerEvents(matching: provider), now: now)
     }
 
     func summary(for selection: PeriodSelection, provider: ProviderKind? = nil, now: Date = .now) -> UsageSummary {
