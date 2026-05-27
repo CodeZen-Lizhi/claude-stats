@@ -178,3 +178,41 @@ let snapshot = makeSnapshot()
 statsGrid(snapshot)
 modelBreakdown(snapshot)
 ```
+
+## Scenario: Inject transcript deletion hooks under Swift 6 strict concurrency
+
+### 1. Scope / Trigger
+
+- Applies when changing `SessionStore` deletion dependencies, filesystem trash hooks, or tests that inject transcript delete/trash behavior.
+- Trigger: `SessionStore` is `@MainActor`, so static members and injected closures that call actor-isolated functions must keep the same global-actor isolation in their function type.
+
+### 2. Signatures
+
+- `typealias TranscriptTrasher = @MainActor @Sendable (URL) throws -> Void`
+- `SessionStore.init(..., trashTranscript: @escaping TranscriptTrasher = SessionStore.moveTranscriptToTrash)`
+- `SessionStore.moveTranscriptToTrash(_:) throws`
+
+### 3. Contracts
+
+- Do not erase `@MainActor` isolation when storing or passing the transcript trash hook.
+- Test doubles for trashing transcripts should satisfy the same `TranscriptTrasher` signature.
+- Keep the actual trash operation on the main actor because deletion is initiated from `SessionStore.deleteSessions(_:)`, which is already main-actor isolated.
+
+### 4. Validation & Error Matrix
+
+- Release compile under Swift 6 strict concurrency must not report "loses global actor 'MainActor'" for `trashTranscript`.
+- Trash hook failure must still roll back the deleted-session record and keep the session visible.
+
+### 5. Wrong vs Correct
+
+#### Wrong
+
+```swift
+private let trashTranscript: (URL) throws -> Void
+```
+
+#### Correct
+
+```swift
+private let trashTranscript: TranscriptTrasher
+```

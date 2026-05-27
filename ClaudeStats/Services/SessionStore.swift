@@ -2,6 +2,7 @@ import Foundation
 import Observation
 
 typealias TranscriptMessageLoader = @Sendable (Session) async -> [SessionTranscriptMessage]
+typealias TranscriptTrasher = @MainActor @Sendable (URL) throws -> Void
 
 /// The app's source of truth for sessions and aggregate usage. Owns the
 /// scan/parse pipeline and a parse cache keyed by transcript metadata
@@ -22,7 +23,7 @@ final class SessionStore {
     private let pricing: ModelPricing
     private let usageLedger: UsageLedgerStore
     private let deletedSessions: DeletedSessionStore
-    private let trashTranscript: (URL) throws -> Void
+    private let trashTranscript: TranscriptTrasher
     private var cache: [String: CacheEntry] = [:]
     private var usageEventsSnapshot: [UsageLedgerEvent] = []
     private var autoRefreshTask: Task<Void, Never>?
@@ -41,7 +42,7 @@ final class SessionStore {
         pricing: ModelPricing,
         usageLedger: UsageLedgerStore = UsageLedgerStore(),
         deletedSessions: DeletedSessionStore = DeletedSessionStore(),
-        trashTranscript: @escaping (URL) throws -> Void = SessionStore.moveTranscriptToTrash
+        trashTranscript: @escaping TranscriptTrasher = SessionStore.moveTranscriptToTrash
     ) {
         self.registry = registry
         self.pricing = pricing
