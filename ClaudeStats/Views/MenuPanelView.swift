@@ -3,13 +3,12 @@ import AppKit
 
 /// Which pane of the stats panel is shown.
 enum StatsPane: String, CaseIterable, Identifiable {
-    case sessions, usage, activity, git
+    case sessions, usage, git
     var id: String { rawValue }
     var title: String {
         switch self {
         case .sessions: L10n.string("stats.pane.sessions", defaultValue: "SESSIONS")
         case .usage: L10n.string("stats.pane.usage", defaultValue: "USAGE")
-        case .activity: L10n.string("stats.pane.activity", defaultValue: "ACTIVITY")
         case .git: L10n.string("stats.pane.git", defaultValue: "GIT")
         }
     }
@@ -41,9 +40,7 @@ enum ExportStampPrecision: String, Hashable, CaseIterable, Identifiable {
 struct StatsExportConfig {
     /// Usage pane settings. `.period` is also reused by the Sessions pane.
     var usage: UsageView.ExportConfig
-    var activity: AIActivityView.ExportData
-    /// Whether the exported snapshot includes the top strip (the platform
-    /// switcher when multiple platforms are enabled, otherwise the scanline bar).
+    /// Whether the exported snapshot includes the top scanline strip.
     var showTopBar: Bool = true
     /// The share timestamp shown in the header corner (replaces the live
     /// "UPD …" readout).
@@ -57,8 +54,8 @@ struct StatsExportConfig {
 ///
 /// When `export` is non-nil the view is in "export" mode: the Usage pane's
 /// period picker becomes a static label below the chart, the chart honours the
-/// frozen style/scale from the config, the Activity pane renders a pre-resolved
-/// snapshot, the header's refresh control is hidden, and the pane content takes
+/// frozen style/scale from the config, the header's refresh control is hidden,
+/// and the pane content takes
 /// its intrinsic height (so `ImageRenderer` captures the whole thing rather than
 /// a clipped/scrolled slice).
 struct StatsPanelBody: View {
@@ -76,7 +73,6 @@ struct StatsPanelBody: View {
 
     private var availablePanes: [StatsPane] {
         var panes: [StatsPane] = [.sessions, .usage]
-        if env.preferences.aiActivityAnalysisEnabled { panes.append(.activity) }
         if gitInPanel { panes.append(.git) }
         return panes
     }
@@ -98,14 +94,10 @@ struct StatsPanelBody: View {
                 switch effectivePane {
                 case .sessions: SessionListView(mode: export.map { .export($0.usage.period) } ?? .interactive)
                 case .usage: UsageView(mode: export.map { .export($0.usage) } ?? .interactive)
-                case .activity: AIActivityView(mode: export.map { .export($0.activity) } ?? .interactive)
                 case .git: GitActivityView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: isExport ? nil : .infinity)
-        }
-        .onChange(of: env.preferences.aiActivityAnalysisEnabled) { _, enabled in
-            if !enabled && pane == .activity { pane = .usage }
         }
         .onChange(of: gitInPanel) { _, inPanel in
             if !inPanel && pane == .git { pane = .usage }

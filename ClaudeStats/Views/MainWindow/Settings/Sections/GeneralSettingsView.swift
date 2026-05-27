@@ -14,18 +14,18 @@ struct GeneralSettingsView: View {
             SettingGroup(title: "Startup") {
                 VStack(spacing: 0) {
                     SettingRow(title: "Launch at login",
-                               description: "Open Claude Stats automatically when you log in to your Mac.") {
+                               description: "Open Codex Statistics automatically when you log in to your Mac.") {
                         Toggle("", isOn: $launchAtLogin)
                             .labelsHidden()
-                            .toggleStyle(.switch)
+                            .toggleStyle(.appSwitch)
                     }
                     .onChange(of: launchAtLogin) { _, newValue in LaunchAtLogin.setEnabled(newValue) }
                     SettingRowDivider()
                     SettingRow(title: "Open main window on launch",
-                               description: "Show the main window when Claude Stats starts, including when you double-click the app.") {
+                               description: "Show the main window when Codex Statistics starts, including when you double-click the app.") {
                         Toggle("", isOn: $prefs.openMainWindowOnLaunch)
                             .labelsHidden()
-                            .toggleStyle(.switch)
+                            .toggleStyle(.appSwitch)
                     }
                 }
                 .settingCard()
@@ -34,14 +34,15 @@ struct GeneralSettingsView: View {
             SettingGroup(title: "Language") {
                 VStack(spacing: 0) {
                     SettingRow(title: "App language",
-                               description: "Choose the language Claude Stats uses after the next restart.") {
-                        Picker("", selection: $prefs.appLanguagePreference) {
-                            ForEach(AppLanguagePreference.allCases) { language in
-                                Text(language.displayName()).tag(language)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(maxWidth: 170)
+                               description: "Choose the language Codex Statistics uses after the next restart.") {
+                        AppSelect(
+                            .localized("App language"),
+                            selection: $prefs.appLanguagePreference,
+                            options: AppLanguagePreference.allCases.map { language in
+                                AppSelectOption(value: language, title: .verbatim(language.displayName()))
+                            },
+                            width: 170
+                        )
                     }
                     .onChange(of: prefs.appLanguagePreference) { _, _ in
                         languageRestartNoticeVisible = true
@@ -58,17 +59,35 @@ struct GeneralSettingsView: View {
                 .settingCard()
             }
 
+            SettingGroup(title: "Appearance") {
+                VStack(spacing: 0) {
+                    SettingRow(title: "Color mode",
+                               description: "Choose whether Codex Statistics follows macOS or uses a fixed light/dark appearance.") {
+                        AppSelect(
+                            .localized("Color mode"),
+                            selection: $prefs.appearancePreference,
+                            options: AppAppearancePreference.allCases.map { mode in
+                                AppSelectOption(value: mode, title: .verbatim(mode.displayName))
+                            },
+                            width: 150
+                        )
+                    }
+                }
+                .settingCard()
+            }
+
             SettingGroup(title: "Refresh") {
                 VStack(spacing: 0) {
                     SettingRow(title: "Refresh every",
-                               description: "How often Claude Stats re-scans your session logs in the background.") {
-                        Picker("", selection: $prefs.autoRefreshMinutes) {
-                            ForEach(Self.refreshOptions, id: \.self) { minutes in
-                                Text(L10n.refreshInterval(minutes: minutes)).tag(minutes)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(maxWidth: 160)
+                               description: "How often Codex Statistics re-scans your session logs in the background.") {
+                        AppSelect(
+                            .localized("Refresh every"),
+                            selection: $prefs.autoRefreshMinutes,
+                            options: Self.refreshOptions.map { minutes in
+                                AppSelectOption(value: minutes, title: .verbatim(L10n.refreshInterval(minutes: minutes)))
+                            },
+                            width: 160
+                        )
                     }
                     .onChange(of: prefs.autoRefreshMinutes) { _, _ in env.applyAutoRefreshSetting() }
                 }
@@ -81,43 +100,33 @@ struct GeneralSettingsView: View {
                                description: "When off, the app starts on the first enabled platform each launch instead of the one you last viewed.") {
                         Toggle("", isOn: $prefs.rememberSelectedProvider)
                             .labelsHidden()
-                            .toggleStyle(.switch)
+                            .toggleStyle(.appSwitch)
                     }
                     SettingRowDivider()
                     SettingRow(title: "Detail edge fade",
                                description: "Blend the main detail pane into the sidebar with a soft boundary fade.") {
                         Toggle("", isOn: $prefs.detailPanelBoundaryFalloffEnabled)
                             .labelsHidden()
-                            .toggleStyle(.switch)
+                            .toggleStyle(.appSwitch)
                     }
                     SettingRowDivider()
                     SettingRow(title: "Include cache reads in token counts",
                                description: "Some APIs re-report cached context on assistant turns, so the same tokens can be counted many times. Turn off to show only \u{201C}new\u{201D} traffic (input + output + cache writes). Estimated cost is unaffected.") {
                         Toggle("", isOn: $prefs.includeCacheInTokens)
                             .labelsHidden()
-                            .toggleStyle(.switch)
+                            .toggleStyle(.appSwitch)
                     }
                     SettingRowDivider()
                     SettingRow(title: "Cost mode",
                                description: "API estimate uses standard first-party token prices. Detailed billing is kept for compatible imported data and currently matches the standard Codex estimate.") {
-                        Picker("", selection: $prefs.costEstimationMode) {
-                            ForEach(CostEstimationMode.allCases) { mode in
-                                Text(mode.displayName).tag(mode)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(maxWidth: 170)
-                    }
-                    SettingRowDivider()
-                    SettingRow(title: "API key storage",
-                               description: "Where API Provider Switcher saves provider keys. JSON keeps them with provider data; Keychain stores references in the library.") {
-                        Picker("", selection: $prefs.apiProviderKeyStorageMode) {
-                            ForEach(APIProviderKeyStorageMode.allCases) { mode in
-                                Text(mode.displayName).tag(mode)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(maxWidth: 150)
+                        AppSelect(
+                            .localized("Cost mode"),
+                            selection: $prefs.costEstimationMode,
+                            options: CostEstimationMode.allCases.map { mode in
+                                AppSelectOption(value: mode, title: .localized(mode.displayName))
+                            },
+                            width: 170
+                        )
                     }
                 }
                 .settingCard()

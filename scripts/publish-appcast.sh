@@ -28,8 +28,8 @@ BUILD="${2:?usage: publish-appcast.sh <version> <build> <tag>}"
 TAG="${3:?usage: publish-appcast.sh <version> <build> <tag>}"
 : "${SPARKLE_PRIVATE_ED_KEY:?SPARKLE_PRIVATE_ED_KEY is not set}"
 
-REPO="1pitaph/claude-stats-releases"
-FEED_URL="https://1pitaph.github.io/claude-stats-releases/appcast.xml"
+REPO="1pitaph/claude-stats"
+FEED_URL="https://1pitaph.github.io/claude-stats/appcast.xml"
 SPARKLE_TOOLS_VERSION="2.9.1"   # the version of Sparkle CLI tools to download
 SPARKLE_MAX_DELTAS="${SPARKLE_MAX_DELTAS:-3}"
 SPARKLE_DELTA_FORMAT_VERSION="${SPARKLE_DELTA_FORMAT_VERSION:-4}"
@@ -63,10 +63,10 @@ gh_warning() {
 # Sparkle updates from a .zip when one is present (no disk image to mount),
 # otherwise from the .dmg (notarized + stapled in the signed release path).
 ARCHIVE=""
-for candidate in "dist/ClaudeStats-$VERSION.zip" "dist/ClaudeStats-$VERSION.dmg"; do
+for candidate in "dist/CodexStatistics-$VERSION.zip" "dist/CodexStatistics-$VERSION.dmg"; do
     if [[ -f "$candidate" ]]; then ARCHIVE="$candidate"; break; fi
 done
-[[ -n "$ARCHIVE" ]] || { echo "error: no dist/ClaudeStats-$VERSION.{zip,dmg} to sign" >&2; exit 1; }
+[[ -n "$ARCHIVE" ]] || { echo "error: no dist/CodexStatistics-$VERSION.{zip,dmg} to sign" >&2; exit 1; }
 ARCHIVE_NAME="$(basename "$ARCHIVE")"
 echo "==> Signing $ARCHIVE for the appcast"
 
@@ -270,7 +270,7 @@ while IFS=$'\t' read -r OLD_BUILD OLD_DISPLAY OLD_URL; do
         continue
     fi
 
-    DELTA_NAME="ClaudeStats-$BUILD-from-$OLD_BUILD.delta"
+    DELTA_NAME="CodexStatistics-$BUILD-from-$OLD_BUILD.delta"
     DELTA_PATH="dist/$DELTA_NAME"
     PATCHED_DIR="$WORK/patched-$OLD_BUILD"
     PATCHED_APP="$PATCHED_DIR/$(basename "$CURRENT_APP")"

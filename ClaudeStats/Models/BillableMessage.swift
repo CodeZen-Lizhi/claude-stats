@@ -26,3 +26,5 @@ struct BillableMessage: Sendable, Hashable {
     /// contribute to totals but never appear in the timeline.
     let timestamp: Date?
 }
+
+extension BillableMessage: Codable {}

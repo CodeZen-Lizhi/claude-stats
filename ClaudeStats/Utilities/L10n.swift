@@ -63,6 +63,15 @@ enum L10n {
               locale: locale)
     }
 
+    static func requestCount(_ value: Int, locale: Locale? = nil) -> String {
+        count(value,
+              singularKey: "count.request.one",
+              pluralKey: "count.request.other",
+              singularDefault: "%d request",
+              pluralDefault: "%d requests",
+              locale: locale)
+    }
+
     static func tokenCount(_ value: Int, locale: Locale? = nil) -> String {
         count(value,
               singularKey: "count.token.one",
@@ -74,7 +83,7 @@ enum L10n {
 
     static func restartLanguageNotice(locale: Locale? = nil) -> String {
         string("settings.language.restart_required",
-               defaultValue: "Restart Claude Stats to apply this language.",
+               defaultValue: "Restart Codex Statistics to apply this language.",
                locale: locale)
     }
 }

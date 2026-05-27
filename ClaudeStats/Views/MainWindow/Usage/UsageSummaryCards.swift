@@ -15,9 +15,14 @@ struct UsageSummaryCards: View {
                     card(L10n.string("usage.stat.sessions", defaultValue: "SESSIONS"), "\(summary.sessionCount)")
                 }
                 GridRow {
-                    card(L10n.string("usage.stat.messages", defaultValue: "MESSAGES"), Format.tokens(summary.messageCount))
+                    card(L10n.string("usage.stat.requests", defaultValue: "REQUESTS"), Format.tokens(summary.messageCount))
+                    card(L10n.string("usage.stat.input", defaultValue: "INPUT"), Format.tokens(summary.totalUsage.inputTokens))
+                    card(L10n.string("usage.stat.output", defaultValue: "OUTPUT"), Format.tokens(summary.totalUsage.outputTokens))
+                }
+                GridRow {
                     card(L10n.string("usage.stat.cache_hit", defaultValue: "CACHE HIT"), cacheHitRate.map(Format.percent) ?? "--")
                     card(L10n.string("usage.stat.cached", defaultValue: "CACHED"), Format.tokens(summary.totalUsage.cacheReadTokens))
+                    card(L10n.string("usage.stat.cache_write", defaultValue: "CACHE WRITE"), Format.tokens(summary.totalUsage.cacheCreationTotalTokens))
                 }
             }
 
@@ -28,7 +33,11 @@ struct UsageSummaryCards: View {
                 }
                 GridRow {
                     card(L10n.string("usage.stat.sessions", defaultValue: "SESSIONS"), "\(summary.sessionCount)")
-                    card(L10n.string("usage.stat.messages", defaultValue: "MESSAGES"), Format.tokens(summary.messageCount))
+                    card(L10n.string("usage.stat.requests", defaultValue: "REQUESTS"), Format.tokens(summary.messageCount))
+                }
+                GridRow {
+                    card(L10n.string("usage.stat.input", defaultValue: "INPUT"), Format.tokens(summary.totalUsage.inputTokens))
+                    card(L10n.string("usage.stat.output", defaultValue: "OUTPUT"), Format.tokens(summary.totalUsage.outputTokens))
                 }
                 GridRow {
                     card(L10n.string("usage.stat.cache_hit", defaultValue: "CACHE HIT"), cacheHitRate.map(Format.percent) ?? "--")

@@ -7,7 +7,7 @@ name: Release
 #   1. Writes the tag's version into project.yml (MARKETING_VERSION) and uses the
 #      workflow run number as the build number (CURRENT_PROJECT_VERSION). The app's
 #      Settings ▸ About reads these from the bundle at runtime, so it updates itself.
-#   2. Builds a Release Claude Stats.app and packages it:
+#   2. Builds a Release Codex Statistics.app and packages it:
 #        • if the Developer ID signing secrets below are configured -> a SIGNED +
 #          NOTARIZED + stapled DMG;
 #        • otherwise -> an ad-hoc-signed (un-notarized) DMG *and* a .zip. Gatekeeper
@@ -15,14 +15,13 @@ name: Release
 #   3. If SPARKLE_PRIVATE_ED_KEY is set, EdDSA-signs the archive, creates delta
 #      updates from recent appcast releases when possible, and writes an updated
 #      appcast.xml for GitHub Pages.
-#   4. Creates GitHub Releases for the tag in both this source repo and the
-#      PUBLIC releases repo (1pitaph/claude-stats-releases), with the same
-#      artifact(s), including deltas, attached. The source repo release is for
-#      internal/project history; the public repo release keeps the binaries
-#      downloadable by anyone.
-#   5. Publishes the updated appcast.xml to the gh-pages branch of the public
-#      releases repo (served at SUFeedURL by GitHub Pages) so existing installs
-#      can auto-update.
+#   4. Creates a GitHub Release for the tag in this public source repo, with the
+#      packaged app and any Sparkle deltas attached.
+#   5. Publishes the updated appcast.xml to this repo's gh-pages branch (served
+#      at SUFeedURL by GitHub Pages) so installs can auto-update.
+#      During the migration away from 1pitaph/claude-stats-releases, the same
+#      appcast is also mirrored to that legacy repo's gh-pages branch when
+#      RELEASES_REPO_TOKEN is present. No binaries are uploaded there.
 #   6. When the tag points at master history, commits the bumped project.yml and
 #      release history files back to master. Tags from feature/dev branches skip
 #      this write-back so branch builds do not accidentally advance master.
@@ -37,12 +36,12 @@ name: Release
 #   NOTARY_APPLE_ID           Apple ID email used for notarization
 #   NOTARY_PASSWORD           app-specific password for that Apple ID (appleid.apple.com)
 #
-# Required secret for publishing to the public releases repo:
+# Optional migration secret:
 #   RELEASES_REPO_TOKEN       fine-grained PAT scoped to 1pitaph/claude-stats-releases
-#                             with Contents: Read and write. The built-in
-#                             GITHUB_TOKEN writes the source repo Release, so a
-#                             cross-repo token is only required for the public
-#                             Release upload and the gh-pages deploy.
+#                             with Contents: Read and write. When present, the
+#                             workflow mirrors appcast.xml to the legacy Pages
+#                             branch so old builds can discover the migration
+#                             release. This token is not used for release assets.
 #
 # Auto-update secret (independent of the signing secrets above):
 #   SPARKLE_PRIVATE_ED_KEY    base64 EdDSA private key from Sparkle's
@@ -50,8 +49,8 @@ name: Release
 #                             key goes in Info.plist as SUPublicEDKey. Without
 #                             this secret the appcast step is skipped (releases
 #                             still publish, but installed apps won't see them).
-#                             Requires GitHub Pages enabled for the gh-pages
-#                             branch on the public releases repo.
+#                             Requires GitHub Pages enabled for this repo's
+#                             gh-pages branch.
 #
 # Git language stats runtime:
 #   The workflow builds a relocatable GitTools runtime from pinned Ruby,
@@ -67,6 +66,15 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      release_ref:
+        description: "Branch, tag, or commit to package"
+        required: true
+        default: "codex/dev"
+      version:
+        description: "Semver version without leading v"
+        required: true
 
 permissions:
   contents: write
@@ -82,42 +90,55 @@ jobs:
       - name: Checkout release ref
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref }}
           fetch-depth: 0
           submodules: recursive
+          token: ${{ secrets.SOURCE_REPO_TOKEN || github.token }}
 
       - name: Detect whether release ref is on master
         id: release_source
         run: |
           set -euo pipefail
           git fetch --no-tags origin master
-          TAG_COMMIT="$(git rev-list -n 1 "$GITHUB_REF_NAME")"
+          TAG_COMMIT="$(git rev-parse HEAD)"
           if git merge-base --is-ancestor "$TAG_COMMIT" origin/master; then
             echo "on_master=true" >> "$GITHUB_OUTPUT"
-            echo "Release tag is on master; version write-back is enabled."
+            echo "Release ref is on master; version write-back is enabled."
           else
             echo "on_master=false" >> "$GITHUB_OUTPUT"
-            echo "Release tag is not on master; version write-back will be skipped."
+            echo "Release ref is not on master; version write-back will be skipped."
           fi
 
       - name: Select Xcode
-        # Pinned, NOT `latest-stable`: the macos-26 image also preinstalls 26.5
-        # beta, which can be removed or replaced without warning. 26.4.1 is the
-        # newest stable Xcode that fixes the Icon Composer actool crash.
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: "26.4.1"
+        run: |
+          set -euo pipefail
+          for candidate in /Applications/Xcode_26.4.1.app /Applications/Xcode_26.4.app /Applications/Xcode.app; do
+            if [[ -d "$candidate" ]]; then
+              sudo xcode-select -s "$candidate/Contents/Developer"
+              xcodebuild -version
+              exit 0
+            fi
+          done
+          echo "::error::No supported Xcode install found."
+          ls -la /Applications | sed -n '/Xcode/p' || true
+          exit 1
 
       - name: Resolve version from tag
         id: version
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::tag '$GITHUB_REF_NAME' is not v<MAJOR>.<MINOR>.<PATCH>"
+            echo "::error::version '$VERSION' is not <MAJOR>.<MINOR>.<PATCH>"
             exit 1
           fi
+          TAG_NAME="v$VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "build=$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Detect signing secrets
         id: signing
@@ -213,7 +234,7 @@ jobs:
         run: bash scripts/bump-version.sh "${{ steps.version.outputs.version }}" "${{ steps.version.outputs.build }}"
 
       - name: Generate in-app release history
-        run: python3 scripts/generate-release-history.py --tag "$GITHUB_REF_NAME" --write-history-json
+        run: python3 scripts/generate-release-history.py --tag "${{ steps.version.outputs.tag }}" --write-history-json
 
       - name: Build GitTools runtime
         run: |
@@ -228,7 +249,7 @@ jobs:
           LINGUIST_RUNTIME_SOURCE: ${{ runner.temp }}/gittools-runtime
         run: |
           if [[ "$(uname -m)" != "arm64" ]]; then
-            echo "::error::Claude Stats releases must run on Apple Silicon runners."
+            echo "::error::Codex Statistics releases must run on Apple Silicon runners."
             exit 1
           fi
           # Defensive: actool talks to these XPC agents and they can be left in a
@@ -237,11 +258,9 @@ jobs:
           bash scripts/release-build.sh "${{ steps.version.outputs.version }}"
 
       - name: Generate release notes from source commits
-        # GitHub's auto-generated notes come from the *target* repo's history,
-        # which on `claude-stats-releases` is just the README — useless. Build
-        # the notes here from the private source repo's commits between this tag
-        # and the previous semver tag (or from the start if this is the first
-        # release). `actions/checkout` with fetch-depth: 0 above fetched all tags.
+        # Build notes from source commits between this tag and the previous semver
+        # tag (or from the start if this is the first release). `actions/checkout`
+        # with fetch-depth: 0 above fetched all tags.
         #
         # We emit two files tuned for different surfaces:
         #   • release_notes.md   → full GitHub Release body from commit subjects + bodies
@@ -250,7 +269,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/generate-release-notes.py \
-            --tag "$GITHUB_REF_NAME" \
+            --tag "${{ steps.version.outputs.tag }}" \
             --markdown-out release_notes.md \
             --sparkle-html-out release_notes.html
 
@@ -263,38 +282,38 @@ jobs:
         if: steps.sparkle.outputs.enabled == 'true'
         env:
           SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
-        run: bash scripts/publish-appcast.sh "${{ steps.version.outputs.version }}" "${{ steps.version.outputs.build }}" "${{ github.ref_name }}"
+        run: bash scripts/publish-appcast.sh "${{ steps.version.outputs.version }}" "${{ steps.version.outputs.build }}" "${{ steps.version.outputs.tag }}"
 
       - name: Create GitHub Release (in source repo)
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ github.ref_name }}
-          files: dist/*
-          body_path: release_notes.md
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          RELEASE_TARGET="$(git rev-parse HEAD)"
+          gh release delete "$TAG_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --yes 2>/dev/null || true
+          gh release create "$TAG_NAME" \
+            dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$RELEASE_TARGET" \
+            --notes-file release_notes.md
 
-      - name: Create GitHub Release (in public releases repo)
-        uses: softprops/action-gh-release@v3
-        with:
-          repository: 1pitaph/claude-stats-releases
-          token: ${{ secrets.RELEASES_REPO_TOKEN }}
-          tag_name: ${{ github.ref_name }}
-          files: dist/*
-          body_path: release_notes.md
-
-      - name: Deploy appcast to GitHub Pages (public releases repo)
+      - name: Deploy appcast to GitHub Pages
         if: steps.sparkle.outputs.enabled == 'true'
         env:
-          RELEASES_REPO_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
+          PAGES_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
-          if [[ -z "$RELEASES_REPO_TOKEN" ]]; then
-            echo "::error::RELEASES_REPO_TOKEN is required to publish the appcast."
+          if [[ -z "$PAGES_TOKEN" ]]; then
+            echo "::error::GITHUB_TOKEN is required to publish the appcast."
             exit 1
           fi
 
-          PAGES_REPO="https://x-access-token:${RELEASES_REPO_TOKEN}@github.com/1pitaph/claude-stats-releases.git"
-          PAGES_DIR="$RUNNER_TEMP/claude-stats-releases-pages"
+          PAGES_REPO="https://x-access-token:${PAGES_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          PAGES_DIR="$RUNNER_TEMP/claude-stats-pages"
           rm -rf "$PAGES_DIR"
 
           if git ls-remote --exit-code --heads "$PAGES_REPO" gh-pages >/dev/null 2>&1; then
@@ -318,7 +337,47 @@ jobs:
             exit 0
           fi
 
-          git commit -m "chore: publish appcast for $GITHUB_REF_NAME"
+          git commit -m "chore: publish appcast for ${{ steps.version.outputs.tag }}"
+          git push origin gh-pages
+
+      - name: Mirror transitional appcast to legacy GitHub Pages
+        if: steps.sparkle.outputs.enabled == 'true'
+        env:
+          RELEASES_REPO_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$RELEASES_REPO_TOKEN" ]]; then
+            echo "::warning::RELEASES_REPO_TOKEN is not set — skipping legacy appcast mirror. Older builds that still use the old SUFeedURL will not see this migration release."
+            exit 0
+          fi
+
+          PAGES_REPO="https://x-access-token:${RELEASES_REPO_TOKEN}@github.com/1pitaph/claude-stats-releases.git"
+          PAGES_DIR="$RUNNER_TEMP/claude-stats-releases-pages"
+          rm -rf "$PAGES_DIR"
+
+          if git ls-remote --exit-code --heads "$PAGES_REPO" gh-pages >/dev/null 2>&1; then
+            git clone --depth 1 --branch gh-pages "$PAGES_REPO" "$PAGES_DIR"
+          else
+            git clone --depth 1 "$PAGES_REPO" "$PAGES_DIR"
+            cd "$PAGES_DIR"
+            git checkout --orphan gh-pages
+            git rm -rf . >/dev/null 2>&1 || true
+          fi
+
+          cd "$PAGES_DIR"
+          rsync -a --checksum "$GITHUB_WORKSPACE/_site/" "$PAGES_DIR/"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+
+          if [[ -z "$(git status --porcelain)" ]]; then
+            echo "No legacy GitHub Pages changes to publish."
+            exit 0
+          fi
+
+          git commit -m "chore: mirror appcast for $GITHUB_REF_NAME"
           git push origin gh-pages
 
       - name: Commit version bump back to master

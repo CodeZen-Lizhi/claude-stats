@@ -61,14 +61,14 @@ struct MainSystemMonitorView: View {
             }
             .buttonStyle(.bordered)
 
-            Text(env.preferences.systemMonitorRefreshRate == .off ? "Manual refresh" : "Every \(env.preferences.systemMonitorRefreshRate.displayName)")
+            Text(refreshCadenceLabel)
                 .font(.sora(11))
                 .foregroundStyle(Color.stxMuted)
 
             Spacer()
 
             if let timestamp = vm.snapshot?.timestamp {
-                Text("Updated \(timestamp.formatted(date: .omitted, time: .standard))")
+                Text(L10n.format("system_monitor.updated", defaultValue: "Updated %@", timestamp.formatted(date: .omitted, time: .standard)))
                     .font(.sora(11).monospacedDigit())
                     .foregroundStyle(Color.stxMuted)
             } else {
@@ -77,6 +77,17 @@ struct MainSystemMonitorView: View {
                     .foregroundStyle(Color.stxMuted)
             }
         }
+    }
+
+    private var refreshCadenceLabel: String {
+        if env.preferences.systemMonitorRefreshRate == .off {
+            return L10n.string("system_monitor.manual_refresh", defaultValue: "Manual refresh")
+        }
+        return L10n.format(
+            "system_monitor.every",
+            defaultValue: "Every %@",
+            env.preferences.systemMonitorRefreshRate.displayName
+        )
     }
 
     private var cards: some View {

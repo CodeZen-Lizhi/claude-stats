@@ -26,34 +26,6 @@
 	<string>NSApplication</string>
 	<key>NSHumanReadableCopyright</key>
 	<string></string>
-	<key>NSAppleEventsUsageDescription</key>
-	<string>Notch Island media controls may use Apple Events for local music apps.</string>
-	<key>NSAppleMusicUsageDescription</key>
-	<string>Notch Island can read local Apple Music playback metadata when the media module is enabled.</string>
-	<key>NSAudioCaptureUsageDescription</key>
-	<string>Notch Island can capture local audio levels for visualizer modules when audio features are enabled.</string>
-	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Notch Island can show Bluetooth audio device status when enabled.</string>
-	<key>NSCalendarsUsageDescription</key>
-	<string>Notch Island can show calendar and reminder previews when enabled.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>Notch Island can show camera privacy indicators when enabled.</string>
-	<key>NSContactsUsageDescription</key>
-	<string>Claude Stats may request contacts access for enabled Notch Island modules.</string>
-	<key>NSLocationUsageDescription</key>
-	<string>Claude Stats may request location access for enabled Notch Island modules.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Notch Island can show microphone privacy indicators when enabled.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Claude Stats may request photo library access for enabled Notch Island modules.</string>
-	<key>NSRemindersUsageDescription</key>
-	<string>Notch Island can show reminders alongside calendar previews when enabled.</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Claude Stats may request speech recognition access for enabled Notch Island modules.</string>
-	<key>NSSystemAdministrationUsageDescription</key>
-	<string>Claude Stats may request elevated privileges for helper tools when explicitly enabled.</string>
-	<key>NSScreenCaptureUsageDescription</key>
-	<string>Claude Stats can use screen recording for Notch Island recording indicators and screen assistant modules when enabled.</string>
 	<!--
 	  Sparkle auto-update. SUPublicEDKey is the EdDSA *public* key produced by
 	  Sparkle's `generate_keys` (the matching private key lives only in the
@@ -61,7 +33,7 @@
 	  below after running `generate_keys` — see AGENTS.md ▸ Releasing.
 	-->
 	<key>SUFeedURL</key>
-	<string>https://1pitaph.github.io/claude-stats-releases/appcast.xml</string>
+	<string>https://1pitaph.github.io/claude-stats/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>q08NR2AvmmN/WuX7o7jQmYMsaL/5bPmiX/xlo3flCZY=</string>
 	<key>SUEnableAutomaticChecks</key>

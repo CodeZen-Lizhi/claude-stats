@@ -22,7 +22,6 @@ struct SettingsSidebarColumn: View {
             ForEach(SettingsSection.allCases) { s in
                 SidebarRow(title: s.title,
                            symbol: s.symbol,
-                           assetName: s.assetName,
                            isSelected: section == s) { section = s }
             }
 

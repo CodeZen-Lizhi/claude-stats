@@ -9,7 +9,7 @@ and republishes it to the gh-pages branch.
 Usage:
   update-appcast.py \
       --version 1.2.0 --build 42 \
-      --url https://github.com/1pitaph/claude-stats-releases/releases/download/v1.2.0/ClaudeStats-1.2.0.zip \
+      --url https://github.com/1pitaph/claude-stats/releases/download/v1.2.0/CodexStatistics-1.2.0.zip \
       --enclosure-attrs 'sparkle:edSignature="..." length="12345"' \
       --release-notes-file release_notes.html \
       --min-system-version 14.0.0 \
@@ -33,14 +33,14 @@ import re
 import sys
 import time
 
-FEED_URL = "https://1pitaph.github.io/claude-stats-releases/appcast.xml"
+FEED_URL = "https://1pitaph.github.io/claude-stats/appcast.xml"
 
 SKELETON = """<?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
   <channel>
-    <title>Claude Stats</title>
+    <title>Codex Statistics</title>
     <link>{feed}</link>
-    <description>Most recent updates to Claude Stats.</description>
+    <description>Most recent updates to Codex Statistics.</description>
     <language>en</language>
   </channel>
 </rss>
@@ -65,6 +65,7 @@ DELTA_ENCLOSURE_TEMPLATE = """        <enclosure url="{url}" sparkle:deltaFrom="
 """
 
 LENGTH_ATTRIBUTE_RE = re.compile(r'(?:^|\s)length="(?P<length>\d+)"')
+UPDATE_HEADING_RE = re.compile(r"(<h([1-6])[^>]*>\s*本次更新\s*)(</h\2>)", re.IGNORECASE)
 
 
 def enclosure_length(enclosure_attrs: str) -> int | None:
@@ -91,75 +92,47 @@ def format_byte_count(byte_count: int) -> str:
     return f"{byte_count} bytes"
 
 
-def delta_display_name(delta: dict[str, str]) -> str:
-    display = delta.get("deltaFromDisplay")
-    build = delta["deltaFrom"]
-    if display:
-        return f"{display} (build {build})"
-    return f"build {build}"
+def render_size_pill(size: str, class_name: str, version: str | None = None) -> str:
+    attrs = f'class="cs-update-size-pill {html.escape(class_name, quote=True)}"'
+    if version is not None:
+        attrs += f' data-sparkle-version="{html.escape(version, quote=True)}"'
+    return f"<span {attrs}>{html.escape(size)}</span>"
 
 
-def render_size_row(label: str, detail: str, size: str) -> str:
-    escaped_label = html.escape(label)
-    escaped_detail = html.escape(detail)
-    escaped_size = html.escape(size)
-    return "\n".join(
-        [
-            '      <tr style="border-top: 1px solid #d7deea;">',
-            f'        <td style="padding: 8px 0; color: #2f3b52;">{escaped_label}</td>',
-            (
-                '        <td style="padding: 8px 12px; color: #697386; '
-                f'font-size: 12px;">{escaped_detail}</td>'
-            ),
-            (
-                '        <td style="padding: 8px 0; color: #172033; font-weight: 700; '
-                f'text-align: right; white-space: nowrap;">{escaped_size}</td>'
-            ),
-            "      </tr>",
-        ]
-    )
-
-
-def render_download_size_notes(enclosure_attrs: str, deltas: list[dict[str, str]]) -> str:
+def render_update_size_pills(enclosure_attrs: str, deltas: list[dict[str, str]]) -> str:
     full_length = enclosure_length(enclosure_attrs)
     if full_length is None:
         raise ValueError("full enclosureAttrs must include length")
 
-    rows: list[str] = []
+    pills: list[str] = []
     for delta in deltas:
         delta_length = enclosure_length(delta["enclosureAttrs"])
         if delta_length is None:
             continue
-        from_display = delta_display_name(delta)
         size = format_byte_count(delta_length)
-        rows.append(render_size_row("增量更新包", f"从 {from_display} 更新", size))
+        pills.append(render_size_pill(size, "cs-update-size-delta", delta["deltaFrom"]))
 
     full_size = format_byte_count(full_length)
-    if deltas:
-        rows.append(render_size_row("完整安装包", "较旧版本会自动回退下载", full_size))
-        hint = "如果当前版本匹配可用增量包，将优先下载较小的增量更新；否则 Sparkle 会下载完整安装包。"
-    else:
-        rows.append(render_size_row("完整安装包", "本次更新下载内容", full_size))
-        hint = "本次更新将下载完整安装包。"
+    pills.append(render_size_pill(full_size, "cs-update-size-full"))
 
+    return f'<span class="cs-update-size-pills">{"".join(pills)}</span>'
+
+
+def inject_update_size_pills(notes_html: str, enclosure_attrs: str, deltas: list[dict[str, str]]) -> str:
+    pills = render_update_size_pills(enclosure_attrs, deltas)
+
+    def add_pills(match: re.Match[str]) -> str:
+        return f"{match.group(1)}{pills}{match.group(3)}"
+
+    updated_notes, count = UPDATE_HEADING_RE.subn(add_pills, notes_html, count=1)
+    if count:
+        return updated_notes
     return "\n".join(
         [
-            (
-                '<div style="margin: 0 0 18px; padding: 14px 16px; border: 1px solid #cdd9ed; '
-                'border-radius: 12px; background: #f6f9ff;">'
-            ),
-            (
-                '  <p style="margin: 0 0 4px; color: #172033; font-size: 15px; '
-                'font-weight: 700;">下载大小</p>'
-            ),
-            (
-                '  <p style="margin: 0 0 12px; color: #53627c; font-size: 12px; '
-                f'line-height: 1.5;">{html.escape(hint)}</p>'
-            ),
-            '  <table style="width: 100%; border-collapse: collapse; font-size: 13px; line-height: 1.35;">',
-            *rows,
-            "  </table>",
+            '<div class="cs-update-size-fallback">',
+            pills,
             "</div>",
+            notes_html,
         ]
     )
 
@@ -187,16 +160,32 @@ def render_appcast_notes_html(
     enclosure_attrs: str,
     deltas: list[dict[str, str]],
 ) -> str:
-    size_notes = render_download_size_notes(enclosure_attrs, deltas)
+    notes_html = inject_update_size_pills(notes_html, enclosure_attrs, deltas)
     release_notes = render_release_notes_section(notes_html)
-    body = "\n".join(part for part in (size_notes, release_notes) if part)
     return "\n".join(
         [
             (
-                '<div style="font-family: -apple-system, BlinkMacSystemFont, Helvetica, Arial, '
-                'sans-serif; color: #1f2937;">'
+                '<div class="cs-appcast-notes" style="font-family: -apple-system, BlinkMacSystemFont, '
+                'Helvetica, Arial, sans-serif; color: #1f2937;">'
             ),
-            body,
+            "  <style>",
+            (
+                "    .cs-update-size-fallback { margin: 0 0 14px; }"
+            ),
+            (
+                "    .cs-update-size-pills { display: inline-flex; align-items: center; "
+                "margin-left: 10px; min-width: 0; vertical-align: middle; }"
+            ),
+            (
+                "    .cs-update-size-pill { display: inline-block; padding: 4px 10px; "
+                "border: 0; border-radius: 999px; background: #eaf1ff; color: #172033; "
+                "font-size: 12px; font-weight: 700; line-height: 1.2; white-space: nowrap; }"
+            ),
+            "    .cs-update-size-delta { display: none; }",
+            "    .cs-update-size-delta.sparkle-installed-version { display: inline-block; }",
+            "    .cs-update-size-delta.sparkle-installed-version ~ .cs-update-size-full { display: none; }",
+            "  </style>",
+            release_notes,
             "</div>",
         ]
     )

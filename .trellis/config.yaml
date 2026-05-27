@@ -88,13 +88,3 @@ max_journal_lines: 2000
 #
 # codex:
 #   dispatch_mode: inline  # or "sub-agent" to dispatch trellis-* sub-agents
-
-# Auto-detected monorepo packages
-packages:
-  ThirdParty/Atoll:
-    path: ThirdParty/Atoll
-    type: submodule
-  ThirdParty/CppJieba:
-    path: ThirdParty/CppJieba
-    type: submodule
-default_package: ThirdParty/Atoll

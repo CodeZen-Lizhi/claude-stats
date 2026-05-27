@@ -26,9 +26,8 @@ struct DashboardViewModelTests {
         #expect(viewModel.stats.favoriteModel == DashboardModelKey(provider: .codex, model: "shared-model"))
         #expect(viewModel.modelBreakdown.map(\.key) == [
             DashboardModelKey(provider: .codex, model: "shared-model"),
-            DashboardModelKey(provider: .codex, model: "shared-model"),
         ])
-        #expect(viewModel.modelBreakdown.map(\.usage.total) == [250, 100])
+        #expect(viewModel.modelBreakdown.map(\.usage.total) == [350])
         #expect(viewModel.modelTrend.models == viewModel.modelBreakdown.map(\.id))
     }
 
@@ -88,6 +87,28 @@ struct DashboardViewModelTests {
         #expect(viewModel.modelTrend.dataRevisionID != last7Revision)
     }
 
+    @MainActor
+    @Test("Event reload uses token timestamps and folds child sessions into parents")
+    func eventReloadUsesTimestampsAndParentSessionIDs() async {
+        let viewModel = DashboardViewModel(pricing: TestPricing.table)
+        viewModel.period = .today
+        let now = Date.now
+        let today = calendar.startOfDay(for: now)
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: today)!
+        let events = [
+            event("yesterday", sessionID: "parent", at: calendar.date(byAdding: .hour, value: 23, to: yesterday)!, tokens: 900),
+            event("parent-today", sessionID: "parent", at: calendar.date(byAdding: .hour, value: 1, to: today)!, tokens: 100),
+            event("child-today", sessionID: "child", parentSessionID: "parent", at: calendar.date(byAdding: .hour, value: 2, to: today)!, tokens: 50),
+        ]
+
+        await viewModel.reload(events: events)
+
+        #expect(viewModel.stats.sessions == 1)
+        #expect(viewModel.stats.messages == 2)
+        #expect(viewModel.stats.totalTokens == 150)
+        #expect(viewModel.heatmapCells.reduce(0) { $0 + $1.value } == 1_050)
+    }
+
     private func session(
         _ id: String,
         provider: ProviderKind,
@@ -129,6 +150,34 @@ struct DashboardViewModelTests {
             lastModified: when,
             fileSize: 1,
             stats: stats
+        )
+    }
+
+    private func event(
+        _ id: String,
+        sessionID: String,
+        parentSessionID: String? = nil,
+        at timestamp: Date,
+        tokens: Int
+    ) -> UsageLedgerEvent {
+        let usage = TokenUsage(
+            inputTokens: tokens,
+            outputTokens: 0,
+            cacheReadTokens: 0,
+            cacheCreation5mTokens: 0,
+            cacheCreation1hTokens: 0
+        )
+        return UsageLedgerEvent(
+            eventKey: id,
+            sessionID: sessionID,
+            provider: .codex,
+            model: "gpt-test",
+            timestamp: timestamp,
+            usage: usage,
+            cost: CostEstimate(standardAPI: Double(tokens) / 1_000_000),
+            sourcePath: "/tmp/\(sessionID).jsonl",
+            sequenceIndex: 0,
+            parentSessionID: parentSessionID
         )
     }
 }

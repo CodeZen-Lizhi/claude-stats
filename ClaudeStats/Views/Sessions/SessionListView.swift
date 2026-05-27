@@ -25,10 +25,14 @@ struct SessionListView: View {
                         .textFieldStyle(.plain)
                         .font(.sora(12))
                     Picker("Sort", selection: $vm.sortOrder) {
-                        ForEach(SessionListViewModel.SortOrder.allCases) { Text($0.displayName).tag($0) }
+                        ForEach(SessionListViewModel.SortOrder.allCases) { order in
+                            Text(order.displayName).tag(order)
+                        }
                     }
+                    .pickerStyle(.menu)
                     .labelsHidden()
-                    .fixedSize()
+                    .controlSize(.small)
+                    .frame(width: 126)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)

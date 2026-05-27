@@ -12,6 +12,28 @@ struct UsageSummaryTests {
                    cacheCreation5mTokens: 0, cacheCreation1hTokens: 0)
     }
 
+    private func event(
+        _ id: String,
+        sessionID: String = "session",
+        parentSessionID: String? = nil,
+        at timestamp: Date,
+        tokens count: Int
+    ) -> UsageLedgerEvent {
+        let usage = tokens(count)
+        return UsageLedgerEvent(
+            eventKey: id,
+            sessionID: sessionID,
+            provider: .codex,
+            model: "model-a",
+            timestamp: timestamp,
+            usage: usage,
+            cost: CostEstimate(standardAPI: Double(count) / 1_000_000),
+            sourcePath: "/tmp/\(sessionID).jsonl",
+            sequenceIndex: 0,
+            parentSessionID: parentSessionID
+        )
+    }
+
     /// A session whose activity and single timeline bucket both land on
     /// `dayStart + hour`.
     private func session(_ id: String, daysAgo n: Int, hour: Int, model: String, count: Int) -> Session {
@@ -63,6 +85,34 @@ struct UsageSummaryTests {
 
     private func model(_ name: String, count: Int) -> ModelUsage {
         ModelUsage(model: name, messageCount: 1, usage: tokens(count), pricing: TestPricing.table)
+    }
+
+    @Test("Event summaries assign cross-day usage by event timestamp")
+    func eventSummariesAssignCrossDayUsageByEventTimestamp() {
+        let now = cal.date(bySettingHour: 10, minute: 0, second: 0, of: .now)!
+        let today = cal.startOfDay(for: now)
+        let yesterday = cal.date(byAdding: .day, value: -1, to: today)!
+        let events = [
+            event("y", at: cal.date(byAdding: .hour, value: 23, to: yesterday)!, tokens: 100),
+            event("t", at: cal.date(byAdding: .hour, value: 1, to: today)!, tokens: 250),
+        ]
+
+        let summary = UsageSummary.make(period: .today, events: events, now: now, calendar: cal)
+
+        #expect(summary.totalTokens == 250)
+        #expect(summary.messageCount == 1)
+    }
+
+    @Test("Child ledger events count under parent session id")
+    func childLedgerEventsCountUnderParentSessionID() {
+        let now = Date.now
+        let summary = UsageSummary.make(period: .allTime, events: [
+            event("p", sessionID: "parent", at: now, tokens: 100),
+            event("c", sessionID: "child", parentSessionID: "parent", at: now, tokens: 50),
+        ], now: now, calendar: cal)
+
+        #expect(summary.sessionCount == 1)
+        #expect(summary.totalTokens == 150)
     }
 
     @Test("Only sessions inside the [start, end] day range count")

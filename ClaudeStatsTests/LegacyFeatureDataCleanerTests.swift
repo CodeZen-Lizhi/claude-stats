@@ -11,7 +11,7 @@ struct LegacyFeatureDataCleanerTests {
         defer { try? FileManager.default.removeItem(at: root) }
 
         let tokenTownDirectory = root
-            .appendingPathComponent("Claude Stats", isDirectory: true)
+            .appendingPathComponent("Codex Statistics", isDirectory: true)
             .appendingPathComponent("TokenTown", isDirectory: true)
         let stateDirectory = tokenTownDirectory.appendingPathComponent("v1", isDirectory: true)
         try FileManager.default.createDirectory(at: stateDirectory, withIntermediateDirectories: true)

@@ -6,7 +6,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
     case general
     case features
     case menuBar
-    case notchIsland
+    case pricing
     case tracking
     case github
     case systemMonitor
@@ -19,7 +19,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
         case .general:   L10n.string("settings.section.general", defaultValue: "General")
         case .features:  L10n.string("settings.section.features", defaultValue: "Features")
         case .menuBar:   L10n.string("settings.section.menu_bar", defaultValue: "Menu Bar")
-        case .notchIsland: L10n.string("settings.section.notch_island", defaultValue: "Notch Island")
+        case .pricing:   L10n.string("settings.section.pricing", defaultValue: "Model Pricing")
         case .tracking:  L10n.string("settings.section.tracking", defaultValue: "Tracking")
         case .github:    "GitHub"
         case .systemMonitor: L10n.string("settings.section.system_monitor", defaultValue: "System Monitor")
@@ -32,7 +32,7 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
         case .general:   "gearshape"
         case .features:  "switch.2"
         case .menuBar:   "menubar.rectangle"
-        case .notchIsland: "capsule.portrait.tophalf.filled"
+        case .pricing:   "dollarsign.circle"
         case .tracking:  "waveform.path.ecg"
         case .github:    "chevron.left.forwardslash.chevron.right"
         case .systemMonitor: "cpu"

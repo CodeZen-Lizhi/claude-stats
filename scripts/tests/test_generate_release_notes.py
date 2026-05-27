@@ -79,6 +79,8 @@ class GenerateReleaseNotesTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         markdown, html = self.read_outputs()
         self.assertIn("## 更新内容", markdown)
+        self.assertIn("https://github.com/1pitaph/claude-stats/releases/tag/v1.0.0", markdown)
+        self.assertNotIn("claude-stats-releases", markdown)
         self.assertIn("### 新功能", markdown)
         self.assertIn("- 新增Git语言统计范围的偏好设置", markdown)
         self.assertIn("### 修复", markdown)

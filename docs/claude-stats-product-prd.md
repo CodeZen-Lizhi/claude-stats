@@ -18,26 +18,26 @@ Claude Stats 是一个原生 macOS 菜单栏应用，面向每天长时间使用
 
 ## Codex-only Provider 决策
 
-本项目主线产品边界是 **Codex-only**。这里的 provider 指 AI session provider，也就是负责发现本地会话、解析 transcript、计算用量限制、管理 CLI API 配置和展示服务状态的数据入口。
+本项目主线产品边界是 **Codex-only**。这里的 provider 指 AI session provider，也就是负责发现本地会话、解析 transcript、计算用量限制、读取相关配置和展示服务状态的数据入口。
 
 已删除并不再作为主线维护的 provider 范围：
 
-- Claude provider 实现、Claude transcript parser、Claude usage limit bridge、Claude Desktop 用量采集和 Claude status UI。
-- Gemini、Kimi、MiniMax 的 provider 空壳、UI 入口和测试占位。
-- 平台设置页、菜单栏 provider switcher，以及面向多 AI session provider 的选择控件。
+- 非 Codex provider 实现、transcript parser、usage limit bridge、桌面用量采集和服务状态 UI。
+- 非 Codex provider 空壳、UI 入口和测试占位。
+- 平台设置页、菜单栏多 provider 选择 UI，以及面向多 AI session provider 的选择控件。
 
 必须保留的边界：
 
 - `Provider` 协议、`ProviderRegistry`、`SessionStore`、`UsageLimitStore` 等共享抽象继续存在。
 - `ProviderRegistry` 只注册 `CodexProvider`。
 - App 内部继续通过 `CodexProvider` 读取 Codex sessions、统计、配置和用量限制，避免把 Codex 文件扫描和解析逻辑散落到 UI。
-- Git、Skills、System Monitor、Notch Island、Atoll、Ops 等非 AI session provider 功能不属于 Codex-only provider 删除范围。内嵌终端、LinuxDo、Local AI、CloudKit 排行榜和上游 Dictionary / Technical Terms 功能不属于当前产品范围。
+- Git、System Monitor、Ops 等非 AI session provider 功能不属于 Codex-only provider 删除范围。已删除的实验功能、社区功能、云同步排行和上游术语管理功能不属于当前产品范围。
 
 以后同步原项目或上游更新时的规则：
 
-- 可以跳过 Claude、Gemini、Kimi、MiniMax provider 实现、provider UI、provider 测试和 provider 文案的新增或修改。
+- 可以跳过非 Codex provider 实现、provider UI、provider 测试和 provider 文案的新增或修改。
 - 如果上游改动同时触碰共享抽象和其他 provider，只同步对 `Provider` 协议、Codex 数据口、共享统计、共享配置、共享 UI 结构真正有用的部分。
-- 不要为了兼容上游多 provider 改动重新加入 provider switcher、平台设置页、Claude Desktop capture 或 Claude status。
+- 不要为了兼容上游多 provider 改动重新加入多 provider 选择 UI、平台设置页、桌面用量采集或服务状态 UI。
 - 只有当产品重新决定支持第二个 AI session provider 时，才通过新 provider 目录、`Provider` 协议实现和 `ProviderRegistry` 注册接入；否则默认拒绝非 Codex provider 改动。
 
 ## 核心产品区域
@@ -62,7 +62,7 @@ Claude Stats 是一个原生 macOS 菜单栏应用，面向每天长时间使用
 
 - Codex 通过 `~/.codex/sessions/` 读取本地 session transcript。
 - 应用内部仍保留 `Provider` 协议和 `CodexProvider` 数据口，方便会话、统计、配置、用量限制走统一链路。
-- 旧用户偏好或配置里出现的 Claude、Gemini、Kimi、MiniMax provider 值会被忽略或收敛到 Codex。
+- 旧用户偏好或配置里出现的非 Codex provider 值会被忽略或收敛到 Codex。
 - 本地文件变化后，会话数据应该能自动刷新。
 
 ### 3. 会话列表
@@ -118,18 +118,7 @@ Claude Stats 是一个原生 macOS 菜单栏应用，面向每天长时间使用
 - 清楚展示告警和权限状态。
 - 用量限制数据要和长期会话统计分开。
 
-### 7. Provider 配置与切换
-
-应用包含 API Provider Switcher，用于管理 Codex CLI 的 API provider 配置。
-
-需求：
-
-- 能在配置界面切换 Codex 的 API provider。
-- 能查看和编辑 Codex provider 配置项。
-- 支持选择 key 的存储方式。
-- Codex 专属配置必须留在 Codex provider 专属代码路径里处理。
-
-### 8. 分享与展示
+### 7. 分享与展示
 
 应用应该支持可分享的输出，让统计结果更适合展示。
 
@@ -139,29 +128,27 @@ Claude Stats 是一个原生 macOS 菜单栏应用，面向每天长时间使用
 - 输出要有视觉表现力，并以指标为核心。
 - 导出的结果要足够精致，适合分享。
 
-### 9. 开发者工具界面
+### 8. 开发者工具界面
 
 应用必须暴露当前产品里已经存在的辅助开发工具。
 
 当前界面包括：
 
 - Git 和仓库活动
-- Skills 库
 - 系统监控
 - 运维工具
 - AI 配置浏览
 
-### 10. Notch Island 与悬浮统计
+### 9. 悬浮统计
 
-产品包含两个用于被动监控的快速入口。
+产品包含用于被动监控的快速入口。
 
 需求：
 
-- 提供 Notch Island，用于展示实时会话上下文。
 - 提供悬浮统计，方便快速查看状态。
-- 这些入口必须是可选功能，并由应用偏好设置控制。
+- 该入口必须是可选功能，并由应用偏好设置控制。
 
-### 11. 设置
+### 10. 设置
 
 设置页是控制功能可见性和行为的地方。
 
@@ -170,13 +157,12 @@ Claude Stats 是一个原生 macOS 菜单栏应用，面向每天长时间使用
 - 通用
 - 功能
 - 菜单栏
-- Notch Island
 - 跟踪
 - GitHub
 - 系统监控
 - 关于
 
-### 12. 更新
+### 11. 更新
 
 应用必须支持打包版本的自动更新。
 
@@ -188,7 +174,7 @@ Claude Stats 是一个原生 macOS 菜单栏应用，面向每天长时间使用
 
 ## Fork 专属删减
 
-本 fork 明确不包含内嵌终端、LinuxDo、Local AI、CloudKit 排行榜，以及上游 Dictionary / Technical Terms 功能。用户自维护 transcript 术语、对应设置页、内置术语资源以及导入导出流程都不属于当前产品范围。以后同步上游时，默认不跟进这类改动；只有本 fork 明确重新需要用户维护术语时再评估。
+本 fork 明确不包含已删除的实验功能、社区功能、云同步排行和上游术语管理功能。用户自维护 transcript 术语、对应设置页、内置术语资源以及导入导出流程都不属于当前产品范围。以后同步上游时，默认不跟进这类改动；只有本 fork 明确重新需要对应能力时再评估。
 
 ## 非功能需求
 

@@ -70,7 +70,7 @@ struct UsageLimitPanel: View {
     private var content: some View {
         if let report {
             switch report.status {
-            case .fresh:
+            case .fresh, .cached:
                 if let snapshot = report.snapshot {
                     limitWindows(displayedWindows(snapshot.windows))
                     sourceFooter(snapshot: snapshot)
@@ -202,6 +202,8 @@ struct UsageLimitPanel: View {
         switch status {
         case .fresh:
             L10n.string("usage.limit.status.fresh", defaultValue: "FRESH")
+        case .cached:
+            L10n.string("usage.limit.status.cached", defaultValue: "CACHED")
         case .setupRequired:
             L10n.string("usage.limit.status.setup", defaultValue: "SETUP")
         case .waitingForNextResponse:
@@ -217,6 +219,8 @@ struct UsageLimitPanel: View {
         switch status {
         case .fresh:
             Color.green
+        case .cached:
+            Color.stxMuted
         case .setupRequired:
             Color.blue
         case .waitingForNextResponse:

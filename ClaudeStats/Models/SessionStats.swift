@@ -22,6 +22,31 @@ struct SessionStats: Sendable, Hashable {
     /// Empty when the provider doesn't populate it (e.g. Codex transcripts);
     /// the aggregator falls back to ``models`` in that case.
     var billableMessages: [BillableMessage] = []
+    /// Provider parser state at the end of the transcript, used to continue
+    /// parsing appended bytes without re-reading old lines.
+    var lastModel: String?
+
+    init(
+        title: String,
+        messageCount: Int,
+        firstActivity: Date?,
+        lastActivity: Date?,
+        models: [ModelUsage],
+        timeline: [ModelBucket],
+        activityIntervals: [DateInterval] = [],
+        billableMessages: [BillableMessage] = [],
+        lastModel: String? = nil
+    ) {
+        self.title = title
+        self.messageCount = messageCount
+        self.firstActivity = firstActivity
+        self.lastActivity = lastActivity
+        self.models = models
+        self.timeline = timeline
+        self.activityIntervals = activityIntervals
+        self.billableMessages = billableMessages
+        self.lastModel = lastModel
+    }
 
     var totalUsage: TokenUsage { models.reduce(.zero) { $0 + $1.usage } }
     var totalTokens: Int { totalUsage.total }

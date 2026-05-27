@@ -159,6 +159,22 @@ struct ModelPricing: Sendable, Hashable {
             .appendingPathComponent("pricing.json")
     }
 
+    static func writeUserPricing(_ pricing: ModelPricing, to url: URL? = userPricingFileURL()) throws {
+        guard let url else { return }
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let file = File(
+            _comment: "User-edited pricing in USD per 1,000,000 tokens. Restart or rescan Codex Statistics to apply changes to parsed costs.",
+            models: pricing.rates,
+            defaultPricing: pricing.defaultRate
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(file).write(to: url, options: .atomic)
+    }
+
     private static func decode(_ url: URL?) -> File? {
         guard let url, let data = try? Data(contentsOf: url) else { return nil }
         return try? JSONDecoder().decode(File.self, from: data)

@@ -2,8 +2,7 @@ import SwiftUI
 import AppKit
 
 /// The main window's left column. Two regions stacked vertically:
-///   - Top nav (Dashboard, STATS for usage/activity, then TOOLS for
-///     configuration and Git tools).
+///   - Top nav (Dashboard, sessions, usage, optional system/git).
 /// Settings stays pinned at the bottom.
 ///
 /// Lives over a window-level `NSVisualEffectView` (`.sidebar` material), so
@@ -12,9 +11,6 @@ struct SidebarColumn: View {
     @Binding var page: MainPage
     var availablePages: [MainPage]
     var onOpenSettings: () -> Void
-    var onOpenSessions: () -> Void
-    var onOpenConfigs: () -> Void
-    var onOpenOps: () -> Void
 
     @Environment(AppEnvironment.self) private var env
 
@@ -24,41 +20,14 @@ struct SidebarColumn: View {
             Color.clear.frame(height: 44)
 
             navRow(.dashboard)
-            sessionsEntryRow
-
-            sectionHeader("STATS")
+            navRow(.sessions)
             navRow(.usage)
-            if env.preferences.aiActivityAnalysisEnabled { navRow(.activity) }
             if env.preferences.systemMonitorEnabled { navRow(.system) }
-
-            sectionHeader("TOOLS")
-            navRow(.configurations)
-            SidebarRow(
-                title: "Configs",
-                symbol: "doc.text.magnifyingglass",
-                isSelected: false,
-                trailingSymbol: "chevron.right",
-                showsTrailingOnHover: true
-            ) {
-                clearTextFocus()
-                onOpenConfigs()
-            }
-            if env.preferences.gitTrackingEnabled { navRow(.git) }
-            navRow(.skills)
-            SidebarRow(
-                title: "Ops",
-                symbol: "wrench.and.screwdriver",
-                isSelected: false,
-                trailingSymbol: "chevron.right",
-                showsTrailingOnHover: true
-            ) {
-                clearTextFocus()
-                onOpenOps()
-            }
+            if showsGitTool { navRow(.git) }
 
             Spacer(minLength: 0)
 
-            SidebarRow(title: "Settings", symbol: "gearshape", isSelected: false) {
+            SidebarRow(title: L10n.string("settings.title", defaultValue: "Settings"), symbol: "gearshape", isSelected: false) {
                 clearTextFocus()
                 onOpenSettings()
             }
@@ -76,10 +45,12 @@ struct SidebarColumn: View {
     @ViewBuilder
     private func navRow(_ p: MainPage) -> some View {
         if availablePages.contains(p) {
+            let count = p == .sessions ? env.store.sessions(for: env.preferences.selectedProvider).count : 0
             SidebarRow(
                 title: p.title,
                 symbol: p.symbol,
-                isSelected: page == p
+                isSelected: page == p,
+                trailingText: count > 0 ? "\(count)" : nil
             ) {
                 clearTextFocus()
                 page = p
@@ -87,29 +58,8 @@ struct SidebarColumn: View {
         }
     }
 
-    private var sessionsEntryRow: some View {
-        let count = env.store.sessions(for: env.preferences.selectedProvider).count
-        return SidebarRow(
-            title: "Sessions",
-            symbol: "text.bubble",
-            isSelected: false,
-            trailingText: count > 0 ? "\(count)" : nil,
-            trailingSymbol: "chevron.right",
-            showsTrailingOnHover: true
-        ) {
-            clearTextFocus()
-            onOpenSessions()
-        }
-    }
-
-    private func sectionHeader(_ title: String) -> some View {
-        Text(LocalizedStringKey(title))
-            .font(.sora(10, weight: .semibold))
-            .tracking(1.0)
-            .foregroundStyle(Color.stxMuted)
-            .padding(.horizontal, 14)
-            .padding(.top, 14)
-            .padding(.bottom, 4)
+    private var showsGitTool: Bool {
+        env.preferences.gitTrackingEnabled && availablePages.contains(.git)
     }
 
     private func clearTextFocus() {
@@ -194,11 +144,8 @@ struct SidebarRow: View {
     @Previewable @State var page: MainPage = .dashboard
     return SidebarColumn(
         page: $page,
-        availablePages: [.dashboard, .configurations, .usage, .activity, .git],
-        onOpenSettings: {},
-        onOpenSessions: {},
-        onOpenConfigs: {},
-        onOpenOps: {}
+        availablePages: [.dashboard, .sessions, .usage, .git],
+        onOpenSettings: {}
     )
     .environment(AppEnvironment.preview())
     .frame(width: 240, height: 600)

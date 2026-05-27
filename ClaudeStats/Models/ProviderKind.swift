@@ -25,8 +25,7 @@ enum ProviderKind: String, CaseIterable, Codable, Sendable, Identifiable, Hashab
         "codex-logo"
     }
 
-    /// Name of the monochrome (template-rendered) logo image set — used in the
-    /// panel's platform switcher so all logos read uniformly.
+    /// Name of the monochrome (template-rendered) logo image set.
     var monochromeAssetName: String {
         "codex"
     }

@@ -112,7 +112,11 @@ struct UsageView: View {
             }
             GridRow {
                 statCell(L10n.string("usage.stat.sessions", defaultValue: "SESSIONS"), "\(s.sessionCount)")
-                statCell(L10n.string("usage.stat.messages", defaultValue: "MESSAGES"), Format.tokens(s.messageCount))
+                statCell(L10n.string("usage.stat.requests", defaultValue: "REQUESTS"), Format.tokens(s.messageCount))
+            }
+            GridRow {
+                statCell(L10n.string("usage.stat.input", defaultValue: "INPUT"), Format.tokens(s.totalUsage.inputTokens))
+                statCell(L10n.string("usage.stat.output", defaultValue: "OUTPUT"), Format.tokens(s.totalUsage.outputTokens))
             }
         }
     }

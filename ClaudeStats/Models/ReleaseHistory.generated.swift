@@ -3,8 +3,20 @@
 extension ReleaseHistoryCatalog {
     static let generatedEntries: [ReleaseHistoryEntry] = [
         ReleaseHistoryEntry(
+            version: "1.7.7",
+            date: "May 26, 2026",
+            headline: "将Claude桌面自动捕获和定时捕获的配置移到设置页面，简化使用面板，统一权限按钮命名",
+            changes: [
+                "新增UsageLimitStatus.cached状态与本地化文案",
+                "重构Claude/Codex使用限制加载逻辑，过期缓存返回cached状态",
+                "重构多处列表选择器为统一的AppSelect组件，统一UI风格",
+                "更新相关测试用例适配新的状态逻辑",
+                "重构appcast生成脚本，更新下载大小展示样式",
+            ]
+        ),
+        ReleaseHistoryEntry(
             version: "1.7.6",
-            date: "May 25, 2026",
+            date: "May 26, 2026",
             headline: "替换了原有的系统图标，为Cursor、Windsurf、Trae、Qoder等Git工作区源添加了专属的自定义logo资源，更新了相关的数据模型和视图显示逻辑。",
             changes: [
                 "新增GitWorkspaceSourceID枚举与相关工具类，支持Claude、Codex、Cursor等多源配置",
@@ -37,13 +49,13 @@ extension ReleaseHistoryCatalog {
         ReleaseHistoryEntry(
             version: "1.7.3",
             date: "May 24, 2026",
-            headline: "添加llama.cpp子模块与相关桥接代码",
+            headline: "改进发布构建流程与 Apple Silicon 运行约束",
             changes: [
-                "新增本地AI设置页面与语义搜索功能",
                 "仅支持Apple Silicon Mac，更新构建与发布脚本",
-                "新增嵌入模型管理与会话相似性搜索",
                 "优化构建流程，添加代码签名与瘦身脚本",
-                "移除TranscriptAnalysisService内的本地TF-IDF分析器实例，改为通过索引获取持久化快照",
+                "完善发布产物签名与打包路径",
+                "提升调试构建与发布构建的一致性",
+                "整理旧实验功能的发布说明描述",
             ]
         ),
         ReleaseHistoryEntry(
@@ -61,13 +73,13 @@ extension ReleaseHistoryCatalog {
         ReleaseHistoryEntry(
             version: "1.7.1",
             date: "May 23, 2026",
-            headline: "本次提交新增了OpenComputerUseKit第三方库作为桌面自动化依赖，重构了Claude桌面使用采集流程：",
+            headline: "改进桌面使用采集流程与权限提示",
             changes: [
                 "新增屏幕录制权限检查器，统一管理屏幕录制权限请求逻辑",
-                "新增OpenComputerUse原生文本阅读器，优先使用自动化接口采集数据",
-                "重构使用解析逻辑，支持新的Claude桌面UI用量格式",
+                "重构使用解析逻辑，支持新的桌面UI用量格式",
                 "新增自动化测试用例覆盖新功能",
                 "修复权限重检查逻辑，支持屏幕录制权限的重新校验",
+                "提升采集失败时的提示一致性",
             ]
         ),
         ReleaseHistoryEntry(
@@ -93,11 +105,11 @@ extension ReleaseHistoryCatalog {
         ReleaseHistoryEntry(
             version: "1.6.8",
             date: "May 22, 2026",
-            headline: "新增LinuxDo图标资源文件及Contents.json配置",
+            headline: "新增侧边栏图标资源文件及Contents.json配置",
             changes: [
                 "为MainPage和SettingsSection添加assetName属性以获取对应logo名称",
                 "修改SidebarRow组件，支持显示自定义资产图片替代系统图标",
-                "在侧边栏和设置侧边栏中为LinuxDo项添加logo展示",
+                "在侧边栏和设置侧边栏中为页面项添加logo展示",
                 "调整了截图表格的表头结构，将原本的行内标题改为表头形式，并且将分享统计导出的演示图折叠进详情块中，优化文档排版可读性",
                 "将原来的单张截图排版改为表格布局，让截图更整齐美观，同时更新了两个菜单面板的演示gif文件",
             ]
@@ -164,9 +176,9 @@ extension ReleaseHistoryCatalog {
         ReleaseHistoryEntry(
             version: "1.6.2",
             date: "May 21, 2026",
-            headline: "新增LinuxDo话题路由解析与导航逻辑",
+            headline: "新增社区内容路由解析与导航逻辑",
             changes: [
-                "完善Post响应模型与LinuxDoPost数据结构",
+                "完善帖子响应模型与数据结构",
                 "实现完整的HTML内容解析与富文本展示",
                 "添加话题列表页UI优化与分类颜色支持",
                 "集成本地通知跳转处理",
@@ -184,13 +196,13 @@ extension ReleaseHistoryCatalog {
         ReleaseHistoryEntry(
             version: "1.6.0",
             date: "May 21, 2026",
-            headline: "新增LocalSkillDetailModel和RemoteSkillDetailModel用于展示技能详情数据",
+            headline: "改进主窗口侧边栏切换与详情展示结构",
             changes: [
-                "新增SkillFactModel、SkillMarkdownDocument等配套数据结构",
+                "新增详情展示所需的配套数据结构",
                 "重构MainWindowModeShell的侧边栏切换逻辑，使用transition替代offset动画",
-                "为SkillsStore添加selectedLocalDetail和selectedRemoteDetail计算属性",
+                "补充详情选择状态的计算属性",
                 "新增对应测试用例验证详情数据正确性",
-                "实现了LinuxDo侧边栏、工作区视图，将其加入主窗口导航系统，调整了主窗口布局适配新页面，修复了侧边栏切换偏移逻辑",
+                "调整主窗口布局适配新增页面，修复侧边栏切换偏移逻辑",
             ]
         ),
         ReleaseHistoryEntry(
@@ -398,7 +410,7 @@ extension ReleaseHistoryCatalog {
             headline: "App icon, status, and cost-estimation updates.",
             changes: [
                 "Added new app icon assets and configuration.",
-                "Added cost estimation mode and Claude status monitoring.",
+                "Added cost estimation mode and service status monitoring.",
                 "Added long-context pricing support and improved activity analysis structure.",
             ]
         ),

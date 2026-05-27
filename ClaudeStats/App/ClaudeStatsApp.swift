@@ -33,7 +33,7 @@ struct ClaudeStatsApp: App {
                 .tint(.stxAccent)
         }
 
-        Window("Claude Stats", id: MainWindowView.windowID) {
+        Window("Codex Statistics", id: MainWindowView.windowID) {
             MainWindowView()
                 .appEnvironment(appDelegate.env)
                 .frame(minWidth: 900, idealWidth: 1040, minHeight: 600, idealHeight: 720)
@@ -50,5 +50,16 @@ private extension View {
         self
             .environment(env)
             .environment(\.locale, env.preferences.appLanguagePreference.locale)
+            .preferredColorScheme(env.preferences.appearancePreference.colorScheme)
+    }
+}
+
+private extension AppAppearancePreference {
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: nil
+        case .light: .light
+        case .dark: .dark
+        }
     }
 }

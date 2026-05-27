@@ -1,7 +1,7 @@
 import Foundation
 
 enum UsageLimitCachePaths {
-    private static let appSupportFolderName = "Claude Stats"
+    private static let appSupportFolderName = "Codex Statistics"
     private static let usageLimitsFolderName = "UsageLimits"
 
     static func directory(fileManager: FileManager = .default) -> URL {
@@ -22,4 +22,3 @@ enum UsageLimitCachePaths {
             .appendingPathComponent("claude-statusline-bridge.sh", isDirectory: false)
     }
 }
-

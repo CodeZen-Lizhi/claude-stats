@@ -4,30 +4,26 @@ import SwiftUI
 /// Top-level page shown in the main window's detail column. Settings live in
 /// their own main-window mode, not as a `MainPage`.
 enum MainPage: String, CaseIterable, Identifiable, Sendable {
-    case dashboard, configurations, usage, activity, git, system, skills
+    case dashboard, sessions, usage, git, system
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .dashboard: L10n.string("main_page.dashboard", defaultValue: "Dashboard")
-        case .configurations: L10n.string("main_page.switcher", defaultValue: "Switcher")
+        case .sessions: L10n.string("main_page.sessions", defaultValue: "Sessions")
         case .usage: L10n.string("main_page.usage", defaultValue: "Usage")
-        case .activity: L10n.string("main_page.activity", defaultValue: "Activity")
         case .git: L10n.string("main_page.git", defaultValue: "Git")
         case .system: L10n.string("main_page.system", defaultValue: "System")
-        case .skills: "Skills"
         }
     }
 
     var symbol: String {
         switch self {
         case .dashboard: "square.grid.2x2"
-        case .configurations: "slider.horizontal.3"
+        case .sessions: "text.bubble"
         case .usage: "chart.bar.xaxis"
-        case .activity: "waveform"
         case .git: "arrow.triangle.branch"
         case .system: "cpu"
-        case .skills: "sparkles"
         }
     }
 }
@@ -51,30 +47,16 @@ struct MainWindowView: View {
     @SceneStorage("mainWindow.sidebarVisible") private var sidebarVisible: Bool = true
     @SceneStorage("mainWindow.mode") private var modeRaw: String = MainWindowMode.app.rawValue
     @SceneStorage("mainWindow.settingsSection") private var settingsSectionRaw: String = SettingsSection.general.rawValue
-    @SceneStorage("mainWindow.configsSection") private var configsSectionRaw: String = AIConfigsSection.overview.rawValue
-    @SceneStorage("mainWindow.configsSearch") private var configsSearchText: String = ""
-    @SceneStorage("mainWindow.configsProjectID") private var configsProjectIDRaw: String = ""
-    @SceneStorage("mainWindow.configsDocumentID") private var configsDocumentIDRaw: String = ""
-    @SceneStorage("mainWindow.opsSection") private var opsSectionRaw: String = OpsSection.brew.rawValue
     @SceneStorage("mainWindow.sessionsDestination") private var sessionsDestinationRaw: String = SessionsDestination.overviewRawValue
     @State private var page: MainPage = .dashboard
     @State private var toggleHovering = false
     @State private var trafficLights = TrafficLightPositioner()
 
     private var availablePages: [MainPage] {
-        var pages: [MainPage] = [.dashboard, .configurations, .usage]
-        if env.preferences.aiActivityAnalysisEnabled { pages.append(.activity) }
+        var pages: [MainPage] = [.dashboard, .sessions, .usage]
         if env.preferences.gitTrackingEnabled { pages.append(.git) }
         if env.preferences.systemMonitorEnabled { pages.append(.system) }
-        pages.append(.skills)
         return pages
-    }
-
-    /// Resolves the currently selected session against the store. Returns nil
-    /// if the id was set but the session has since been removed.
-    private var selectedSession: Session? {
-        guard case .session(let id) = sessionsDestination else { return nil }
-        return env.store.sessions(for: env.preferences.selectedProvider).first { $0.id == id }
     }
 
     private var sessionsDestination: SessionsDestination {
@@ -89,53 +71,10 @@ struct MainWindowView: View {
         SettingsSection(rawValue: settingsSectionRaw) ?? .general
     }
 
-    private var configsSection: AIConfigsSection {
-        AIConfigsSection(rawValue: configsSectionRaw) ?? .overview
-    }
-
-    private var opsSection: OpsSection {
-        OpsSection(storedRawValue: opsSectionRaw)
-    }
-
     private var settingsSectionBinding: Binding<SettingsSection> {
         Binding(
             get: { settingsSection },
             set: { settingsSectionRaw = $0.rawValue }
-        )
-    }
-
-    private var configsSectionBinding: Binding<AIConfigsSection> {
-        Binding(
-            get: { configsSection },
-            set: { configsSectionRaw = $0.rawValue }
-        )
-    }
-
-    private var configsSearchBinding: Binding<String> {
-        Binding(
-            get: { configsSearchText },
-            set: { configsSearchText = $0 }
-        )
-    }
-
-    private var configsProjectIDBinding: Binding<String> {
-        Binding(
-            get: { configsProjectIDRaw },
-            set: { configsProjectIDRaw = $0 }
-        )
-    }
-
-    private var configsDocumentIDBinding: Binding<String> {
-        Binding(
-            get: { configsDocumentIDRaw },
-            set: { configsDocumentIDRaw = $0 }
-        )
-    }
-
-    private var opsSectionBinding: Binding<OpsSection> {
-        Binding(
-            get: { opsSection },
-            set: { opsSectionRaw = $0.rawValue }
         )
     }
 
@@ -158,41 +97,14 @@ struct MainWindowView: View {
                 SidebarColumn(
                     page: $page,
                     availablePages: availablePages,
-                    onOpenSettings: openSettings,
-                    onOpenSessions: openSessions,
-                    onOpenConfigs: openConfigs,
-                    onOpenOps: openOps
-                )
-            } sessionsSidebar: {
-                SessionSidebarColumn(
-                    destination: sessionsDestinationBinding,
-                    onExit: closeSessions
-                )
-            } configsSidebar: {
-                AIConfigsSidebarColumn(
-                    section: configsSectionBinding,
-                    searchText: configsSearchBinding,
-                    onExit: closeConfigs
+                    onOpenSettings: openSettings
                 )
             } settingsSidebar: {
                 SettingsSidebarColumn(section: settingsSectionBinding, onExit: closeSettings)
-            } opsSidebar: {
-                OpsSidebarColumn(section: opsSectionBinding, onExit: closeOps)
             } appDetail: {
                 detail
-            } sessionsDetail: {
-                sessionsDetail
-            } configsDetail: {
-                AIConfigsDetailView(
-                    section: configsSection,
-                    searchText: configsSearchText,
-                    selectedProjectID: configsProjectIDBinding,
-                    selectedDocumentID: configsDocumentIDBinding
-                )
             } settingsDetail: {
                 SettingsDetailView(section: settingsSection, onSelectSection: selectSettingsSection)
-            } opsDetail: {
-                OpsDetailView(store: env.ops, section: opsSection)
             }
             .background {
                 Color.clear
@@ -200,12 +112,17 @@ struct MainWindowView: View {
                     .onTapGesture { clearTextFocus() }
             }
 
-            if mode == .app || mode == .sessions || mode == .configs || mode == .ops {
+            if mode == .app {
                 sidebarToggle
                     .padding(.leading, 81)
                     .padding(.top, 11)
                     .transition(.opacity)
             }
+
+            appearanceToggle
+                .padding(.top, 12)
+                .padding(.trailing, 16)
+                .frame(maxWidth: .infinity, alignment: .topTrailing)
         }
         .ignoresSafeArea()
         .background(WindowAccessor { window in
@@ -213,7 +130,7 @@ struct MainWindowView: View {
         })
         .onAppear {
             normalizeNavigationState()
-            if mode == .sessions { clearInvalidSessionSelection() }
+            if page == .sessions { clearInvalidSessionSelection() }
             DockVisibilityCoordinator.shared.acquire()
             Log.app.info("Main window opened on page \(page.rawValue, privacy: .public)")
         }
@@ -230,15 +147,12 @@ struct MainWindowView: View {
             pageRaw = new.rawValue
         }
         .onChange(of: env.store.lastRefreshedAt) { _, _ in
-            if mode == .sessions { clearInvalidSessionSelection() }
+            if page == .sessions { clearInvalidSessionSelection() }
         }
         .onChange(of: env.preferences.selectedProvider) { _, _ in
-            if mode == .sessions, case .session = sessionsDestination {
+            if page == .sessions, case .session = sessionsDestination {
                 sessionsDestinationRaw = SessionsDestination.overviewRawValue
             }
-        }
-        .onChange(of: env.preferences.aiActivityAnalysisEnabled) { _, on in
-            if !on && page == .activity { page = .dashboard }
         }
         .onChange(of: env.preferences.gitTrackingEnabled) { _, on in
             if !on && page == .git { page = .dashboard }
@@ -256,6 +170,26 @@ struct MainWindowView: View {
     }
 
     // MARK: - Sidebar toggle
+
+    private var appearanceToggle: some View {
+        Button {
+            env.preferences.appearancePreference =
+                env.preferences.appearancePreference == .dark ? .light : .dark
+        } label: {
+            Image(systemName: env.preferences.appearancePreference == .dark ? "sun.max" : "moon")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color.stxMuted)
+                .frame(width: 28, height: 26)
+                .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .strokeBorder(Color.stxStroke.opacity(0.75), lineWidth: 1)
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(L10n.string("appearance.toggle", defaultValue: "Toggle light/dark mode"))
+    }
 
     private var sidebarToggle: some View {
         Button {
@@ -285,34 +219,14 @@ struct MainWindowView: View {
         switch page {
         case .dashboard:
             DashboardView()
-        case .configurations:
-            ConfigurationsView()
+        case .sessions:
+            SessionsWorkspaceView(destination: sessionsDestinationBinding)
         case .usage:
             MainUsageView()
-        case .activity:
-            MainActivityView()
         case .git:
             MainGitActivityView()
         case .system:
             MainSystemMonitorView()
-        case .skills:
-            SkillsWorkspaceView(store: env.skills)
-        }
-    }
-
-    @ViewBuilder
-    private var sessionsDetail: some View {
-        switch sessionsDestination {
-        case .overview:
-            SessionsOverviewDetailView()
-        case .analysis:
-            SessionsAnalysisDetailView()
-        case .session:
-            if let session = selectedSession {
-                CenteredPaneContainer { SessionDetailView(session: session) }
-            } else {
-                SessionsOverviewDetailView()
-            }
         }
     }
 
@@ -335,32 +249,7 @@ struct MainWindowView: View {
         settingsSectionRaw = section.rawValue
     }
 
-    private func openSessions() {
-        sessionsDestinationRaw = SessionsDestination.overviewRawValue
-        transition(to: .sessions)
-    }
-
-    private func openConfigs() {
-        transition(to: .configs)
-    }
-
-    private func openOps() {
-        transition(to: .ops)
-    }
-
     private func closeSettings() {
-        transition(to: .app)
-    }
-
-    private func closeSessions() {
-        transition(to: .app)
-    }
-
-    private func closeConfigs() {
-        transition(to: .app)
-    }
-
-    private func closeOps() {
         transition(to: .app)
     }
 

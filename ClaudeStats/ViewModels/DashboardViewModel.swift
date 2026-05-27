@@ -128,6 +128,11 @@ final class DashboardViewModel {
     /// Recompute the overview off-main. Captures a local `Calendar` so the
     /// detached block stays Sendable under Swift 6 strict concurrency.
     func reload(sessions: [Session]) async {
+        let events = sessions.flatMap(Self.events(from:))
+        await reload(events: events)
+    }
+
+    func reload(events: [UsageLedgerEvent]) async {
         currentReloadGeneration &+= 1
         let generation = currentReloadGeneration
         if !isLoading { isLoading = true }
@@ -144,7 +149,7 @@ final class DashboardViewModel {
 
         let task = Task.detached(priority: .userInitiated) { () throws -> ReloadResult in
             try Self.reloadResult(
-                sessions: sessions,
+                events: events,
                 period: period,
                 heatmapInterval: heatmapInterval,
                 calendar: cal,
@@ -186,19 +191,19 @@ final class DashboardViewModel {
     }
 
     nonisolated private static func reloadResult(
-        sessions: [Session],
+        events: [UsageLedgerEvent],
         period: StatsPeriod,
         heatmapInterval: DateInterval,
         calendar cal: Calendar,
         now: Date
     ) throws -> ReloadResult {
         var accumulator = ReloadAccumulator()
-        accumulator.reserveCapacity(sessionCount: sessions.count)
+        accumulator.reserveCapacity(eventCount: events.count)
 
-        for (index, session) in sessions.enumerated() {
+        for (index, event) in events.enumerated() {
             if index.isMultiple(of: 64) { try Task.checkCancellation() }
-            try accumulator.add(
-                session,
+            accumulator.add(
+                event,
                 period: period,
                 heatmapInterval: heatmapInterval,
                 calendar: cal,
@@ -211,7 +216,6 @@ final class DashboardViewModel {
     }
 
     private struct ReloadAccumulator {
-        var sessionsInPeriod = 0
         var messageCount = 0
         var modelTotals: [DashboardModelKey: ModelTotal] = [:]
         var periodTimeline: [String: [Date: TokenUsage]] = [:]
@@ -219,95 +223,46 @@ final class DashboardViewModel {
         var activeDaysInPeriod: Set<Date> = []
         var activeDaysAllTime: Set<Date> = []
         var heatmapTokensByDay: [Date: Int] = [:]
+        var sessionsInPeriod: Set<String> = []
 
-        mutating func reserveCapacity(sessionCount: Int) {
-            activeDaysAllTime.reserveCapacity(min(sessionCount, 512))
-            activeDaysInPeriod.reserveCapacity(min(sessionCount, 128))
+        mutating func reserveCapacity(eventCount: Int) {
+            activeDaysAllTime.reserveCapacity(min(eventCount, 512))
+            activeDaysInPeriod.reserveCapacity(min(eventCount, 128))
         }
 
         mutating func add(
-            _ session: Session,
+            _ event: UsageLedgerEvent,
             period: StatsPeriod,
             heatmapInterval: DateInterval,
             calendar cal: Calendar,
             now: Date
-        ) throws {
-            let activityDate = session.stats?.lastActivity ?? session.lastModified
-            let activityDay = cal.startOfDay(for: activityDate)
+        ) {
+            let activityDay = cal.startOfDay(for: event.timestamp)
             activeDaysAllTime.insert(activityDay)
 
-            let isInPeriod = period.contains(activityDate, now: now, calendar: cal)
+            let isInPeriod = period.contains(event.timestamp, now: now, calendar: cal)
             if isInPeriod {
-                sessionsInPeriod += 1
+                sessionsInPeriod.insert(event.parentSessionID ?? event.sessionID)
                 activeDaysInPeriod.insert(activityDay)
+                messageCount += 1
+                let key = DashboardModelKey(provider: event.provider, model: event.model)
+                var total = modelTotals[key] ?? ModelTotal()
+                total.messageCount += 1
+                total.usage += event.usage
+                total.costEstimate += event.cost
+                modelTotals[key] = total
             }
-
-            guard let stats = session.stats else { return }
-            if isInPeriod {
-                messageCount += stats.messageCount
-                for model in stats.models {
-                    let key = DashboardModelKey(provider: session.provider, model: model.model)
-                    var total = modelTotals[key] ?? ModelTotal()
-                    total.messageCount += model.messageCount
-                    total.usage += model.usage
-                    total.costEstimate += model.costEstimate
-                    modelTotals[key] = total
-                }
-            }
-
-            try addTimeline(
-                stats: stats,
-                session: session,
+            let modelID = DashboardModelKey(provider: event.provider, model: event.model).id
+            addTimelineBucket(
+                modelID: modelID,
+                start: event.timestamp,
+                usage: event.usage,
                 isInPeriod: isInPeriod,
                 period: period,
                 heatmapInterval: heatmapInterval,
                 calendar: cal,
                 now: now
             )
-        }
-
-        private mutating func addTimeline(
-            stats: SessionStats,
-            session: Session,
-            isInPeriod: Bool,
-            period: StatsPeriod,
-            heatmapInterval: DateInterval,
-            calendar cal: Calendar,
-            now: Date
-        ) throws {
-            if stats.timeline.isEmpty {
-                let activityDate = stats.lastActivity ?? session.lastModified
-                let bucketStart = cal.dateInterval(of: .hour, for: activityDate)?.start ?? activityDate
-                for model in stats.models where model.usage.total > 0 {
-                    try Task.checkCancellation()
-                    let key = DashboardModelKey(provider: session.provider, model: model.model).id
-                    addTimelineBucket(
-                        modelID: key,
-                        start: bucketStart,
-                        usage: model.usage,
-                        isInPeriod: isInPeriod,
-                        period: period,
-                        heatmapInterval: heatmapInterval,
-                        calendar: cal,
-                        now: now
-                    )
-                }
-            } else {
-                for bucket in stats.timeline {
-                    try Task.checkCancellation()
-                    let key = DashboardModelKey(provider: session.provider, model: bucket.model).id
-                    addTimelineBucket(
-                        modelID: key,
-                        start: bucket.start,
-                        usage: bucket.usage,
-                        isInPeriod: isInPeriod,
-                        period: period,
-                        heatmapInterval: heatmapInterval,
-                        calendar: cal,
-                        now: now
-                    )
-                }
-            }
         }
 
         private mutating func addTimelineBucket(
@@ -348,7 +303,7 @@ final class DashboardViewModel {
 
             return ReloadResult(
                 stats: DashboardStats(
-                    sessions: sessionsInPeriod,
+                    sessions: sessionsInPeriod.count,
                     messages: messageCount,
                     totalTokens: totalUsage.total,
                     totalCost: totalCost,
@@ -439,6 +394,42 @@ final class DashboardViewModel {
         var messageCount = 0
         var usage: TokenUsage = .zero
         var costEstimate: CostEstimate = .zero
+    }
+
+    nonisolated private static func events(from session: Session) -> [UsageLedgerEvent] {
+        guard let stats = session.stats else { return [] }
+        if !stats.billableMessages.isEmpty {
+            return stats.billableMessages.enumerated().compactMap { index, bill in
+                guard let timestamp = bill.timestamp else { return nil }
+                return UsageLedgerEvent(
+                    eventKey: bill.hash ?? "\(session.provider.rawValue)|\(session.id)|dashboard|\(index)",
+                    sessionID: session.id,
+                    provider: session.provider,
+                    model: bill.model,
+                    timestamp: timestamp,
+                    usage: bill.usage,
+                    cost: bill.cost,
+                    sourcePath: session.filePath,
+                    sequenceIndex: index,
+                    parentSessionID: session.agentInfo?.parentSessionID
+                )
+            }
+        }
+        let timestamp = stats.lastActivity ?? session.lastModified
+        return stats.models.enumerated().map { index, model in
+            UsageLedgerEvent(
+                eventKey: "\(session.provider.rawValue)|\(session.id)|dashboard-model|\(index)",
+                sessionID: session.id,
+                provider: session.provider,
+                model: model.model,
+                timestamp: timestamp,
+                usage: model.usage,
+                cost: model.costEstimate,
+                sourcePath: session.filePath,
+                sequenceIndex: index,
+                parentSessionID: session.agentInfo?.parentSessionID
+            )
+        }
     }
 
     nonisolated private static func trendSeries(

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 4
+- **Total Sessions**: 12
 - **Last Active**: 2026-05-26
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~145 | Active |
+| `journal-1.md` | ~434 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,7 +29,15 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
-| 4 | 2026-05-26 | 精简 Ops 与移除网络调试 | `dc2bdd8` | `codex/dev` |
+| 12 | 2026-05-26 | 精简 Ops 与移除网络调试 | `dc2bdd8` | `codex/dev` |
+| 11 | 2026-05-26 | 同步上游分支 | `eb0b50f`, `05f7199` | `codex/dev` |
+| 10 | 2026-05-26 | 删除活动和配置功能 | `651cedd` | `codex/dev` |
+| 9 | 2026-05-26 | 修复 Codex 会话项目归属 | `fd41713` | `codex/dev` |
+| 8 | 2026-05-26 | 清理已删除功能残留 | `9858cc9` | `codex/release-ci-fix` |
+| 7 | 2026-05-26 | 删除 API 服务商切换器 | `88feb72` | `codex/release-ci-fix` |
+| 6 | 2026-05-26 | 删除 Skills 功能 | `64eb79d` | `codex/release-ci-fix` |
+| 5 | 2026-05-26 | 修复 OPS 环境工具检测 | `66764e9` | `codex/release-ci-fix` |
+| 4 | 2026-05-26 | 云端重打 v1.7.6 安装包 | `1730d90`, `fa92cb8`, `03c4384` | `codex/release-ci-fix` |
 | 3 | 2026-05-25 | 移除废弃功能 | `7d77383` | `codex/dev` |
 | 2 | 2026-05-25 | Diagnose packaged app background exit | `4d5ce47` | `codex/dev` |
 | 1 | 2026-05-25 | Remove Dictionary and review Codex-only merge | `f0372ec`, `e2af669`, `12816a7` | `codex/dev` |

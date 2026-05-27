@@ -25,11 +25,7 @@ struct CodexUsageLimitLoader: Sendable {
                 )
             }
             guard snapshot.isFresh(now: now, ttl: Self.snapshotTTL) else {
-                return .waitingForNextResponse(
-                    provider: .codex,
-                    snapshot: snapshot,
-                    message: "Codex did not publish a fresh limit snapshot yet. This refreshes after the next Codex response."
-                )
+                return .cached(provider: .codex, snapshot: snapshot)
             }
             return .fresh(provider: .codex, snapshot: snapshot)
         } catch {
@@ -195,4 +191,3 @@ private struct CodexUsageLimitLine: Decodable {
         }
     }
 }
-

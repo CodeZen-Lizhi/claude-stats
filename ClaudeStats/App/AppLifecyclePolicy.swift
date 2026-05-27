@@ -1,8 +1,8 @@
 import Foundation
 
-/// Keeps Claude Stats resident while it is running as a menu-bar utility.
+/// Keeps Codex Statistics resident while it is running as a menu-bar utility.
 enum AppLifecyclePolicy {
-    static let automaticTerminationReason = "Claude Stats is a resident menu-bar app."
+    static let automaticTerminationReason = "Codex Statistics is a resident menu-bar app."
 
     @MainActor
     static func configureAutomaticTermination(using processInfo: AutomaticTerminationControlling = ProcessInfo.processInfo) {

@@ -60,7 +60,7 @@ struct FeatureControlCard<Preview: View, Controls: View>: View {
 
                 Toggle("", isOn: $isOn)
                     .labelsHidden()
-                    .toggleStyle(.switch)
+                    .toggleStyle(.appSwitch)
                     .accessibilityLabel(title)
             }
 
@@ -122,7 +122,7 @@ struct FeatureDisabledNotice: View {
                 .frame(width: 22, height: 22)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("\(featureName) is off")
+                Text(L10n.format("feature.disabled.title", defaultValue: "%@ is off", featureName))
                     .font(.sora(13, weight: .semibold))
                 Text(LocalizedStringKey(message))
                     .font(.sora(11))

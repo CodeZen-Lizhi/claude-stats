@@ -20,7 +20,7 @@ struct LegacyFeatureDataCleaner {
 
     private func removeLegacyTokenTownData() {
         let tokenTownDirectory = applicationSupportDirectory
-            .appendingPathComponent("Claude Stats", isDirectory: true)
+            .appendingPathComponent("Codex Statistics", isDirectory: true)
             .appendingPathComponent("TokenTown", isDirectory: true)
         guard fileManager.fileExists(atPath: tokenTownDirectory.path) else { return }
 

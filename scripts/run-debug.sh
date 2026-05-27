@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Build a Debug ClaudeStats.app to the canonical DerivedData path and launch it.
+# Build a Debug Codex Statistics.app to the canonical DerivedData path and launch it.
 #
-# Why not `open -a Claude\ Stats` or the default DerivedData path: this is a
+# Why not `open -a Codex\ Statistics` or the default DerivedData path: this is a
 # menu-bar (LSUIElement) app. Multiple registered .app bundles with the same
 # bundle id cause Launch Services conflicts and the menu-bar item silently fails
 # to appear. Always build to /tmp/Codex-stats-build and launch by full path so
@@ -10,13 +10,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 DERIVED=/tmp/Codex-stats-build
-APP="$DERIVED/Build/Products/Debug/Claude Stats.app"
-APP_PROCESS_PATTERN="Claude Stats.app/Contents/MacOS/Claude Stats"
+APP="$DERIVED/Build/Products/Debug/Codex Statistics.app"
+APP_PROCESS_PATTERN="Codex Statistics.app/Contents/MacOS/Codex Statistics"
 LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
 require_apple_silicon() {
     if [[ "$(uname -m)" != "arm64" ]]; then
-        echo "error: Claude Stats now supports Apple Silicon Macs only." >&2
+        echo "error: Codex Statistics now supports Apple Silicon Macs only." >&2
         exit 1
     fi
 }
@@ -45,7 +45,7 @@ stop_running_app() {
         return 0
     fi
 
-    echo "==> Stopping existing Claude Stats process(es): $(echo "$pids" | tr '\n' ' ')"
+    echo "==> Stopping existing Codex Statistics process(es): $(echo "$pids" | tr '\n' ' ')"
     kill -TERM $pids 2>/dev/null || true
     if wait_until_stopped 30; then
         return 0
@@ -59,22 +59,22 @@ stop_running_app() {
     fi
 
     pids="$(running_app_pids)"
-    echo "error: unable to stop existing Claude Stats process(es): $(echo "$pids" | tr '\n' ' ')" >&2
+    echo "error: unable to stop existing Codex Statistics process(es): $(echo "$pids" | tr '\n' ' ')" >&2
     return 1
 }
 
 unregister_bundle_if_present() {
     local bundle="$1"
     if [[ -d "$bundle" ]]; then
-        echo "==> Unregistering stale Claude Stats bundle: $bundle"
+        echo "==> Unregistering stale Codex Statistics bundle: $bundle"
         "$LSREGISTER" -u "$bundle" 2>/dev/null || true
     fi
 }
 
 cleanup_stale_registrations() {
-    unregister_bundle_if_present "/Applications/Claude Stats.app"
-    unregister_bundle_if_present "/tmp/claude-stats-build/Build/Products/Debug/Claude Stats.app"
-    unregister_bundle_if_present "/tmp/Codex-stats-build-tests/Build/Products/Debug/Claude Stats.app"
+    unregister_bundle_if_present "/Applications/Codex Statistics.app"
+    unregister_bundle_if_present "/tmp/claude-stats-build/Build/Products/Debug/Codex Statistics.app"
+    unregister_bundle_if_present "/tmp/Codex-stats-build-tests/Build/Products/Debug/Codex Statistics.app"
 }
 
 require_apple_silicon
@@ -115,14 +115,14 @@ for ((i = 0; i < 20; i++)); do
 done
 
 if [[ -z "$(running_app_pids)" ]]; then
-    echo "error: launch did not produce a Claude Stats process" >&2
+    echo "error: launch did not produce a Codex Statistics process" >&2
     exit 1
 fi
 
 for ((i = 0; i < 24; i++)); do
     sleep 0.25
     if [[ -z "$(running_app_pids)" ]]; then
-        echo "error: Claude Stats process exited during startup verification" >&2
+        echo "error: Codex Statistics process exited during startup verification" >&2
         exit 1
     fi
 done

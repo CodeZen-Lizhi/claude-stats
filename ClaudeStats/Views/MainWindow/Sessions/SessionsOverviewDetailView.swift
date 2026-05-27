@@ -15,7 +15,7 @@ struct SessionsOverviewDetailView: View {
     }
 
     private var summary: UsageSummary {
-        env.store.summary(for: .allTime, provider: provider)
+        UsageSummary.make(period: .allTime, sessions: sessions, pricing: env.pricing)
     }
 
     private var projectCount: Int {
@@ -57,16 +57,19 @@ struct SessionsOverviewDetailView: View {
                 Image(systemName: provider.iconSystemName)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(provider.accentColor)
-                Text("SESSIONS")
+                Text(L10n.string("stats.pane.sessions", defaultValue: "SESSIONS"))
                     .font(.sora(11, weight: .semibold))
                     .tracking(1.2)
                     .foregroundStyle(Color.stxMuted)
             }
 
-            Text("\(provider.shortName) session statistics")
+            Text(L10n.format("sessions.overview.title",
+                             defaultValue: "%@ session statistics",
+                             provider.shortName))
                 .font(.sora(24, weight: .semibold))
 
-            Text("All discovered conversations for the current provider.")
+            Text(L10n.string("sessions.overview.subtitle",
+                             defaultValue: "All discovered conversations for the current provider."))
                 .font(.sora(12))
                 .foregroundStyle(Color.stxMuted)
         }
@@ -75,7 +78,9 @@ struct SessionsOverviewDetailView: View {
     private var emptyState: some View {
         ContentUnavailableView {
             Label(
-                env.store.isLoading ? "Scanning Sessions" : "No Sessions",
+                env.store.isLoading
+                    ? L10n.string("sessions.empty.scanning_title", defaultValue: "Scanning Sessions")
+                    : L10n.string("sessions.empty.no_sessions", defaultValue: "No Sessions"),
                 systemImage: env.store.isLoading ? "arrow.triangle.2.circlepath" : "tray"
             )
         } description: {
@@ -87,12 +92,14 @@ struct SessionsOverviewDetailView: View {
 
     private var emptyStateMessage: String {
         if env.store.isLoading {
-            return "Scanning sessions for \(provider.shortName)..."
+            return L10n.format("sessions.empty.scanning_provider",
+                               defaultValue: "Scanning sessions for %@...",
+                               provider.shortName)
         }
         if let path = env.store.dataDirectoryPath(for: provider), !path.isEmpty {
-            return "No sessions found in \(path)."
+            return L10n.format("sessions.empty.path", defaultValue: "No sessions found in %@.", path)
         }
-        return "No sessions for \(provider.shortName) yet."
+        return L10n.format("sessions.empty.provider", defaultValue: "No sessions for %@ yet.", provider.shortName)
     }
 
     private var statsGrid: some View {
@@ -134,38 +141,38 @@ struct SessionsOverviewDetailView: View {
     }
 
     private var sessionCountCard: some View {
-        StatCard(label: "SESSIONS", value: "\(summary.sessionCount)")
+        StatCard(label: L10n.string("usage.stat.sessions", defaultValue: "SESSIONS"), value: "\(summary.sessionCount)")
     }
 
     private var projectCountCard: some View {
-        StatCard(label: "PROJECTS", value: "\(projectCount)")
+        StatCard(label: L10n.string("sessions.stat.projects", defaultValue: "PROJECTS"), value: "\(projectCount)")
     }
 
     private var messageCountCard: some View {
-        StatCard(label: "MESSAGES", value: Format.tokens(summary.messageCount))
+        StatCard(label: L10n.string("usage.stat.requests", defaultValue: "REQUESTS"), value: Format.tokens(summary.messageCount))
     }
 
     private var tokenCountCard: some View {
         StatCard(
-            label: "TOTAL TOKENS",
+            label: L10n.string("session.stat.total_tokens", defaultValue: "TOTAL TOKENS"),
             value: Format.tokens(summary.totalTokens(includingCacheRead: env.preferences.includeCacheInTokens))
         )
     }
 
     private var estimatedCostCard: some View {
         StatCard(
-            label: "EST. COST",
+            label: L10n.string("usage.stat.estimated_cost", defaultValue: "EST. COST"),
             value: Format.cost(summary.totalCost(for: env.preferences.costEstimationMode))
         )
     }
 
     private var modelCountCard: some View {
-        StatCard(label: "MODELS", value: "\(summary.models.count)")
+        StatCard(label: L10n.string("sessions.stat.models", defaultValue: "MODELS"), value: "\(summary.models.count)")
     }
 
     private var cacheHitCard: some View {
         StatCard(
-            label: "CACHE HIT",
+            label: L10n.string("usage.stat.cache_hit", defaultValue: "CACHE HIT"),
             value: cacheHitRate.map { Format.percent($0) } ?? "--",
             animatesNumericValue: false
         )
@@ -173,7 +180,7 @@ struct SessionsOverviewDetailView: View {
 
     private var lastActivityCard: some View {
         StatCard(
-            label: "LAST ACTIVITY",
+            label: L10n.string("session.stat.last_activity", defaultValue: "LAST ACTIVITY"),
             value: lastActivity.map { Format.relativeDate($0) } ?? "--",
             animatesNumericValue: false
         )
@@ -183,7 +190,7 @@ struct SessionsOverviewDetailView: View {
     private var modelBreakdown: some View {
         if !summary.models.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text("BY MODEL")
+                Text(L10n.string("section.by_model", defaultValue: "BY MODEL"))
                     .font(.sora(10, weight: .semibold))
                     .tracking(0.6)
                     .foregroundStyle(Color.stxMuted)
@@ -200,7 +207,7 @@ struct SessionsOverviewDetailView: View {
     private var recentSessionsSection: some View {
         if !recentSessions.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text("RECENT SESSIONS")
+                Text(L10n.string("sessions.recent", defaultValue: "RECENT SESSIONS"))
                     .font(.sora(10, weight: .semibold))
                     .tracking(0.6)
                     .foregroundStyle(Color.stxMuted)

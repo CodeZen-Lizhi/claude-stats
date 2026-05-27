@@ -12,10 +12,8 @@ final class AppEnvironment {
     let preferences: Preferences
     let providerRegistry: ProviderRegistry
     let store: SessionStore
-    let transcriptAnalysis: TranscriptAnalysisStore
     let updater = UpdaterController()
     let floatingStatsPanel = FloatingStatsPanelController()
-    let notchIsland = NotchIslandController()
     /// View models live in the environment so the Settings window and the
     /// individual pages can share state — and so the VMs persist across
     /// main-window open/close cycles (reopening doesn't refire a fetch).
@@ -24,13 +22,7 @@ final class AppEnvironment {
     let github = GitHubViewModel()
     let openAIStatus: OpenAIStatusViewModel
     let usageLimits: UsageLimitStore
-    let configurationProfiles: ConfigurationProfilesViewModel
-    let apiProviders: APIProviderSwitcherViewModel
-    let cliEnvironment: CLIEnvironmentViewModel
-    let aiConfigs: AIConfigsViewModel
-    let skills: SkillsStore
     let systemMonitor: SystemMonitorViewModel
-    let ops: OpsStore
 
     init(
         pricing: ModelPricing,
@@ -38,26 +30,17 @@ final class AppEnvironment {
         providerRegistry: ProviderRegistry,
         store: SessionStore,
         usageLimits: UsageLimitStore? = nil,
-        cliEnvironment: CLIEnvironmentViewModel = CLIEnvironmentViewModel(),
-        systemMonitor: SystemMonitorViewModel = SystemMonitorViewModel(),
-        ops: OpsStore = OpsStore()
+        systemMonitor: SystemMonitorViewModel = SystemMonitorViewModel()
     ) {
         self.pricing = pricing
         self.preferences = preferences
         self.providerRegistry = providerRegistry
         self.store = store
-        self.transcriptAnalysis = TranscriptAnalysisStore()
-        self.cliEnvironment = cliEnvironment
         self.systemMonitor = systemMonitor
-        self.ops = ops
         self.dashboard = DashboardViewModel(pricing: pricing)
         self.gitActivity = GitActivityViewModel()
         self.openAIStatus = OpenAIStatusViewModel(preferences: preferences)
         self.usageLimits = usageLimits ?? UsageLimitStore(registry: providerRegistry)
-        self.configurationProfiles = ConfigurationProfilesViewModel(registry: providerRegistry)
-        self.apiProviders = APIProviderSwitcherViewModel()
-        self.aiConfigs = AIConfigsViewModel(scanner: AIConfigScanner(registry: providerRegistry))
-        self.skills = SkillsStore()
     }
 
     convenience init() {
@@ -76,25 +59,16 @@ final class AppEnvironment {
         LegacyFeatureDataCleaner().cleanRemovedFeatureData()
         LaunchAtLogin.enableByDefaultIfNeeded()
         Task {
-            await apiProviders.loadIfNeeded(keyStorageMode: preferences.apiProviderKeyStorageMode)
-            await configurationProfiles.loadIfNeeded()
             await store.refresh()
         }
         openAIStatus.start()
         applyAutoRefreshSetting()
         updater.start()
         floatingStatsPanel.start(environment: self)
-        if !Self.isRunningUnitTests {
-            notchIsland.start(environment: self)
-        }
     }
 
     func applyAutoRefreshSetting() {
         store.startAutoRefresh(every: TimeInterval(preferences.autoRefreshMinutes) * 60)
     }
 
-    private static var isRunningUnitTests: Bool {
-        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
-            || NSClassFromString("XCTestCase") != nil
-    }
 }

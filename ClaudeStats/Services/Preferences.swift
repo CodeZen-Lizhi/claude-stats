@@ -14,16 +14,19 @@ enum MenuBarMetric: String, CaseIterable, Sendable, Identifiable {
     }
 }
 
-enum APIProviderKeyStorageMode: String, CaseIterable, Sendable, Identifiable {
-    case json
-    case keychain
+/// User-selected app appearance for the main UI.
+enum AppAppearancePreference: String, CaseIterable, Sendable, Identifiable {
+    case system
+    case light
+    case dark
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .json: "JSON"
-        case .keychain: L10n.string("api_key_storage.keychain", defaultValue: "Keychain")
+        case .system: L10n.string("appearance.system", defaultValue: "System")
+        case .light: L10n.string("appearance.light", defaultValue: "Light")
+        case .dark: L10n.string("appearance.dark", defaultValue: "Dark")
         }
     }
 }
@@ -38,6 +41,9 @@ final class Preferences {
             defaults.set(appLanguagePreference.rawValue, forKey: Keys.appLanguagePreference)
             appLanguagePreference.applyToAppleLanguages(defaults: defaults)
         }
+    }
+    var appearancePreference: AppAppearancePreference {
+        didSet { defaults.set(appearancePreference.rawValue, forKey: Keys.appearancePreference) }
     }
     var autoRefreshMinutes: Int {
         didSet { defaults.set(autoRefreshMinutes, forKey: Keys.autoRefreshMinutes) }
@@ -69,7 +75,7 @@ final class Preferences {
     var menuBarIncludesCache: Bool {
         didSet { defaults.set(menuBarIncludesCache, forKey: Keys.menuBarIncludesCache) }
     }
-    /// Whether launching Claude Stats should present the main window. On by
+    /// Whether launching Codex Statistics should present the main window. On by
     /// default so double-clicking the app behaves like a normal windowed app.
     var openMainWindowOnLaunch: Bool {
         didSet { defaults.set(openMainWindowOnLaunch, forKey: Keys.openMainWindowOnLaunch) }
@@ -89,59 +95,11 @@ final class Preferences {
     var floatingTabAnchor: Double {
         didSet { defaults.set(floatingTabAnchor, forKey: Keys.floatingTabAnchor) }
     }
-    /// Camera-notch Dynamic Island surface adapted from Atoll. Off by default
-    /// so the existing menu-bar and floating-tab entry points remain unchanged.
-    var notchIslandEnabled: Bool {
-        didSet { defaults.set(notchIslandEnabled, forKey: Keys.notchIslandEnabled) }
-    }
-    var notchIslandDisplayMode: NotchIslandDisplayMode {
-        didSet { defaults.set(notchIslandDisplayMode.rawValue, forKey: Keys.notchIslandDisplayMode) }
-    }
-    var notchIslandSelectedScreenIDs: Set<String> {
-        didSet {
-            if notchIslandSelectedScreenIDs.isEmpty {
-                notchIslandSelectedScreenIDs = NotchIslandScreenCatalog.defaultSelectedScreenIDs()
-                return
-            }
-            defaults.set(
-                notchIslandSelectedScreenIDs.sorted().joined(separator: ","),
-                forKey: Keys.notchIslandSelectedScreenIDs
-            )
-        }
-    }
-    var notchIslandScreenStyles: [String: NotchIslandScreenStyle] {
-        didSet {
-            persistNotchIslandScreenStyles()
-        }
-    }
-    var notchIslandSizePreset: NotchIslandSizePreset {
-        didSet { defaults.set(notchIslandSizePreset.rawValue, forKey: Keys.notchIslandSizePreset) }
-    }
-    var notchIslandHoverExpansionEnabled: Bool {
-        didSet { defaults.set(notchIslandHoverExpansionEnabled, forKey: Keys.notchIslandHoverExpansionEnabled) }
-    }
-    var notchIslandShortcutEnabled: Bool {
-        didSet { defaults.set(notchIslandShortcutEnabled, forKey: Keys.notchIslandShortcutEnabled) }
-    }
-    var notchIslandEnabledModules: Set<NotchIslandModule> {
-        didSet {
-            if notchIslandEnabledModules.isEmpty {
-                notchIslandEnabledModules = NotchIslandModule.defaultEnabled
-            }
-            defaults.set(
-                notchIslandEnabledModules.map(\.rawValue).sorted().joined(separator: ","),
-                forKey: Keys.notchIslandEnabledModules
-            )
-        }
-    }
     var detailPanelBoundaryFalloffEnabled: Bool {
         didSet { defaults.set(detailPanelBoundaryFalloffEnabled, forKey: Keys.detailPanelBoundaryFalloffEnabled) }
     }
     var sessionsExpandedOnAppOpen: Bool {
         didSet { defaults.set(sessionsExpandedOnAppOpen, forKey: Keys.sessionsExpandedOnAppOpen) }
-    }
-    var apiProviderKeyStorageMode: APIProviderKeyStorageMode {
-        didSet { defaults.set(apiProviderKeyStorageMode.rawValue, forKey: Keys.apiProviderKeyStorageMode) }
     }
     var systemMonitorEnabled: Bool {
         didSet { defaults.set(systemMonitorEnabled, forKey: Keys.systemMonitorEnabled) }
@@ -161,9 +119,8 @@ final class Preferences {
         }
     }
 
-    /// Which platforms the user has turned on. The switcher bar only appears
-    /// when this has more than one entry; otherwise the panel shows the single
-    /// enabled platform (and the original scanline strip). Always non-empty.
+    /// Which platform is enabled. The app is Codex-only, so this remains
+    /// normalized to a single value for compatibility with shared data paths.
     var enabledProviders: Set<ProviderKind> {
         didSet {
             if enabledProviders != [.codex] {
@@ -183,8 +140,8 @@ final class Preferences {
             defaults.set(selectedProvider.rawValue, forKey: Keys.selectedProvider)
         }
     }
-    /// When off, the app forgets ``selectedProvider`` on launch and starts on
-    /// the first enabled platform.
+    /// Kept for compatibility with older defaults. Codex-only builds always
+    /// normalize the selected provider to Codex.
     var rememberSelectedProvider: Bool {
         didSet { defaults.set(rememberSelectedProvider, forKey: Keys.rememberSelectedProvider) }
     }
@@ -194,13 +151,10 @@ final class Preferences {
         [.codex]
     }
 
-    /// Opt-in to the AI activity analysis (reads macOS Screen Time; needs Full
-    /// Disk Access). Off by default — the Activity tab only appears when on.
-    var aiActivityAnalysisEnabled: Bool {
-        didSet { defaults.set(aiActivityAnalysisEnabled, forKey: Keys.aiActivityAnalysisEnabled) }
-    }
-    /// Opt-in to git tracking — adds a view that correlates Codex usage with the
-    /// commit activity of the repos you've used Claude in. Off by default.
+    /// Adds a view that correlates Codex usage with the commit activity of the
+    /// repos you've used Codex in. On by default so the main Tools section keeps
+    /// its primary workspace entry visible; users can still hide it from
+    /// Settings > Features.
     var gitTrackingEnabled: Bool {
         didSet { defaults.set(gitTrackingEnabled, forKey: Keys.gitTrackingEnabled) }
     }
@@ -267,51 +221,12 @@ final class Preferences {
     var overlapPalette: OverlapPalette {
         didSet { defaults.set(overlapPalette.rawValue, forKey: Keys.overlapPalette) }
     }
-    /// Extra GUI coding-surface bundle ids the user added on top of
-    /// ``ActivitySurfaceCatalog/codingSurfaceDefaults``.
-    var codingSurfaceBundleIDsAdded: [String] {
-        didSet { defaults.set(codingSurfaceBundleIDsAdded, forKey: Keys.codingSurfaceBundleIDsAdded) }
-    }
-    /// Default GUI coding-surface bundle ids the user turned off.
-    var codingSurfaceBundleIDsRemoved: [String] {
-        didSet { defaults.set(codingSurfaceBundleIDsRemoved, forKey: Keys.codingSurfaceBundleIDsRemoved) }
-    }
-    /// Extra terminal/CLI-host bundle ids the user added on top of
-    /// ``ActivitySurfaceCatalog/cliHostDefaults``.
-    var cliHostBundleIDsAdded: [String] {
-        didSet { defaults.set(cliHostBundleIDsAdded, forKey: Keys.cliHostBundleIDsAdded) }
-    }
-    /// Default terminal/CLI-host bundle ids the user turned off.
-    var cliHostBundleIDsRemoved: [String] {
-        didSet { defaults.set(cliHostBundleIDsRemoved, forKey: Keys.cliHostBundleIDsRemoved) }
-    }
-
-    /// The GUI coding-surface bundle ids actually in effect for the analysis.
-    var effectiveCodingSurfaceBundleIDs: Set<String> {
-        ActivitySurfaceCatalog.effectiveCodingSurfaceBundleIDs(
-            added: codingSurfaceBundleIDsAdded,
-            removed: codingSurfaceBundleIDsRemoved
-        )
-    }
-
-    /// The CLI-host bundle ids actually in effect for the analysis.
-    var effectiveCLIHostBundleIDs: Set<String> {
-        ActivitySurfaceCatalog.effectiveCLIHostBundleIDs(
-            added: cliHostBundleIDsAdded,
-            removed: cliHostBundleIDsRemoved
-        )
-    }
-
-    /// All app-focus bundle ids needed for one Screen Time query.
-    var effectiveActivityBundleIDs: Set<String> {
-        effectiveCodingSurfaceBundleIDs.union(effectiveCLIHostBundleIDs)
-    }
-
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         appLanguagePreference = AppLanguagePreference(rawValue: defaults.string(forKey: Keys.appLanguagePreference) ?? "") ?? .system
+        appearancePreference = AppAppearancePreference(rawValue: defaults.string(forKey: Keys.appearancePreference) ?? "") ?? .system
         autoRefreshMinutes = (defaults.object(forKey: Keys.autoRefreshMinutes) as? Int) ?? 5
         menuBarMetric = MenuBarMetric(rawValue: defaults.string(forKey: Keys.menuBarMetric) ?? "") ?? .tokens
         menuBarPeriod = StatsPeriod(rawValue: defaults.string(forKey: Keys.menuBarPeriod) ?? "") ?? .allTime
@@ -322,33 +237,8 @@ final class Preferences {
         floatingTabEnabled = (defaults.object(forKey: Keys.floatingTabEnabled) as? Bool) ?? true
         floatingTabEdge = FloatingPanelEdge(rawValue: defaults.string(forKey: Keys.floatingTabEdge) ?? "") ?? .right
         floatingTabAnchor = (defaults.object(forKey: Keys.floatingTabAnchor) as? Double) ?? 0.5
-        notchIslandEnabled = defaults.bool(forKey: Keys.notchIslandEnabled)
-        let legacyNotchDisplayMode = NotchIslandDisplayMode(rawValue: defaults.string(forKey: Keys.notchIslandDisplayMode) ?? "") ?? .primaryDisplay
-        notchIslandDisplayMode = legacyNotchDisplayMode
-        let storedNotchScreenIDsRaw = defaults.string(forKey: Keys.notchIslandSelectedScreenIDs) ?? ""
-        let storedNotchScreenIDs = storedNotchScreenIDsRaw
-            .split(separator: ",")
-            .map { String($0) }
-        if storedNotchScreenIDs.isEmpty {
-            let migratedScreenIDs = NotchIslandScreenCatalog.defaultSelectedScreenIDs(for: legacyNotchDisplayMode)
-            notchIslandSelectedScreenIDs = migratedScreenIDs
-            defaults.set(migratedScreenIDs.sorted().joined(separator: ","), forKey: Keys.notchIslandSelectedScreenIDs)
-        } else {
-            notchIslandSelectedScreenIDs = Set(storedNotchScreenIDs)
-        }
-        notchIslandScreenStyles = Self.decodeNotchIslandScreenStyles(defaults.string(forKey: Keys.notchIslandScreenStyles))
-        notchIslandSizePreset = NotchIslandSizePreset(rawValue: defaults.string(forKey: Keys.notchIslandSizePreset) ?? "") ?? .regular
-        notchIslandHoverExpansionEnabled = (defaults.object(forKey: Keys.notchIslandHoverExpansionEnabled) as? Bool) ?? true
-        notchIslandShortcutEnabled = (defaults.object(forKey: Keys.notchIslandShortcutEnabled) as? Bool) ?? true
-        let storedNotchModules = (defaults.string(forKey: Keys.notchIslandEnabledModules) ?? "")
-            .split(separator: ",")
-            .compactMap { NotchIslandModule(rawValue: String($0)) }
-        notchIslandEnabledModules = storedNotchModules.isEmpty
-            ? NotchIslandModule.defaultEnabled
-            : Set(storedNotchModules)
         detailPanelBoundaryFalloffEnabled = (defaults.object(forKey: Keys.detailPanelBoundaryFalloffEnabled) as? Bool) ?? true
         sessionsExpandedOnAppOpen = (defaults.object(forKey: Keys.sessionsExpandedOnAppOpen) as? Bool) ?? false
-        apiProviderKeyStorageMode = APIProviderKeyStorageMode(rawValue: defaults.string(forKey: Keys.apiProviderKeyStorageMode) ?? "") ?? .json
         systemMonitorEnabled = defaults.bool(forKey: Keys.systemMonitorEnabled)
         systemMonitorRefreshRate = SystemMonitorRefreshRate(rawValue: defaults.string(forKey: Keys.systemMonitorRefreshRate) ?? "") ?? .threeSeconds
         let storedSystemMonitorModules = (defaults.string(forKey: Keys.systemMonitorVisibleModules) ?? "")
@@ -357,8 +247,7 @@ final class Preferences {
         systemMonitorVisibleModules = storedSystemMonitorModules.isEmpty
             ? SystemMonitorModule.defaultVisible
             : Set(storedSystemMonitorModules)
-        aiActivityAnalysisEnabled = defaults.bool(forKey: Keys.aiActivityAnalysisEnabled)
-        gitTrackingEnabled = defaults.bool(forKey: Keys.gitTrackingEnabled)
+        gitTrackingEnabled = (defaults.object(forKey: Keys.gitTrackingEnabled) as? Bool) ?? true
         gitOpensInWindow = defaults.bool(forKey: Keys.gitOpensInWindow)
         gitWorkspaceSourceIDs = GitWorkspaceSourceCatalog.decodeStoredSourceIDs(
             defaults.string(forKey: Keys.gitWorkspaceSourceIDs)
@@ -378,25 +267,6 @@ final class Preferences {
         openAIStatusNotificationsEnabled = defaults.bool(forKey: Keys.openAIStatusNotificationsEnabled)
         openAIStatusLastNotificationFingerprint = defaults.string(forKey: Keys.openAIStatusLastNotificationFingerprint) ?? ""
         overlapPalette = OverlapPalette(rawValue: defaults.string(forKey: Keys.overlapPalette) ?? "") ?? .appCohesive
-        let hasNewCodingSurfaceAdditions = defaults.object(forKey: Keys.codingSurfaceBundleIDsAdded) != nil
-        let hasNewCodingSurfaceRemovals = defaults.object(forKey: Keys.codingSurfaceBundleIDsRemoved) != nil
-        let storedCodingSurfaceBundleIDsAdded = defaults.stringArray(forKey: Keys.codingSurfaceBundleIDsAdded)
-            ?? defaults.stringArray(forKey: Keys.ideBundleIDsAdded)
-            ?? []
-        let storedCodingSurfaceBundleIDsRemoved = defaults.stringArray(forKey: Keys.codingSurfaceBundleIDsRemoved)
-            ?? defaults.stringArray(forKey: Keys.ideBundleIDsRemoved)
-            ?? []
-        codingSurfaceBundleIDsAdded = storedCodingSurfaceBundleIDsAdded
-        codingSurfaceBundleIDsRemoved = storedCodingSurfaceBundleIDsRemoved
-        cliHostBundleIDsAdded = defaults.stringArray(forKey: Keys.cliHostBundleIDsAdded) ?? []
-        cliHostBundleIDsRemoved = defaults.stringArray(forKey: Keys.cliHostBundleIDsRemoved) ?? []
-
-        if !hasNewCodingSurfaceAdditions, defaults.object(forKey: Keys.ideBundleIDsAdded) != nil {
-            defaults.set(storedCodingSurfaceBundleIDsAdded, forKey: Keys.codingSurfaceBundleIDsAdded)
-        }
-        if !hasNewCodingSurfaceRemovals, defaults.object(forKey: Keys.ideBundleIDsRemoved) != nil {
-            defaults.set(storedCodingSurfaceBundleIDsRemoved, forKey: Keys.codingSurfaceBundleIDsRemoved)
-        }
 
         let remember = (defaults.object(forKey: Keys.rememberSelectedProvider) as? Bool) ?? true
 
@@ -406,31 +276,9 @@ final class Preferences {
         appLanguagePreference.applyToAppleLanguages(defaults: defaults)
     }
 
-    private func persistNotchIslandScreenStyles() {
-        let raw = notchIslandScreenStyles.mapValues(\.rawValue)
-        guard let data = try? JSONEncoder().encode(raw),
-              let json = String(data: data, encoding: .utf8) else {
-            defaults.removeObject(forKey: Keys.notchIslandScreenStyles)
-            return
-        }
-        defaults.set(json, forKey: Keys.notchIslandScreenStyles)
-    }
-
-    private static func decodeNotchIslandScreenStyles(_ raw: String?) -> [String: NotchIslandScreenStyle] {
-        guard let raw,
-              let data = raw.data(using: .utf8),
-              let decoded = try? JSONDecoder().decode([String: String].self, from: data) else {
-            return [:]
-        }
-        return decoded.reduce(into: [:]) { result, pair in
-            if let style = NotchIslandScreenStyle(rawValue: pair.value) {
-                result[pair.key] = style
-            }
-        }
-    }
-
     private enum Keys {
         static let appLanguagePreference = "appLanguagePreference"
+        static let appearancePreference = "appearancePreference"
         static let autoRefreshMinutes = "autoRefreshMinutes"
         static let menuBarMetric = "menuBarMetric"
         static let menuBarPeriod = "menuBarPeriod"
@@ -441,32 +289,16 @@ final class Preferences {
         static let floatingTabEnabled = "floatingTabEnabled"
         static let floatingTabEdge = "floatingTabEdge"
         static let floatingTabAnchor = "floatingTabAnchor"
-        static let notchIslandEnabled = "notchIslandEnabled"
-        static let notchIslandDisplayMode = "notchIslandDisplayMode"
-        static let notchIslandSelectedScreenIDs = "notchIslandSelectedScreenIDs"
-        static let notchIslandScreenStyles = "notchIslandScreenStyles"
-        static let notchIslandSizePreset = "notchIslandSizePreset"
-        static let notchIslandHoverExpansionEnabled = "notchIslandHoverExpansionEnabled"
-        static let notchIslandShortcutEnabled = "notchIslandShortcutEnabled"
-        static let notchIslandEnabledModules = "notchIslandEnabledModules"
         static let detailPanelBoundaryFalloffEnabled = "detailPanelBoundaryFalloffEnabled"
         static let sessionsExpandedOnAppOpen = "sessionsExpandedOnAppOpen"
-        static let apiProviderKeyStorageMode = "apiProviderKeyStorageMode"
         static let systemMonitorEnabled = "systemMonitorEnabled"
         static let systemMonitorRefreshRate = "systemMonitorRefreshRate"
         static let systemMonitorVisibleModules = "systemMonitorVisibleModules"
-        static let aiActivityAnalysisEnabled = "aiActivityAnalysisEnabled"
         static let gitTrackingEnabled = "gitTrackingEnabled"
         static let gitOpensInWindow = "gitOpensInWindow"
         static let gitWorkspaceSourceIDs = "gitWorkspaceSourceIDs"
         static let gitStatsScope = "gitStatsScope"
         static let gitDiffBlockGranularity = "gitDiffBlockGranularity"
-        static let codingSurfaceBundleIDsAdded = "codingSurfaceBundleIDsAdded"
-        static let codingSurfaceBundleIDsRemoved = "codingSurfaceBundleIDsRemoved"
-        static let cliHostBundleIDsAdded = "cliHostBundleIDsAdded"
-        static let cliHostBundleIDsRemoved = "cliHostBundleIDsRemoved"
-        static let ideBundleIDsAdded = "ideBundleIDsAdded"
-        static let ideBundleIDsRemoved = "ideBundleIDsRemoved"
         static let enabledProviders = "enabledProviders"
         static let selectedProvider = "selectedProvider"
         static let rememberSelectedProvider = "rememberSelectedProvider"

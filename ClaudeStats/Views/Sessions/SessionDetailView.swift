@@ -14,8 +14,6 @@ struct SessionDetailView: View {
     let session: Session
     @State private var transcriptMessages: [SessionTranscriptMessage] = []
     @State private var transcriptIsLoading = false
-    @State private var similarSessions: [SemanticSessionSearchResult] = []
-    @State private var similarSessionsLoading = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -28,20 +26,12 @@ struct SessionDetailView: View {
                 missingStatsPlaceholder
             }
 
-            analysisInsightsSection
-            similarSessionsSection
             transcriptSection
             actionRow
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .task(id: session.id) {
             await loadTranscript()
-            env.transcriptAnalysis.loadIfNeeded(
-                provider: session.provider,
-                sessions: env.store.sessions(for: session.provider),
-                messageLoader: env.store.transcriptMessageLoader(for: session.provider)
-            )
-            await loadSimilarSessions()
         }
     }
 
@@ -59,7 +49,7 @@ struct SessionDetailView: View {
                     .foregroundStyle(Color.stxMuted)
             }
 
-            Text(session.stats?.title.nonEmpty ?? session.externalID)
+            Text(session.stats?.title.nonEmpty ?? session.titleFallback ?? session.externalID)
                 .font(.sora(22, weight: .semibold))
                 .foregroundStyle(.primary)
                 .lineLimit(2)
@@ -86,7 +76,7 @@ struct SessionDetailView: View {
                          value: Format.tokens(stats.totalTokens(includingCacheRead: includeCache)))
                 StatCard(label: L10n.string("session.stat.estimated_cost", defaultValue: "ESTIMATED COST"),
                          value: Format.cost(stats.totalCost(for: env.preferences.costEstimationMode)))
-                StatCard(label: L10n.string("session.stat.messages", defaultValue: "MESSAGES"),
+                StatCard(label: L10n.string("usage.stat.requests", defaultValue: "REQUESTS"),
                          value: "\(stats.messageCount)")
                 StatCard(label: L10n.string("session.stat.last_activity", defaultValue: "LAST ACTIVITY"),
                          value: Format.relativeDate(stats.lastActivity ?? session.lastModified),
@@ -129,7 +119,7 @@ struct SessionDetailView: View {
                         .controlSize(.small)
                         .scaleEffect(0.72)
                 } else if !transcriptMessages.isEmpty {
-                    Text(L10n.messageCount(transcriptMessages.count))
+                    Text(L10n.requestCount(session.stats?.messageCount ?? transcriptMessages.count))
                         .font(.sora(10))
                         .foregroundStyle(Color.stxMuted)
                 }
@@ -173,129 +163,6 @@ struct SessionDetailView: View {
         transcriptIsLoading = false
     }
 
-    // MARK: - Similar sessions
-
-    @ViewBuilder
-    private var similarSessionsSection: some View {
-        if env.localAI.semanticSearchAvailable {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("SIMILAR SESSIONS")
-                        .font(.sora(10, weight: .semibold))
-                        .tracking(0.6)
-                        .foregroundStyle(Color.stxMuted)
-                    Spacer(minLength: 0)
-                    if similarSessionsLoading {
-                        ProgressView()
-                            .controlSize(.small)
-                            .scaleEffect(0.72)
-                    }
-                }
-
-                let sessionsByID = Dictionary(uniqueKeysWithValues: env.store.sessions(for: session.provider).map { ($0.id, $0) })
-                let rows = similarSessions.compactMap { result -> SimilarSessionRowData? in
-                    guard let related = sessionsByID[result.sessionID] else { return nil }
-                    return SimilarSessionRowData(session: related, result: result)
-                }
-
-                if rows.isEmpty && !similarSessionsLoading {
-                    Text("No close matches yet.")
-                        .font(.sora(11))
-                        .foregroundStyle(Color.stxMuted)
-                        .padding(12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .appSurface(.compactCard(radius: 8), padding: nil)
-                } else {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(rows) { row in
-                            SimilarSessionResultRow(row: row)
-                            if row.id != rows.last?.id {
-                                Divider().overlay(Color.stxStroke)
-                            }
-                        }
-                    }
-                    .padding(12)
-                    .appSurface(.compactCard(radius: 8), padding: nil)
-                }
-            }
-        }
-    }
-
-    private func loadSimilarSessions() async {
-        guard env.localAI.semanticSearchAvailable else {
-            similarSessions = []
-            similarSessionsLoading = false
-            return
-        }
-        similarSessionsLoading = true
-        let results = await env.localAI.similarSessions(
-            to: session,
-            providerSessions: env.store.sessions(for: session.provider),
-            messageLoader: env.store.transcriptMessageLoader(for: session.provider)
-        )
-        guard !Task.isCancelled else { return }
-        similarSessions = results
-        similarSessionsLoading = false
-    }
-
-    // MARK: - Analysis
-
-    @ViewBuilder
-    private var analysisInsightsSection: some View {
-        if let analysis = env.transcriptAnalysis.sessionAnalysis(for: session.id, provider: session.provider),
-           !analysis.topTerms.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("INSIGHTS")
-                    .font(.sora(10, weight: .semibold))
-                    .tracking(0.6)
-                    .foregroundStyle(Color.stxMuted)
-
-                VStack(alignment: .leading, spacing: 12) {
-                    insightGroup("Top terms", terms: Array(analysis.topTerms.prefix(8)))
-                    if !analysis.fileTerms.isEmpty {
-                        insightGroup("Files", terms: analysis.fileTerms)
-                    }
-                    if !analysis.commandTerms.isEmpty {
-                        insightGroup("Commands", terms: analysis.commandTerms)
-                    }
-                    if !analysis.errorTerms.isEmpty {
-                        insightGroup("Errors", terms: analysis.errorTerms)
-                    }
-                }
-                .padding(12)
-                .appSurface(.compactCard(radius: 8), padding: nil)
-            }
-        } else if env.transcriptAnalysis.isLoading(for: session.provider) {
-            HStack(spacing: 8) {
-                ProgressView()
-                    .controlSize(.small)
-                    .scaleEffect(0.72)
-                Text("Analyzing terms...")
-                    .font(.sora(11))
-                    .foregroundStyle(Color.stxMuted)
-            }
-        }
-    }
-
-    private func insightGroup(_ title: String, terms: [TranscriptSessionTerm]) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title.uppercased())
-                .font(.sora(9, weight: .semibold))
-                .tracking(0.6)
-                .foregroundStyle(Color.stxMuted)
-            TranscriptInsightFlowLayout(spacing: 6, rowSpacing: 6) {
-                ForEach(terms, id: \.chipID) { term in
-                    Text(term.displayName)
-                        .font(.sora(10, weight: .medium))
-                        .lineLimit(1)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
-                }
-            }
-        }
-    }
-
     // MARK: - Missing stats placeholder
 
     private var missingStatsPlaceholder: some View {
@@ -329,41 +196,6 @@ struct SessionDetailView: View {
             Spacer(minLength: 0)
         }
         .font(.sora(11))
-    }
-}
-
-private struct SimilarSessionRowData: Identifiable {
-    let session: Session
-    let result: SemanticSessionSearchResult
-
-    var id: String { session.id }
-}
-
-private struct SimilarSessionResultRow: View {
-    let row: SimilarSessionRowData
-
-    private var title: String {
-        row.session.stats?.title.nonEmpty ?? row.session.externalID
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 8) {
-                Text(title)
-                    .font(.sora(11, weight: .medium))
-                    .lineLimit(1)
-                Spacer(minLength: 8)
-                Text(String(format: "%.2f", row.result.score))
-                    .font(.sora(10).monospacedDigit())
-                    .foregroundStyle(Color.stxMuted)
-            }
-            Text(row.result.matchedExcerpt)
-                .font(.sora(10))
-                .foregroundStyle(Color.stxMuted)
-                .lineLimit(2)
-        }
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -424,50 +256,6 @@ private extension SessionTranscriptMessage.Role {
         case .system: .stxMuted
         }
     }
-}
-
-private struct TranscriptInsightFlowLayout: Layout {
-    var spacing: CGFloat = 6
-    var rowSpacing: CGFloat = 6
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = proposal.width ?? 400
-        var x: CGFloat = 0
-        var y: CGFloat = 0
-        var rowHeight: CGFloat = 0
-        for view in subviews {
-            let size = view.sizeThatFits(.unspecified)
-            if x + size.width > width, x > 0 {
-                x = 0
-                y += rowHeight + rowSpacing
-                rowHeight = 0
-            }
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-        }
-        return CGSize(width: width, height: y + rowHeight)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x = bounds.minX
-        var y = bounds.minY
-        var rowHeight: CGFloat = 0
-        for view in subviews {
-            let size = view.sizeThatFits(.unspecified)
-            if x + size.width > bounds.maxX, x > bounds.minX {
-                x = bounds.minX
-                y += rowHeight + rowSpacing
-                rowHeight = 0
-            }
-            view.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-        }
-    }
-}
-
-private extension TranscriptSessionTerm {
-    var chipID: String { "\(kind.rawValue)-\(canonical)" }
 }
 
 private extension String {
