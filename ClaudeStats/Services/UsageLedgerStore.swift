@@ -6,10 +6,24 @@ import Foundation
 actor UsageLedgerStore {
     private let fileURL: URL
     private var snapshot: UsageLedgerSnapshot
+    private var persistenceBatchDepth = 0
+    private var hasDeferredPersistence = false
 
     init(fileURL: URL = UsageLedgerPaths.ledgerURL()) {
         self.fileURL = fileURL
         self.snapshot = Self.load(from: fileURL)
+    }
+
+    func beginPersistenceBatch() {
+        persistenceBatchDepth += 1
+    }
+
+    func endPersistenceBatch() {
+        guard persistenceBatchDepth > 0 else { return }
+        persistenceBatchDepth -= 1
+        guard persistenceBatchDepth == 0, hasDeferredPersistence else { return }
+        hasDeferredPersistence = false
+        persistNow()
     }
 
     func events(provider: ProviderKind? = nil) -> [UsageLedgerEvent] {
@@ -105,13 +119,19 @@ actor UsageLedgerStore {
 
     func markSeen(_ sessions: [Session], now: Date = .now) async {
         let liveIDs = Set(sessions.map(\.id))
+        var didChange = false
         for index in snapshot.parseStates.indices {
-            snapshot.parseStates[index].sourceExists = liveIDs.contains(snapshot.parseStates[index].sessionID)
-            if snapshot.parseStates[index].sourceExists {
-                snapshot.parseStates[index].lastSeenAt = now
+            let isLive = liveIDs.contains(snapshot.parseStates[index].sessionID)
+            let wasLive = snapshot.parseStates[index].sourceExists
+            if wasLive != isLive {
+                snapshot.parseStates[index].sourceExists = isLive
+                if isLive {
+                    snapshot.parseStates[index].lastSeenAt = now
+                }
+                didChange = true
             }
         }
-        persist()
+        if didChange { persist() }
     }
 
     func syncParentSessionIDs(mapping: [String: String], liveSessionIDs: Set<String>) async {
@@ -294,6 +314,14 @@ actor UsageLedgerStore {
     }
 
     private func persist() {
+        guard persistenceBatchDepth == 0 else {
+            hasDeferredPersistence = true
+            return
+        }
+        persistNow()
+    }
+
+    private func persistNow() {
         do {
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             let encoder = JSONEncoder()

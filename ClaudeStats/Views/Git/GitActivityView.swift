@@ -87,7 +87,7 @@ struct GitActivityView: View {
         .task(id: key) {
             if isPreview { return }
             await vm.reloadIfNeeded(
-                sessions: env.store.sessions,
+                sessions: env.store.gitAttributionSessions,
                 sourceIDs: sourceIDs,
                 lastRefreshedAt: env.store.lastRefreshedAt
             )

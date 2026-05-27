@@ -127,6 +127,170 @@ struct SessionStoreTests {
     }
 
     @MainActor
+    @Test("Deleting a session trashes transcript, hides it, and preserves ledger and git history")
+    func deleteSessionTrashesTranscriptAndPreservesHistory() async {
+        let session = Self.session(lastModified: Date(timeIntervalSince1970: 1_000), fileSize: 42)
+        let ledger = Self.temporaryLedger()
+        let deleted = Self.temporaryDeletedStore()
+        var trashedPaths: [String] = []
+        let provider = MutableSessionProvider(
+            sessions: [session],
+            statsByID: [session.id: Self.stats(title: "Deleted", tokens: 250)]
+        )
+        let store = SessionStore(
+            registry: ProviderRegistry(providers: [provider]),
+            pricing: TestPricing.table,
+            usageLedger: ledger,
+            deletedSessions: deleted,
+            trashTranscript: { trashedPaths.append($0.path) }
+        )
+
+        await store.refresh()
+        #expect(store.sessions.map(\.id) == [session.id])
+        #expect(store.summary(for: .allTime).totalTokens == 250)
+
+        let result = await store.deleteSession(store.sessions[0])
+
+        #expect(result.deletedIDs == Set([session.id]))
+        #expect(result.failures.isEmpty)
+        #expect(trashedPaths == [session.filePath])
+        #expect(store.sessions.isEmpty)
+        #expect(store.summary(for: .allTime).totalTokens == 250)
+        #expect(store.gitAttributionSessions.map(\.id).contains(session.id))
+
+        provider.update(sessions: [session], statsByID: [:])
+        let restarted = SessionStore(
+            registry: ProviderRegistry(providers: [provider]),
+            pricing: TestPricing.table,
+            usageLedger: ledger,
+            deletedSessions: deleted,
+            trashTranscript: { _ in }
+        )
+
+        await restarted.refresh()
+
+        #expect(restarted.sessions.isEmpty)
+        #expect(restarted.summary(for: .allTime).totalTokens == 250)
+        #expect(restarted.gitAttributionSessions.map(\.id).contains(session.id))
+    }
+
+    @MainActor
+    @Test("Batch delete keeps failures visible while successful deletes stay hidden")
+    func batchDeleteKeepsFailuresVisible() async {
+        let first = Self.session(
+            id: "project::first",
+            externalID: "first",
+            lastModified: Date(timeIntervalSince1970: 1_000),
+            fileSize: 42
+        )
+        let second = Self.session(
+            id: "project::second",
+            externalID: "second",
+            lastModified: Date(timeIntervalSince1970: 2_000),
+            fileSize: 42
+        )
+        let provider = MutableSessionProvider(
+            sessions: [first, second],
+            statsByID: [
+                first.id: Self.stats(title: "First", tokens: 100),
+                second.id: Self.stats(title: "Second", tokens: 200),
+            ]
+        )
+        let store = SessionStore(
+            registry: ProviderRegistry(providers: [provider]),
+            pricing: TestPricing.table,
+            usageLedger: Self.temporaryLedger(),
+            deletedSessions: Self.temporaryDeletedStore(),
+            trashTranscript: { url in
+                if url.path == second.filePath {
+                    throw NSError(domain: "SessionStoreTests", code: 7, userInfo: [
+                        NSLocalizedDescriptionKey: "trash denied"
+                    ])
+                }
+            }
+        )
+
+        await store.refresh()
+        let result = await store.deleteSessions(store.sessions)
+
+        #expect(result.deletedIDs == Set([first.id]))
+        #expect(result.failures.map(\.sessionID) == [second.id])
+        #expect(store.sessions.map(\.id) == [second.id])
+        #expect(store.summary(for: .allTime).totalTokens == 300)
+    }
+
+    @MainActor
+    @Test("Deleting parent hides folded child while preserving historical attribution")
+    func deleteParentHidesChildAndPreservesHistory() async {
+        let parent = Self.session(
+            id: "codex::parent",
+            externalID: "parent",
+            lastModified: Date(timeIntervalSince1970: 2_000),
+            fileSize: 80,
+            cwd: "/tmp/project"
+        )
+        let child = Self.session(
+            id: "codex::child",
+            externalID: "child",
+            lastModified: Date(timeIntervalSince1970: 2_010),
+            fileSize: 70,
+            cwd: "/tmp/project/.agents/worker",
+            agentInfo: SessionAgentInfo(
+                threadSource: "subagent",
+                parentSessionID: "codex::parent",
+                nickname: "Worker",
+                role: "trellis-implement",
+                path: "/root/worker"
+            )
+        )
+        let provider = MutableSessionProvider(
+            sessions: [parent, child],
+            statsByID: [
+                parent.id: Self.stats(title: "Parent", tokens: 100, at: Date(timeIntervalSince1970: 2_000)),
+                child.id: Self.stats(title: "Child", tokens: 50, at: Date(timeIntervalSince1970: 2_005)),
+            ]
+        )
+        let ledger = Self.temporaryLedger()
+        let deleted = Self.temporaryDeletedStore()
+        let store = SessionStore(
+            registry: ProviderRegistry(providers: [provider]),
+            pricing: TestPricing.table,
+            usageLedger: ledger,
+            deletedSessions: deleted,
+            trashTranscript: { _ in }
+        )
+
+        await store.refresh()
+        #expect(store.sessions.map(\.id) == [parent.id])
+        #expect(store.sessions.first?.stats?.totalTokens == 150)
+
+        let result = await store.deleteSession(store.sessions[0])
+
+        #expect(result.deletedIDs == Set([child.id, parent.id]))
+        #expect(store.sessions.isEmpty)
+        #expect(store.summary(for: .allTime).totalTokens == 150)
+        #expect(store.gitAttributionSessions.first?.id == parent.id)
+        #expect(store.gitAttributionSessions.first?.childSessions.map(\.id) == [child.id])
+        #expect(store.gitAttributionSessions.first?.stats?.totalTokens == 150)
+
+        provider.update(sessions: [parent, child], statsByID: [:])
+        let restarted = SessionStore(
+            registry: ProviderRegistry(providers: [provider]),
+            pricing: TestPricing.table,
+            usageLedger: ledger,
+            deletedSessions: deleted,
+            trashTranscript: { _ in }
+        )
+
+        await restarted.refresh()
+
+        #expect(restarted.sessions.isEmpty)
+        #expect(restarted.gitAttributionSessions.first?.id == parent.id)
+        #expect(restarted.gitAttributionSessions.first?.childSessions.map(\.id) == [child.id])
+        #expect(restarted.gitAttributionSessions.first?.stats?.totalTokens == 150)
+    }
+
+    @MainActor
     @Test("Child agent sessions are folded into parent session")
     func childAgentSessionsFoldIntoParent() async {
         let parent = Self.session(
@@ -490,6 +654,13 @@ struct SessionStoreTests {
             .appendingPathComponent("claude-stats-tests-\(UUID().uuidString)", isDirectory: true)
             .appendingPathComponent("usage-ledger.json", isDirectory: false)
         return UsageLedgerStore(fileURL: url)
+    }
+
+    private static func temporaryDeletedStore() -> DeletedSessionStore {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("claude-stats-tests-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("deleted-sessions.json", isDirectory: false)
+        return DeletedSessionStore(fileURL: url)
     }
 }
 

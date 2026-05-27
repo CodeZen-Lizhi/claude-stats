@@ -2778,6 +2778,54 @@
         }
       }
     },
+    "menu.footer.quit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Quit"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "退出"
+          }
+        }
+      }
+    },
+    "menu.footer.settings": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Settings"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置"
+          }
+        }
+      }
+    },
+    "menu.footer.share": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Share"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分享"
+          }
+        }
+      }
+    },
     "menu.footer.share.help": {
       "extractionState": "stale",
       "localizations": {
@@ -2791,6 +2839,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "将快照导出为 PNG"
+          }
+        }
+      }
+    },
+    "menu.footer.update": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Update"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新"
           }
         }
       }
@@ -5063,7 +5127,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ STATS"
+            "value": "%@ Stats"
           }
         },
         "zh-Hans": {
@@ -5080,7 +5144,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "UPD %@"
+            "value": "Updated %@"
           }
         },
         "zh-Hans": {
@@ -5091,19 +5155,115 @@
         }
       }
     },
+    "stats.action.git": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Git"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Git"
+          }
+        }
+      }
+    },
+    "stats.action.git.help": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Open Git activity"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开 Git 活动"
+          }
+        }
+      }
+    },
+    "stats.action.main": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Main"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主窗口"
+          }
+        }
+      }
+    },
+    "stats.action.main.help": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Open the main window"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开主窗口"
+          }
+        }
+      }
+    },
+    "stats.action.refresh": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Refresh"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新"
+          }
+        }
+      }
+    },
+    "stats.action.refresh.help": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Refresh now"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "立即刷新"
+          }
+        }
+      }
+    },
     "stats.pane.git": {
       "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "GIT"
+            "value": "Git"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "GIT"
+            "value": "Git"
           }
         }
       }
@@ -5114,7 +5274,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "SESSIONS"
+            "value": "Sessions"
           }
         },
         "zh-Hans": {
@@ -5131,7 +5291,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "USAGE"
+            "value": "Usage"
           }
         },
         "zh-Hans": {
@@ -10846,6 +11006,294 @@
           "stringUnit": {
             "state": "translated",
             "value": "缓存写入"
+          }
+        }
+      }
+    },
+    "common.cancel": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Cancel"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消"
+          }
+        }
+      }
+    },
+    "common.ok": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "OK"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确定"
+          }
+        }
+      }
+    },
+    "sessions.delete.batch.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Delete %@ sessions?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除 %@ 个会话？"
+          }
+        }
+      }
+    },
+    "sessions.delete.confirm": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Move to Trash"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移到废纸篓"
+          }
+        }
+      }
+    },
+    "sessions.delete.confirmation.batch.message": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "The original transcripts will be moved to Trash. Token, cost, Dashboard, and Git history stay available. Project folders, Git repos, and Codex settings are not deleted. If any delete fails, successful deletes stay deleted and failed sessions remain in the list."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原始 transcript 会移到废纸篓。Token、费用、Dashboard 和 Git 历史统计会保留。不会删除项目目录、Git 仓库或 Codex 设置。如果部分删除失败，成功项保持已删除，失败项会留在列表中。"
+          }
+        }
+      }
+    },
+    "sessions.delete.confirmation.message": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "The original transcript will be moved to Trash. Token, cost, Dashboard, and Git history stay available. Project folders, Git repos, and Codex settings are not deleted."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原始 transcript 会移到废纸篓。Token、费用、Dashboard 和 Git 历史统计会保留。不会删除项目目录、Git 仓库或 Codex 设置。"
+          }
+        }
+      }
+    },
+    "sessions.delete.failed.message": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%@ sessions were moved to Trash. %@ failed. First error: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 个会话已移到废纸篓，%@ 个失败。首个错误：%@"
+          }
+        }
+      }
+    },
+    "sessions.delete.failed.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Some sessions could not be deleted"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分会话删除失败"
+          }
+        }
+      }
+    },
+    "sessions.delete.failed.unknown": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Unknown error."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未知错误。"
+          }
+        }
+      }
+    },
+    "sessions.delete.group": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Delete project sessions"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除此项目组会话"
+          }
+        }
+      }
+    },
+    "sessions.delete.single.button": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Delete Session"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除会话"
+          }
+        }
+      }
+    },
+    "sessions.delete.single.menu": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Delete Session"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除会话"
+          }
+        }
+      }
+    },
+    "sessions.delete.single.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Delete session?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除这个会话？"
+          }
+        }
+      }
+    },
+    "sessions.selection.cancel": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Cancel selection"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消选择"
+          }
+        }
+      }
+    },
+    "sessions.selection.clear": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Clear"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清空"
+          }
+        }
+      }
+    },
+    "sessions.selection.delete_count": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Delete %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除 %@ 个"
+          }
+        }
+      }
+    },
+    "sessions.selection.select_visible": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Select visible"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全选当前结果"
+          }
+        }
+      }
+    },
+    "sessions.selection.start": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Select sessions"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择会话"
           }
         }
       }

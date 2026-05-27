@@ -4,9 +4,12 @@ import SwiftUI
 /// Secondary main-window sidebar for browsing provider-scoped sessions.
 struct SessionSidebarColumn: View {
     @Binding var destination: SessionsDestination
+    var onRequestDelete: ([Session]) -> Void = { _ in }
 
     @Environment(AppEnvironment.self) private var env
     @State private var sessionsVM = SessionListViewModel()
+    @State private var selectionMode = false
+    @State private var selectedSessionIDs: Set<String> = []
     @FocusState private var searchFieldFocused: Bool
 
     private var provider: ProviderKind {
@@ -35,6 +38,10 @@ struct SessionSidebarColumn: View {
             sortPicker(vm: vm)
                 .padding(.horizontal, 12)
                 .padding(.bottom, 8)
+
+            selectionControls(vm: vm)
+                .padding(.horizontal, 12)
+                .padding(.bottom, selectionMode ? 8 : 0)
 
             SidebarRow(
                 title: L10n.string("sessions.overview", defaultValue: "Overview"),
@@ -85,6 +92,18 @@ struct SessionSidebarColumn: View {
                 }
 
                 Spacer(minLength: 0)
+
+                HeaderIconButton(
+                    systemName: selectionMode ? "xmark.circle" : "checkmark.circle",
+                    help: selectionMode
+                        ? L10n.string("sessions.selection.cancel", defaultValue: "Cancel selection")
+                        : L10n.string("sessions.selection.start", defaultValue: "Select sessions"),
+                    enabled: selectionMode || vm.hasProviderSessions
+                ) {
+                    clearSearchFocus()
+                    selectionMode.toggle()
+                    selectedSessionIDs.removeAll()
+                }
 
                 HeaderIconButton(
                     systemName: "arrow.down.right.and.arrow.up.left",
@@ -147,6 +166,36 @@ struct SessionSidebarColumn: View {
     }
 
     @ViewBuilder
+    private func selectionControls(vm: SessionListViewModel) -> some View {
+        if selectionMode {
+            HStack(spacing: 8) {
+                Button(L10n.string("sessions.selection.select_visible", defaultValue: "Select visible")) {
+                    selectedSessionIDs = Set(visibleSessions(vm: vm).map(\.id))
+                }
+                .buttonStyle(.borderless)
+                .disabled(visibleSessions(vm: vm).isEmpty)
+
+                Button(L10n.string("sessions.selection.clear", defaultValue: "Clear")) {
+                    selectedSessionIDs.removeAll()
+                }
+                .buttonStyle(.borderless)
+                .disabled(selectedSessionIDs.isEmpty)
+
+                Spacer(minLength: 0)
+
+                Button(role: .destructive) {
+                    requestDeleteSelected(vm: vm)
+                } label: {
+                    Text(L10n.format("sessions.selection.delete_count", defaultValue: "Delete %@", "\(selectedSessionIDs.count)"))
+                }
+                .buttonStyle(.borderless)
+                .disabled(selectedSessionIDs.isEmpty)
+            }
+            .font(.sora(10, weight: .medium))
+        }
+    }
+
+    @ViewBuilder
     private func sessionsTree(vm: SessionListViewModel) -> some View {
         let groups = vm.projectGroups
 
@@ -165,7 +214,8 @@ struct SessionSidebarColumn: View {
                         ProjectSidebarRow(
                             name: group.displayName,
                             count: group.count,
-                            isExpanded: isExpanded
+                            isExpanded: isExpanded,
+                            onDelete: { onRequestDelete(group.sessions) }
                         ) {
                             clearSearchFocus()
                             withAnimation(.easeInOut(duration: 0.18)) { vm.toggle(group.id) }
@@ -174,9 +224,16 @@ struct SessionSidebarColumn: View {
                             ForEach(group.sessions) { session in
                                 SessionSidebarRow(
                                     session: session,
-                                    isSelected: destination == .session(session.id)
+                                    isSelected: destination == .session(session.id),
+                                    selectionMode: selectionMode,
+                                    isBulkSelected: selectedSessionIDs.contains(session.id),
+                                    onDelete: { onRequestDelete([session]) }
                                 ) {
-                                    selectSession(session)
+                                    if selectionMode {
+                                        toggleBulkSelection(session)
+                                    } else {
+                                        selectSession(session)
+                                    }
                                 }
                             }
                         }
@@ -223,11 +280,36 @@ struct SessionSidebarColumn: View {
             provider: provider,
             costMode: env.preferences.costEstimationMode
         )
+        selectedSessionIDs.formIntersection(Set(visibleSessions(vm: sessionsVM).map(\.id)))
     }
 
     private func clearSearchFocus() {
         searchFieldFocused = false
         NSApp.keyWindow?.makeFirstResponder(nil)
+    }
+
+    private func visibleSessions(vm: SessionListViewModel) -> [Session] {
+        vm.projectGroups.flatMap(\.sessions)
+    }
+
+    private func selectedSessions(vm: SessionListViewModel) -> [Session] {
+        visibleSessions(vm: vm).filter { selectedSessionIDs.contains($0.id) }
+    }
+
+    private func toggleBulkSelection(_ session: Session) {
+        if selectedSessionIDs.contains(session.id) {
+            selectedSessionIDs.remove(session.id)
+        } else {
+            selectedSessionIDs.insert(session.id)
+        }
+    }
+
+    private func requestDeleteSelected(vm: SessionListViewModel) {
+        let sessions = selectedSessions(vm: vm)
+        guard !sessions.isEmpty else { return }
+        selectedSessionIDs.removeAll()
+        selectionMode = false
+        onRequestDelete(sessions)
     }
 
 }
@@ -236,6 +318,7 @@ private struct ProjectSidebarRow: View {
     let name: String
     let count: Int
     let isExpanded: Bool
+    var onDelete: (() -> Void)? = nil
     let toggle: () -> Void
 
     @State private var hovering = false
@@ -273,12 +356,22 @@ private struct ProjectSidebarRow: View {
         .buttonStyle(.plain)
         .padding(.horizontal, 8)
         .onHover { hovering = $0 }
+        .contextMenu {
+            if let onDelete {
+                Button(role: .destructive, action: onDelete) {
+                    Label(L10n.string("sessions.delete.group", defaultValue: "Delete project sessions"), systemImage: "trash")
+                }
+            }
+        }
     }
 }
 
 private struct SessionSidebarRow: View {
     let session: Session
     let isSelected: Bool
+    var selectionMode = false
+    var isBulkSelected = false
+    var onDelete: () -> Void = {}
     let select: () -> Void
 
     @State private var hovering = false
@@ -291,30 +384,39 @@ private struct SessionSidebarRow: View {
 
     var body: some View {
         Button(action: select) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(.sora(11))
-                    .foregroundStyle(isSelected ? .primary : Color.stxMuted.opacity(0.95))
-                    .lineLimit(1)
-                HStack(spacing: 6) {
-                    Text(Format.relativeDate(session.stats?.lastActivity ?? session.lastModified))
-                        .font(.sora(9))
-                        .foregroundStyle(Color.stxMuted.opacity(0.7))
+            HStack(spacing: 8) {
+                if selectionMode {
+                    Image(systemName: isBulkSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(isBulkSelected ? Color.stxAccent : Color.stxMuted.opacity(0.8))
+                        .frame(width: 14)
+                        .accessibilityHidden(true)
+                }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title)
+                        .font(.sora(11))
+                        .foregroundStyle(isSelected || isBulkSelected ? .primary : Color.stxMuted.opacity(0.95))
                         .lineLimit(1)
-
-                    if let badge = session.sourceBadge {
-                        Text(badge)
-                            .font(.sora(8, weight: .semibold))
-                            .foregroundStyle(Color.stxMuted.opacity(0.8))
+                    HStack(spacing: 6) {
+                        Text(Format.relativeDate(session.stats?.lastActivity ?? session.lastModified))
+                            .font(.sora(9))
+                            .foregroundStyle(Color.stxMuted.opacity(0.7))
                             .lineLimit(1)
+
+                        if let badge = session.sourceBadge {
+                            Text(badge)
+                                .font(.sora(8, weight: .semibold))
+                                .foregroundStyle(Color.stxMuted.opacity(0.8))
+                                .lineLimit(1)
+                        }
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
             .background {
-                if isSelected {
+                if isSelected || isBulkSelected {
                     RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.10))
                 } else if hovering {
                     RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.05))
@@ -334,6 +436,9 @@ private struct SessionSidebarRow: View {
                 Button("Open Project Folder") {
                     NSWorkspace.shared.open(URL(fileURLWithPath: cwd))
                 }
+            }
+            Button(role: .destructive, action: onDelete) {
+                Label(L10n.string("sessions.delete.single.menu", defaultValue: "Delete Session"), systemImage: "trash")
             }
         }
     }

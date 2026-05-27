@@ -5,6 +5,7 @@ struct SessionRow: View {
     @Environment(AppEnvironment.self) private var env
     let session: Session
     var onSelect: (() -> Void)?
+    var onDelete: ((Session) -> Void)?
 
     var body: some View {
         Group {
@@ -25,6 +26,13 @@ struct SessionRow: View {
             if let cwd = session.cwd, FileManager.default.fileExists(atPath: cwd) {
                 Button("Open Project Folder") {
                     NSWorkspace.shared.open(URL(fileURLWithPath: cwd))
+                }
+            }
+            if let onDelete {
+                Button(role: .destructive) {
+                    onDelete(session)
+                } label: {
+                    Label(L10n.string("sessions.delete.single.menu", defaultValue: "Delete Session"), systemImage: "trash")
                 }
             }
         }

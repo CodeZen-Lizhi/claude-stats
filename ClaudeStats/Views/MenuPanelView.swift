@@ -7,9 +7,9 @@ enum StatsPane: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .sessions: L10n.string("stats.pane.sessions", defaultValue: "SESSIONS")
-        case .usage: L10n.string("stats.pane.usage", defaultValue: "USAGE")
-        case .git: L10n.string("stats.pane.git", defaultValue: "GIT")
+        case .sessions: L10n.string("stats.pane.sessions", defaultValue: "Sessions")
+        case .usage: L10n.string("stats.pane.usage", defaultValue: "Usage")
+        case .git: L10n.string("stats.pane.git", defaultValue: "Git")
         }
     }
 }
@@ -40,7 +40,7 @@ enum ExportStampPrecision: String, Hashable, CaseIterable, Identifiable {
 struct StatsExportConfig {
     /// Usage pane settings. `.period` is also reused by the Sessions pane.
     var usage: UsageView.ExportConfig
-    /// Whether the exported snapshot includes the top scanline strip.
+    /// Whether the exported snapshot includes the top accent strip.
     var showTopBar: Bool = true
     /// The share timestamp shown in the header corner (replaces the live
     /// "UPD …" readout).
@@ -48,7 +48,7 @@ struct StatsExportConfig {
     var stampPrecision: ExportStampPrecision = .monthOnly
 }
 
-/// The stats panel body: a scanline strip, a header, a Sessions/Usage title bar
+/// The stats panel body: an accent strip, a header, a Sessions/Usage title bar
 /// with a toggle, and the selected pane. Used both inside ``MenuPanelView`` (the
 /// dropdown, which adds the Settings/Quit footer) and in the share-export window.
 ///
@@ -81,10 +81,17 @@ struct StatsPanelBody: View {
         availablePanes.contains(pane) ? pane : .usage
     }
 
+    private var effectivePaneBinding: Binding<StatsPane> {
+        Binding(
+            get: { effectivePane },
+            set: { pane = $0 }
+        )
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             if !isExport || (export?.showTopBar ?? true) {
-                TickBar(active: env.store.isLoading)
+                MenuPanelTopAccent(active: env.store.isLoading)
             }
             header
             StxRule()
@@ -108,15 +115,18 @@ struct StatsPanelBody: View {
         HStack(spacing: 10) {
             Text(effectivePane.title)
                 .font(.sora(18, weight: .semibold))
-                .tracking(1.8)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
             Spacer(minLength: 8)
-            HStack(spacing: 10) {
-                ForEach(availablePanes) { p in
-                    PaneChip(title: p.title, isSelected: p == effectivePane) { pane = p }
-                }
+            PillSegmentedBar(
+                availablePanes,
+                selection: effectivePaneBinding,
+                style: .toolbarModeSwitch
+            ) { option, isSelected in
+                Text(option.title)
+                    .font(.sora(11, weight: isSelected ? .semibold : .medium))
+                    .tracking(0.2)
             }
         }
         .padding(.horizontal, 14)
@@ -126,10 +136,9 @@ struct StatsPanelBody: View {
     private var header: some View {
         HStack(spacing: 10) {
             Text(L10n.format("stats.header.provider_stats",
-                             defaultValue: "%@ STATS",
+                             defaultValue: "%@ Stats",
                              env.preferences.selectedProvider.shortName))
                 .font(.sora(15, weight: .semibold))
-                .tracking(1.6)
                 .foregroundStyle(.primary)
             Spacer()
             if let export {
@@ -139,53 +148,41 @@ struct StatsPanelBody: View {
                     .foregroundStyle(Color.stxMuted)
             } else if let last = env.store.lastRefreshedAt {
                 Text(L10n.format("stats.header.updated",
-                                 defaultValue: "UPD %@",
+                                 defaultValue: "Updated %@",
                                  Format.relativeDate(last)))
                     .font(.sora(9))
                     .tracking(0.5)
                     .foregroundStyle(Color.stxMuted)
             }
             if !isExport && gitInWindow {
-                Button {
+                MenuBarActionButton(
+                    title: L10n.string("stats.action.git", defaultValue: "Git"),
+                    systemImage: "arrow.triangle.branch"
+                ) {
                     NSApp.activate(ignoringOtherApps: true)
                     openWindow(id: GitActivityView.windowID)
-                } label: {
-                    BracketBox(spacing: 4) {
-                        Image(systemName: "arrow.triangle.branch").font(.system(size: 10, weight: .bold))
-                    }
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(Color.stxMuted)
-                .help("Open Git activity")
+                .help(L10n.string("stats.action.git.help", defaultValue: "Open Git activity"))
             }
             if !isExport {
-                Button {
+                MenuBarActionButton(
+                    title: L10n.string("stats.action.refresh", defaultValue: "Refresh"),
+                    systemImage: "arrow.clockwise",
+                    isBusy: env.store.isLoading
+                ) {
                     Task { await env.store.refresh() }
-                } label: {
-                    BracketBox(spacing: 4) {
-                        if env.store.isLoading {
-                            ProgressView().controlSize(.mini)
-                        } else {
-                            Image(systemName: "arrow.clockwise").font(.system(size: 10, weight: .bold))
-                        }
-                    }
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(Color.stxMuted)
                 .disabled(env.store.isLoading)
-                .help("Refresh now")
+                .help(L10n.string("stats.action.refresh.help", defaultValue: "Refresh now"))
 
-                Button {
+                MenuBarActionButton(
+                    title: L10n.string("stats.action.main", defaultValue: "Main"),
+                    systemImage: "macwindow"
+                ) {
                     NSApp.activate(ignoringOtherApps: true)
                     openWindow(id: MainWindowView.windowID)
-                } label: {
-                    BracketBox(spacing: 4) {
-                        Image(systemName: "macwindow").font(.system(size: 10, weight: .bold))
-                    }
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(Color.stxMuted)
-                .help("Open the main window")
+                .help(L10n.string("stats.action.main.help", defaultValue: "Open the main window"))
             }
         }
         .padding(.horizontal, 14)
@@ -227,48 +224,27 @@ struct MenuPanelView: View {
 
     private var footer: some View {
         HStack(spacing: 10) {
-            Button {
+            MenuBarActionButton(title: L10n.string("menu.footer.settings", defaultValue: "Settings"), systemImage: "gearshape") {
                 NSApp.activate(ignoringOtherApps: true)
                 openWindow(id: MainWindowView.windowID)
                 NotificationCenter.default.post(name: .openSettingsInMainWindow, object: nil)
-            } label: {
-                BracketBox(spacing: 5) {
-                    Label("SETTINGS", systemImage: "gearshape")
-                        .labelStyle(.titleAndIcon)
-                        .font(.sora(10))
-                        .tracking(0.8)
-                }
             }
-            .buttonStyle(.plain)
+
             if updateAvailable {
                 updateButton
                     .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
-            Button {
+
+            MenuBarActionButton(title: L10n.string("menu.footer.share", defaultValue: "Share"), systemImage: "square.and.arrow.up") {
                 NSApp.activate(ignoringOtherApps: true)
                 openWindow(id: ShareExportView.windowID)
-            } label: {
-                BracketBox(spacing: 5) {
-                    Label("SHARE", systemImage: "square.and.arrow.up")
-                        .labelStyle(.titleAndIcon)
-                        .font(.sora(10))
-                        .tracking(0.8)
-                }
             }
-            .buttonStyle(.plain)
             .help(L10n.string("menu.footer.share.help", defaultValue: "Export a snapshot as a PNG"))
+
             Spacer()
-            Button {
+            MenuBarActionButton(title: L10n.string("menu.footer.quit", defaultValue: "Quit"), systemImage: "power") {
                 NSApplication.shared.terminate(nil)
-            } label: {
-                BracketBox(spacing: 5) {
-                    Label("QUIT", systemImage: "power")
-                        .labelStyle(.titleAndIcon)
-                        .font(.sora(10))
-                        .tracking(0.8)
-                }
             }
-            .buttonStyle(.plain)
             .keyboardShortcut("q")
         }
         .foregroundStyle(Color.stxMuted)
@@ -283,11 +259,11 @@ struct MenuPanelView: View {
             HStack(spacing: 5) {
                 Image(systemName: "arrow.down.circle.fill")
                     .font(.system(size: 10, weight: .bold))
-                Text("UPDATE")
+                Text(L10n.string("menu.footer.update", defaultValue: "Update"))
                     .font(.sora(10, weight: .semibold))
-                    .tracking(0.8)
+                    .lineLimit(1)
             }
-            .lineLimit(1)
+            .tracking(0.2)
             .padding(.horizontal, 9)
             .frame(height: 24)
             .background(Color.stxAccent.opacity(0.14), in: Capsule())
@@ -373,32 +349,67 @@ private struct MenuPanelWindowSizeLock: NSViewRepresentable {
     }
 }
 
-/// A small underlined tab chip used in the pane bar to switch panes.
-private struct PaneChip: View {
+private struct MenuPanelTopAccent: View {
+    let active: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                .fill(Color.stxAccent.opacity(active ? 0.75 : 0.28))
+                .frame(height: 2)
+            Circle()
+                .fill(active ? Color.stxAccent : Color.stxStroke)
+                .frame(width: 5, height: 5)
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 9)
+        .padding(.bottom, 6)
+    }
+}
+
+private struct MenuBarActionButton: View {
     let title: String
-    let isSelected: Bool
+    let systemImage: String
+    var isBusy: Bool = false
     let action: () -> Void
+
     @State private var hovering = false
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 3) {
+            HStack(spacing: 5) {
+                if isBusy {
+                    ProgressView().controlSize(.mini)
+                } else {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 10, weight: .bold))
+                }
                 Text(title)
                     .font(.sora(10, weight: .semibold))
-                    .tracking(0.8)
-                    .foregroundStyle(isSelected ? .primary : (hovering ? Color.primary : Color.primary.opacity(0.40)))
-                Rectangle()
-                    .fill(Color.stxAccent)
-                    .frame(height: 1.5)
-                    .scaleEffect(x: isSelected ? 1 : 0, anchor: .center)
+                    .lineLimit(1)
             }
-            .fixedSize()
-            .contentShape(Rectangle())
+            .tracking(0.2)
+            .padding(.horizontal, 9)
+            .frame(height: 24)
+            .background(background, in: Capsule())
+            .overlay(Capsule().strokeBorder(border, lineWidth: 1))
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .foregroundStyle(foreground)
         .onHover { hovering = $0 }
-        .animation(.easeOut(duration: 0.18), value: isSelected)
-        .animation(.easeOut(duration: 0.12), value: hovering)
+    }
+
+    private var foreground: Color {
+        hovering ? Color.primary : Color.stxMuted
+    }
+
+    private var background: Color {
+        hovering ? Color.primary.opacity(0.06) : Color.primary.opacity(0.035)
+    }
+
+    private var border: Color {
+        hovering ? Color.primary.opacity(0.12) : Color.stxStroke.opacity(0.75)
     }
 }
 

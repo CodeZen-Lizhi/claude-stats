@@ -386,7 +386,7 @@ private struct GitCommitInspector: View {
         let attribution = CommitUsageAttribution.make(
             commit: commit,
             graph: vm.graph,
-            sessions: env.store.sessions(for: env.preferences.selectedProvider),
+            sessions: env.store.gitAttributionSessions.filter { $0.provider == env.preferences.selectedProvider },
             repo: repo,
             currentUserEmail: currentUserEmail
         )

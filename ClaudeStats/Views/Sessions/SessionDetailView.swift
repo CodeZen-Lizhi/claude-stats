@@ -12,6 +12,7 @@ import AppKit
 struct SessionDetailView: View {
     @Environment(AppEnvironment.self) private var env
     let session: Session
+    var onDelete: ((Session) -> Void)?
     @State private var transcriptMessages: [SessionTranscriptMessage] = []
     @State private var transcriptIsLoading = false
     @State private var transcriptSearchText = ""
@@ -311,6 +312,14 @@ struct SessionDetailView: View {
 
             Spacer(minLength: 0)
 
+            if let onDelete {
+                Button(role: .destructive) {
+                    onDelete(session)
+                } label: {
+                    Label(L10n.string("sessions.delete.single.button", defaultValue: "Delete Session"), systemImage: "trash")
+                }
+                .buttonStyle(.bordered)
+            }
         }
         .font(.sora(11))
     }

@@ -10,6 +10,7 @@ typealias TranscriptMessageLoader = @Sendable (Session) async -> [SessionTranscr
 @Observable
 final class SessionStore {
     private(set) var sessions: [Session] = []
+    private(set) var historicalSessions: [Session] = []
     private(set) var isLoading = false
     private(set) var lastRefreshedAt: Date?
     /// Whether any provider's on-disk data directory exists — drives the
@@ -20,6 +21,8 @@ final class SessionStore {
     private let registry: ProviderRegistry
     private let pricing: ModelPricing
     private let usageLedger: UsageLedgerStore
+    private let deletedSessions: DeletedSessionStore
+    private let trashTranscript: (URL) throws -> Void
     private var cache: [String: CacheEntry] = [:]
     private var usageEventsSnapshot: [UsageLedgerEvent] = []
     private var autoRefreshTask: Task<Void, Never>?
@@ -33,10 +36,18 @@ final class SessionStore {
     /// Max transcripts parsed concurrently.
     private static let parseBatchSize = 16
 
-    init(registry: ProviderRegistry, pricing: ModelPricing, usageLedger: UsageLedgerStore = UsageLedgerStore()) {
+    init(
+        registry: ProviderRegistry,
+        pricing: ModelPricing,
+        usageLedger: UsageLedgerStore = UsageLedgerStore(),
+        deletedSessions: DeletedSessionStore = DeletedSessionStore(),
+        trashTranscript: @escaping (URL) throws -> Void = SessionStore.moveTranscriptToTrash
+    ) {
         self.registry = registry
         self.pricing = pricing
         self.usageLedger = usageLedger
+        self.deletedSessions = deletedSessions
+        self.trashTranscript = trashTranscript
         self.dataDirectoryExists = registry.providers.contains { $0.dataDirectoryExists }
     }
 
@@ -112,6 +123,10 @@ final class SessionStore {
         ledgerEvents(matching: provider)
     }
 
+    var gitAttributionSessions: [Session] {
+        historicalSessions
+    }
+
     private func ledgerEvents(matching provider: ProviderKind?) -> [UsageLedgerEvent] {
         guard let provider else { return usageEventsSnapshot }
         return usageEventsSnapshot.filter { $0.provider == provider }
@@ -128,8 +143,12 @@ final class SessionStore {
         for provider in registry.providers {
             discovered += await provider.discoverSessions()
         }
+        let deletedRecords = await deletedSessions.records()
+        let deletedIndex = DeletedSessionIndex(records: deletedRecords)
+        discovered.removeAll { deletedIndex.contains($0) }
         discovered.sort { $0.lastModified > $1.lastModified }
         dataDirectoryExists = registry.providers.contains { $0.dataDirectoryExists }
+        await usageLedger.beginPersistenceBatch()
         await usageLedger.markSeen(discovered)
 
         let providerByKind = Dictionary(uniqueKeysWithValues: registry.providers.map { ($0.kind, $0) })
@@ -237,11 +256,18 @@ final class SessionStore {
         }
         // Drop transcripts that parsed to nothing (only queue-ops / snapshots).
         let parsedSessions = withStats.filter { $0.stats != nil }
-        sessions = await buildSessionGraph(from: parsedSessions, providers: providerByKind)
+        let allSessionInputs = Self.applyingDeletedParentLinks(
+            to: parsedSessions + await deletedRecordSessions(from: deletedRecords),
+            records: deletedRecords
+        )
+        let allSessionGraph = await buildSessionGraph(from: allSessionInputs, providers: providerByKind)
+        historicalSessions = allSessionGraph
+        sessions = Self.visibleSessionGraph(from: allSessionGraph, deletedIndex: deletedIndex)
         await usageLedger.syncParentSessionIDs(
             mapping: Self.parentMapping(from: sessions),
             liveSessionIDs: liveIDs
         )
+        await usageLedger.endPersistenceBatch()
         usageEventsSnapshot = await usageLedger.events()
         lastRefreshedAt = .now
         Log.store.notice("Refreshed: \(self.sessions.count) sessions visible, \(appendedCount) appended, \(rebuiltCount) rebuilt")
@@ -267,6 +293,38 @@ final class SessionStore {
         autoRefreshTask = nil
     }
 
+    func deleteSession(_ session: Session) async -> SessionDeletionResult {
+        await deleteSessions([session])
+    }
+
+    func deleteSessions(_ selectedSessions: [Session]) async -> SessionDeletionResult {
+        let targets = Self.expandedDeletionTargets(from: selectedSessions)
+        let now = Date()
+        var deletedIDs = Set<String>()
+        var failures: [SessionDeletionFailure] = []
+
+        for session in targets {
+            let record = DeletedSessionRecord(session: session, deletedAt: now)
+            do {
+                try await deletedSessions.add([record])
+                do {
+                    try trashTranscript(URL(fileURLWithPath: session.filePath))
+                    deletedIDs.insert(session.id)
+                } catch {
+                    try? await deletedSessions.remove(sessionIDs: [session.id])
+                    failures.append(Self.deletionFailure(for: session, error: error))
+                }
+            } catch {
+                failures.append(Self.deletionFailure(for: session, error: error))
+            }
+        }
+
+        if !deletedIDs.isEmpty {
+            await refresh()
+        }
+        return SessionDeletionResult(deletedIDs: deletedIDs, failures: failures)
+    }
+
     private func childTranscriptMessages(from children: [Session]) async -> [SessionTranscriptMessage] {
         var messages: [SessionTranscriptMessage] = []
         for child in children.sorted(by: childSort) {
@@ -286,6 +344,16 @@ final class SessionStore {
         }
         return messages
     }
+
+    private func deletedRecordSessions(from records: [DeletedSessionRecord]) async -> [Session] {
+        var out: [Session] = []
+        for record in records {
+            let shell = record.session(stats: nil)
+            let stats = await usageLedger.stats(for: shell)
+            out.append(record.session(stats: stats))
+        }
+        return out
+    }
 }
 
 #if DEBUG
@@ -293,6 +361,7 @@ extension SessionStore {
     /// Inject canned sessions without touching disk — for SwiftUI previews.
     func loadPreviewSessions(_ sessions: [Session]) {
         self.sessions = sessions
+        self.historicalSessions = sessions
         self.usageEventsSnapshot = Self.previewEvents(from: sessions)
         self.lastRefreshedAt = .now
         self.dataDirectoryExists = !sessions.isEmpty
@@ -339,6 +408,20 @@ extension SessionStore {
 #endif
 
 private extension SessionStore {
+    struct DeletedSessionIndex {
+        let ids: Set<String>
+        let paths: Set<String>
+
+        init(records: [DeletedSessionRecord]) {
+            self.ids = Set(records.map(\.sessionID))
+            self.paths = Set(records.map(\.filePath))
+        }
+
+        func contains(_ session: Session) -> Bool {
+            ids.contains(session.id) || paths.contains(session.filePath)
+        }
+    }
+
     enum RefreshWorkItem: Sendable {
         case append(Session, UsageLedgerParseState)
         case rebuild(Session, RebuildNilPolicy)
@@ -352,6 +435,80 @@ private extension SessionStore {
     enum RebuildNilPolicy: Sendable {
         case preserveLedgerOnNil
         case replaceLedgerOnNil
+    }
+
+    static func moveTranscriptToTrash(_ url: URL) throws {
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        var trashedURL: NSURL?
+        try FileManager.default.trashItem(at: url, resultingItemURL: &trashedURL)
+    }
+
+    static func expandedDeletionTargets(from sessions: [Session]) -> [Session] {
+        var ordered: [Session] = []
+        var seen = Set<String>()
+
+        func append(_ session: Session) {
+            for child in session.childSessions {
+                append(child)
+            }
+            guard seen.insert(session.id).inserted else { return }
+            ordered.append(session)
+        }
+
+        for session in sessions {
+            append(session)
+        }
+        return ordered
+    }
+
+    static func applyingDeletedParentLinks(to sessions: [Session], records: [DeletedSessionRecord]) -> [Session] {
+        var parentByChild: [String: String] = [:]
+        for record in records {
+            for childID in record.childSessionIDs {
+                parentByChild[childID] = record.sessionID
+            }
+        }
+        guard !parentByChild.isEmpty else { return sessions }
+
+        return sessions.map { session in
+            guard let parentID = parentByChild[session.id],
+                  session.agentInfo?.parentSessionID == nil else {
+                return session
+            }
+            var copy = session
+            var agentInfo = copy.agentInfo ?? SessionAgentInfo(
+                threadSource: "subagent",
+                parentSessionID: nil,
+                nickname: nil,
+                role: nil,
+                path: nil
+            )
+            agentInfo.threadSource = agentInfo.threadSource ?? "subagent"
+            agentInfo.parentSessionID = parentID
+            copy.agentInfo = agentInfo
+            return copy
+        }
+    }
+
+    static func visibleSessionGraph(from roots: [Session], deletedIndex: DeletedSessionIndex) -> [Session] {
+        roots.compactMap { visibleSession(from: $0, deletedIndex: deletedIndex) }
+            .sorted { $0.lastModified > $1.lastModified }
+    }
+
+    static func visibleSession(from session: Session, deletedIndex: DeletedSessionIndex) -> Session? {
+        guard !deletedIndex.contains(session) else { return nil }
+        var copy = session
+        copy.childSessions = session.childSessions.compactMap { visibleSession(from: $0, deletedIndex: deletedIndex) }
+            .sorted(by: childSort)
+        return copy
+    }
+
+    static func deletionFailure(for session: Session, error: Error) -> SessionDeletionFailure {
+        SessionDeletionFailure(
+            sessionID: session.id,
+            title: session.stats?.title.nonEmpty ?? session.titleFallback ?? session.externalID,
+            message: error.localizedDescription
+        )
     }
 
     static func canRestoreFromLedger(_ session: Session, state: UsageLedgerParseState) -> Bool {
