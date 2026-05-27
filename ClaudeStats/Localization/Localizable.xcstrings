@@ -4527,6 +4527,70 @@
         }
       }
     },
+    "session.transcript.hidden_older": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ older messages are hidden to keep the window responsive."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已隐藏 %@ 条较早消息，以保持窗口响应。"
+          }
+        }
+      }
+    },
+    "session.transcript.no_matches": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No transcript matches found."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有找到匹配的对话内容。"
+          }
+        }
+      }
+    },
+    "session.transcript.showing_matches": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Showing %@ matching messages with %@ total matches."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在显示 %@ 条匹配消息，共 %@ 处匹配。"
+          }
+        }
+      }
+    },
+    "session.transcript.showing_recent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Showing latest %@ of %@ messages."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在显示最近 %@ 条消息，共 %@ 条。"
+          }
+        }
+      }
+    },
     "SESSIONS": {
       "localizations": {
         "en": {

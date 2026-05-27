@@ -18,11 +18,14 @@ struct SessionDetailView: View {
     @State private var transcriptSearchText = ""
     @State private var selectedSearchOrdinal: Int?
 
-    private var transcriptSearchIndex: TranscriptSearchIndex {
-        TranscriptSearchIndex.make(messages: transcriptMessages, query: transcriptSearchText)
-    }
-
     var body: some View {
+        let transcriptSearchIndex = TranscriptSearchIndex.make(messages: transcriptMessages, query: transcriptSearchText)
+        let renderWindow = TranscriptRenderWindow.make(
+            messages: transcriptMessages,
+            searchIndex: transcriptSearchIndex,
+            searchQuery: transcriptSearchText
+        )
+
         VStack(alignment: .leading, spacing: 18) {
             header
 
@@ -34,7 +37,7 @@ struct SessionDetailView: View {
             }
 
             metadataPanel
-            transcriptSection
+            transcriptSection(transcriptSearchIndex: transcriptSearchIndex, renderWindow: renderWindow)
             actionRow
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -42,7 +45,8 @@ struct SessionDetailView: View {
             await loadTranscript()
         }
         .onChange(of: transcriptSearchText) { _, _ in
-            selectedSearchOrdinal = transcriptSearchIndex.isEmpty ? nil : 0
+            let index = TranscriptSearchIndex.make(messages: transcriptMessages, query: transcriptSearchText)
+            selectedSearchOrdinal = index.isEmpty ? nil : 0
         }
     }
 
@@ -152,7 +156,10 @@ struct SessionDetailView: View {
 
     // MARK: - Transcript
 
-    private var transcriptSection: some View {
+    private func transcriptSection(
+        transcriptSearchIndex: TranscriptSearchIndex,
+        renderWindow: TranscriptRenderWindow
+    ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 10) {
                 Text("CONVERSATION")
@@ -162,7 +169,7 @@ struct SessionDetailView: View {
 
                 Spacer(minLength: 0)
 
-                transcriptSearchControls
+                transcriptSearchControls(transcriptSearchIndex)
 
                 if transcriptIsLoading {
                     ProgressView()
@@ -181,9 +188,15 @@ struct SessionDetailView: View {
             } else if transcriptMessages.isEmpty {
                 transcriptPlaceholder(L10n.string("session.transcript.empty",
                                                   defaultValue: "No readable conversation content found in this transcript."))
+            } else if renderWindow.messages.isEmpty {
+                transcriptPlaceholder(L10n.string("session.transcript.no_matches",
+                                                  defaultValue: "No transcript matches found."))
             } else {
+                if let note = transcriptRenderNote(for: renderWindow) {
+                    transcriptNotice(note)
+                }
                 LazyVStack(alignment: .leading, spacing: 10) {
-                    ForEach(transcriptMessages) { message in
+                    ForEach(renderWindow.messages) { message in
                         let messageMatches = transcriptSearchIndex.matches(for: message.id)
                         TranscriptMessageRow(
                             message: message,
@@ -203,7 +216,7 @@ struct SessionDetailView: View {
         }
     }
 
-    private var transcriptSearchControls: some View {
+    private func transcriptSearchControls(_ transcriptSearchIndex: TranscriptSearchIndex) -> some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 10, weight: .medium))
@@ -213,12 +226,12 @@ struct SessionDetailView: View {
                 .font(.sora(11))
                 .frame(width: 180)
             if !transcriptSearchText.isEmpty {
-                Text(searchCountLabel)
+                Text(searchCountLabel(transcriptSearchIndex))
                     .font(.sora(9).monospacedDigit())
                     .foregroundStyle(Color.stxMuted)
                     .frame(minWidth: 44, alignment: .trailing)
                 Button {
-                    stepSearch(-1)
+                    stepSearch(-1, transcriptSearchIndex: transcriptSearchIndex)
                 } label: {
                     Image(systemName: "chevron.up")
                         .font(.system(size: 9, weight: .semibold))
@@ -227,7 +240,7 @@ struct SessionDetailView: View {
                 .disabled(transcriptSearchIndex.isEmpty)
                 .help("Previous match")
                 Button {
-                    stepSearch(1)
+                    stepSearch(1, transcriptSearchIndex: transcriptSearchIndex)
                 } label: {
                     Image(systemName: "chevron.down")
                         .font(.system(size: 9, weight: .semibold))
@@ -250,17 +263,52 @@ struct SessionDetailView: View {
         .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 6))
     }
 
-    private var searchCountLabel: String {
+    private func searchCountLabel(_ transcriptSearchIndex: TranscriptSearchIndex) -> String {
         guard !transcriptSearchIndex.isEmpty, let selectedSearchOrdinal else {
             return "0/0"
         }
         return "\(selectedSearchOrdinal + 1)/\(transcriptSearchIndex.count)"
     }
 
-    private func stepSearch(_ delta: Int) {
+    private func stepSearch(_ delta: Int, transcriptSearchIndex: TranscriptSearchIndex) {
         guard !transcriptSearchIndex.isEmpty else { return }
         let current = selectedSearchOrdinal ?? 0
         selectedSearchOrdinal = (current + delta + transcriptSearchIndex.count) % transcriptSearchIndex.count
+    }
+
+    private func transcriptRenderNote(for renderWindow: TranscriptRenderWindow) -> String? {
+        switch renderWindow.mode {
+        case .all:
+            return nil
+        case .recent(let hiddenCount):
+            return L10n.format(
+                "session.transcript.showing_recent",
+                defaultValue: "Showing latest %@ of %@ messages.",
+                "\(renderWindow.messages.count)",
+                "\(renderWindow.totalCount)"
+            ) + " " + L10n.format(
+                "session.transcript.hidden_older",
+                defaultValue: "%@ older messages are hidden to keep the window responsive.",
+                "\(hiddenCount)"
+            )
+        case .search(let matchCount):
+            return L10n.format(
+                "session.transcript.showing_matches",
+                defaultValue: "Showing %@ matching messages with %@ total matches.",
+                "\(renderWindow.messages.count)",
+                "\(matchCount)"
+            )
+        }
+    }
+
+    private func transcriptNotice(_ text: String) -> some View {
+        Text(text)
+            .font(.sora(10))
+            .foregroundStyle(Color.stxMuted)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 6))
     }
 
     private func transcriptPlaceholder(_ text: String) -> some View {
@@ -276,8 +324,9 @@ struct SessionDetailView: View {
         transcriptIsLoading = true
         let messages = await env.store.transcriptMessages(for: session)
         guard !Task.isCancelled else { return }
+        let index = TranscriptSearchIndex.make(messages: messages, query: transcriptSearchText)
         transcriptMessages = messages
-        selectedSearchOrdinal = transcriptSearchIndex.isEmpty ? nil : 0
+        selectedSearchOrdinal = index.isEmpty ? nil : 0
         transcriptIsLoading = false
     }
 
@@ -372,9 +421,13 @@ private struct TranscriptMessageBody: View {
     let text: String
     let role: SessionTranscriptMessage.Role
     let matches: [TranscriptSearchMatch]
+    private let blocks: [TranscriptContentBlock]
 
-    private var blocks: [TranscriptContentBlock] {
-        TranscriptContentBlock.parse(text)
+    init(text: String, role: SessionTranscriptMessage.Role, matches: [TranscriptSearchMatch]) {
+        self.text = text
+        self.role = role
+        self.matches = matches
+        self.blocks = TranscriptContentBlock.parse(text)
     }
 
     var body: some View {
@@ -445,12 +498,29 @@ private struct TranscriptContentBlock: Identifiable {
     enum Kind {
         case markdown
         case code(language: String?)
+
+        var identityPrefix: String {
+            switch self {
+            case .markdown:
+                return "markdown"
+            case .code(let language):
+                return "code-\(language ?? "")"
+            }
+        }
     }
 
-    let id = UUID()
+    let id: String
     let kind: Kind
     let text: String
     let absoluteStart: String.Index
+
+    init(kind: Kind, text: String, absoluteStart: String.Index, source: String) {
+        self.kind = kind
+        self.text = text
+        self.absoluteStart = absoluteStart
+        let offset = source.distance(from: source.startIndex, to: absoluteStart)
+        self.id = "\(kind.identityPrefix)-\(offset)-\(text.count)"
+    }
 
     static func parse(_ text: String) -> [TranscriptContentBlock] {
         var blocks: [TranscriptContentBlock] = []
@@ -458,12 +528,12 @@ private struct TranscriptContentBlock: Identifiable {
 
         while cursor < text.endIndex {
             guard let fenceStart = text[cursor...].range(of: "```") else {
-                appendMarkdown(String(text[cursor...]), start: cursor, to: &blocks)
+                appendMarkdown(String(text[cursor...]), start: cursor, source: text, to: &blocks)
                 break
             }
 
             if fenceStart.lowerBound > cursor {
-                appendMarkdown(String(text[cursor..<fenceStart.lowerBound]), start: cursor, to: &blocks)
+                appendMarkdown(String(text[cursor..<fenceStart.lowerBound]), start: cursor, source: text, to: &blocks)
             }
 
             var language: String?
@@ -477,23 +547,31 @@ private struct TranscriptContentBlock: Identifiable {
                     TranscriptContentBlock(
                         kind: .code(language: language),
                         text: String(text[codeStart..<fenceEnd.lowerBound]).trimmingCharacters(in: .newlines),
-                        absoluteStart: codeStart
+                        absoluteStart: codeStart,
+                        source: text
                     )
                 )
                 cursor = fenceEnd.upperBound
             } else {
-                appendMarkdown(String(text[fenceStart.lowerBound...]), start: fenceStart.lowerBound, to: &blocks)
+                appendMarkdown(String(text[fenceStart.lowerBound...]), start: fenceStart.lowerBound, source: text, to: &blocks)
                 break
             }
         }
 
-        return blocks.isEmpty ? [TranscriptContentBlock(kind: .markdown, text: text, absoluteStart: text.startIndex)] : blocks
+        return blocks.isEmpty
+            ? [TranscriptContentBlock(kind: .markdown, text: text, absoluteStart: text.startIndex, source: text)]
+            : blocks
     }
 
-    private static func appendMarkdown(_ text: String, start: String.Index, to blocks: inout [TranscriptContentBlock]) {
+    private static func appendMarkdown(
+        _ text: String,
+        start: String.Index,
+        source: String,
+        to blocks: inout [TranscriptContentBlock]
+    ) {
         let trimmed = text.trimmingCharacters(in: .newlines)
         guard !trimmed.isEmpty else { return }
-        blocks.append(TranscriptContentBlock(kind: .markdown, text: trimmed, absoluteStart: start))
+        blocks.append(TranscriptContentBlock(kind: .markdown, text: trimmed, absoluteStart: start, source: source))
     }
 }
 
