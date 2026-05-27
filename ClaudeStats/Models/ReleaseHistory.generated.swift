@@ -3,6 +3,18 @@
 extension ReleaseHistoryCatalog {
     static let generatedEntries: [ReleaseHistoryEntry] = [
         ReleaseHistoryEntry(
+            version: "1.7.8",
+            date: "May 27, 2026",
+            headline: "提取GitGraphRowGeometry统一管理图形行布局计算，替换原有分散的railPad、laneSpacing计算",
+            changes: [
+                "将rail宽度、内容起始位置等逻辑封装到专用结构体中",
+                "调整railPad默认值从15改为18，优化图形边距",
+                "重构行视图布局结构，通过geometry统一驱动布局参数",
+                "新增GitChangedFileRowModel和面板组件替换旧文件行实现",
+                "实现自适应明暗色调的diff渲染调色板",
+            ]
+        ),
+        ReleaseHistoryEntry(
             version: "1.7.7",
             date: "May 26, 2026",
             headline: "将Claude桌面自动捕获和定时捕获的配置移到设置页面，简化使用面板，统一权限按钮命名",
