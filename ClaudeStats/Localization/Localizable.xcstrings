@@ -11402,7 +11402,7 @@
         "en": {
           "stringUnit": {
             "state": "new",
-            "value": "codex.version.checking"
+            "value": "Checking local Codex version..."
           }
         },
         "zh-Hans": {
@@ -11418,7 +11418,7 @@
         "en": {
           "stringUnit": {
             "state": "new",
-            "value": "codex.version.checking_latest"
+            "value": "Checking latest release..."
           }
         },
         "zh-Hans": {
@@ -11434,7 +11434,7 @@
         "en": {
           "stringUnit": {
             "state": "new",
-            "value": "codex.version.unavailable"
+            "value": "Unavailable"
           }
         },
         "zh-Hans": {
@@ -11450,13 +11450,93 @@
         "en": {
           "stringUnit": {
             "state": "new",
-            "value": "codex.version.current"
+            "value": "Current"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "已是最新"
+          }
+        }
+      }
+    },
+    "codex.version.latest_missing_field": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "No version field in npm latest metadata."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "npm 最新版本信息里没有 version 字段。"
+          }
+        }
+      }
+    },
+    "codex.version.latest_network_error": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Unable to check the npm registry."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法连接 npm registry 检查最新版。"
+          }
+        }
+      }
+    },
+    "codex.version.latest_registry_error": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "npm registry returned an error."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "npm registry 返回了错误。"
+          }
+        }
+      }
+    },
+    "codex.version.local_failed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Unable to read the local Codex version."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取本机 Codex 版本。"
+          }
+        }
+      }
+    },
+    "codex.version.local_not_found": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Codex CLI was not found in PATH or common install locations."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未在 PATH 或常见安装位置找到 Codex CLI。"
           }
         }
       }
