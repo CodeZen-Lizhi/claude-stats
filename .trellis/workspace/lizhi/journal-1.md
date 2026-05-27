@@ -465,3 +465,36 @@ Diagnosed packaged Claude Stats exiting while idle, added a resident menu-bar li
 ### Next Steps
 
 - None - task complete
+
+
+## Session 14: Claude Statistics 借鉴功能实现
+
+**Date**: 2026-05-27
+**Task**: Claude Statistics 借鉴功能实现
+**Branch**: `codex/dev`
+
+### Summary
+
+实现 transcript 搜索、会话导航、诊断导出、分享卡 v2 和 Usage 图表 hover 读数；因本机无完整 Xcode，Xcode 构建与 debug 启动未能验证。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `44279bf` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
