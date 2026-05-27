@@ -377,3 +377,7 @@ private extension ProcessInfo {
         return String(cString: machine)
     }
 }
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
+}
