@@ -144,7 +144,6 @@ struct CodexSessionScanner: Sendable {
         var buffer = Data()
         while true {
             guard let chunk = try? handle.read(upToCount: titleIndexReadChunkSize),
-                  let chunk,
                   !chunk.isEmpty else {
                 break
             }

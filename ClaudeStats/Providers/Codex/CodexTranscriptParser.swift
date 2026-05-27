@@ -321,7 +321,9 @@ struct CodexTranscriptParser: Sendable {
             try handle.seek(toOffset: offset)
             var buffer = Data()
             var parsedBytes: UInt64 = 0
-            while let chunk = try handle.read(upToCount: lineReadChunkSize), !chunk.isEmpty {
+            while true {
+                let chunk = try handle.read(upToCount: lineReadChunkSize)
+                guard !chunk.isEmpty else { break }
                 buffer.append(chunk)
                 while let newline = buffer.firstIndex(of: 0x0A) {
                     if newline > buffer.startIndex {
