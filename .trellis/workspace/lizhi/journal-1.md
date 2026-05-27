@@ -432,3 +432,36 @@ Diagnosed packaged Claude Stats exiting while idle, added a resident menu-bar li
 ### Next Steps
 
 - None - task complete
+
+
+## Session 13: 第一阶段 UI/Git 优化
+
+**Date**: 2026-05-27
+**Task**: 第一阶段 UI/Git 优化
+**Branch**: `codex/dev`
+
+### Summary
+
+实现主窗口侧栏宽度持久化、Git Inspector 简化、分支 badge、Codex 主来源与 JetBrains 辅助来源、设置页瘦身和本地化补齐。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `054e803` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
