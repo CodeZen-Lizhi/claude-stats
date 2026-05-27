@@ -20,7 +20,7 @@ class GitToolsRuntimeScriptTests(unittest.TestCase):
             tool.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
             tool.chmod(0o755)
 
-    def test_prune_removes_symbols_objects_and_cmake_build_dirs(self) -> None:
+    def test_prune_removes_build_only_runtime_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             dsym = root / "native.dSYM"
@@ -35,6 +35,22 @@ class GitToolsRuntimeScriptTests(unittest.TestCase):
             (cmake_build / "CMakeCache.txt").write_text("cache", encoding="utf-8")
             (cmake_build / "CMakeFiles" / "artifact").write_text("tmp", encoding="utf-8")
 
+            gem_cache = root / "gems" / "ruby" / "3.4.0" / "cache"
+            gem_cache.mkdir(parents=True)
+            (gem_cache / "github-linguist.gem").write_text("gem", encoding="utf-8")
+
+            rugged_vendor = root / "gems" / "ruby" / "3.4.0" / "gems" / "rugged-1.9.0" / "vendor"
+            rugged_vendor.mkdir(parents=True)
+            (rugged_vendor / "source.c").write_text("source", encoding="utf-8")
+
+            ruby_headers = root / "runtime" / "ruby" / "include"
+            ruby_headers.mkdir(parents=True)
+            (ruby_headers / "ruby.h").write_text("header", encoding="utf-8")
+
+            default_rbs = root / "runtime" / "ruby" / "lib" / "ruby" / "gems" / "3.4.0" / "gems" / "rbs-3.8.0"
+            default_rbs.mkdir(parents=True)
+            (default_rbs / "rbs.rb").write_text("rbs", encoding="utf-8")
+
             result = subprocess.run(
                 ["bash", str(PRUNE_SCRIPT), str(root)],
                 text=True,
@@ -45,6 +61,10 @@ class GitToolsRuntimeScriptTests(unittest.TestCase):
             self.assertFalse(dsym.exists())
             self.assertFalse(object_file.exists())
             self.assertFalse(cmake_build.exists())
+            self.assertFalse(gem_cache.exists())
+            self.assertFalse(rugged_vendor.exists())
+            self.assertFalse(ruby_headers.exists())
+            self.assertFalse(default_rbs.exists())
 
     def test_verify_rejects_object_files_before_functional_checks(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
