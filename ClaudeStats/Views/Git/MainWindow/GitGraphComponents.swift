@@ -6,8 +6,7 @@ import SwiftUI
 struct GitGraphRowView: View {
     let row: GraphLayout.Row
     let rowHeight: CGFloat
-    let laneSpacing: CGFloat
-    let railPad: CGFloat
+    let geometry: GitGraphRowGeometry
     let nodeRadius: CGFloat
     let railWidth: CGFloat
     let isSelected: Bool
@@ -18,33 +17,24 @@ struct GitGraphRowView: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            ZStack(alignment: .leading) {
                 GitGraphRailView(
                     row: row,
-                    laneSpacing: laneSpacing,
-                    railPad: railPad,
+                    geometry: geometry,
                     nodeRadius: nodeRadius,
                     connectsFromTop: connectsFromTop
                 )
                 .frame(width: railWidth)
 
-                GitAvatar(name: row.commit.author, email: row.commit.authorEmail)
-                    .frame(width: 20, height: 20)
-
-                commitContent
-                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-                    .clipped()
-                    .mask(TrailingFadeMask(width: 34))
-
-                Text(Format.relativeDate(row.commit.date))
-                    .font(.sora(9).monospacedDigit())
-                    .foregroundStyle(Color.stxMuted)
-                    .lineLimit(1)
-                    .fixedSize()
-                    .help(Format.shortDate(row.commit.date))
+                HStack(spacing: 0) {
+                    Color.clear
+                        .frame(width: geometry.contentLeading(for: row))
+                    rowContent
+                }
+                .padding(.trailing, 14)
             }
-            .padding(.trailing, 14)
             .frame(height: rowHeight)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background((hovering || isSelected) ? Color.primary.opacity(0.05) : Color.clear)
             .contentShape(Rectangle())
         }
@@ -55,6 +45,25 @@ struct GitGraphRowView: View {
 
     private var accessibilityTitle: String {
         "\(row.commit.shortHash), \(row.commit.author), \(row.commit.subject)"
+    }
+
+    private var rowContent: some View {
+        HStack(spacing: 8) {
+            GitAvatar(name: row.commit.author, email: row.commit.authorEmail)
+                .frame(width: 20, height: 20)
+
+            commitContent
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                .clipped()
+                .mask(TrailingFadeMask(width: 34))
+
+            Text(Format.relativeDate(row.commit.date))
+                .font(.sora(9).monospacedDigit())
+                .foregroundStyle(Color.stxMuted)
+                .lineLimit(1)
+                .fixedSize()
+                .help(Format.shortDate(row.commit.date))
+        }
     }
 
     private var commitContent: some View {
@@ -74,12 +83,10 @@ struct GitGraphRowView: View {
 
 private struct GitGraphRailView: View {
     let row: GraphLayout.Row
-    let laneSpacing: CGFloat
-    let railPad: CGFloat
+    let geometry: GitGraphRowGeometry
     let nodeRadius: CGFloat
     let connectsFromTop: Bool
 
-    private func x(_ column: Int) -> CGFloat { railPad + CGFloat(column) * laneSpacing }
     private func color(_ idx: Int) -> Color { Color.stxRamp[idx % Color.stxRamp.count] }
 
     var body: some View {
@@ -89,21 +96,21 @@ private struct GitGraphRailView: View {
 
             for lane in row.passThrough {
                 var p = Path()
-                p.move(to: CGPoint(x: x(lane.column), y: 0))
-                p.addLine(to: CGPoint(x: x(lane.column), y: h))
+                p.move(to: CGPoint(x: geometry.laneX(lane.column), y: 0))
+                p.addLine(to: CGPoint(x: geometry.laneX(lane.column), y: h))
                 ctx.stroke(p, with: .color(color(lane.colorIndex)), lineWidth: 1.6)
             }
 
             if connectsFromTop || !row.isBranchTip {
                 var p = Path()
-                p.move(to: CGPoint(x: x(row.column), y: 0))
-                p.addLine(to: CGPoint(x: x(row.column), y: midY))
+                p.move(to: CGPoint(x: geometry.laneX(row.column), y: 0))
+                p.addLine(to: CGPoint(x: geometry.laneX(row.column), y: midY))
                 ctx.stroke(p, with: .color(color(row.colorIndex)), lineWidth: 1.6)
             }
 
             for e in row.edgesDown {
                 var p = Path()
-                let xf = x(e.fromColumn), xt = x(e.toColumn)
+                let xf = geometry.laneX(e.fromColumn), xt = geometry.laneX(e.toColumn)
                 p.move(to: CGPoint(x: xf, y: midY))
                 if xf == xt {
                     p.addLine(to: CGPoint(x: xt, y: h))
@@ -117,7 +124,7 @@ private struct GitGraphRailView: View {
                 ctx.stroke(p, with: .color(color(e.colorIndex)), lineWidth: 1.6)
             }
 
-            let c = CGPoint(x: x(row.column), y: midY)
+            let c = CGPoint(x: geometry.laneX(row.column), y: midY)
             let disc = Path(ellipseIn: CGRect(
                 x: c.x - nodeRadius,
                 y: c.y - nodeRadius,
@@ -142,7 +149,7 @@ private struct GitGraphRailView: View {
 struct GitWorkingTreeRowView: View {
     let summary: GitWorkingTreeSummary
     let rowHeight: CGFloat
-    let railPad: CGFloat
+    let geometry: GitGraphRowGeometry
     let nodeRadius: CGFloat
     let railWidth: CGFloat
     let railColorIndex: Int
@@ -153,27 +160,34 @@ struct GitWorkingTreeRowView: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            ZStack(alignment: .leading) {
                 GitWorkingTreeRailView(
-                    railPad: railPad,
+                    geometry: geometry,
                     nodeRadius: nodeRadius,
                     railColorIndex: railColorIndex
                 )
-                    .frame(width: railWidth)
+                .frame(width: railWidth)
 
-                GitWorkingTreeIcon()
-                    .frame(width: 20, height: 20)
+                HStack(spacing: 0) {
+                    Color.clear
+                        .frame(width: geometry.workingTreeContentLeading)
+                    HStack(spacing: 8) {
+                        GitWorkingTreeIcon()
+                            .frame(width: 20, height: 20)
 
-                Text(summary.title)
-                    .font(.sora(13, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                        Text(summary.title)
+                            .font(.sora(13, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
 
-                Spacer(minLength: 8)
+                        Spacer(minLength: 8)
+                    }
+                }
+                .padding(.trailing, 14)
             }
-            .padding(.trailing, 14)
             .frame(height: rowHeight)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background((hovering || isSelected) ? Color.primary.opacity(0.05) : Color.clear)
             .contentShape(Rectangle())
         }
@@ -184,7 +198,7 @@ struct GitWorkingTreeRowView: View {
 }
 
 private struct GitWorkingTreeRailView: View {
-    let railPad: CGFloat
+    let geometry: GitGraphRowGeometry
     let nodeRadius: CGFloat
     let railColorIndex: Int
 
@@ -195,15 +209,15 @@ private struct GitWorkingTreeRailView: View {
             let midY = size.height / 2
             let railColor = color(railColorIndex)
             var p = Path()
-            p.move(to: CGPoint(x: railPad, y: midY + nodeRadius + 2))
-            p.addLine(to: CGPoint(x: railPad, y: size.height))
+            p.move(to: CGPoint(x: geometry.laneX(0), y: midY + nodeRadius + 2))
+            p.addLine(to: CGPoint(x: geometry.laneX(0), y: size.height))
             ctx.stroke(
                 p,
                 with: .color(railColor),
                 style: StrokeStyle(lineWidth: 1.6, lineCap: .round, dash: [2, 4])
             )
 
-            let c = CGPoint(x: railPad, y: midY)
+            let c = CGPoint(x: geometry.laneX(0), y: midY)
             let ring = Path(ellipseIn: CGRect(
                 x: c.x - nodeRadius - 2,
                 y: c.y - nodeRadius - 2,
