@@ -5,6 +5,7 @@ import SwiftUI
 /// sidebar swaps this overview for ``SessionDetailView``.
 struct SessionsOverviewDetailView: View {
     @Environment(AppEnvironment.self) private var env
+    var onSelectSession: (Session) -> Void = { _ in }
 
     private var provider: ProviderKind {
         env.preferences.selectedProvider
@@ -214,7 +215,9 @@ struct SessionsOverviewDetailView: View {
 
                 VStack(spacing: 0) {
                     ForEach(recentSessions) { session in
-                        SessionRow(session: session)
+                        SessionRow(session: session) {
+                            onSelectSession(session)
+                        }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                     }

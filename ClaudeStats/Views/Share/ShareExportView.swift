@@ -13,6 +13,7 @@ struct ShareExportView: View {
     @State private var scheme: ColorScheme = .light
     @State private var showTopBar = true
     @State private var stampPrecision: ExportStampPrecision = .monthOnly
+    @State private var template: ShareExportTemplate = .panel
     @State private var pane: StatsPane = .usage
     @State private var preset: StatsPeriod = .today
     @State private var useCustomRange = false
@@ -39,16 +40,28 @@ struct ShareExportView: View {
         )
     }
 
+    private var shareCardConfig: ShareCardV2View.Config {
+        ShareCardV2View.Config(selection: selection, stampDate: .now, stampPrecision: stampPrecision)
+    }
+
     /// The panel as it will be exported. Used both for the on-screen preview and
     /// (re-instantiated) as the `ImageRenderer` content.
     private func exportPanel(paneBinding: Binding<StatsPane>) -> some View {
-        StatsPanelBody(pane: paneBinding, export: exportConfig)
-            .frame(width: 380)
-            .fixedSize(horizontal: false, vertical: true)
-            .font(.sora(13))
-            .tint(.stxAccent)
-            .background(MenuBarSurface.backgroundFill)
-            .environment(\.colorScheme, scheme)
+        Group {
+            switch template {
+            case .panel:
+                StatsPanelBody(pane: paneBinding, export: exportConfig)
+                    .frame(width: 380)
+            case .socialCard:
+                ShareCardV2View(config: shareCardConfig)
+                    .frame(width: 420)
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .font(.sora(13))
+        .tint(.stxAccent)
+        .background(MenuBarSurface.backgroundFill)
+        .environment(\.colorScheme, scheme)
     }
 
     var body: some View {
@@ -102,11 +115,17 @@ struct ShareExportView: View {
                 }
             }
 
+            optionGroup("Template") {
+                UnderlineTabRow(options: ShareExportTemplate.allCases, label: \.label, selection: $template)
+            }
+
             optionGroup("Pane") {
                 UnderlineTabRow(options: availablePanes, label: \.title, selection: $pane)
             }
+            .disabled(template == .socialCard)
+            .opacity(template == .socialCard ? 0.45 : 1)
 
-            if pane == .usage {
+            if pane == .usage && template == .panel {
                 optionGroup("Chart") {
                     VStack(alignment: .leading, spacing: 8) {
                         UnderlineTabRow(options: [TrendChartStyle.line, .bar],
@@ -227,6 +246,19 @@ struct ShareExportView: View {
         pasteboard.clearContents()
         pasteboard.writeObjects([image])
         statusMessage = "Copied to clipboard."
+    }
+}
+
+private enum ShareExportTemplate: String, CaseIterable, Hashable, Identifiable {
+    case panel
+    case socialCard
+
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .panel: "Panel"
+        case .socialCard: "Card v2"
+        }
     }
 }
 

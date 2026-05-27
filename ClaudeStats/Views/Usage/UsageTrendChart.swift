@@ -246,6 +246,7 @@ struct UsageTrendChartView<Legend: View>: View {
 
     @State private var displayedSnapshot: UsageTrendChartSnapshot?
     @State private var chartStageNonce = 0
+    @State private var hoveredDate: Date?
 
     init(
         snapshot: UsageTrendChartSnapshot,
@@ -271,6 +272,7 @@ struct UsageTrendChartView<Legend: View>: View {
                 StxRule()
             }
             chartStage(displayed)
+            hoverReadout(displayed)
         }
         .animation(UsageTrendMotion.chartCrossfade, value: stageAnimationID(displayed))
         .onAppear {
@@ -301,32 +303,40 @@ struct UsageTrendChartView<Legend: View>: View {
 
     @ViewBuilder
     private func chart(_ displayed: UsageTrendChartSnapshot) -> some View {
-        let base = Chart(displayed.points) { point in
-            switch displayed.style {
-            case .line:
-                if displayed.stackByType {
-                    AreaMark(
-                        x: .value("Time", point.date, unit: displayed.isHourly ? .hour : .day),
+        let base = Chart {
+            ForEach(displayed.points) { point in
+                switch displayed.style {
+                case .line:
+                    if displayed.stackByType {
+                        AreaMark(
+                            x: .value("Time", point.date, unit: displayed.isHourly ? .hour : .day),
+                            y: .value("Tokens", point.value)
+                        )
+                        .foregroundStyle(by: .value("Type", point.series))
+                        .interpolationMethod(.catmullRom)
+                    } else {
+                        LineMark(
+                            x: .value("Time", point.date, unit: displayed.isHourly ? .hour : .day),
+                            y: .value("Tokens", point.value)
+                        )
+                        .foregroundStyle(by: .value("Model", point.series))
+                        .interpolationMethod(.catmullRom)
+                        .lineStyle(StrokeStyle(lineWidth: 2))
+                    }
+                case .bar:
+                    BarMark(
+                        x: .value("Day", point.date, unit: .day),
                         y: .value("Tokens", point.value)
                     )
-                    .foregroundStyle(by: .value("Type", point.series))
-                    .interpolationMethod(.catmullRom)
-                } else {
-                    LineMark(
-                        x: .value("Time", point.date, unit: displayed.isHourly ? .hour : .day),
-                        y: .value("Tokens", point.value)
-                    )
-                    .foregroundStyle(by: .value("Model", point.series))
-                    .interpolationMethod(.catmullRom)
-                    .lineStyle(StrokeStyle(lineWidth: 2))
+                    .foregroundStyle(by: .value(displayed.stackByType ? "Type" : "Model", point.series))
+                    .cornerRadius(barCornerRadius)
                 }
-            case .bar:
-                BarMark(
-                    x: .value("Day", point.date, unit: .day),
-                    y: .value("Tokens", point.value)
-                )
-                .foregroundStyle(by: .value(displayed.stackByType ? "Type" : "Model", point.series))
-                .cornerRadius(barCornerRadius)
+            }
+
+            if let hover = hoverSnapshot(for: displayed) {
+                RuleMark(x: .value("Hover", hover.date, unit: displayed.isHourly ? .hour : .day))
+                    .foregroundStyle(Color.stxAccent.opacity(0.45))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
             }
         }
         .chartYAxis {
@@ -369,6 +379,22 @@ struct UsageTrendChartView<Legend: View>: View {
         .chartLegend(.hidden)
         .animation(UsageTrendMotion.chartMorph, value: displayed.dataID)
         .stxDateChartViewportTransition(displayed.viewport, value: displayed.viewportID)
+        .chartOverlay { proxy in
+            GeometryReader { geometry in
+                let frame = geometry[proxy.plotAreaFrame]
+                Rectangle()
+                    .fill(Color.clear)
+                    .contentShape(Rectangle())
+                    .onContinuousHover(coordinateSpace: .local) { phase in
+                        switch phase {
+                        case .active(let location):
+                            updateHover(location: location, plotFrame: frame, proxy: proxy)
+                        case .ended:
+                            hoveredDate = nil
+                        }
+                    }
+            }
+        }
 
         if displayed.stackByType {
             base.chartForegroundStyleScale(
@@ -380,6 +406,45 @@ struct UsageTrendChartView<Legend: View>: View {
                 ModelPalette.color(at: displayed.modelColorIndexByID[key] ?? 0)
             })
         }
+    }
+
+    @ViewBuilder
+    private func hoverReadout(_ displayed: UsageTrendChartSnapshot) -> some View {
+        if let hover = hoverSnapshot(for: displayed) {
+            HStack(spacing: 8) {
+                Text(hover.date, format: displayed.isHourly ? .dateTime.hour().day().month(.abbreviated) : .dateTime.month(.abbreviated).day())
+                    .font(.sora(10, weight: .semibold))
+                    .foregroundStyle(.primary)
+                Text(Format.tokens(hover.totalTokens))
+                    .font(.sora(10, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(Color.stxAccent)
+                Text(hover.seriesSummary)
+                    .font(.sora(10))
+                    .foregroundStyle(Color.stxMuted)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 6)
+            .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.stxStroke.opacity(0.7), lineWidth: 1))
+            .transition(.opacity.combined(with: .move(edge: .top)))
+        }
+    }
+
+    private func updateHover(location: CGPoint, plotFrame: CGRect, proxy: ChartProxy) {
+        guard plotFrame.contains(location) else {
+            hoveredDate = nil
+            return
+        }
+        let x = location.x - plotFrame.origin.x
+        hoveredDate = proxy.value(atX: x, as: Date.self)
+    }
+
+    private func hoverSnapshot(for displayed: UsageTrendChartSnapshot) -> UsageTrendHoverSnapshot? {
+        guard let hoveredDate else { return nil }
+        return UsageTrendHoverSnapshot.make(near: hoveredDate, in: displayed)
     }
 
     private var stageTransition: AnyTransition {
@@ -421,5 +486,33 @@ struct UsageTrendChartView<Legend: View>: View {
         withTransaction(transaction) {
             displayedSnapshot = snapshot
         }
+    }
+}
+
+struct UsageTrendHoverSnapshot: Equatable {
+    let date: Date
+    let totalTokens: Int
+    let seriesSummary: String
+
+    static func make(near date: Date, in snapshot: UsageTrendChartSnapshot) -> UsageTrendHoverSnapshot? {
+        guard let nearestDate = snapshot.points
+            .map(\.date)
+            .min(by: {
+                abs($0.timeIntervalSince(date)) < abs($1.timeIntervalSince(date))
+            }) else {
+            return nil
+        }
+        let rows = snapshot.points
+            .filter { $0.date == nearestDate }
+            .map { point in
+                (series: point.series, tokens: Int((snapshot.useLog ? expm1(point.value) : point.value).rounded()))
+            }
+            .filter { $0.tokens > 0 }
+            .sorted { $0.tokens > $1.tokens }
+        let total = rows.reduce(0) { $0 + $1.tokens }
+        let summary = rows.prefix(3)
+            .map { "\($0.series): \(Format.tokens($0.tokens))" }
+            .joined(separator: " · ")
+        return UsageTrendHoverSnapshot(date: nearestDate, totalTokens: total, seriesSummary: summary.isEmpty ? "No usage" : summary)
     }
 }

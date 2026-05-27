@@ -4,8 +4,33 @@ import AppKit
 struct SessionRow: View {
     @Environment(AppEnvironment.self) private var env
     let session: Session
+    var onSelect: (() -> Void)?
 
     var body: some View {
+        Group {
+            if let onSelect {
+                Button(action: onSelect) {
+                    rowContent
+                }
+                .buttonStyle(.plain)
+            } else {
+                rowContent
+            }
+        }
+        .contentShape(Rectangle())
+        .contextMenu {
+            Button("Reveal Transcript in Finder") {
+                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: session.filePath)])
+            }
+            if let cwd = session.cwd, FileManager.default.fileExists(atPath: cwd) {
+                Button("Open Project Folder") {
+                    NSWorkspace.shared.open(URL(fileURLWithPath: cwd))
+                }
+            }
+        }
+    }
+
+    private var rowContent: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: session.provider.iconSystemName)
                 .foregroundStyle(session.provider.accentColor)
@@ -42,17 +67,6 @@ struct SessionRow: View {
                 }
                 .font(.sora(9).monospacedDigit())
                 .foregroundStyle(Color.stxMuted)
-            }
-        }
-        .contentShape(Rectangle())
-        .contextMenu {
-            Button("Reveal Transcript in Finder") {
-                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: session.filePath)])
-            }
-            if let cwd = session.cwd, FileManager.default.fileExists(atPath: cwd) {
-                Button("Open Project Folder") {
-                    NSWorkspace.shared.open(URL(fileURLWithPath: cwd))
-                }
             }
         }
     }

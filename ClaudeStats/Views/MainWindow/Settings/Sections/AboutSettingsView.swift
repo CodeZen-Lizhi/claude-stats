@@ -1,10 +1,13 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 struct AboutSettingsView: View {
     @Environment(AppEnvironment.self) private var env
     var onShowReleaseHistory: () -> Void = {}
     @State private var codexStatus = CodexVersionStatus.loading
+    @State private var diagnosticsMessage: String?
+    @State private var diagnosticsIsExporting = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 28) {
@@ -46,6 +49,19 @@ struct AboutSettingsView: View {
                 .settingCard()
             }
 
+            SettingGroup(title: "Diagnostics") {
+                VStack(spacing: 0) {
+                    SettingRow(title: "Export diagnostics",
+                               description: diagnosticsMessage ?? "Creates a redacted support bundle with logs, scanner status, permissions, and integration health.") {
+                        Button(diagnosticsIsExporting ? "Exporting..." : "Export…") {
+                            exportDiagnostics()
+                        }
+                        .disabled(diagnosticsIsExporting)
+                    }
+                }
+                .settingCard()
+            }
+
             SettingGroup(title: "About") {
                 VStack(spacing: 0) {
                     SettingRow(title: "Version",
@@ -75,6 +91,28 @@ struct AboutSettingsView: View {
     private func refreshCodexStatus() async {
         codexStatus = .loading
         codexStatus = await CodexVersionChecker().check()
+    }
+
+    private func exportDiagnostics() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.zip]
+        panel.canCreateDirectories = true
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd-HHmm"
+        panel.nameFieldStringValue = "Codex Statistics Diagnostics \(formatter.string(from: .now)).zip"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        diagnosticsIsExporting = true
+        diagnosticsMessage = nil
+        Task { @MainActor in
+            do {
+                let exported = try await DiagnosticsExporter().export(environment: env, to: url)
+                diagnosticsMessage = "Saved \(exported.lastPathComponent)."
+            } catch {
+                diagnosticsMessage = "Export failed: \(error.localizedDescription)"
+            }
+            diagnosticsIsExporting = false
+        }
     }
 }
 

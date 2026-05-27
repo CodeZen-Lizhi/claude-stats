@@ -35,12 +35,16 @@ struct SessionsWorkspaceView: View {
     private var sessionsDetail: some View {
         switch destination {
         case .overview:
-            SessionsOverviewDetailView()
+            SessionsOverviewDetailView { session in
+                destination = .session(session.id)
+            }
         case .session:
             if let selectedSession {
                 CenteredPaneContainer { SessionDetailView(session: selectedSession) }
             } else {
-                SessionsOverviewDetailView()
+                SessionsOverviewDetailView { session in
+                    destination = .session(session.id)
+                }
             }
         }
     }
@@ -52,6 +56,7 @@ struct SessionsWorkspaceView: View {
             destination = .overview
         }
     }
+
 }
 
 #if DEBUG
