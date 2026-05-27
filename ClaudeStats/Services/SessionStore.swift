@@ -508,7 +508,7 @@ private extension SessionStore {
     static func deletionFailure(for session: Session, error: Error) -> SessionDeletionFailure {
         SessionDeletionFailure(
             sessionID: session.id,
-            title: session.stats?.title.nonEmpty ?? session.titleFallback ?? session.externalID,
+            title: session.stats.flatMap { $0.title.isEmpty ? nil : $0.title } ?? session.titleFallback ?? session.externalID,
             message: error.localizedDescription
         )
     }
