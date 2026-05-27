@@ -155,7 +155,7 @@ emit_xcodebuild_failure_summary() {
     fi
 }
 
-XCODEBUILD_LOG="$WORK/xcodebuild.log"
+XCODEBUILD_LOG="$(mktemp "${TMPDIR:-/tmp}/codex-stats-xcodebuild.XXXXXX.log")"
 set +e
 xcodebuild \
     -project ClaudeStats.xcodeproj \
