@@ -17,6 +17,9 @@ struct Session: Sendable, Identifiable, Hashable {
     let filePath: String
     /// Working directory the session ran in, if it could be read cheaply.
     let cwd: String?
+    /// Provider-owned display title that should win over transcript-derived
+    /// fallbacks. Codex stores these in `session_index.jsonl`.
+    let titleOverride: String?
     /// Provider-supplied title fallback used when the transcript has no title.
     let titleFallback: String?
     /// Coarse source bucket for UI hints; does not affect usage accounting.
@@ -39,6 +42,7 @@ struct Session: Sendable, Identifiable, Hashable {
         projectDisplayNameOverride: String? = nil,
         filePath: String,
         cwd: String?,
+        titleOverride: String? = nil,
         titleFallback: String? = nil,
         sourceKind: SessionSourceKind = .project,
         lastModified: Date,
@@ -54,6 +58,7 @@ struct Session: Sendable, Identifiable, Hashable {
         self.projectDisplayNameOverride = projectDisplayNameOverride
         self.filePath = filePath
         self.cwd = cwd
+        self.titleOverride = titleOverride
         self.titleFallback = titleFallback
         self.sourceKind = sourceKind
         self.lastModified = lastModified

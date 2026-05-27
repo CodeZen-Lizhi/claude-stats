@@ -64,7 +64,7 @@ struct SessionDetailView: View {
                     .foregroundStyle(Color.stxMuted)
             }
 
-            Text(session.stats?.title.nonEmpty ?? session.titleFallback ?? session.externalID)
+            Text(session.titleOverride?.nonEmpty ?? session.stats?.title.nonEmpty ?? session.titleFallback ?? session.externalID)
                 .font(.sora(22, weight: .semibold))
                 .foregroundStyle(.primary)
                 .lineLimit(2)

@@ -216,8 +216,10 @@ final class SessionStore {
                         appendedCount += 1
                     case .rebuilt(let session, let stats, let nilPolicy):
                         if let stats {
-                            await usageLedger.replaceEvents(for: session, stats: stats)
-                            let ledgerStats = await usageLedger.stats(for: session) ?? stats
+                            let displayStats = stats.applyingTitleOverride(session.titleOverride)
+                            await usageLedger.replaceEvents(for: session, stats: displayStats)
+                            let ledgerStats = (await usageLedger.stats(for: session) ?? displayStats)
+                                .applyingTitleOverride(session.titleOverride)
                             cache[session.id] = CacheEntry(
                                 fileSize: session.fileSize,
                                 lastModified: session.lastModified,
@@ -245,13 +247,14 @@ final class SessionStore {
         var withStats = discovered
         for i in withStats.indices {
             if let stats = cache[withStats[i].id]?.stats {
-                withStats[i].stats = stats
+                withStats[i].stats = stats.applyingTitleOverride(withStats[i].titleOverride)
             } else if let stats = await usageLedger.stats(for: withStats[i]) {
-                withStats[i].stats = stats
+                let displayStats = stats.applyingTitleOverride(withStats[i].titleOverride)
+                withStats[i].stats = displayStats
                 cache[withStats[i].id] = CacheEntry(
                     fileSize: withStats[i].fileSize,
                     lastModified: withStats[i].lastModified,
-                    stats: stats
+                    stats: displayStats
                 )
             }
         }

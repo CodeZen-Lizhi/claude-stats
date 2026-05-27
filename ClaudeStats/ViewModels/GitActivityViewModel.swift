@@ -3,10 +3,11 @@ import Observation
 
 /// Time window the git view is scoped to.
 enum GitRange: String, CaseIterable, Identifiable, Sendable {
-    case last7Days, last30Days, last90Days
+    case today, last7Days, last30Days, last90Days
     var id: String { rawValue }
     var shortLabel: String {
         switch self {
+        case .today: "今天"
         case .last7Days: "7D"
         case .last30Days: "30D"
         case .last90Days: "90D"
@@ -14,6 +15,7 @@ enum GitRange: String, CaseIterable, Identifiable, Sendable {
     }
     var dayCount: Int {
         switch self {
+        case .today: 1
         case .last7Days: 7
         case .last30Days: 30
         case .last90Days: 90
@@ -26,10 +28,10 @@ enum GitRange: String, CaseIterable, Identifiable, Sendable {
 @MainActor
 @Observable
 final class GitActivityViewModel {
-    var range: GitRange = .last7Days {
+    var range: GitRange = .today {
         didSet { if range != oldValue { reloadToken &+= 1 } }
     }
-    var onlyMyCommits: Bool = false {
+    var onlyMyCommits: Bool = true {
         didSet { if onlyMyCommits != oldValue { reloadToken &+= 1 } }
     }
     private(set) var repos: [RepoActivity] = []

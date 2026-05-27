@@ -17,6 +17,7 @@ struct CodexSessionScanner: Sendable {
         guard fm.fileExists(atPath: root.path, isDirectory: &isDir), isDir.boolValue else { return [] }
 
         var rawSessions: [RawSession] = []
+        let titleIndex = Self.readSessionTitleIndex(from: paths.sessionIndexFile)
         for url in Self.rolloutFiles(under: root) {
             let values = try? url.resourceValues(forKeys: Set(Self.resourceKeys))
             guard values?.isRegularFile == true else { continue }
@@ -26,11 +27,13 @@ struct CodexSessionScanner: Sendable {
 
             let meta = Self.readSessionMeta(from: url)
             let uuid = meta?.id ?? Self.uuidFromFilename(url.lastPathComponent) ?? url.deletingPathExtension().lastPathComponent
+            let titleOverride = titleIndex[uuid]
             rawSessions.append(RawSession(
                 id: "codex::\(uuid)",
                 externalID: uuid,
                 url: url,
                 cwd: meta?.cwd,
+                titleOverride: titleOverride,
                 titleFallback: meta?.titleFallback,
                 lastModified: modified,
                 fileSize: size,
@@ -75,6 +78,7 @@ struct CodexSessionScanner: Sendable {
                 projectDisplayNameOverride: resolution.displayName,
                 filePath: raw.url.path,
                 cwd: raw.cwd,
+                titleOverride: raw.titleOverride,
                 titleFallback: raw.titleFallback ?? resolution.titleFallback,
                 sourceKind: resolution.sourceKind,
                 lastModified: raw.lastModified,
@@ -105,6 +109,33 @@ struct CodexSessionScanner: Sendable {
         let cwd: String?
         let titleFallback: String?
         let agentInfo: SessionAgentInfo?
+    }
+
+    static func readSessionTitleIndex(from url: URL) -> [String: String] {
+        guard let data = try? Data(contentsOf: url), !data.isEmpty else { return [:] }
+        struct Entry: Decodable {
+            let id: String?
+            let threadName: String?
+
+            enum CodingKeys: String, CodingKey {
+                case id
+                case threadName = "thread_name"
+            }
+        }
+
+        let decoder = JSONDecoder()
+        var titles: [String: String] = [:]
+        for lineBytes in data.split(separator: 0x0A /* \n */, omittingEmptySubsequences: true) {
+            guard let entry = try? decoder.decode(Entry.self, from: Data(lineBytes)),
+                  let id = entry.id?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !id.isEmpty,
+                  let title = entry.threadName?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !title.isEmpty else {
+                continue
+            }
+            titles[id] = title
+        }
+        return titles
     }
 
     /// Read the first JSONL line (`type == "session_meta"`) to pull `id` and
@@ -206,6 +237,7 @@ struct CodexSessionScanner: Sendable {
         let externalID: String
         let url: URL
         let cwd: String?
+        let titleOverride: String?
         let titleFallback: String?
         let lastModified: Date
         let fileSize: Int64

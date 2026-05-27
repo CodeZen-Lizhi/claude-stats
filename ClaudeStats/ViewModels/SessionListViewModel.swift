@@ -46,6 +46,7 @@ final class SessionListViewModel {
         let lastActivity: Date
         let totalTokens: Int
         let totalCost: Double
+        let projectFolderURL: URL?
         var count: Int { sessions.count }
     }
 
@@ -101,7 +102,8 @@ final class SessionListViewModel {
                 sessions: sorted,
                 lastActivity: lastActivity,
                 totalTokens: totalTokens,
-                totalCost: totalCost
+                totalCost: totalCost,
+                projectFolderURL: Self.projectFolderURL(groupKey: key, sessions: value)
             )
         }
         groups.sort {
@@ -127,5 +129,26 @@ final class SessionListViewModel {
         case .cost:
             sessions.sorted { ($0.stats?.totalCost(for: costMode) ?? 0) > ($1.stats?.totalCost(for: costMode) ?? 0) }
         }
+    }
+
+    private static func projectFolderURL(groupKey: String, sessions: [Session]) -> URL? {
+        let fileManager = FileManager.default
+        if groupKey.hasPrefix("/"), isExistingDirectory(groupKey, fileManager: fileManager) {
+            return URL(fileURLWithPath: groupKey, isDirectory: true)
+        }
+
+        for session in sessions where session.sourceKind == .project || session.sourceKind == .worktree {
+            guard let cwd = session.cwd,
+                  isExistingDirectory(cwd, fileManager: fileManager) else {
+                continue
+            }
+            return URL(fileURLWithPath: cwd, isDirectory: true)
+        }
+        return nil
+    }
+
+    private static func isExistingDirectory(_ path: String, fileManager: FileManager) -> Bool {
+        var isDirectory: ObjCBool = false
+        return fileManager.fileExists(atPath: path, isDirectory: &isDirectory) && isDirectory.boolValue
     }
 }

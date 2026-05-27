@@ -23,6 +23,7 @@ struct CodexProvider: Provider {
             .parse(transcriptAt: URL(fileURLWithPath: session.filePath),
                    fallbackTitle: session.titleFallback ?? session.projectDisplayName,
                    sessionID: session.id)
+            .map { $0.applyingTitleOverride(session.titleOverride) }
     }
 
     func parseUsageAppend(_ session: Session, from state: UsageLedgerParseState) async -> UsageLedgerAppendResult? {

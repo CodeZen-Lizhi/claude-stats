@@ -9,6 +9,9 @@ struct CodexPaths: Sendable, Hashable {
     /// `<homeDirectory>/sessions` — rollout transcripts under `YYYY/MM/DD/`.
     var sessionsDirectory: URL { homeDirectory.appendingPathComponent("sessions", isDirectory: true) }
 
+    /// `<homeDirectory>/session_index.jsonl` — Codex's user-facing thread names.
+    var sessionIndexFile: URL { homeDirectory.appendingPathComponent("session_index.jsonl", isDirectory: false) }
+
     init(homeDirectory: URL) { self.homeDirectory = homeDirectory }
 
     static let `default`: CodexPaths = {

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// A tappable header row for one project: folder glyph, project name, session
@@ -32,6 +33,13 @@ struct ProjectGroupRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            if let projectFolderURL = group.projectFolderURL {
+                Button("Open Project Folder") {
+                    NSWorkspace.shared.open(projectFolderURL)
+                }
+            }
+        }
     }
 }
 
@@ -42,7 +50,10 @@ struct ProjectGroupRow: View {
         id: samples.first?.projectDirectoryName ?? "demo",
         displayName: samples.first?.projectDisplayName ?? "demo",
         sessions: samples,
-        lastActivity: .now
+        lastActivity: .now,
+        totalTokens: 0,
+        totalCost: 0,
+        projectFolderURL: nil
     )
     return VStack(spacing: 0) {
         ProjectGroupRow(group: group, isExpanded: false) {}.padding(8)

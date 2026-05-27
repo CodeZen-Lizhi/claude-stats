@@ -32,6 +32,27 @@ struct CodexSessionScannerTests {
         #expect(session.fileSize >= CodexSessionScanner.minimumFileSize)
     }
 
+    @Test("Reads Codex session_index thread names as title overrides")
+    func readsSessionIndexThreadNames() async throws {
+        let root = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let dayDir = root.appendingPathComponent("sessions/2026/01/10", isDirectory: true)
+        let id = "019e648b-1f04-71b0-acb1-9965b3e7f826"
+
+        try writeTranscript(id: id, cwd: "/Users/dev/projects/demo", to: dayDir.appendingPathComponent("rollout-2026-01-10T09-00-00-\(id).jsonl"))
+        try TempDir.write(
+            [
+                #"{"id":"\#(id)","thread_name":"Old title","updated_at":"2026-01-10T09:00:00Z"}"#,
+                #"{"id":"\#(id)","thread_name":"梳理问题原因","updated_at":"2026-01-10T09:01:00Z"}"#,
+            ].joined(separator: "\n") + "\n",
+            to: root.appendingPathComponent("session_index.jsonl")
+        )
+
+        let session = try #require(await CodexSessionScanner(paths: CodexPaths(homeDirectory: root)).scan().first)
+
+        #expect(session.titleOverride == "梳理问题原因")
+    }
+
     @Test("Folds Codex worktrees into matching real project groups")
     func foldsWorktreesIntoMatchingProject() async throws {
         let root = try TempDir.make()

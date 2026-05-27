@@ -10,6 +10,7 @@ struct DeletedSessionRecord: Codable, Hashable, Identifiable, Sendable {
     let projectDisplayNameOverride: String?
     let filePath: String
     let cwd: String?
+    let titleOverride: String?
     let titleFallback: String?
     let sourceKind: SessionSourceKind
     let lastModified: Date
@@ -26,6 +27,7 @@ struct DeletedSessionRecord: Codable, Hashable, Identifiable, Sendable {
         self.projectDisplayNameOverride = session.projectDisplayNameOverride
         self.filePath = session.filePath
         self.cwd = session.cwd
+        self.titleOverride = session.titleOverride
         self.titleFallback = session.titleFallback
         self.sourceKind = session.sourceKind
         self.lastModified = session.lastModified
@@ -44,6 +46,7 @@ struct DeletedSessionRecord: Codable, Hashable, Identifiable, Sendable {
             projectDisplayNameOverride: projectDisplayNameOverride,
             filePath: filePath,
             cwd: cwd,
+            titleOverride: titleOverride,
             titleFallback: titleFallback,
             sourceKind: sourceKind,
             lastModified: lastModified,

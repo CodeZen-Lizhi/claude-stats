@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 
 struct SessionRow: View {
     @Environment(AppEnvironment.self) private var env
@@ -20,14 +19,6 @@ struct SessionRow: View {
         }
         .contentShape(Rectangle())
         .contextMenu {
-            Button("Reveal Transcript in Finder") {
-                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: session.filePath)])
-            }
-            if let cwd = session.cwd, FileManager.default.fileExists(atPath: cwd) {
-                Button("Open Project Folder") {
-                    NSWorkspace.shared.open(URL(fileURLWithPath: cwd))
-                }
-            }
             if let onDelete {
                 Button(role: .destructive) {
                     onDelete(session)
@@ -50,7 +41,7 @@ struct SessionRow: View {
                     .font(.sora(12, weight: .medium))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
-                Text(session.stats?.title ?? session.externalID)
+                Text(session.titleOverride ?? session.stats?.title ?? session.externalID)
                     .font(.sora(10))
                     .foregroundStyle(Color.stxMuted)
                     .lineLimit(1)

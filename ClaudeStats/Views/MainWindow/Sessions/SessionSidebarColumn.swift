@@ -26,9 +26,9 @@ struct SessionSidebarColumn: View {
         VStack(alignment: .leading, spacing: 0) {
             Color.clear.frame(height: 22)
 
-            statusCard(vm: vm)
-                .padding(.horizontal, 8)
-                .padding(.top, 10)
+            headerBar(vm: vm)
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
                 .padding(.bottom, 10)
 
             searchField(vm: vm)
@@ -65,61 +65,53 @@ struct SessionSidebarColumn: View {
         .onChange(of: env.preferences.costEstimationMode) { _, _ in refreshSessionGroups() }
     }
 
-    private func statusCard(vm: SessionListViewModel) -> some View {
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("SESSIONS")
+    private func headerBar(vm: SessionListViewModel) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("会话")
                     .font(.sora(10, weight: .semibold))
                     .tracking(1.0)
                     .foregroundStyle(Color.stxMuted)
-                Spacer(minLength: 8)
-                Text(provider.shortName)
-                    .font(.sora(10, weight: .medium))
-                    .foregroundStyle(Color.stxMuted)
-            }
-
-            HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text("\(providerSessionCount)")
-                        .font(.sora(18, weight: .semibold).monospacedDigit())
+                        .font(.sora(19, weight: .semibold).monospacedDigit())
                         .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
                     Text(providerSessionCount == 1 ? "session" : "sessions")
                         .font(.sora(10))
                         .foregroundStyle(Color.stxMuted)
                         .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
                 }
+            }
 
-                Spacer(minLength: 0)
+            Spacer(minLength: 8)
 
-                HeaderIconButton(
-                    systemName: selectionMode ? "xmark.circle" : "checkmark.circle",
-                    help: selectionMode
-                        ? L10n.string("sessions.selection.cancel", defaultValue: "Cancel selection")
-                        : L10n.string("sessions.selection.start", defaultValue: "Select sessions"),
-                    enabled: selectionMode || vm.hasProviderSessions
-                ) {
-                    clearSearchFocus()
-                    selectionMode.toggle()
-                    selectedSessionIDs.removeAll()
-                }
+            Text(provider.shortName)
+                .font(.sora(10, weight: .medium))
+                .foregroundStyle(Color.stxMuted)
 
-                HeaderIconButton(
-                    systemName: "arrow.down.right.and.arrow.up.left",
-                    help: "Collapse all projects",
-                    enabled: !vm.expandedProjects.isEmpty
-                ) {
-                    clearSearchFocus()
-                    withAnimation(.easeInOut(duration: 0.18)) {
-                        vm.expandedProjects.removeAll()
-                    }
+            HeaderIconButton(
+                systemName: selectionMode ? "xmark" : "checklist",
+                help: selectionMode
+                    ? L10n.string("sessions.selection.cancel", defaultValue: "Cancel selection")
+                    : L10n.string("sessions.selection.start", defaultValue: "Select sessions"),
+                enabled: selectionMode || vm.hasProviderSessions
+            ) {
+                clearSearchFocus()
+                selectionMode.toggle()
+                selectedSessionIDs.removeAll()
+            }
+
+            HeaderIconButton(
+                systemName: "chevron.up.chevron.down",
+                help: "Collapse all projects",
+                enabled: !vm.expandedProjects.isEmpty
+            ) {
+                clearSearchFocus()
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    vm.expandedProjects.removeAll()
                 }
             }
         }
-        .padding(10)
-        .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.stxStroke.opacity(0.7), lineWidth: 1))
     }
 
     private func searchField(vm: SessionListViewModel) -> some View {
@@ -215,6 +207,7 @@ struct SessionSidebarColumn: View {
                             name: group.displayName,
                             count: group.count,
                             isExpanded: isExpanded,
+                            projectFolderURL: group.projectFolderURL,
                             onDelete: { onRequestDelete(group.sessions) }
                         ) {
                             clearSearchFocus()
@@ -318,6 +311,7 @@ private struct ProjectSidebarRow: View {
     let name: String
     let count: Int
     let isExpanded: Bool
+    let projectFolderURL: URL?
     var onDelete: (() -> Void)? = nil
     let toggle: () -> Void
 
@@ -357,6 +351,11 @@ private struct ProjectSidebarRow: View {
         .padding(.horizontal, 8)
         .onHover { hovering = $0 }
         .contextMenu {
+            if let projectFolderURL {
+                Button("Open Project Folder") {
+                    NSWorkspace.shared.open(projectFolderURL)
+                }
+            }
             if let onDelete {
                 Button(role: .destructive, action: onDelete) {
                     Label(L10n.string("sessions.delete.group", defaultValue: "Delete project sessions"), systemImage: "trash")
@@ -377,6 +376,7 @@ private struct SessionSidebarRow: View {
     @State private var hovering = false
 
     private var title: String {
+        if let title = session.titleOverride, !title.isEmpty { return title }
         if let title = session.stats?.title, !title.isEmpty { return title }
         if let fallback = session.titleFallback, !fallback.isEmpty { return fallback }
         return session.externalID
@@ -429,14 +429,6 @@ private struct SessionSidebarRow: View {
         .padding(.trailing, 8)
         .onHover { hovering = $0 }
         .contextMenu {
-            Button("Reveal Transcript in Finder") {
-                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: session.filePath)])
-            }
-            if let cwd = session.cwd, FileManager.default.fileExists(atPath: cwd) {
-                Button("Open Project Folder") {
-                    NSWorkspace.shared.open(URL(fileURLWithPath: cwd))
-                }
-            }
             Button(role: .destructive, action: onDelete) {
                 Label(L10n.string("sessions.delete.single.menu", defaultValue: "Delete Session"), systemImage: "trash")
             }
@@ -455,12 +447,12 @@ private struct HeaderIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(enabled ? Color.stxMuted : Color.stxMuted.opacity(0.35))
-                .frame(width: 24, height: 22)
+                .frame(width: 22, height: 22)
                 .background {
                     if enabled && hovering {
-                        RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.08))
+                        RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.08))
                     }
                 }
                 .contentShape(Rectangle())

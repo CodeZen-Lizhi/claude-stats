@@ -59,4 +59,15 @@ struct SessionStats: Sendable, Hashable {
     func totalCost(for mode: CostEstimationMode) -> Double {
         models.reduce(0) { $0 + $1.estimatedCost(for: mode) }
     }
+
+    func applyingTitleOverride(_ titleOverride: String?) -> SessionStats {
+        guard let titleOverride = titleOverride?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !titleOverride.isEmpty,
+              titleOverride != title else {
+            return self
+        }
+        var copy = self
+        copy.title = titleOverride
+        return copy
+    }
 }

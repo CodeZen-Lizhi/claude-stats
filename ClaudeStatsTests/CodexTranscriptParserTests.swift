@@ -96,6 +96,35 @@ struct CodexTranscriptParserTests {
         #expect(stats.title == CodexSampleTranscript.threadName)
     }
 
+    @Test("Codex provider prefers session index title override")
+    func providerPrefersSessionIndexTitleOverride() async throws {
+        let root = try TempDir.make()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let url = root.appendingPathComponent("rollout.jsonl")
+        try TempDir.write([
+            #"{"timestamp":"2026-01-10T09:00:00.000Z","type":"session_meta","payload":{"id":"indexed-session","cwd":"/tmp/project"}}"#,
+            #"{"timestamp":"2026-01-10T09:00:01.000Z","type":"event_msg","payload":{"type":"user_message","message":"我反馈一些项目的问题"}}"#,
+        ].joined(separator: "\n") + "\n", to: url)
+        let session = Session(
+            id: "codex::indexed-session",
+            externalID: "indexed-session",
+            provider: .codex,
+            projectDirectoryName: "/tmp/project",
+            filePath: url.path,
+            cwd: "/tmp/project",
+            titleOverride: "梳理问题原因",
+            lastModified: Date(timeIntervalSince1970: 1_768_035_600),
+            fileSize: Int64((try Data(contentsOf: url)).count)
+        )
+
+        let stats = try #require(await CodexProvider(
+            paths: CodexPaths(homeDirectory: root),
+            pricing: CodexSampleTranscript.pricing
+        ).parse(session))
+
+        #expect(stats.title == "梳理问题原因")
+    }
+
     @Test("Uses fallback title when transcript has no thread name or user title")
     func fallbackTitleWhenTranscriptHasNoDisplayTitle() async throws {
         let stats = try await parseLines([
