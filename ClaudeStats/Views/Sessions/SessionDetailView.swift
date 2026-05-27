@@ -117,7 +117,8 @@ struct SessionDetailView: View {
 
     private var metadataPanel: some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 10)], alignment: .leading, spacing: 10) {
-            metadataCell("MODEL", session.stats?.models.first.map {
+            let firstModelID = session.stats?.models.first?.model
+            metadataCell("MODEL", firstModelID.map {
                 env.store.displayName(forModel: $0, provider: session.provider)
             } ?? "--")
             metadataCell("DURATION", sessionDuration.map(Format.duration) ?? "--")
