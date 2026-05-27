@@ -565,3 +565,69 @@ Diagnosed packaged Claude Stats exiting while idle, added a resident menu-bar li
 ### Next Steps
 
 - None - task complete
+
+
+## Session 17: 修复大会话详情卡死
+
+**Date**: 2026-05-27
+**Task**: 修复大会话详情卡死
+**Branch**: `codex/dev`
+
+### Summary
+
+诊断 Codex Statistics 无操作时疑似闪退的问题，确认系统记录为 SwiftUI 详情页布局卡死和 CPU 资源异常；提交修复，限制大会话 transcript 默认渲染窗口并稳定内容块身份，避免后台恢复详情页时主线程被完整 transcript 布局拖死。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `70b106e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 18: Git 默认筛选
+
+**Date**: 2026-05-27
+**Task**: Git 默认筛选
+**Branch**: `codex/dev`
+
+### Summary
+
+将 Git 活动默认范围改为今天，默认勾选我的提交，并补了默认值测试；相关改动已提交并推送。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b50e815` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
