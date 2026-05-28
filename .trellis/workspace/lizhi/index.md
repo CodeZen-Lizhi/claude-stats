@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 18
-- **Last Active**: 2026-05-27
+- **Total Sessions**: 19
+- **Last Active**: 2026-05-28
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~633 | Active |
+| `journal-1.md` | ~666 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 19 | 2026-05-28 | 替换应用图标 | `1385585` | `codex/dev` |
 | 18 | 2026-05-27 | Git 默认筛选 | `b50e815` | `codex/dev` |
 | 17 | 2026-05-27 | 修复大会话详情卡死 | `70b106e` | `codex/dev` |
 | 16 | 2026-05-27 | 修复 Git 工具入口默认显示 | `e2c6f01` | `codex/dev` |
