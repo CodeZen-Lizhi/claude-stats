@@ -32,6 +32,7 @@ targets:
     sources:
       - path: ClaudeStats
         excludes:
+          - AppIcon.icon
           - Resources/GitTools
       - path: ClaudeStats/Resources/GitTools
         type: folder
