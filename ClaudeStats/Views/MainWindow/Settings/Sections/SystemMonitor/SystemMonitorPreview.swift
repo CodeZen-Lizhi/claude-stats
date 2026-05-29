@@ -14,17 +14,17 @@ struct SystemMonitorPreview: View {
 
             HStack(alignment: .top, spacing: 10) {
                 previewCard(
-                    title: "CPU",
+                    title: SystemMonitorModule.cpu.title,
                     value: "42%",
                     colors: [Color.stxRamp[1], Color.stxRamp[0]]
                 )
                 previewCard(
-                    title: "Memory",
+                    title: SystemMonitorModule.memory.title,
                     value: "64%",
                     colors: [Color.stxRamp[0], Color.stxRamp[1], Color.stxRamp[3]]
                 )
                 previewCard(
-                    title: "Network",
+                    title: SystemMonitorModule.network.title,
                     value: "1.8 MB/s",
                     colors: [Color.stxRamp[3], Color.stxRamp[0]]
                 )

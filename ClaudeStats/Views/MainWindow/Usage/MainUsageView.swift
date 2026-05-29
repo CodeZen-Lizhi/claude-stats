@@ -5,7 +5,7 @@ import SwiftUI
 struct MainUsageView: View {
     @Environment(AppEnvironment.self) private var env
 
-    @SceneStorage("mainWindow.usage.period") private var periodRaw: String = StatsPeriod.allTime.rawValue
+    @SceneStorage("mainWindow.usage.period") private var periodRaw: String = StatsPeriod.today.rawValue
     @SceneStorage("mainWindow.usage.chartStyle") private var chartStyleRaw: String = MainUsageView.ChartStyleStorage.line.rawValue
     @SceneStorage("mainWindow.usage.scaleMode") private var scaleModeRaw: String = MainUsageView.ScaleModeStorage.linear.rawValue
     @SceneStorage("mainWindow.usage.stackByType") private var stackByTypeRaw: Bool = false
@@ -156,7 +156,7 @@ struct MainUsageView: View {
     }
 
     private func syncFromSceneStorage() {
-        vm.period = StatsPeriod(rawValue: periodRaw) ?? .allTime
+        vm.period = StatsPeriod(rawValue: periodRaw) ?? .today
         vm.chartStyle = ChartStyleStorage(rawValue: chartStyleRaw)?.chartStyle ?? .line
         vm.scaleMode = ScaleModeStorage(rawValue: scaleModeRaw)?.scaleMode ?? .linear
         vm.stackByType = stackByTypeRaw

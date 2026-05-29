@@ -52,7 +52,7 @@ struct UsageDerivedData: Sendable {
 @MainActor
 @Observable
 final class UsageViewModel {
-    var period: StatsPeriod = .allTime
+    var period: StatsPeriod = .today
     /// Line vs. bar for the trend panel (ignored for the Today/hourly view,
     /// which is always a smoothed line).
     var chartStyle: TrendChartStyle = .line

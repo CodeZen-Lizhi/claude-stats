@@ -2,7 +2,8 @@ import Foundation
 import SwiftUI
 
 struct PricingSettingsView: View {
-    @State private var rows: [PricingEditorRow] = PricingEditorRow.rows(from: ModelPricing.loadDefault())
+    @Environment(AppEnvironment.self) private var env
+    @State private var rows: [PricingEditorRow] = []
     @State private var statusMessage: String?
     @State private var isUpdating = false
 
@@ -38,10 +39,18 @@ struct PricingSettingsView: View {
 
                     StxRule()
 
-                    pricingHeader
-                    ForEach($rows) { $row in
-                        PricingRowEditor(row: $row)
-                        if row.id != rows.last?.id { StxRule() }
+                    if rows.isEmpty {
+                        Text(L10n.string("pricing.empty.used_models", defaultValue: "No parsed model usage yet. Refresh or rescan after using Codex, then pricing rows will appear here."))
+                            .font(.sora(11))
+                            .foregroundStyle(Color.stxMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(12)
+                    } else {
+                        pricingHeader
+                        ForEach($rows) { $row in
+                            PricingRowEditor(row: $row)
+                            if row.id != rows.last?.id { StxRule() }
+                        }
                     }
                 }
                 .settingCard()
@@ -54,6 +63,8 @@ struct PricingSettingsView: View {
                 }
             }
         }
+        .onAppear(perform: reloadRows)
+        .onChange(of: env.store.sessions) { _, _ in reloadRows() }
     }
 
     private var pricingHeader: some View {
@@ -73,12 +84,26 @@ struct PricingSettingsView: View {
 
     private func save() {
         do {
-            let pricing = PricingEditorRow.pricing(from: rows)
+            let pricing = PricingEditorRow.pricing(from: rows, preserving: ModelPricing.loadDefault())
             try ModelPricing.writeUserPricing(pricing)
             statusMessage = L10n.string("pricing.save.success", defaultValue: "Saved pricing. Restart or rescan to apply edited costs to parsed usage.")
         } catch {
             statusMessage = L10n.format("pricing.save.failed", defaultValue: "Save failed: %@", error.localizedDescription)
         }
+    }
+
+    private func reloadRows() {
+        rows = PricingEditorRow.rows(from: ModelPricing.loadDefault(), limitingTo: usedModelIDs())
+    }
+
+    private func usedModelIDs() -> Set<String> {
+        let ledgerModels = env.store.usageEventsSnapshot().map(\.model)
+        let sessionModels = env.store.sessions.flatMap { session in
+            var models = session.stats?.models.map(\.model) ?? []
+            models.append(contentsOf: session.childSessions.flatMap { $0.stats?.models.map(\.model) ?? [] })
+            return models
+        }
+        return Set(ledgerModels + sessionModels)
     }
 
     @MainActor
@@ -94,13 +119,22 @@ struct PricingSettingsView: View {
                     result.source
                 )
             } else {
-                rows = PricingEditorRow.merge(rows, with: result.rows)
-                statusMessage = L10n.format(
-                    "pricing.update.success",
-                    defaultValue: "Updated %@ model prices from %@.",
-                    "\(result.rows.count)",
-                    result.source
-                )
+                let visibleUpdates = result.rows.filter { usedModelIDs().contains($0.model) }
+                rows = PricingEditorRow.merge(rows, with: visibleUpdates)
+                if visibleUpdates.isEmpty {
+                    statusMessage = L10n.format(
+                        "pricing.update.no_used_match",
+                        defaultValue: "Checked %@, but none of the official rows matched models you've used.",
+                        result.source
+                    )
+                } else {
+                    statusMessage = L10n.format(
+                        "pricing.update.used_success",
+                        defaultValue: "Updated %@ used model prices from %@.",
+                        "\(visibleUpdates.count)",
+                        result.source
+                    )
+                }
             }
         } catch {
             statusMessage = L10n.format("pricing.update.failed", defaultValue: "Update failed: %@", error.localizedDescription)
@@ -131,24 +165,37 @@ private struct PricingEditorRow: Identifiable, Hashable {
             .sorted { $0.model.localizedStandardCompare($1.model) == .orderedAscending }
     }
 
-    static func pricing(from rows: [PricingEditorRow]) -> ModelPricing {
-        let rates = Dictionary(uniqueKeysWithValues: rows.map { row in
+    static func rows(from pricing: ModelPricing, limitingTo modelIDs: Set<String>) -> [PricingEditorRow] {
+        modelIDs
+            .map { model in
+                let rate = pricing.rate(for: model)
+                return PricingEditorRow(
+                    model: model,
+                    input: decimal(rate.input),
+                    output: decimal(rate.output),
+                    cacheRead: decimal(rate.cacheRead),
+                    cacheWrite: decimal(rate.cacheWrite5m)
+                )
+            }
+            .sorted { $0.model.localizedStandardCompare($1.model) == .orderedAscending }
+    }
+
+    static func pricing(from rows: [PricingEditorRow], preserving base: ModelPricing) -> ModelPricing {
+        var rates = base.rates
+        for row in rows {
             let input = Double(row.input) ?? 0
             let output = Double(row.output) ?? 0
             let cacheRead = Double(row.cacheRead) ?? 0
             let cacheWrite = Double(row.cacheWrite) ?? 0
-            return (
-                row.model,
-                ModelPricing.Rates(
-                    input: input,
-                    output: output,
-                    cacheWrite5m: cacheWrite,
-                    cacheWrite1h: cacheWrite * 1.6,
-                    cacheRead: cacheRead
-                )
+            rates[row.model] = ModelPricing.Rates(
+                input: input,
+                output: output,
+                cacheWrite5m: cacheWrite,
+                cacheWrite1h: cacheWrite * 1.6,
+                cacheRead: cacheRead
             )
-        })
-        return ModelPricing(rates: rates, defaultRate: ModelPricing.loadDefault().defaultRate)
+        }
+        return ModelPricing(rates: rates, defaultRate: base.defaultRate)
     }
 
     static func merge(_ existing: [PricingEditorRow], with updates: [PricingEditorRow]) -> [PricingEditorRow] {
@@ -273,6 +320,7 @@ private struct OfficialPricingFetcher {
 #if DEBUG
 #Preview {
     PricingSettingsView()
+        .environment(AppEnvironment.preview())
         .padding()
         .frame(width: 820)
         .background(Color.stxBackground)

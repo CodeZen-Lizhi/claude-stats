@@ -164,9 +164,9 @@ private struct SystemMonitorFeaturePreview: View {
             }
 
             HStack(spacing: 8) {
-                SystemPreviewTile(title: "CPU", value: "42%", colors: [Color.stxRamp[1], Color.stxRamp[0]])
-                SystemPreviewTile(title: "Memory", value: "64%", colors: [Color.stxRamp[0], Color.stxRamp[3]])
-                SystemPreviewTile(title: "Net", value: "1.8M", colors: [Color.stxRamp[3], Color.stxRamp[0]])
+                SystemPreviewTile(title: SystemMonitorModule.cpu.title, value: "42%", colors: [Color.stxRamp[1], Color.stxRamp[0]])
+                SystemPreviewTile(title: SystemMonitorModule.memory.title, value: "64%", colors: [Color.stxRamp[0], Color.stxRamp[3]])
+                SystemPreviewTile(title: SystemMonitorModule.network.title, value: "1.8M", colors: [Color.stxRamp[3], Color.stxRamp[0]])
             }
         }
     }

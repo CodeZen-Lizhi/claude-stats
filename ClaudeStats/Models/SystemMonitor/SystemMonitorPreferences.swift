@@ -55,13 +55,20 @@ enum SystemMonitorModule: String, CaseIterable, Sendable, Identifiable {
 
     var title: String {
         switch self {
-        case .cpu: "CPU"
-        case .memory: "Memory"
-        case .disk: "Disk"
-        case .network: "Network"
-        case .battery: "Battery"
-        case .gpu: "GPU"
-        case .thermal: "Thermal"
+        case .cpu:
+            L10n.string("CPU", defaultValue: "CPU")
+        case .memory:
+            L10n.string("Memory", defaultValue: "Memory")
+        case .disk:
+            L10n.string("Disk", defaultValue: "Disk")
+        case .network:
+            L10n.string("Network", defaultValue: "Network")
+        case .battery:
+            L10n.string("Power", defaultValue: "Power")
+        case .gpu:
+            L10n.string("GPU", defaultValue: "GPU")
+        case .thermal:
+            L10n.string("Thermal", defaultValue: "Thermal")
         }
     }
 
@@ -79,13 +86,20 @@ enum SystemMonitorModule: String, CaseIterable, Sendable, Identifiable {
 
     var settingsDescription: String {
         switch self {
-        case .cpu: "Processor utilization and per-core load."
-        case .memory: "Memory pressure, active, wired, compressed, and swap."
-        case .disk: "System volume capacity plus read/write activity."
-        case .network: "Physical interface upload/download throughput."
-        case .battery: "Battery level, health, charge state, and adapter power."
-        case .gpu: "Read-only GPU utilization and temperature when available."
-        case .thermal: "macOS thermal pressure state."
+        case .cpu:
+            L10n.string("system_monitor.module.cpu.description", defaultValue: "Processor utilization and per-core load.")
+        case .memory:
+            L10n.string("system_monitor.module.memory.description", defaultValue: "Memory pressure, active, wired, compressed, and swap.")
+        case .disk:
+            L10n.string("system_monitor.module.disk.description", defaultValue: "System volume capacity plus read/write activity.")
+        case .network:
+            L10n.string("system_monitor.module.network.description", defaultValue: "Physical interface upload/download throughput.")
+        case .battery:
+            L10n.string("system_monitor.module.power.description", defaultValue: "Battery level, health, charge state, and adapter power.")
+        case .gpu:
+            L10n.string("system_monitor.module.gpu.description", defaultValue: "Read-only GPU utilization and temperature when available.")
+        case .thermal:
+            L10n.string("system_monitor.module.thermal.description", defaultValue: "macOS thermal pressure state.")
         }
     }
 }

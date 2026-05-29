@@ -1124,23 +1124,6 @@
         }
       }
     },
-    "Cost mode": {
-      "extractionState": "stale",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cost mode"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "费用模式"
-          }
-        }
-      }
-    },
     "cost_mode.api_estimate": {
       "extractionState": "stale",
       "localizations": {
@@ -1405,7 +1388,38 @@
         }
       }
     },
-    "CPU": {},
+    "CPU": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "CPU"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU"
+          }
+        }
+      }
+    },
+    "GPU": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "GPU"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU"
+          }
+        }
+      }
+    },
     "CPU, memory, disk, network, power, and thermal signals.": {
       "localizations": {
         "zh-Hans": {
@@ -3949,23 +3963,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "刷新间隔"
-          }
-        }
-      }
-    },
-    "Remember selected platform": {
-      "extractionState": "stale",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Remember selected platform"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "记住已选平台"
           }
         }
       }
@@ -9487,16 +9484,6 @@
         }
       }
     },
-    "API estimate uses standard first-party token prices. Detailed billing is kept for compatible imported data and currently matches the standard Codex estimate.": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "API 估算使用标准官方令牌价格。详细账单保留给兼容的导入数据，目前与标准 Codex 估算一致。"
-          }
-        }
-      }
-    },
     "API key required": {
       "localizations": {
         "zh-Hans": {
@@ -10902,14 +10889,30 @@
       "localizations": {
         "en": {
           "stringUnit": {
-            "state": "new",
-            "value": "pricing.save.success"
+            "state": "translated",
+            "value": "Saved pricing. Restart or rescan to apply edited costs to parsed usage."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "价格已保存。重启或重新扫描后，编辑后的费用会应用到解析结果。"
+          }
+        }
+      }
+    },
+    "pricing.empty.used_models": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No parsed model usage yet. Refresh or rescan after using Codex, then pricing rows will appear here."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有解析到模型用量。使用 Codex 后刷新或重新扫描，这里会显示对应的价格行。"
           }
         }
       }
@@ -10950,14 +10953,46 @@
       "localizations": {
         "en": {
           "stringUnit": {
-            "state": "new",
-            "value": "pricing.update.success"
+            "state": "translated",
+            "value": "Updated %@ model prices from %@."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "已更新 %@ 个模型价格，来源：%@。"
+          }
+        }
+      }
+    },
+    "pricing.update.used_success": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updated %@ used model prices from %@."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已更新 %@ 个已使用模型价格，来源：%@。"
+          }
+        }
+      }
+    },
+    "pricing.update.no_used_match": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checked %@, but none of the official rows matched models you've used."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已检查 %@，但官方价格行里没有匹配你使用过的模型。"
           }
         }
       }
@@ -11826,23 +11861,6 @@
         }
       }
     },
-    "When off, the app starts on the first enabled platform each launch instead of the one you last viewed.": {
-      "extractionState": "stale",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "When off, the app starts on the first enabled platform each launch instead of the one you last viewed."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "关闭后，应用每次启动都会显示第一个启用的平台，而不是上次查看的平台。"
-          }
-        }
-      }
-    },
     "Refresh Rate": {
       "localizations": {
         "en": {
@@ -12447,6 +12465,118 @@
           "stringUnit": {
             "state": "translated",
             "value": "每 %@"
+          }
+        }
+      }
+    },
+    "system_monitor.module.cpu.description": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Processor utilization and per-core load."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "处理器利用率与每核心负载。"
+          }
+        }
+      }
+    },
+    "system_monitor.module.disk.description": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "System volume capacity plus read/write activity."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统卷容量与读写活动。"
+          }
+        }
+      }
+    },
+    "system_monitor.module.gpu.description": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Read-only GPU utilization and temperature when available."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可用时显示只读 GPU 利用率与温度。"
+          }
+        }
+      }
+    },
+    "system_monitor.module.memory.description": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Memory pressure, active, wired, compressed, and swap."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内存压力、活动、wired、压缩与交换。"
+          }
+        }
+      }
+    },
+    "system_monitor.module.network.description": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Physical interface upload/download throughput."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "物理网络接口的上传/下载吞吐量。"
+          }
+        }
+      }
+    },
+    "system_monitor.module.power.description": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Battery level, health, charge state, and adapter power."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电池电量、健康度、充电状态与适配器供电。"
+          }
+        }
+      }
+    },
+    "system_monitor.module.thermal.description": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "macOS thermal pressure state."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS 温度压力状态。"
           }
         }
       }
@@ -13311,6 +13441,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "这个时间范围内，Codex 使用过的 Git 仓库没有提交。可以扩大时间范围或关闭“我的提交”。"
+          }
+        }
+      }
+    },
+    "git.activity.empty.action.wider": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看 %@"
+          }
+        }
+      }
+    },
+    "git.activity.empty.action.all_commits": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All commits"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部提交"
           }
         }
       }

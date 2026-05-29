@@ -114,7 +114,7 @@ struct MainSystemMonitorView: View {
     private var cpuCard: some View {
         let cpu = snapshot.cpu
         return SystemMetricCard(
-            title: "Processor Load",
+            title: SystemMonitorModule.cpu.title,
             symbol: SystemMonitorModule.cpu.symbol,
             value: Format.percent(cpu.totalUsage),
             caption: "\(cpu.perCoreUsage.count) logical cores",
@@ -140,7 +140,7 @@ struct MainSystemMonitorView: View {
     private var memoryCard: some View {
         let memory = snapshot.memory
         return SystemMetricCard(
-            title: "Memory",
+            title: SystemMonitorModule.memory.title,
             symbol: SystemMonitorModule.memory.symbol,
             value: Format.percent(memory.usedRatio),
             caption: "\(bytes(memory.usedBytes)) of \(bytes(memory.totalBytes)) · \(memory.pressure.displayName)",
@@ -163,7 +163,7 @@ struct MainSystemMonitorView: View {
     private var diskCard: some View {
         let disk = snapshot.disk
         return SystemMetricCard(
-            title: "Disk",
+            title: SystemMonitorModule.disk.title,
             symbol: SystemMonitorModule.disk.symbol,
             value: Format.percent(disk.usedRatio),
             caption: "\(disk.volumeName) · \(bytes(disk.freeBytes)) free",
@@ -181,7 +181,7 @@ struct MainSystemMonitorView: View {
     private var networkCard: some View {
         let network = snapshot.network
         return SystemMetricCard(
-            title: "Network",
+            title: SystemMonitorModule.network.title,
             symbol: SystemMonitorModule.network.symbol,
             value: network.isUp ? bytesPerSecond(network.downloadBytesPerSecond) : "Offline",
             caption: "\(network.displayName) \(network.localIPv4.map { "· \($0)" } ?? "")",
@@ -199,7 +199,7 @@ struct MainSystemMonitorView: View {
     private var batteryCard: some View {
         let battery = snapshot.battery
         return SystemMetricCard(
-            title: "Power",
+            title: SystemMonitorModule.battery.title,
             symbol: SystemMonitorModule.battery.symbol,
             value: battery.level.map(Format.percent) ?? "AC",
             caption: batteryCaption(battery),
@@ -218,7 +218,7 @@ struct MainSystemMonitorView: View {
     private var gpuCard: some View {
         let gpu = snapshot.gpu
         return SystemMetricCard(
-            title: "GPU",
+            title: SystemMonitorModule.gpu.title,
             symbol: SystemMonitorModule.gpu.symbol,
             value: gpu.utilization.map(Format.percent) ?? "--",
             caption: gpu.isAvailable ? gpu.model : "GPU counters unavailable",
@@ -236,7 +236,7 @@ struct MainSystemMonitorView: View {
     private var thermalCard: some View {
         let thermal = snapshot.thermal
         return SystemMetricCard(
-            title: "Thermal",
+            title: SystemMonitorModule.thermal.title,
             symbol: SystemMonitorModule.thermal.symbol,
             value: thermal.state.displayName,
             valueAnimatesNumeric: false,

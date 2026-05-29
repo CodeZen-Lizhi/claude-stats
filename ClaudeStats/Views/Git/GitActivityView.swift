@@ -13,6 +13,7 @@ struct GitActivityView: View {
     static let windowID = "git-activity"
 
     @Environment(AppEnvironment.self) private var env
+    @Environment(\.openWindow) private var openWindow
     @State private var graphRepo: GitRepo?
     @State private var recentCommitsExpanded = false
     private let previewModel: GitActivityViewModel?
@@ -72,8 +73,16 @@ struct GitActivityView: View {
                     notice("GIT NOT AVAILABLE",
                            "Couldn't run the `git` command. Install the Xcode command-line tools (`xcode-select --install`) and refresh.")
                 } else if !vm.hasData {
-                    notice("NO GIT ACTIVITY",
-                           "None of the configured Git sources have repositories with commits in this window — or the window is too short. Try a wider range.")
+                    GitActivityEmptyState(
+                        title: L10n.string("git.activity.empty.title", defaultValue: "No git activity"),
+                        message: L10n.string("git.activity.empty.message", defaultValue: "No Codex-used Git repos have commits in this range. Try a wider window or disable My Commits."),
+                        rangeLabel: vm.range.shortLabel,
+                        onlyMyCommits: vm.onlyMyCommits,
+                        widerRange: widerRange(after: vm.range),
+                        onSelectRange: { vm.range = $0 },
+                        onShowAllCommits: { vm.onlyMyCommits = false },
+                        onOpenSources: openRepositorySources
+                    )
                 } else {
                     recentCommitsPanel
                     summaryGrid
@@ -92,6 +101,21 @@ struct GitActivityView: View {
                 gitInputRevision: env.store.gitAttributionRevision
             )
         }
+    }
+
+    private func widerRange(after range: GitRange) -> GitRange? {
+        switch range {
+        case .today: return .last7Days
+        case .last7Days: return .last30Days
+        case .last30Days: return .last90Days
+        case .last90Days: return nil
+        }
+    }
+
+    private func openRepositorySources() {
+        NSApp.activate(ignoringOtherApps: true)
+        openWindow(id: MainWindowView.windowID)
+        NotificationCenter.default.post(name: .openSettingsInMainWindow, object: SettingsSection.tracking)
     }
 
     // MARK: Header
@@ -385,6 +409,114 @@ struct GitActivityView: View {
             .onHover { hovering = $0 }
             .animation(.easeOut(duration: 0.18), value: isSelected)
         }
+    }
+}
+
+private struct GitActivityEmptyState: View {
+    let title: String
+    let message: String
+    let rangeLabel: String
+    let onlyMyCommits: Bool
+    let widerRange: GitRange?
+    let onSelectRange: (GitRange) -> Void
+    let onShowAllCommits: () -> Void
+    let onOpenSources: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 10) {
+                glyph
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(title)
+                        .font(.sora(14, weight: .semibold))
+                        .foregroundStyle(.primary)
+                    Text(message)
+                        .font(.sora(10))
+                        .foregroundStyle(Color.stxMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            HStack(spacing: 6) {
+                filterPill(systemImage: "calendar", text: rangeLabel)
+                if onlyMyCommits {
+                    filterPill(systemImage: "person.crop.circle", text: L10n.string("My Commits", defaultValue: "My Commits"))
+                }
+            }
+
+            HStack(spacing: 8) {
+                if let widerRange {
+                    emptyAction(
+                        L10n.format("git.activity.empty.action.wider", defaultValue: "Show %@", widerRange.shortLabel),
+                        systemImage: "calendar.badge.plus"
+                    ) {
+                        onSelectRange(widerRange)
+                    }
+                }
+                if onlyMyCommits {
+                    emptyAction(
+                        L10n.string("git.activity.empty.action.all_commits", defaultValue: "All commits"),
+                        systemImage: "person.2"
+                    ) {
+                        onShowAllCommits()
+                    }
+                }
+                emptyAction(
+                    L10n.string("settings.section.tracking", defaultValue: "Repository Sources"),
+                    systemImage: "folder.badge.gearshape"
+                ) {
+                    onOpenSources()
+                }
+            }
+        }
+        .menuBarSurface(.compactCard(fillOpacity: 0.72, cornerRadius: 10, maxWidth: .infinity), padding: 14)
+    }
+
+    private var glyph: some View {
+        ZStack {
+            Circle()
+                .fill(Color.stxAccent.opacity(0.14))
+            Circle()
+                .strokeBorder(Color.stxAccent.opacity(0.34), lineWidth: 1)
+            Image(systemName: "arrow.triangle.branch")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.stxAccent)
+        }
+        .frame(width: 34, height: 34)
+        .accessibilityHidden(true)
+    }
+
+    private func filterPill(systemImage: String, text: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: systemImage)
+                .font(.system(size: 8, weight: .semibold))
+            Text(text)
+                .font(.sora(9, weight: .medium))
+                .lineLimit(1)
+        }
+        .foregroundStyle(Color.stxMuted)
+        .padding(.horizontal, 7)
+        .frame(height: 20)
+        .background(Color.primary.opacity(0.045), in: Capsule())
+    }
+
+    private func emptyAction(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 8, weight: .bold))
+                Text(title)
+                    .font(.sora(9, weight: .semibold))
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 8)
+            .frame(height: 22)
+            .background(Color.primary.opacity(0.06), in: Capsule())
+            .overlay(Capsule().strokeBorder(Color.primary.opacity(0.11), lineWidth: 1))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.primary)
     }
 }
 

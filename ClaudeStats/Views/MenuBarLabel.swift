@@ -9,8 +9,8 @@ struct MenuBarLabel: View {
         let prefs = env.preferences
         let summary = env.store.summary(for: prefs.menuBarPeriod, provider: prefs.selectedProvider)
         let value = valueText(summary: summary, metric: prefs.menuBarMetric)
-        HStack(spacing: 4) {
-            Image(systemName: "chart.bar.xaxis")
+        HStack(spacing: 5) {
+            MenuBarUsageGlyph()
             Text(value)
                 .monospacedDigit()
                 .stxNumericValueTransition(value: value)
@@ -26,6 +26,32 @@ struct MenuBarLabel: View {
         case .cost:
             return Format.cost(summary.totalCost(for: env.preferences.costEstimationMode))
         }
+    }
+}
+
+private struct MenuBarUsageGlyph: View {
+    private let bars: [(height: CGFloat, opacity: Double)] = [
+        (5, 0.62),
+        (10, 0.9),
+        (7, 0.74),
+    ]
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 2) {
+            ForEach(Array(bars.enumerated()), id: \.offset) { _, bar in
+                Capsule(style: .continuous)
+                    .fill(.primary.opacity(bar.opacity))
+                    .frame(width: 2.5, height: bar.height)
+            }
+        }
+        .padding(.bottom, 2)
+        .overlay(alignment: .bottom) {
+            Capsule(style: .continuous)
+                .fill(.primary.opacity(0.5))
+                .frame(width: 16, height: 1.5)
+        }
+        .frame(width: 18, height: 14, alignment: .center)
+        .accessibilityHidden(true)
     }
 }
 

@@ -96,13 +96,6 @@ struct GeneralSettingsView: View {
 
             SettingGroup(title: "Behavior") {
                 VStack(spacing: 0) {
-                    SettingRow(title: "Remember selected platform",
-                               description: "When off, the app starts on the first enabled platform each launch instead of the one you last viewed.") {
-                        Toggle("", isOn: $prefs.rememberSelectedProvider)
-                            .labelsHidden()
-                            .toggleStyle(.appSwitch)
-                    }
-                    SettingRowDivider()
                     SettingRow(title: "Detail edge fade",
                                description: "Blend the main detail pane into the sidebar with a soft boundary fade.") {
                         Toggle("", isOn: $prefs.detailPanelBoundaryFalloffEnabled)
@@ -115,18 +108,6 @@ struct GeneralSettingsView: View {
                         Toggle("", isOn: $prefs.includeCacheInTokens)
                             .labelsHidden()
                             .toggleStyle(.appSwitch)
-                    }
-                    SettingRowDivider()
-                    SettingRow(title: "Cost mode",
-                               description: "API estimate uses standard first-party token prices. Detailed billing is kept for compatible imported data and currently matches the standard Codex estimate.") {
-                        AppSelect(
-                            .localized("Cost mode"),
-                            selection: $prefs.costEstimationMode,
-                            options: CostEstimationMode.allCases.map { mode in
-                                AppSelectOption(value: mode, title: .localized(mode.displayName))
-                            },
-                            width: 170
-                        )
                     }
                 }
                 .settingCard()
