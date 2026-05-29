@@ -31,7 +31,6 @@ enum FloatingStatsContentSection: Int, CaseIterable, Equatable, Sendable {
     case rule
     case metrics
     case status
-    case actions
 }
 
 enum FloatingStatsContentAnimation {

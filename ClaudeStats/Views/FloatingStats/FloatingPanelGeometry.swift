@@ -6,7 +6,7 @@ import Foundation
 enum FloatingPanelGeometry {
     static let collapsedVerticalSize = CGSize(width: 36, height: 108)
     static let collapsedHorizontalSize = CGSize(width: 108, height: 36)
-    static let expandedSize = CGSize(width: 300, height: 220)
+    static let expandedSize = CGSize(width: 300, height: 188)
 
     static func size(edge: FloatingPanelEdge, expanded: Bool) -> CGSize {
         if expanded { return expandedSize }

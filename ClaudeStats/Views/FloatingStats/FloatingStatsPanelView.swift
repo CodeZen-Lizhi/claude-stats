@@ -122,7 +122,6 @@ struct FloatingStatsPanelView: View {
         return VStack(alignment: .leading, spacing: 10) {
             animatedExpandedSection(.header) {
                 header(provider: provider, period: prefs.menuBarPeriod)
-                    .overlay(dragHandle)
             }
 
             animatedExpandedSection(.rule) {
@@ -140,14 +139,9 @@ struct FloatingStatsPanelView: View {
             animatedExpandedSection(.status) {
                 updatedStatusSection(provider: provider)
             }
-
-            Spacer(minLength: 0)
-
-            animatedExpandedSection(.actions) {
-                actionButtons
-            }
         }
         .padding(14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .task(id: provider) {
             await refreshProviderStatusIfNeeded(provider: provider)
         }
@@ -186,7 +180,7 @@ struct FloatingStatsPanelView: View {
     @ViewBuilder
     private var updatedText: some View {
         if let refreshed = env.store.lastRefreshedAt {
-            Text("UPDATED \(Format.relativeDate(refreshed).uppercased())")
+            Text(verbatim: updatedLabel(for: refreshed))
                 .font(.sora(9, weight: .medium))
                 .tracking(0.7)
                 .foregroundStyle(Color.stxMuted)
@@ -198,28 +192,14 @@ struct FloatingStatsPanelView: View {
         }
     }
 
-    private var actionButtons: some View {
-        HStack(spacing: 7) {
-            FloatingStatsActionButton(symbol: env.store.isLoading ? "hourglass" : "arrow.clockwise", label: "Refresh") {
-                Task { await env.store.refresh() }
-            }
-            .disabled(env.store.isLoading)
-
-            FloatingStatsActionButton(symbol: "macwindow", label: "Open main window") {
-                NotificationCenter.default.post(name: .openMainWindowFromFloatingStats, object: nil)
-            }
-
-            FloatingStatsActionButton(symbol: "arrow.triangle.branch", label: "Open Git") {
-                NotificationCenter.default.post(
-                    name: .openMainWindowDestinationFromFloatingStats,
-                    object: FloatingStatsMainWindowDestination.page(.git)
-                )
-            }
-
-            FloatingStatsActionButton(symbol: "gearshape", label: "Open settings") {
-                NotificationCenter.default.post(name: .openSettingsFromFloatingStats, object: nil)
-            }
+    private func updatedLabel(for refreshed: Date, now: Date = .now) -> String {
+        let elapsed = now.timeIntervalSince(refreshed)
+        if elapsed < 60 {
+            return L10n.string("floating_stats.updated.just_now", defaultValue: "Updated just now")
         }
+        return L10n.format("floating_stats.updated.relative",
+                           defaultValue: "Updated %@",
+                           Format.relativeDate(refreshed, now: now))
     }
 
     private func header(provider: ProviderKind, period: StatsPeriod) -> some View {
@@ -241,13 +221,28 @@ struct FloatingStatsPanelView: View {
                     .foregroundStyle(Color.stxMuted)
             }
             Spacer(minLength: 8)
-            Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(Color.stxMuted)
-                .accessibilityHidden(true)
+            FloatingStatsActionButton(symbol: env.store.isLoading ? "hourglass" : "arrow.clockwise",
+                                      label: "Refresh") {
+                Task { await env.store.refresh() }
+            }
+            .disabled(env.store.isLoading)
+
+            dragHandleButton
         }
         .contentShape(Rectangle())
         .accessibilityHint("Drag to move the floating tab")
+    }
+
+    private var dragHandleButton: some View {
+        ZStack {
+            Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Color.stxMuted)
+                .frame(width: 28, height: 28)
+                .accessibilityHidden(true)
+            dragHandle
+                .frame(width: 28, height: 28)
+        }
     }
 
     private func providerLogoTint(for provider: ProviderKind) -> Color {
