@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="docs/assets/claude-stats-icon.png" alt="Claude Stats app icon" width="128" height="128">
+  <img src="docs/assets/claude-stats-icon.png" alt="Codex Statistics app icon" width="128" height="128">
 </p>
 
-<h1 align="center">Claude Stats</h1>
+<h1 align="center">Codex Statistics</h1>
 
 <p align="center">
-  Native macOS menu-bar stats for AI coding work.
+  Native macOS menu-bar statistics for OpenAI Codex coding work.
 </p>
 
 <p align="center">
@@ -17,14 +17,14 @@
   <a href="#contributing">Contributing</a>
 </p>
 
-Claude Stats is an open-source native macOS app for people who work in AI coding tools all day. It runs from the menu bar, reads local usage and activity data, and turns it into quick answers about sessions, tokens, cost, limits, repository activity, local status, and debugging context.
+Codex Statistics is an open-source native macOS app for people who work in OpenAI Codex all day. It runs from the menu bar, reads local Codex usage and activity data, and turns it into quick answers about sessions, requests, tokens, cost, limits, repository activity, local status, and debugging context.
 
 The app began as a focused macOS take on the open-source [Claude Statistics](https://github.com/sj719045032/claude-statistics) project. It is now a Codex-only product with a provider abstraction kept internally for clean session, usage, and configuration boundaries.
 
 ## Reference Notes
 
 - [Claude Statistics inspiration notes](docs/claude-statistics-inspiration-notes.md) collects product ideas worth reusing here, especially share cards, model pricing management, and transcript-based stats and cost analysis.
-- [Claude Stats product PRD](docs/claude-stats-product-prd.md) documents the current product by feature family for future refactors and second-development work.
+- [Codex Statistics product PRD](docs/claude-stats-product-prd.md) documents the current product by feature family for future refactors and second-development work.
 
 ## Features
 
@@ -74,7 +74,7 @@ Screenshots and GIF demos live in [`docs/assets/screens`](docs/assets/screens), 
 <summary><strong>Stats and activity</strong></summary>
 
 <p><strong>Dashboard overview</strong></p>
-<img src="docs/assets/screens/dashboard-overview.png" alt="Claude Stats dashboard overview">
+<img src="docs/assets/screens/dashboard-overview.png" alt="Codex Statistics dashboard overview">
 
 <p><strong>Sessions overview</strong></p>
 <img src="docs/assets/screens/sessions-overview.png" alt="Codex session statistics overview">
@@ -129,8 +129,8 @@ Screenshots and GIF demos live in [`docs/assets/screens`](docs/assets/screens), 
 
 Packaged builds are published from this repository:
 
-- [GitHub Releases](https://github.com/1pitaph/claude-stats/releases)
-- [Sparkle appcast](https://1pitaph.github.io/claude-stats/appcast.xml)
+- [GitHub Releases](https://github.com/CodeZen-Lizhi/claude-stats/releases)
+- [Sparkle appcast](https://codezen-lizhi.github.io/claude-stats/appcast.xml)
 
 Release packaging supports both signed/notarized builds and unsigned fallback builds. If you use an unsigned build, macOS Gatekeeper may require opening it with right-click, then **Open**.
 
@@ -142,7 +142,7 @@ Intel Macs are not supported by current releases. The last public universal buil
 
 ## Privacy & Data
 
-Claude Stats is local-first. Core usage stats are read from local Codex data such as `~/.codex/sessions/`; optional activity features may request macOS permissions such as Full Disk Access, Accessibility, or Screen Recording.
+Codex Statistics is local-first. Core usage stats are read from local Codex data such as `~/.codex/sessions/`; optional activity features may request macOS permissions such as Full Disk Access, Accessibility, or Screen Recording.
 
 Network-facing features are feature-specific: Sparkle checks for updates, OpenAI status views may query public status pages, and GitHub-related views connect only when configured.
 
@@ -151,7 +151,7 @@ Network-facing features are feature-specific: Sparkle checks for updates, OpenAI
 Clone with submodules:
 
 ```bash
-git clone --recursive https://github.com/1pitaph/claude-stats.git
+git clone --recursive https://github.com/CodeZen-Lizhi/claude-stats.git
 cd claude-stats
 ```
 
@@ -203,7 +203,7 @@ scripts/          project generation, local run/test, release, appcast tooling
 
 ## Open Source & Third-Party Modules
 
-Claude Stats is released under the [GNU Affero General Public License v3.0](LICENSE). Swift Package Manager dependencies are declared in [`project.yml`](project.yml); release builds currently embed Sparkle for automatic updates.
+Codex Statistics is released under the [GNU Affero General Public License v3.0](LICENSE). Swift Package Manager dependencies are declared in [`project.yml`](project.yml); release builds currently embed Sparkle for automatic updates.
 
 ## Contributing
 
