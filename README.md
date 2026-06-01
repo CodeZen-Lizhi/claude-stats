@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="docs/assets/claude-stats-icon.png" alt="Codex Statistics app icon" width="128" height="128">
-</p>
-
 <h1 align="center">Codex Statistics</h1>
 
 <p align="center">
@@ -10,7 +6,6 @@
 
 <p align="center">
   <a href="#what-it-does">What It Does</a> ·
-  <a href="#screenshots">Screenshots</a> ·
   <a href="#install">Install</a> ·
   <a href="#privacy-and-data">Privacy</a> ·
   <a href="#build-from-source">Build</a>
@@ -77,77 +72,6 @@ The app runs as a menu-bar utility, with an optional floating edge tab and a ful
 - Connect GitHub with a token stored in Keychain.
 - Check for updates through Sparkle.
 - Export diagnostics when debugging local data or app behavior.
-
-## Screenshots
-
-Screenshots and GIFs are stored in [`docs/assets/screens`](docs/assets/screens).
-
-### Menu Bar
-
-<table>
-  <tr>
-    <th align="left" width="33%">Usage</th>
-    <th align="left" width="33%">Activity</th>
-    <th align="left" width="33%">Git</th>
-  </tr>
-  <tr>
-    <td valign="top" width="33%">
-      <img src="docs/assets/screens/menubar-usage.gif" alt="Menu-bar usage panel" width="100%">
-    </td>
-    <td valign="top" width="33%">
-      <img src="docs/assets/screens/menubar-activity.gif" alt="Menu-bar activity panel" width="100%">
-    </td>
-    <td valign="top" width="33%">
-      <img src="docs/assets/screens/menubar-git.gif" alt="Menu-bar Git panel" width="100%">
-    </td>
-  </tr>
-</table>
-
-### Main Window
-
-<table>
-  <tr>
-    <th align="left" width="50%">Dashboard</th>
-    <th align="left" width="50%">Sessions</th>
-  </tr>
-  <tr>
-    <td valign="top" width="50%">
-      <img src="docs/assets/screens/dashboard-overview.png" alt="Dashboard overview" width="100%">
-    </td>
-    <td valign="top" width="50%">
-      <img src="docs/assets/screens/sessions-overview.png" alt="Sessions overview" width="100%">
-    </td>
-  </tr>
-  <tr>
-    <th align="left" width="50%">Usage And Limits</th>
-    <th align="left" width="50%">Repository Workspace</th>
-  </tr>
-  <tr>
-    <td valign="top" width="50%">
-      <img src="docs/assets/screens/usage-token-limits.png" alt="Usage and token limits" width="100%">
-    </td>
-    <td valign="top" width="50%">
-      <img src="docs/assets/screens/git-repository-workspace.png" alt="Git repository workspace" width="100%">
-    </td>
-  </tr>
-</table>
-
-### Settings And Sharing
-
-<table>
-  <tr>
-    <th align="left" width="50%">Feature Settings</th>
-    <th align="left" width="50%">Share PNG Export</th>
-  </tr>
-  <tr>
-    <td valign="top" width="50%">
-      <img src="docs/assets/screens/settings-features.png" alt="Feature settings" width="100%">
-    </td>
-    <td valign="top" width="50%">
-      <img src="docs/assets/screens/menubar-share-stats.gif" alt="Share stats export flow" width="100%">
-    </td>
-  </tr>
-</table>
 
 ## Install
 
