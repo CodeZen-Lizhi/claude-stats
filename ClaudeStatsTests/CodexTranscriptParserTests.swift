@@ -89,6 +89,39 @@ struct CodexTranscriptParserTests {
         #expect(abs(model.estimatedCost - 1.0) < 1e-9)
     }
 
+    @Test("Skips forked transcript replay token counts from the fork creation second")
+    func forkedTranscriptReplayPreludeDoesNotCountAsUsage() async throws {
+        let stats = try await parseLines([
+            #"{"timestamp":"2026-01-10T09:17:41.297Z","type":"session_meta","payload":{"id":"fork","forked_from_id":"parent","cwd":"/tmp/project"}}"#,
+            #"{"timestamp":"2026-01-10T09:17:41.300Z","type":"session_meta","payload":{"id":"parent","cwd":"/tmp/project"}}"#,
+            #"{"timestamp":"2026-01-10T09:17:41.301Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":1000,"cached_input_tokens":900,"output_tokens":10,"reasoning_output_tokens":0,"total_tokens":1010}}}}"#,
+            #"{"timestamp":"2026-01-10T09:17:41.900Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":2000,"cached_input_tokens":1800,"output_tokens":20,"reasoning_output_tokens":0,"total_tokens":2020}}}}"#,
+            #"{"timestamp":"2026-01-10T09:18:00.000Z","type":"turn_context","payload":{"model":"gpt-5.4"}}"#,
+            #"{"timestamp":"2026-01-10T09:18:01.000Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":300,"cached_input_tokens":100,"output_tokens":50,"reasoning_output_tokens":0,"total_tokens":350}}}}"#,
+        ], pricing: Self.gpt54Pricing)
+
+        let model = try #require(stats.models.first)
+        #expect(stats.billableMessages.count == 1)
+        #expect(model.usage.inputTokens == 200)
+        #expect(model.usage.outputTokens == 50)
+        #expect(model.usage.cacheReadTokens == 100)
+        #expect(model.usage.total == 350)
+    }
+
+    @Test("Non-forked transcripts keep token counts from their first second")
+    func nonForkedTranscriptCountsFirstSecondUsage() async throws {
+        let stats = try await parseLines([
+            #"{"timestamp":"2026-01-10T09:17:41.297Z","type":"session_meta","payload":{"id":"plain","cwd":"/tmp/project"}}"#,
+            #"{"timestamp":"2026-01-10T09:17:41.301Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":1000,"cached_input_tokens":900,"output_tokens":10,"reasoning_output_tokens":0,"total_tokens":1010}}}}"#,
+        ], pricing: Self.gpt54Pricing)
+
+        let model = try #require(stats.models.first)
+        #expect(stats.billableMessages.count == 1)
+        #expect(model.usage.inputTokens == 100)
+        #expect(model.usage.outputTokens == 10)
+        #expect(model.usage.cacheReadTokens == 900)
+    }
+
     @Test("Counts user + agent messages, prefers thread name as title")
     func messagesAndTitle() async throws {
         let stats = try await parseSample()

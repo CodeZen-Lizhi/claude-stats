@@ -28,12 +28,14 @@ struct CodexTranscriptParser: Sendable {
         var threadName: String?
         var firstUserTitle: String?
         var messageTimestamps: [Date] = []
+        var replayFilter = ForkReplayFilter()
         let calendar = Calendar.current
 
         let decoder = JSONDecoder()
         let parsedByteCount = Self.readLines(from: url) { lineData in
             guard let line = try? decoder.decode(CodexLine.self, from: lineData) else { return }
             let date = ISO8601.parse(line.timestamp)
+            replayFilter.observe(line: line, date: date)
             track(date, &firstActivity, &lastActivity)
             guard let payload = line.payload else { return }
 
@@ -59,6 +61,7 @@ struct CodexTranscriptParser: Sendable {
                 }
 
             case ("event_msg", "token_count"):
+                guard !replayFilter.shouldSkipTokenCount(line: line, date: date) else { break }
                 guard let delta = payload.info?.lastTokenUsage else { break }
                 let usage = delta.tokenUsage
                 guard usage.total > 0 else { break }
@@ -138,6 +141,7 @@ struct CodexTranscriptParser: Sendable {
         var lastActivity: Date?
         var threadName: String?
         var firstUserTitle: String?
+        var replayFilter = ForkReplayFilter()
         let decoder = JSONDecoder()
 
         let parsedByteCount = Self.readLines(
@@ -147,6 +151,7 @@ struct CodexTranscriptParser: Sendable {
         ) { lineData in
             guard let line = try? decoder.decode(CodexLine.self, from: lineData) else { return }
             let date = ISO8601.parse(line.timestamp)
+            replayFilter.observe(line: line, date: date)
             track(date, &firstActivity, &lastActivity)
             guard let payload = line.payload else { return }
 
@@ -170,6 +175,7 @@ struct CodexTranscriptParser: Sendable {
                 }
 
             case ("event_msg", "token_count"):
+                guard !replayFilter.shouldSkipTokenCount(line: line, date: date) else { break }
                 guard let delta = payload.info?.lastTokenUsage else { break }
                 let usage = delta.tokenUsage
                 guard usage.total > 0, let date else { break }
@@ -384,6 +390,33 @@ struct CodexTranscriptParser: Sendable {
         let millis = timestamp.map { Int(($0.timeIntervalSince1970 * 1_000).rounded()) } ?? -1
         return "codex|\(sessionID)|\(sequenceIndex)|\(millis)"
     }
+
+    private struct ForkReplayFilter {
+        private var sawFirstLine = false
+        private var replayWindowStart: Date?
+        private var replayWindowEnd: Date?
+
+        mutating func observe(line: CodexLine, date: Date?) {
+            guard !sawFirstLine else { return }
+            sawFirstLine = true
+            guard line.type == "session_meta",
+                  line.payload?.forkedFromID != nil,
+                  let date else { return }
+
+            let secondStart = Date(timeIntervalSince1970: floor(date.timeIntervalSince1970))
+            replayWindowStart = secondStart
+            replayWindowEnd = secondStart.addingTimeInterval(1)
+        }
+
+        func shouldSkipTokenCount(line: CodexLine, date: Date?) -> Bool {
+            guard line.type == "event_msg",
+                  line.payload?.type == "token_count",
+                  let replayWindowStart,
+                  let replayWindowEnd,
+                  let date else { return false }
+            return date >= replayWindowStart && date < replayWindowEnd
+        }
+    }
 }
 
 // MARK: - JSONL line shapes (only the fields we read)
@@ -403,6 +436,7 @@ private struct CodexLine: Decodable {
         let turnID: String?
         let startedAt: Int?
         let completedAt: Int?
+        let forkedFromID: String?
 
         enum CodingKeys: String, CodingKey {
             case type, model, message, info
@@ -411,6 +445,7 @@ private struct CodexLine: Decodable {
             case turnID = "turn_id"
             case startedAt = "started_at"
             case completedAt = "completed_at"
+            case forkedFromID = "forked_from_id"
         }
     }
 

@@ -19,6 +19,8 @@ struct UsageLedgerEvent: Sendable, Hashable, Codable, Identifiable {
 
 /// Persisted parser progress for one transcript file.
 struct UsageLedgerParseState: Sendable, Hashable, Codable {
+    static let currentParserRevision = 2
+
     let sessionID: String
     let provider: ProviderKind
     let sourcePath: String
@@ -34,6 +36,7 @@ struct UsageLedgerParseState: Sendable, Hashable, Codable {
     var lastSeenAt: Date
     var lastModel: String?
     var hasViewableTranscript: Bool? = nil
+    var parserRevision: Int? = nil
 }
 
 /// Provider parse result for bytes appended after a previously parsed offset.

@@ -113,7 +113,8 @@ actor UsageLedgerStore {
                 sourceExists: true,
                 lastSeenAt: now,
                 lastModel: nil,
-                hasViewableTranscript: false
+                hasViewableTranscript: false,
+                parserRevision: UsageLedgerParseState.currentParserRevision
             ))
         }
         persist()
@@ -186,6 +187,7 @@ actor UsageLedgerStore {
             state.lastSeenAt = now
             state.lastModel = stats.lastModel
             state.hasViewableTranscript = true
+            state.parserRevision = UsageLedgerParseState.currentParserRevision
             upsertIndexedParseState(state)
         } else {
             upsertIndexedParseState(UsageLedgerParseState(
@@ -203,7 +205,8 @@ actor UsageLedgerStore {
                 sourceExists: sourceExists,
                 lastSeenAt: now,
                 lastModel: stats.lastModel,
-                hasViewableTranscript: true
+                hasViewableTranscript: true,
+                parserRevision: UsageLedgerParseState.currentParserRevision
             ))
         }
     }
@@ -234,6 +237,7 @@ actor UsageLedgerStore {
             state.lastSeenAt = now
             state.lastModel = result.lastModel
             state.hasViewableTranscript = true
+            state.parserRevision = UsageLedgerParseState.currentParserRevision
             upsertIndexedParseState(state)
         } else {
             let stats = Self.stats(

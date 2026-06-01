@@ -20,6 +20,7 @@ struct UsageLedgerStoreTests {
         let parseState = await ledger.parseState(for: session.id)
         #expect(afterMarkSeenData == initialData)
         #expect(parseState?.lastSeenAt == firstSeenAt)
+        #expect(parseState?.parserRevision == UsageLedgerParseState.currentParserRevision)
     }
 
     @Test("Batched persistence flushes pending ledger changes at the end")
@@ -39,6 +40,7 @@ struct UsageLedgerStoreTests {
         decoder.dateDecodingStrategy = .iso8601
         let snapshot = try decoder.decode(UsageLedgerSnapshot.self, from: data)
         #expect(snapshot.parseStates.map(\.sessionID).sorted() == ["project::one", "project::two"])
+        #expect(snapshot.parseStates.allSatisfy { $0.parserRevision == UsageLedgerParseState.currentParserRevision })
     }
 
     private static func temporaryLedgerURL() -> URL {

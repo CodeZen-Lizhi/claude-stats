@@ -640,10 +640,12 @@ private extension SessionStore {
             && state.sourcePath == session.filePath
             && state.fileSize == session.fileSize
             && state.lastModified == session.lastModified
+            && state.parserRevision == UsageLedgerParseState.currentParserRevision
     }
 
     static func canAppendUsage(_ session: Session, state: UsageLedgerParseState) -> Bool {
         guard state.hasViewableTranscript != false,
+              state.parserRevision == UsageLedgerParseState.currentParserRevision,
               state.provider == session.provider,
               state.sourcePath == session.filePath,
               state.fileSize >= 0,
