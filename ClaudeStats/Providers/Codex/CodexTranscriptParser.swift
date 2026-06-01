@@ -147,13 +147,15 @@ struct CodexTranscriptParser: Sendable {
         let parsedByteCount = Self.readLines(
             from: handle,
             requireTrailingNewline: true,
+            parseCompleteTrailingLine: true,
             startingAt: state.lastParsedByteOffset
         ) { lineData in
-            guard let line = try? decoder.decode(CodexLine.self, from: lineData) else { return }
+            guard Self.isCompleteJSONLine(lineData) else { return false }
+            guard let line = try? decoder.decode(CodexLine.self, from: lineData) else { return true }
             let date = ISO8601.parse(line.timestamp)
             replayFilter.observe(line: line, date: date)
             track(date, &firstActivity, &lastActivity)
-            guard let payload = line.payload else { return }
+            guard let payload = line.payload else { return true }
 
             switch (line.type, payload.type) {
             case ("turn_context", _):
@@ -206,6 +208,7 @@ struct CodexTranscriptParser: Sendable {
             default:
                 break
             }
+            return true
         }
         guard let parsedByteCount else { return nil }
 
@@ -323,6 +326,24 @@ struct CodexTranscriptParser: Sendable {
         startingAt offset: UInt64,
         handleLine: (Data) -> Void
     ) -> UInt64? {
+        readLines(
+            from: handle,
+            requireTrailingNewline: requireTrailingNewline,
+            parseCompleteTrailingLine: false,
+            startingAt: offset
+        ) { lineData in
+            handleLine(lineData)
+            return true
+        }
+    }
+
+    private static func readLines(
+        from handle: FileHandle,
+        requireTrailingNewline: Bool,
+        parseCompleteTrailingLine: Bool,
+        startingAt offset: UInt64,
+        handleLine: (Data) -> Bool
+    ) -> UInt64? {
         do {
             try handle.seek(toOffset: offset)
             var buffer = Data()
@@ -333,21 +354,29 @@ struct CodexTranscriptParser: Sendable {
                 buffer.append(chunk)
                 while let newline = buffer.firstIndex(of: 0x0A) {
                     if newline > buffer.startIndex {
-                        handleLine(Data(buffer[..<newline]))
+                        _ = handleLine(Data(buffer[..<newline]))
                     }
                     let nextIndex = buffer.index(after: newline)
                     parsedBytes += UInt64(buffer.distance(from: buffer.startIndex, to: nextIndex))
                     buffer.removeSubrange(buffer.startIndex..<nextIndex)
                 }
             }
-            if !requireTrailingNewline, !buffer.isEmpty {
-                handleLine(buffer)
-                parsedBytes += UInt64(buffer.count)
+            if !buffer.isEmpty {
+                if !requireTrailingNewline {
+                    _ = handleLine(buffer)
+                    parsedBytes += UInt64(buffer.count)
+                } else if parseCompleteTrailingLine, handleLine(buffer) {
+                    parsedBytes += UInt64(buffer.count)
+                }
             }
             return parsedBytes
         } catch {
             return nil
         }
+    }
+
+    private static func isCompleteJSONLine(_ lineData: Data) -> Bool {
+        (try? JSONSerialization.jsonObject(with: lineData)) != nil
     }
 
     private func track(_ date: Date?, _ first: inout Date?, _ last: inout Date?) {

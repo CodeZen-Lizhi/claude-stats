@@ -359,6 +359,57 @@ struct CodexTranscriptParserTests {
         #expect(result.lastParsedByteOffset == offset + UInt64(Data(completeLine.utf8).count))
     }
 
+    @Test("Append parser counts complete trailing JSONL line without newline")
+    func appendParserCountsCompleteTrailingLineWithoutNewline() async throws {
+        let root = try Self.makeTempDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let url = root.appendingPathComponent("rollout.jsonl")
+        let initial = #"{"timestamp":"2026-01-10T09:00:00.000Z","type":"session_meta","payload":{"id":"complete-tail","cwd":"/tmp/project"}}"# + "\n"
+        try Self.write(initial, to: url)
+        let offset = UInt64((try Data(contentsOf: url)).count)
+        let trailingLine = #"{"timestamp":"2026-01-10T09:00:01.000Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":30,"reasoning_output_tokens":0,"total_tokens":130}}}}"#
+        try FileHandle(forWritingTo: url).closeAfter {
+            try $0.seekToEnd()
+            $0.write(Data(trailingLine.utf8))
+        }
+        let session = Session(
+            id: "codex::complete-tail",
+            externalID: "complete-tail",
+            provider: .codex,
+            projectDirectoryName: "project",
+            filePath: url.path,
+            cwd: "/tmp/project",
+            lastModified: Date(timeIntervalSince1970: 1_768_035_601),
+            fileSize: Int64((try Data(contentsOf: url)).count)
+        )
+        let state = UsageLedgerParseState(
+            sessionID: session.id,
+            provider: session.provider,
+            sourcePath: session.filePath,
+            fileSize: Int64(offset),
+            lastModified: Date(timeIntervalSince1970: 1_768_035_600),
+            lastParsedByteOffset: offset,
+            eventCount: 0,
+            title: nil,
+            messageCount: 0,
+            firstActivity: nil,
+            lastActivity: nil,
+            sourceExists: true,
+            lastSeenAt: Date(timeIntervalSince1970: 1_768_035_600),
+            lastModel: "gpt-5.4"
+        )
+
+        let result = try #require(await CodexTranscriptParser(pricing: Self.gpt54Pricing)
+            .parseUsageAppend(transcriptAt: url, session: session, state: state))
+        let event = try #require(result.events.first)
+
+        #expect(result.events.count == 1)
+        #expect(result.lastParsedByteOffset == UInt64(max(session.fileSize, 0)))
+        #expect(event.usage.inputTokens == 80)
+        #expect(event.usage.cacheReadTokens == 20)
+        #expect(event.usage.outputTokens == 30)
+    }
+
     @Test("First/last activity span the transcript; timeline has one bucket per hour")
     func activityWindow() async throws {
         let stats = try await parseSample()

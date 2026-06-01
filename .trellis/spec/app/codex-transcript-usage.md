@@ -22,6 +22,7 @@
 - For ordinary transcripts, every `token_count.info.last_token_usage` with positive total usage is eligible for parsing.
 - For forked transcripts, detect a first-line `session_meta` payload with `forked_from_id`.
 - In a forked transcript, skip `token_count` records whose outer line timestamp falls inside the fork creation second. Those records are copied parent history, not new API requests.
+- Incremental append parsing must count a complete final JSONL record even when the writer has not emitted a trailing newline yet; only malformed/incomplete final records should remain unadvanced for the next scan.
 - Use a parser revision when changing usage semantics so old persisted parse states rebuild instead of restoring polluted ledger events by file size and mtime alone.
 
 ### 4. Validation & Error Matrix
@@ -29,6 +30,8 @@
 - Missing `forked_from_id` -> parse first-second `token_count` normally.
 - `forked_from_id` present and `token_count` is in the fork creation second -> skip that usage event.
 - `forked_from_id` present and `token_count` timestamp is later than the fork creation second -> count normally.
+- Complete trailing `token_count` JSON without a newline -> count it and advance the parsed byte offset.
+- Incomplete trailing JSON -> do not count it and do not advance past it.
 - Old `UsageLedgerParseState.parserRevision == nil` or stale -> rebuild from transcript, do not append or restore.
 - Missing or malformed `token_count.info.last_token_usage` -> skip that usage event as before.
 
@@ -42,6 +45,7 @@
 
 - Parser test: forked transcript skips replay `token_count` events from the fork creation second and counts later usage.
 - Parser test: non-forked transcript keeps first-second usage.
+- Append parser test: complete final JSONL line without a newline is counted, while incomplete final JSON remains pending.
 - Store/planning behavior: parser revision changes cause stale states to rebuild before restoring/appending usage.
 - Regression data check when available: affected hour should no longer contain the fork replay request spike.
 
